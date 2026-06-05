@@ -1,0 +1,182 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(rm -rf node_modules)",
+            "Bash(rm -rf node_modules/)",
+            "Bash(rm -rf dist)",
+            "Bash(rm -rf dist/)",
+            "Bash(rm -rf build)",
+            "Bash(rm -rf build/)",
+            "Bash(rm -rf out)",
+            "Bash(rm -rf out/)",
+            "Bash(rm -rf target)",
+            "Bash(rm -rf target/)",
+            "Bash(rm -rf .next)",
+            "Bash(rm -rf .next/)",
+            "Bash(rm -rf .nuxt)",
+            "Bash(rm -rf .nuxt/)",
+            "Bash(rm -rf .output)",
+            "Bash(rm -rf .output/)",
+            "Bash(rm -rf .turbo)",
+            "Bash(rm -rf .turbo/)",
+            "Bash(rm -rf .cache)",
+            "Bash(rm -rf .cache/)",
+            "Bash(rm -rf .eslintcache)",
+            "Bash(rm -rf coverage)",
+            "Bash(rm -rf coverage/)",
+            "Bash(rm -rf .pytest_cache)",
+            "Bash(rm -rf .pytest_cache/)",
+            "Bash(rm -rf .tox)",
+            "Bash(rm -rf .tox/)",
+            "Bash(rm -rf __pycache__)",
+            "Bash(rm -rf __pycache__/)",
+            "Bash(rm -rf .venv)",
+            "Bash(rm -rf .venv/)",
+            "Bash(rm -rf venv)",
+            "Bash(rm -rf venv/)",
+            "Bash(rm -rf .mypy_cache)",
+            "Bash(rm -rf .ruff_cache)",
+            "Bash(rm -rf vendor)",
+            "Bash(rm -rf vendor/)"
+        ],
+        "deny": [
+            "Bash(rm -rf*)",
+            "Bash(rm -fr*)",
+            "Bash(*rm -rf*)",
+            "Bash(*rm -fr*)",
+            "Bash(sudo*)",
+            "Bash(*sudo *)",
+            "Bash(mkfs*)",
+            "Bash(*mkfs *)",
+            "Bash(dd if=*)",
+            "Bash(dd of=*)",
+            "Bash(*curl*|*sh*)",
+            "Bash(*curl*| *sh*)",
+            "Bash(*curl*|bash*)",
+            "Bash(*curl*| bash*)",
+            "Bash(*wget*|*sh*)",
+            "Bash(*wget*| *sh*)",
+            "Bash(*wget*|bash*)",
+            "Bash(*wget*| bash*)",
+            "Bash(git push --force)",
+            "Bash(git push --force *)",
+            "Bash(git push * --force)",
+            "Bash(git push * --force *)",
+            "Bash(git push -f)",
+            "Bash(git push -f *)",
+            "Bash(git push * -f)",
+            "Bash(git push * -f *)",
+            "Bash(git reset --hard*)",
+            "Bash(chmod 777*)",
+            "Bash(*chmod 777*)",
+            "Bash(chmod -R 777*)",
+            "Bash(npm publish*)",
+            "Bash(pip upload*)",
+            "Bash(docker push*)",
+            "Bash(terraform destroy*)",
+            "Edit(~/.bashrc)",
+            "Edit(~/.zshrc)",
+            "Edit(~/.ssh/**)",
+            "Read(~/.ssh/**)",
+            "Read(~/.gnupg/**)",
+            "Read(~/.aws/**)",
+            "Read(~/.azure/**)",
+            "Read(~/.config/gh/**)",
+            "Read(~/.git-credentials)",
+            "Read(~/.docker/config.json)",
+            "Read(~/.kube/**)",
+            "Read(~/.npmrc)",
+            "Read(~/.pypirc)",
+            "Read(~/.gem/credentials)",
+            "Read(~/Library/Keychains/**)",
+            "Read(**/*credential*)",
+            "Read(**/*secret*)",
+            "Bash(gh pr merge*)"
+        ]
+    },
+    "env": {
+        "DISABLE_TELEMETRY": "1",
+        "DISABLE_ERROR_REPORTING": "1"
+    },
+    "enableAllProjectMcpServers": false,
+    "alwaysThinkingEnabled": true,
+    "cleanupPeriodDays": 365,
+    "statusLine": {
+        "type": "command",
+        "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/statusline.sh"
+    },
+    "hooks": {
+        "PreToolUse": [
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "jq -r '.tool_input.command' | \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-commit-guard.sh",
+                        "timeout": 5
+                    },
+                    {
+                        "type": "command",
+                        "command": "jq -r '.tool_input.command' | \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/push-guard.sh",
+                        "timeout": 5
+                    },
+                    {
+                        "type": "command",
+                        "command": "jq -r '.tool_input.command' | \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/test-run-guard.sh",
+                        "timeout": 5
+                    }
+                ]
+            },
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "jq -r '.tool_input.file_path' | \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/edit-branch-guard.sh",
+                        "timeout": 5
+                    },
+                    {
+                        "type": "command",
+                        "command": "jq -r '.tool_input.file_path' | \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/test-guard.sh",
+                        "timeout": 5
+                    }
+                ]
+            }
+        ],
+        "PostToolUse": [
+            {
+                "matcher": "EnterWorktree",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/verify-enter-worktree.sh",
+                        "timeout": 5
+                    }
+                ]
+            },
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "jq -r '.tool_input.file_path' | { read f; if [[ \"$f\" == *.py ]]; then if command -v ruff &>/dev/null; then ruff format \"$f\" -q 2>/dev/null && echo \"Formatted: $f\"; elif command -v black &>/dev/null; then black \"$f\" -q 2>/dev/null && echo \"Formatted: $f\"; fi; elif [[ \"$f\" == *.ts ]] || [[ \"$f\" == *.tsx ]] || [[ \"$f\" == *.js ]] || [[ \"$f\" == *.jsx ]]; then if command -v prettier &>/dev/null; then prettier --write \"$f\" 2>/dev/null && echo \"Formatted: $f\"; fi; elif [[ \"$f\" == *.go ]]; then if command -v gofmt &>/dev/null; then gofmt -w \"$f\" 2>/dev/null && echo \"Formatted: $f\"; fi; fi; }",
+                        "timeout": 10
+                    }
+                ]
+            }
+        ],
+        "Notification": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/desktop-notification.sh",
+                        "timeout": 5
+                    }
+                ]
+            }
+        ]
+    },
+    "enabledPlugins": {}
+}

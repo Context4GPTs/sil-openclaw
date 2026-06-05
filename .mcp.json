@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "railway": {
+      "command": "npx",
+      "args": ["-y", "@railway/mcp-server"]
+    },
+    "context7": {
+        "command": "npx",
+        "args": ["-y", "@upstash/context7-mcp"]
+    }
+  }
+}

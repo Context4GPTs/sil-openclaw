@@ -1,0 +1,9 @@
+{
+	"id": "show-hidden-files",
+	"name": "Show Hidden Files",
+	"version": "1.0.3",
+	"minAppVersion": "0.15.0",
+	"description": "Reveals hidden dotfiles and all file types in the file explorer.",
+	"author": "witi",
+	"isDesktopOnly": true
+}

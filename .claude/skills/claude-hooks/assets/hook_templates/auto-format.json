@@ -1,0 +1,16 @@
+{
+  "description": "Auto-format files after editing based on file extension",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | { read file_path; case \"$file_path\" in *.ts|*.tsx|*.js|*.jsx) npx prettier --write \"$file_path\" 2>/dev/null || true ;; *.py) black \"$file_path\" 2>/dev/null || true ;; *.go) gofmt -w \"$file_path\" 2>/dev/null || true ;; *.rs) rustfmt \"$file_path\" 2>/dev/null || true ;; esac; }"
+          }
+        ]
+      }
+    ]
+  }
+}
