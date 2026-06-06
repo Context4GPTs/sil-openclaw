@@ -1,0 +1,50 @@
+{
+  "id": "sil",
+  "name": "sil",
+  "description": "Skeleton OpenClaw plugin for sil — registers stub tools a developer copies to add real ones.",
+  "version": "0.1.0",
+  "skills": ["./skill"],
+  "activation": {
+    "onCapabilities": ["tool"]
+  },
+  "contracts": {
+    "tools": [
+      "sil_echo",
+      "sil_ping"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "sil_api_url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Override for the sil backend URL. Falls back to the SIL_API_URL env var, then https://sil.4gpts.com. The skeleton's stub tools never call it; it exists to demonstrate the plugin-config override path."
+      }
+    }
+  },
+  "uiHints": {
+    "sil_api_url": {
+      "label": "sil backend URL",
+      "help": "Override only for staging or self-hosted deployments. Unused by the stub tools.",
+      "placeholder": "https://sil.4gpts.com",
+      "advanced": true
+    }
+  },
+  "security": {
+    "shipsRuntimeCode": true,
+    "packagingNote": "Compiled JavaScript ships under ./dist. The skeleton registers stub tools that return placeholder responses and perform no I/O — no network, no filesystem, no credentials. register() is synchronous and opens nothing.",
+    "registersLongLivedService": false,
+    "serviceIds": [],
+    "runsTimers": false,
+    "inboundHttpRoutes": [],
+    "networkEndpoints": [],
+    "filesystemScope": [],
+    "credentialsOnDisk": [],
+    "noNativeModules": true,
+    "noChildProcess": true,
+    "noInstallScripts": true,
+    "reportVulnerabilitiesTo": "https://x.com/4gpts"
+  }
+}
