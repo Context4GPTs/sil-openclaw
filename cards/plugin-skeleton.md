@@ -176,11 +176,53 @@ tier ∈ {unit, integration, e2e}. The `tiers:` frontmatter is the union of tier
 See .claude/skills/adversarial-testing/references/testing-tiers.md for tier definitions.
 Both product-owner and solutions-architect are responsible for these — product-owner
 frames the behavior, solutions-architect tags the tier.
+
+product-owner wrote the Given/When/Then below with best-guess tier tags; per the architect's
+handoff note, the tier tag is authoritative — solutions-architect may retag and sets `tiers:`.
 -->
+
+**Plugin loads correctly**
+
+- `[unit]` Given the entry module is imported with `definePluginEntry` mocked to capture the register callback, when `register(api)` is invoked with a mock plugin api, then it completes synchronously without throwing and emits exactly one `sil_plugin_loaded` info log marker. (mirrors klodi `index.test.ts:157`)
+- `[unit]` Given a mock plugin api whose `registerTool`/logger/lifecycle are spies, when `register(api)` runs, then it opens no socket, arms no timer, and starts no long-lived resource (the register call returns and does not hold the event loop open). (the klodi install-hang failure mode, architect Risk #2)
+- `[unit]` Given the built package, when `openclaw.plugin.json` and `package.json` are parsed, then the manifest has non-empty `id`, `name`, `description`, `version`, a `skills` array, and a `contracts.tools` array, and `package.json` has `type: "module"`, `main` pointing at the built entry, and an `openclaw` compat block declaring `pluginApi` and `minGatewayVersion`.
+- `[integration]` Given the packed plugin artifact and a pinned OpenClaw host, when the host installs the plugin and starts, then the install log contains the `sil_plugin_loaded` marker and the install subprocess exits cleanly (no hang). (mirrors klodi `scripts/smoke-plugin-load.sh`; architect handoff downgrades this to an "imports built entry, runs captured register() against mock api, asserts no-throw + marker logged" integration test if no Docker host is available here — the dockerized version is a follow-up card)
+- `[e2e]` Given a configured OpenClaw agent with the plugin enabled, when the agent boots and a session starts, then the host reports the plugin as loaded/active and surfaces no load error. (architect scoped at most one e2e, only if cheap; otherwise covered by the integration downgrade above)
+
+**Skill is discoverable**
+
+- `[unit]` Given the plugin manifest, when its `skills` paths are resolved, then each path contains a `SKILL.md` whose YAML frontmatter parses and exposes a non-empty `name` and `description`. (mirrors klodi `skill-content.test.ts`)
+- `[unit]` Given `skill/SKILL.md`, when its body is read, then it names every stub tool the plugin registers, so the agent's session-start tool check has a source of truth.
+- `[integration]` Given the plugin loaded in the host, when the agent inspects its available skills, then the plugin's skill appears with the `name` declared in its frontmatter.
+
+**Tools register and return stub responses**
+
+- `[unit]` Given a mock plugin api, when `register(api)` runs, then `api.registerTool` is called once for every name listed in `openclaw.plugin.json#contracts.tools` — the set of registered names equals the set of manifest tool names (no drift in either direction). (mirrors klodi `index.test.ts:73`; architect tags this `[integration]` because it crosses the JSON manifest file + the TS registration code — defer to that tag)
+- `[unit]` Given a registered stub tool, when its `execute` is called with valid params, then it returns a well-formed `ToolResult` of shape `{ content: [{ type: "text", text: <json-string> }] }` carrying a placeholder payload, and performs no network/backend call. (stub shape = klodi `jsonResult`, `src/lib/tool-result.ts:26`)
+- `[unit]` Given a registered stub tool with a typed parameter schema, when `execute` receives params, then the placeholder payload echoes the received params (proving the request→response wiring is real even though the body is stubbed).
+- `[integration]` Given the plugin loaded in the host, when the agent lists available tools, then every name in `contracts.tools` is present and invocable, and invoking one returns the stub `ToolResult` without error.
+
+**A developer can add a new tool by following the existing pattern**
+
+- `[unit]` Given the skeleton ships at least two tool stubs, when their registration code is compared, then both follow the same shape (a `registerTool` call inside a `registerXTools(api)` group wired into `register()`), so "the existing pattern" is demonstrably a pattern and not a single example.
+- `[unit]` Given a developer adds a `registerTool` call but omits the corresponding `contracts.tools` manifest entry (or vice-versa), when the manifest-names-equals-registered-names test runs, then it FAILS — the guardrail makes the add-a-tool pattern self-enforcing. (architect Risk #3 marks this test mandatory, not optional)
+- `[unit]` Given `CLAUDE.md` (and the README "how to add a tool" note the architect specced), when that section is read, then it states the three required steps: register the tool in a group, wire the group into `register()`, and add the name to `contracts.tools`.
+
+**Repo scaffolding consistent with the klodi pattern**
+
+- `[unit]` Given the repo root, when its tree is inspected, then `CLAUDE.md` exists and `docs/decisions/`, `docs/knowledge/`, and `docs/product/` each exist with an `INDEX.md` matching the established docs convention.
+- `[unit]` Given `package.json` declares build and test scripts, when `build` (tsc → `dist/`) and `test` (vitest) run on a clean checkout, then both succeed (the skeleton is buildable and its stub tests are green from the first commit).
 
 ### Open questions (if any)
 
-<!-- escalate to founder if blocking -->
+<!-- escalate to founder if blocking; resolved-inline assumptions below carry the most defensible default so the dev pair is never blocked. -->
+
+No blocking questions for the founder. The architect's `### Approach` block carries the matching structural assumptions (TS/Node 22, `sil` / `@4gpts/sil` id, `sil_*` tools, ≥2 stubs, no NATS, tsc+vitest, dockerized smoke deferred); the behavioral assumptions below agree with it.
+
+- **ASSUMPTION (behavioral) — stub tools call no backend and return synchronously.** "Placeholder responses" (card intent) means each `execute` returns `jsonResult({...})` with a stubbed payload echoing its params; no network, no timer, no credential I/O. This is also what keeps `register()` from holding the event loop open (architect Risk #2 / klodi `smoke-plugin-load.sh:261`).
+- **ASSUMPTION (behavioral) — "follow the existing pattern" is satisfied by ≥2 same-shape stub tools plus a short prose note**, not a generator. The acceptance test asserting manifest-names == registered-names is what makes the pattern self-enforcing for the next dev; the prose note states the three add-a-tool steps.
+- **ASSUMPTION (behavioral) — tool names are neutral skeleton names (`sil_ping`, `sil_echo`), not `klodi_*`.** This is a fresh plugin, not the klodi marketplace; the names exist only to demonstrate the registration shape. Founder can rename at the manifest+package level without touching structure.
+- **DEFERRED (flagged, not blocking) — the full dockerized publish-shape smoke (`vendor.mjs` + `smoke-plugin-load.sh`).** The architect scoped this out of this card. Consequence: the `[integration]`/`[e2e]` host-load criteria describe the eventual target but are verified at the lighter `tsc`-build + vitest "loads without throwing + marker logged" level for *this* card, with the dockerized host-load proof tracked as a follow-up. Surfaced so the dev pair and orchestrator know the load proof is staged, not skipped.
 
 ### → Handoff to In Dev (next agents: expert-developer, qa-developer) — solutions-architect
 
