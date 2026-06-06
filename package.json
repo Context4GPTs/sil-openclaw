@@ -1,0 +1,52 @@
+{
+  "name": "@4gpts/sil",
+  "version": "0.1.0",
+  "description": "OpenClaw plugin skeleton for sil — registers stub tools a developer can copy to add real ones.",
+  "license": "Apache-2.0",
+  "homepage": "https://4gpts.com",
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "sil",
+    "agent",
+    "4gpts"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "skill",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.4.1",
+      "minGatewayVersion": ">=2026.4.15"
+    },
+    "build": {
+      "openclawVersion": "2026.4.15",
+      "pluginSdkVersion": "2026.4.15"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "0.34.14"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "typescript": "5.8.3",
+    "vitest": "4.1.2"
+  }
+}
