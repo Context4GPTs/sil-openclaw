@@ -4,8 +4,8 @@ title: Scaffold OpenClaw plugin skeleton
 slug: plugin-skeleton
 work_type: feature
 tiers: [unit, integration, e2e]
-status: review
-agents: [code-quality-guardian]
+status: distilling
+agents: []
 priority: 2
 created: 2026-06-06
 updated: 2026-06-06
@@ -305,11 +305,43 @@ No blocking questions for the founder. The architect's `### Approach` block carr
 
 ## Review round 1 — code-quality-guardian
 
-<!-- verdict + issues; runs against the open PR's diff (PR was opened by expert-developer at the in-dev → review transition) -->
+**Verdict: PASS.**
+
+Reviewed the full PR #1 diff (`git diff main...card/plugin-skeleton` — 24 plugin files, 0 prior code to regress) against the klodi reference (`/Users/knitlybak/GitHub/4gpts/klodi/klodi-plugin/adapters/openclaw`, read-only) and the card's "Surfaces NOT created" boundary. Read every source file, every test, all configs, the manifest, the skill, and the docs taxonomy. The reference is faithfully *adapted* — load-bearing shape mirrored (entry, `jsonResult`, register-fn pattern, mock-api harness, tsconfig/manifest), marketplace machinery correctly stripped. No criterion unmet, no named risk realized, no security/type hole, no test that lies. Nits only — none block a scaffold stage.
+
+### Evidence — build/test observed firsthand (not taken on trust)
+
+Ran in the worktree on `card/plugin-skeleton` HEAD (`b5290f3`), Node v24.11.0, pnpm 10.21.0:
+
+- `pnpm typecheck` (`tsc --noEmit` over all of `src` incl. tests) → **exit 0**, clean.
+- `pnpm build` (`tsc -p tsconfig.build.json`) → **exit 0**; emits exactly `dist/{index,lib/config,lib/tool-result,tools/examples}.js` — no `.d.ts` (declaration off in build config), no test files (excluded). Matches spec.
+- `pnpm test` (vitest 4.1.2, forks pool) with `dist/` present → **7 files / 78 tests / 0 failed**, exit 0, 305ms. With `dist/` present the `plugin-load.integration.test.ts` exercised the **compiled-artifact** branch, not just the `src` fallback.
+- Working tree clean after build+test; `dist/` stayed gitignored. `git ls-files` confirms **no** `dist/`, `node_modules/`, `*.tgz`, or coverage committed.
+
+### Dimension sweep
+
+- **Spec fidelity (17/17 criteria).** 15 covered by the suite; #17 (build+test succeed) correctly proven by live toolchain execution rather than a recursive self-test; the two host-inspection criteria (#8, #12) folded into the sanctioned no-Docker downgrade + the drift-guard/frontmatter-name coverage. The `[e2e]` host-active criterion is the architect-sanctioned downgrade-to-integration (dockerized publish-shape smoke deferred to a follow-up card) — an explicitly-staged deferral, not an unmet criterion.
+- **`register()` synchronicity (hard constraint) — VERIFIED.** `src/index.ts` applies config overrides → `registerExampleTools` → logs `sil_plugin_loaded` once with `{message, api_url, api_url_source}`; opens nothing. `index.test.ts` spies on `setTimeout`/`setInterval`/`setImmediate`/`fetch` during `register()` and asserts none fire. The klodi install-hang failure mode is guarded.
+- **Manifest↔code drift guard — VERIFIED and meaningful.** `manifest-contract.integration.test.ts` reads the real `openclaw.plugin.json#contracts.tools` (`["sil_echo","sil_ping"]`), runs the real `registerExampleTools` against the mock, set-equals BOTH directions, **and** the "guard actually bites" block proves the equality check rejects a perturbed set in each failure direction (extra-registered name; ghost-declared name), with `size>0`/`>=2` sanity so it can't pass on empty sets. Not tautological.
+- **Type safety — clean, strict on.** `strict: true`; typecheck exit 0. **Zero `any`** anywhere (grep-confirmed across `src` incl. tests). The only loose-typed surfaces are the two `Record<string, unknown>` SDK-boundary fields (genuinely correct — the SDK cannot model arbitrary plugin schemas — and documented), a single `as unknown as MockPluginAPI` in the test mock (standard double pattern), and a deliberate `123 as unknown as string` adversarial fixture. The SDK `.d.ts` is trimmed to exactly what the stubs consume (dropped `registerService`/`registerHttpRoute`/`runtime`/`SystemAPI`/wake plumbing + the now-unused `node:http` import) — tracks the reference's contract, carries no `any` the reference didn't.
+- **Security — clean, manifest honest.** No credentials, no network, no child process, no install scripts in shipped code. The manifest `security` block (`networkEndpoints: []`, `filesystemScope: []`, `credentialsOnDisk: []`, `runsTimers: false`) reflects the skeleton's real empty threat surface — confirmed against the code, NOT transcribed from klodi's NATS/R2/NKey entries. No injection/XSS surface (no user-facing I/O).
+- **Over-scaffolding (the #1 named risk) — did NOT materialize.** None of "Surfaces NOT created" reappear: no `src/service/`, no `vendor.mjs`, no `copy-skill.mjs`, no `smoke-plugin-load.sh`, no `adapters/` nesting, no `@klodi/*`/NATS/JetStream deps. `package.json` deps are flat (`@sinclair/typebox` runtime; `typescript`/`vitest`/`@types/node` dev) — all pinned to the reference's exact versions. No `klodi_*` leak in shipped code/manifest/skill (the only `klodi_` hits are in a test asserting their *absence*).
+- **Hardcoded values — none that violate.** The one module constant `DEFAULT_API_URL = "https://sil.4gpts.com"` is the card-sanctioned env-fallback terminal default (the card asked for "an env fallback", which implies a default), documented as notional, never called by the stubs.
+- **Complexity / anti-patterns / architecture — clean.** Functions tiny (largest ~15 lines), nesting ≤2, no god objects, no long parameter lists, no legacy/shims (greenfield). Clean layering (`index → tools → lib`, ambient types), no circular deps, no domain-importing-infra. The "adapt, don't transcribe" decisions correctly avoid the lava-flow trap of dragging in klodi's dead subsystems.
+- **Test quality — substantive, no tautologies.** `skill-content.test.ts`'s frontmatter extractor genuinely rejects malformed blocks (so "parses" is real); `examples.test.ts` covers empty-params round-trip, cross-stub structural-shape uniformity, `isError`-undefined-on-success, and a fetch-egress negative-proof; `repo-scaffold.integration.test.ts`'s 3-step "add a tool" check is adversarial about completeness (requires the `contracts.tools` step) and enumeration.
+- **Knowledge capture — adequate.** Non-obvious WHYs captured inline (the `clearAllMocks`/closure gotcha, the `api.config`-vs-`pluginConfig` footgun, the trimmed-`.d.ts` rationale, the honest-security-block decision) and in the card body for the distiller. `CLAUDE.md` carries the canonical "How to add a tool" 3-step note + the synchronous-`register()` invariant.
+
+### Non-blocking notes (nits — do NOT bounce the stage; recorded for the distiller / a future transport card)
+
+- **P3 — disclosed adversarial-test gaps (already flagged by qa).** The no-timer guard spies only *global* timers (a `node:timers` import would slip past); "no backend call" spies only `globalThis.fetch` (a raw `node:http`/socket would slip past). Honest partial negative-proofs, fully acceptable for a zero-I/O skeleton with no timers and no transport today. Upgrade to fake-timers / broader egress assertions if/when a real transport lands — that is the follow-up card's concern, not this scaffold's.
+- **P3 — notional default API URL.** `DEFAULT_API_URL` is a baked module constant the stubs never call. The dev pair correctly flagged "env-only with no baked default" as a founder judgment call; the card's "env fallback" wording sanctions the terminal default, so this stands. No action.
+- **P3 — dockerized host-load smoke deferred** (sanctioned). The compiled-`dist` import + `register()`-against-mock load proof runs here; the real-gateway publish-shape smoke (klodi `smoke-plugin-load.sh` shape) is a tracked follow-up card. Surfaced, not skipped.
+
+Proceeding to distillation. The merge target is clean; the distiller reads the diff directly.
 
 ### → Handoff back to In Dev (if FAIL/REVIEW)
 
-<!-- fix list -->
+N/A — verdict is PASS. No fix list.
 
 ## Distillation — solutions-architect
 
