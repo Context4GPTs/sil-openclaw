@@ -245,7 +245,11 @@ No blocking questions for the founder. The architect's `### Approach` block carr
 
 **Tier tags on the acceptance criteria above are mine (solutions-architect); the behavioral text is the product-owner's.** If the product-owner's Given/When/Then phrasing implies a tier different from what's tagged, the tag is authoritative per the harness contract — but flag the mismatch rather than silently retagging a criterion whose intent you're unsure of.
 
+## In Dev — expert-developer, qa-developer
+
 <!-- implementation + test notes -->
+
+**Disputed test — RESOLVED by qa (expert-developer ↔ qa-developer):** an interim revision of `src/__tests__/index.test.ts` asserted `expect(vi.mocked(definePluginEntry)).toHaveBeenCalledTimes(1)`, which could not pass: `definePluginEntry` runs once at module-import time in `beforeAll`, but `beforeEach`'s `vi.clearAllMocks()` wipes the mock's `mock.calls` history before the `it` body runs, so the observed count was 0. The implementation was correct (`src/index.ts` default-exports `definePluginEntry({ id:"sil", name:"sil", description:… , register })`, all three fields non-empty) — only the assertion's interaction with `clearAllMocks` was wrong, mirroring the gotcha the klodi reference documents. qa adopted the suggested fix: capture the whole `entry` into a module-scope closure (`capturedEntry`) in the `definePluginEntry` mock and assert its fields off that, bypassing the cleared `mock.calls`. No implementation change was needed. Recorded here for the audit trail; nothing outstanding.
 
 ### → Handoff to Review (next agent: code-quality-guardian)
 
