@@ -3,9 +3,9 @@ type: card
 title: Scaffold OpenClaw plugin skeleton
 slug: plugin-skeleton
 work_type: feature
-tiers: []
-status: discovery
-agents: [solutions-architect, product-owner]
+tiers: [unit, integration, e2e]
+status: stand-by
+agents: []
 priority: 2
 created: 2026-06-06
 updated: 2026-06-06
