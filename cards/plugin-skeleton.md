@@ -4,15 +4,15 @@ title: Scaffold OpenClaw plugin skeleton
 slug: plugin-skeleton
 work_type: feature
 tiers: [unit, integration, e2e]
-status: in-dev
-agents: [expert-developer, qa-developer]
+status: review
+agents: [code-quality-guardian]
 priority: 2
 created: 2026-06-06
 updated: 2026-06-06
 base_branch: main
 worktree: /Users/knitlybak/GitHub/4gpts/sil/sil-openclaw/.claude/worktrees/card-plugin-skeleton
 branch: card/plugin-skeleton
-pr: null
+pr: https://github.com/Context4GPTs/sil-openclaw/pull/1
 merged_commit: null
 epic_id: scaffold-sil
 origin: goal:scaffold-sil-solution
