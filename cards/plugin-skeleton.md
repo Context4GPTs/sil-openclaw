@@ -4,8 +4,8 @@ title: Scaffold OpenClaw plugin skeleton
 slug: plugin-skeleton
 work_type: feature
 tiers: []
-status: backlog
-agents: []
+status: discovery
+agents: [solutions-architect, product-owner]
 priority: 2
 created: 2026-06-06
 updated: 2026-06-06
