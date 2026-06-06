@@ -35,10 +35,24 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import type { PluginAPI } from "openclaw/plugin-sdk";
 
+interface CapturedEntry {
+  id: string;
+  name: string;
+  description: string;
+  register: (api: PluginAPI) => void;
+}
+
 let capturedRegisterFn: ((api: PluginAPI) => void) | null = null;
+// The whole entry is captured into a closure variable (not read from
+// definePluginEntry.mock.calls) because beforeEach's vi.clearAllMocks()
+// wipes the call history recorded during the one-shot beforeAll import —
+// but a closure variable survives the reset. Same reason the reference
+// adapter keeps `capturedRegisterFn` at module scope.
+let capturedEntry: CapturedEntry | null = null;
 
 vi.mock("openclaw/plugin-sdk/plugin-entry", () => ({
-  definePluginEntry: vi.fn((entry: { register: (api: PluginAPI) => void }) => {
+  definePluginEntry: vi.fn((entry: CapturedEntry) => {
+    capturedEntry = entry;
     capturedRegisterFn = entry.register;
     return entry;
   }),
@@ -49,7 +63,6 @@ vi.mock("openclaw/plugin-sdk/plugin-entry", () => ({
 // tools the group registers — that's examples.test.ts's job.
 vi.mock("../tools/examples.js", () => ({ registerExampleTools: vi.fn() }));
 
-import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { registerExampleTools } from "../tools/examples.js";
 import {
   applyPluginConfigOverrides,
@@ -80,15 +93,12 @@ describe("plugin entry — registration contract", () => {
   });
 
   it("calls definePluginEntry with non-empty id, name, and description", () => {
-    expect(vi.mocked(definePluginEntry)).toHaveBeenCalledTimes(1);
-    const entry = vi.mocked(definePluginEntry).mock.calls[0]![0] as {
-      id: string;
-      name: string;
-      description: string;
-    };
-    expect(entry.id.length).toBeGreaterThan(0);
-    expect(entry.name.length).toBeGreaterThan(0);
-    expect(entry.description.length).toBeGreaterThan(0);
+    // Read from the closure capture, not definePluginEntry.mock.calls:
+    // beforeEach's clearAllMocks() wipes the call recorded at import time.
+    expect(capturedEntry).not.toBeNull();
+    expect(capturedEntry!.id.length).toBeGreaterThan(0);
+    expect(capturedEntry!.name.length).toBeGreaterThan(0);
+    expect(capturedEntry!.description.length).toBeGreaterThan(0);
   });
 
   it("wires the example tool group into register()", () => {
