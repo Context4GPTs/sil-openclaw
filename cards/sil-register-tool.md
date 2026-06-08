@@ -207,9 +207,32 @@ sil-services/cards/done/2026/sil-web-auth-endpoints.md.
 
 **Test strategy.** Unit tier (mock api + temp dir, no network): PKCE derivation, credential round-trip/perms/verifier-absence, the already-registered short-circuit, the response classifier, URL construction, and prompt non-blocking return. Integration tier (real poller+client+credentials wired, **only `fetch` mocked** — the host SDK boundary): the full poll→claim lifecycle across all status codes (200-success once, 200-pending keeps going, 409/410/404 terminal, 5xx retry, budget-exhaustion timeout with no leftover timer), the two-data-dir isolation slice (SC8 in-repo), and refresh (rotate tokens.json, Auth0 never contacted, 401 terminal). The full cross-service + multi-instance E2E is sil-stage's golden example (goal SC9) — out of scope for this repo. qa-developer writes these RED first per `adversarial-testing`; expert-developer takes them GREEN.
 
-## In Dev — <agents>
+## In Dev — qa-developer, expert-developer
 
 <!-- implementation + test notes -->
+
+### Tests written (qa-developer, RED → verified GREEN, 2026-06-08)
+
+Adversarial test suite authored per `adversarial-testing` + `test-driven-development`. Tests are the spec; none were weakened to match the implementation. The expert-developer was implementing concurrently on this same branch, so several suites went GREEN as soon as the matching module landed — I re-ran the full suite as the independent verifier and confirm every unit+integration acceptance criterion is pinned and passing.
+
+**Counts.** 77 tests across 6 new files (61 unit, 15 integration + 1 token-leak unit). Full branch suite: **155/155 green**, `pnpm typecheck` clean, `pnpm build` clean.
+
+| File | Tier | Tests | What it pins |
+|---|---|---|---|
+| `src/__tests__/lib/pkce.test.ts` | unit | 12 | `deriveChallenge` against the FIXED RFC 7636 verifier→challenge vector (the same vector sil-web pins) + independent node:crypto cross-check; hashes-the-verifier-not-the-challenge; 43-char base64url no padding; `newVerifier`/`newSessionId` match sil-web's format gates. The highest-risk drift point (a wrong digest = uniform 404, no diagnostic). |
+| `src/__tests__/lib/credentials.test.ts` | unit | 14 | round-trip (write→read) into the resolved data dir via the `SIL_DATA_DIR` override; `getDataDir` resolution order (env→XDG→home); first-run dir creation; **0600** on every file incl. no leftover world-readable temp; the **verifier-never-on-disk** invariant. |
+| `src/__tests__/lib/sil-client.test.ts` | unit | 12 | the **200-pending vs 200-success classifier** (the subtlest bug — both are HTTP 200, discriminant is `access_token` presence, NOT `res.ok`); 409/410/404 stay distinct terminals; 5xx → retryable (not terminal); half-token 200 not treated as success. |
+| `src/__tests__/lib/poller.test.ts` | unit | 9 | bounded interval loop; stop-on-terminal; stop-on-deadline with a synthetic timeout signal (no silent stall); **no live timer after ANY exit** (`vi.getTimerCount()===0`) — terminal, deadline, and `stop()`; retryable keeps the loop alive within budget. |
+| `src/__tests__/tools/identity.test.ts` | unit | 15 | `sil_register` no-input shape; fresh-run auth_url EXACT form `<host>/authorize?session=<uuid>&code_challenge=<43-char S256>` (exactly those two params, digest not verifier); host override pluginConfig→env→default; prompt non-blocking return; already-registered short-circuit (no fetch, no timer, no overwrite, no auth_url); verifier-never-on-disk after a full run; **tokens never logged** (canary across all logger levels). |
+| `src/__tests__/register-claim.integration.test.ts` | integration | 15 | real poller+client+credentials wired, **only `fetch` mocked**: 200-success persists tokens.json+config.json exactly once + no timer leak; 200-pending keeps polling + persists nothing; 409/410/404 terminal (no persist, no leak); 5xx + network-error retry within budget; budget-exhaustion timeout with **no live timer**; **SC8** two-data-dir isolation; **SC7** refresh rotates tokens.json, contacts ONLY the resolved `sil_api_url` origin (Auth0 never called), 401 → terminal must-re-register. Wire shapes pinned to the merged contract (`sil-services/cards/done/2026/sil-web-auth-endpoints.md`). |
+
+**The `[e2e]` criterion is DEFERRED** (out of scope for this repo, as the card states): "two real plugin instances vs live sil-web + Postgres" is owned by the sil-stage golden example / goal SC9. No fake e2e was written.
+
+**What I verified independently (post-GREEN):** full suite 155/155 across 3 re-runs of the integration file (deterministic, not flaky — the fake-timer + async-fs settle is drained explicitly); typecheck clean; build clean; the manifest drift guard passes (3-step tool-add complete: registered in `registerIdentityTools`, wired into `register()`, `sil_register` in `contracts.tools`).
+
+**For the review / next-card adversarial pass to re-examine (NOT blocking — coverage notes, not test weakenings):**
+- **Un-awaited credential write on success.** `tools/identity.ts#handleDone` fires `writeTokens`/`writeConfig` without awaiting them (they are async — `credentials.ts` uses `await rename`). Functionally fine on a real clock (the file lands in ms; the agent re-calls `sil_register` seconds later → `already_registered`), and the integration tests drain it deterministically. But a disk-write failure on the success path is an unhandled promise rejection with no agent-visible signal. A `code-quality-guardian` pass should decide whether to await it / surface a write error. The inline comment at `identity.ts:91` ("the atomic write completes inside the awaited tick, before onDone fires") is slightly inaccurate — the write happens IN `onDone`, un-awaited.
+- **`security` disclosure block.** Confirm the expert updated `openclaw.plugin.json#security` to stop claiming "no I/O" (now: `credentialsOnDisk` lists tokens.json/config.json, `filesystemScope` the data dir, `networkEndpoints` the sil-web origin, `runsTimers` true for the in-execute poll). `package-manifest.integration.test.ts` pins this block's shape — keep it truthful.
 
 ### → Handoff to Review (next agent: code-quality-guardian)
 
