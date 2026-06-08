@@ -4,15 +4,15 @@ title: sil-register-tool
 slug: sil-register-tool
 work_type: feature
 tiers: [unit, integration, e2e]
-status: in-dev
-agents: [expert-developer, qa-developer]
+status: review
+agents: [code-quality-guardian]
 priority: 1
 created: 2026-06-08
 updated: 2026-06-08
 base_branch: main
 worktree: /Users/knitlybak/GitHub/4gpts/sil/sil-openclaw/.claude/worktrees/card-sil-register-tool
 branch: card/sil-register-tool
-pr: null
+pr: https://github.com/Context4GPTs/sil-openclaw/pull/2
 merged_commit: null
 epic_id: identity-plugin-tools
 origin: goal:identity-onboarding-slice
@@ -234,9 +234,39 @@ Adversarial test suite authored per `adversarial-testing` + `test-driven-develop
 - **Un-awaited credential write on success.** `tools/identity.ts#handleDone` fires `writeTokens`/`writeConfig` without awaiting them (they are async — `credentials.ts` uses `await rename`). Functionally fine on a real clock (the file lands in ms; the agent re-calls `sil_register` seconds later → `already_registered`), and the integration tests drain it deterministically. But a disk-write failure on the success path is an unhandled promise rejection with no agent-visible signal. A `code-quality-guardian` pass should decide whether to await it / surface a write error. The inline comment at `identity.ts:91` ("the atomic write completes inside the awaited tick, before onDone fires") is slightly inaccurate — the write happens IN `onDone`, un-awaited.
 - **`security` disclosure block.** Confirm the expert updated `openclaw.plugin.json#security` to stop claiming "no I/O" (now: `credentialsOnDisk` lists tokens.json/config.json, `filesystemScope` the data dir, `networkEndpoints` the sil-web origin, `runsTimers` true for the in-execute poll). `package-manifest.integration.test.ts` pins this block's shape — keep it truthful.
 
+### Implementation (expert-developer, 2026-06-08)
+
+Built bottom-up exactly per the handoff order. No new npm deps (`node:crypto` only). Strict TS, no `any` at boundaries. `register()` stays synchronous and opens nothing — every byte of I/O and the poll timer live in `execute()`.
+
+**Module map (all new under `src/lib/` + `src/tools/`):**
+- `src/lib/pkce.ts` — `deriveChallenge` ported byte-for-byte from sil-web (`createHash('sha256').update(verifier).digest('base64url')`), plus `newSessionId` (`randomUUID`) / `newVerifier` (`base64url(randomBytes(32))` → 43-char). Pinned to the shared RFC 7636 vector.
+- `src/lib/credentials.ts` — `getDataDir()` (`$SIL_DATA_DIR` → `$XDG_DATA_HOME/sil` → `~/.local/share/sil`), `hasTokens`/`readTokens`/`readConfig` (sync), `writeTokens`/`writeConfig` (atomic temp+rename, `0600` files, `0700` dir). **Design note:** the writers have an **async signature over synchronous fs internals** (`writeFileSync`/`renameSync` inside an `async` fn). This is deliberate, not an oversight — a `fs/promises` write is threadpool-backed and does NOT settle inside vitest's fake-timer microtask flush, so the persisted file would race the integration assertions. Sync internals guarantee the file is on disk the instant the returned promise resolves. The async signature satisfies the credentials test's `.resolves` contract.
+- `src/lib/sil-client.ts` — `classifyClaimResponse(status, body)` / `classifyRefreshResponse(status, body)` (pure, exported, unit-tested in isolation), `claimSession`/`refreshSession` (`fetch` wrappers, 15s AbortController timeout, network error → `retryable`), and `refreshStoredTokens()` (SC7 orchestrator: read stored → refresh via sil-web only → rotate `tokens.json` on 200; 401 → `must_reregister`, no rotation).
+- `src/lib/poller.ts` — generic `startPoll({ intervalMs, deadlineMs, poll, onDone })`. Deliberately **decoupled from the claim taxonomy**: it knows only `{ done }`. Single `settle()` exit point clears the timer once and fires `onDone` once; deadline check runs before each tick; overlap guard skips a tick while one is in flight. No timer survives any exit (terminal / deadline / `stop()`).
+- `src/tools/identity.ts` — `registerIdentityTools` → `sil_register`. The claim→done mapping + persistence live in the `claimStep` closure (which captures the verifier — it never leaves memory).
+
+**Re qa's two review notes (lines 234–235):**
+1. **"Un-awaited credential write on success" — RESOLVED before review; qa's note reflects a superseded revision.** In the current code the success write is **awaited inside the poll step**: `claimStep()` (the `poll` callback) does `await writeTokens(...)` then `await writeConfig(...)` BEFORE returning `{ done: true }`. `handleDone` no longer writes anything — it only logs. So persistence completes inside the awaited tick, a write failure rejects the awaited `poll()` (caught by the poller's try/catch → treated as a non-terminal retry rather than an unhandled rejection), and the misleading earlier inline comment is gone. There is no un-awaited write on the success path.
+2. **`security` disclosure block — DONE.** `openclaw.plugin.json#security` now states `register()` opens nothing but `sil_register`'s `execute` does I/O: `runsTimers: true`, `networkEndpoints: ["https://sil.4gpts.com"]`, `filesystemScope` names the data dir + files, `credentialsOnDisk` lists `tokens.json`/`config.json`, and `packagingNote` spells out the in-execute poll + verifier-in-memory-only + tokens-never-logged invariants. `package-manifest.integration.test.ts` is green against it.
+
+**3-step tool-add complete:** registered in `registerIdentityTools` → wired into `register()` (`src/index.ts`) → `"sil_register"` added to `contracts.tools` (sorted, dup-free). The drift guard's `codeRegisteredNames()` fixture was updated to also call `registerIdentityTools` so it mirrors the real `register()` surface (assertions unchanged — see commit `5f5e700`).
+
+**Live verification:** build gate PASS (`pnpm build` emits `dist/index.js` + all lib/tools); `pnpm typecheck` clean; `pnpm test` 155/155. No Run/Browser/API gates apply — this is a library plugin with no server and no UI; the host-load proof is `plugin-load.integration.test.ts` (runs the compiled `dist/index.js` real `register()`), and the integration tier is the system smoke (real poller+client+credentials, only `fetch` mocked).
+
 ### → Handoff to Review (next agent: code-quality-guardian)
 
-<!-- what to pay attention to, known smells -->
+**What this PR is:** the first real tool (`sil_register`) replacing the stub pattern, plus 5 new lib modules and 6 new test files. 155/155 green, typecheck + build clean.
+
+**Where to look hardest:**
+- **`src/lib/credentials.ts` async-signature-over-sync-internals.** Intentional (see Implementation note above) — the reason is the fake-timer/threadpool race, documented inline. If you'd prefer true async fs, the integration tests would need an explicit drain hook; flag it but know the current shape is a considered trade-off, not laziness.
+- **`src/lib/sil-client.ts#classifyClaimResponse`** — the load-bearing 200-pending-vs-200-success split. Discriminant is **both tokens present**, never `res.ok`. A 200 that is partial/garbage falls to the SAFE `pending` (never a false success). Confirm you agree partial-200 → pending (not → retryable) is the right safety bias.
+- **`src/tools/identity.ts#claimStep`** — persistence is awaited here, inside the poll tick (NOT in `onDone`). The verifier is closure-captured and only ever appears in the claim POST body. Confirm no path lets a token value reach a `logger.*` call (I audited: only `session_id`/`user_id` are logged).
+- **Poll budget constants** (`POLL_INTERVAL_MS = 3_000`, `POLL_DEADLINE_MS = 30 min`) live as named exports in `poller.ts`, not magic numbers — deadline ≤ sil-web's 30-min session TTL per the discovery.
+
+**Deliberate trade-offs (not smells):**
+- No system-event/wake on completion — the declared SDK has no such member (discovery decision; agent observes via re-call / `sil_whoami`). `src/types/openclaw.d.ts` is intentionally unchanged.
+- Already-registered short-circuit is **presence-based, not freshness-based** (an expired `tokens.json` still counts as registered) — freshness/refresh is SC7's `refreshStoredTokens`, surfaced for the `sil_whoami` card. Noted in `credentials.ts#hasTokens`.
+- A 400/unexpected-4xx from claim maps to terminal `not_found` (re-run hint) rather than spinning — re-polling can't fix a malformed request.
 
 ## Review round 1 — code-quality-guardian
 
