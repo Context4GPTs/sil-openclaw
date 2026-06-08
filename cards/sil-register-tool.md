@@ -4,7 +4,7 @@ title: sil-register-tool
 slug: sil-register-tool
 work_type: feature
 tiers: [unit, integration, e2e]
-status: backlog
+status: stand-by
 agents: []
 priority: 1
 created: 2026-06-08
