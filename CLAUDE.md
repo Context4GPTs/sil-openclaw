@@ -6,6 +6,12 @@ Internal contributor-facing instructions for the `sil-openclaw` plugin.
 
 `sil-openclaw` is a standalone OpenClaw plugin (TypeScript, Node 22+, ESM). The plugin lives at the **repo root** — there is no `adapters/` nesting. It is a skeleton: it registers stub tools that return placeholder responses, and exists to be copied when adding real tools. Its structure mirrors the klodi OpenClaw adapter, flattened to one repo and stripped of marketplace machinery (no NATS transport, no persistent service, no vendoring).
 
+**UCP reference.** This plugin implements UCP commerce tools. The spec and SDKs
+live at `../../vendor/ucp/` (see parent `CLAUDE.md` for the full map). Before
+implementing or modifying any tool that touches commerce wire formats, read the
+relevant spec doc in `../../vendor/ucp/spec/docs/specification/`. For TypeScript
+types, check `../../vendor/ucp/js-sdk/src/` (`@ucp-js/sdk`, Zod-generated).
+
 ## Build & test
 
 | Task | Command |
