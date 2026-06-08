@@ -8,6 +8,19 @@ cards/*.md
 !cards/_TEMPLATE.md
 !cards/README.md
 
+# Agent memory — never tracked on any branch; lives on-disk in whichever
+# worktree the agent session is rooted in, surfaced on base via a gitignored
+# symlink (board-sync.sh), exactly like the cards/*.md block above. The whole
+# tree is ignored with no !-exempt: every file here (incl. each agent's
+# MEMORY.md index) is living content, not static scaffolding, so exempting any
+# of it would re-introduce the base churn this rule exists to prevent.
+# NO trailing slash on purpose: a trailing-slash pattern matches directories
+# only and would NOT ignore the base symlink (git sees a symlink as a non-dir),
+# leaving it as untracked dirt that re-blocks board-sync's ff-pull gate. The
+# slash-less form matches BOTH a real agent-memory dir (and everything under it)
+# AND the symlink — verified against git check-ignore.
+.claude/agent-memory
+
 # Kanban runtime state (tick + sync logs)
 .claude/board-state.md
 .claude/sync.log

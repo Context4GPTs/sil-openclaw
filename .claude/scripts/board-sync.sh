@@ -30,6 +30,41 @@ mkdir -p "$WT_ROOT"
 
 log() { printf '[sync] %s\n' "$*"; }
 
+# --- Agent-memory base symlink -----------------------------------------------
+# Mirror of the cards/<slug>.md symlink, but with ONE crucial difference: there
+# is a SINGLE base slot `.claude/agent-memory` (a whole directory), not one link
+# per card. Agent memory is per-AGENT and project-scoped — it accumulates across
+# many cards (every agent subdir at once) — so a per-card link makes no sense; we
+# surface the whole agent-memory dir of one active worktree.
+#
+# WHY a single slot is correct (and why writes never depend on it): each agent
+# runs INSIDE its own worktree session, and the Claude Code platform injects that
+# worktree's own ABSOLUTE memory path — so memory WRITES always land in the right
+# worktree regardless of this link. The link exists purely so a reader (Obsidian)
+# opening the BASE checkout can see *an* active card's memory. With 2+ concurrent
+# worktrees only one can occupy the slot: we use FIRST-WINS (whoever populated the
+# slot keeps it until torn down) — stable, and since it's a visibility nicety not
+# a correctness lever, "which card" is immaterial.
+#
+# Only ever link when the worktree actually has an agent-memory dir AND nothing
+# already occupies the base slot (a real dir shadowing it, or another worktree's
+# still-valid link — first-wins). [ ! -e ] is false for both a real dir and a
+# live symlink, and true for a dangling symlink (cleaned up separately in Phase E).
+agent_memory_link() {
+  # $wt may arrive with a trailing slash (Phase E glob) or without (Phase B
+  # concat); ${wt%/} canonicalizes both so the link text matches the teardown
+  # comparison in Phase D byte-for-byte.
+  local wt="${1%/}" slug="$2"
+  local target_dir="$wt/.claude/agent-memory"
+  local link_path=".claude/agent-memory"
+  # Link text is resolved relative to the link's own dir (.claude/), so strip the
+  # leading ".claude/" from $wt: ".claude/worktrees/card-x" -> "worktrees/card-x".
+  local link_text="${wt#.claude/}/.claude/agent-memory"
+  if [ -d "$target_dir" ] && [ ! -e "$link_path" ]; then
+    ln -s "$link_text" "$link_path" 2>/dev/null && log "$slug: agent-memory symlink created"
+  fi
+}
+
 # --- Phase A: fetch + ff-pull base branch ---
 git fetch --prune origin >/dev/null 2>&1 || { log "fetch failed"; exit 1; }
 
@@ -62,6 +97,10 @@ for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ca
     if [ -f "$card_file" ] && [ ! -e "$link_path" ]; then
       ln -s "../$card_file" "$link_path" 2>/dev/null && log "$slug: symlink created"
     fi
+
+    # Create the agent-memory symlink (.claude/agent-memory → this worktree's copy).
+    # See agent_memory_link()'s header for the single-base-slot rationale.
+    agent_memory_link "$wt" "$slug"
 
     # Sync env files (best-effort, mirrors worktree-ops Step 4a)
     find . -maxdepth 4 -type f \
@@ -118,6 +157,15 @@ for wt in "$WT_ROOT"/card-*/; do
   if [ "$settled" -eq 1 ]; then
     # Remove Obsidian symlink before teardown
     [ -L "cards/$slug.md" ] && rm -f "cards/$slug.md"
+    # Remove the agent-memory slot ONLY if it points at THIS worktree (a single
+    # base slot may belong to a different, still-active worktree — don't orphan
+    # its Obsidian view). Dangling links from a vanished target are swept in
+    # Phase E. Compare the stored link text against this worktree's expected text.
+    wt_canon="${wt%/}"
+    if [ -L ".claude/agent-memory" ] && \
+       [ "$(readlink ".claude/agent-memory")" = "${wt_canon#.claude/}/.claude/agent-memory" ]; then
+      rm -f ".claude/agent-memory" && log "$slug: agent-memory symlink removed"
+    fi
     git worktree remove "$wt" --force >/dev/null 2>&1 || rm -rf "$wt"
     git branch -D "$branch" >/dev/null 2>&1 || true
     log "$slug: torn down (settled)"
@@ -138,10 +186,21 @@ for wt in "$WT_ROOT"/card-*/; do
   if [ -f "$card_file" ] && [ ! -e "$link_path" ]; then
     ln -s "../$card_file" "$link_path" 2>/dev/null && log "$slug: symlink created (reconcile)"
   fi
+
+  # Reconcile the single agent-memory slot: first active worktree with a memory
+  # dir claims it (first-wins — agent_memory_link no-ops once the slot is taken).
+  agent_memory_link "$wt" "$slug"
 done
 # Remove dangling symlinks in cards/
 for link in cards/*.md; do
   [ -L "$link" ] && [ ! -e "$link" ] && rm -f "$link" && log "$(basename "$link" .md): dangling symlink removed"
 done
+# Remove a dangling agent-memory slot (its worktree vanished out from under it).
+# -L && ! -e = symlink whose target no longer resolves; a live link or real dir
+# is left untouched. This prevents a stale link from shadowing a non-worktree
+# agent session's reads on base.
+if [ -L ".claude/agent-memory" ] && [ ! -e ".claude/agent-memory" ]; then
+  rm -f ".claude/agent-memory" && log "agent-memory: dangling symlink removed"
+fi
 
 exit 0
