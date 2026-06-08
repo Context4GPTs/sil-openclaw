@@ -50,4 +50,4 @@ See [`docs/README.md`](./docs/README.md) for the full convention.
 
 ## Standards
 
-The auto-loaded [`.claude/rules/critical-thinking.md`](./.claude/rules/critical-thinking.md) is non-negotiable. Beyond that: strict TypeScript (no `any` at boundaries), no bloat, no hardcoded values that belong in config, fail fast with structured errors, test behavior (mock the host SDK boundary, not logic). The `code-quality-guardian` skill enforces this with a PASS / REVIEW / FAIL verdict before any PR is opened.
+The auto-loaded rules [`.claude/rules/critical-thinking.md`](./.claude/rules/critical-thinking.md) and [`.claude/rules/production-grade-first.md`](./.claude/rules/production-grade-first.md) are non-negotiable — the latter makes production-grade tooling, performance, and code the overriding priority, and we never do backwards-compatibility. Beyond that: strict TypeScript (no `any` at boundaries), no bloat, no hardcoded values that belong in config, fail fast with structured errors, test behavior (mock the host SDK boundary, not logic). The `code-quality-guardian` skill enforces this with a PASS / REVIEW / FAIL verdict before any PR is opened.
