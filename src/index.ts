@@ -24,6 +24,8 @@ import {
   applyPluginConfigOverrides,
   getApiUrl,
   getApiUrlSource,
+  getSilApiUrl,
+  getSilApiUrlSource,
   type SilPluginConfig,
 } from "./lib/config.js";
 import { registerExampleTools } from "./tools/examples.js";
@@ -47,6 +49,8 @@ export default definePluginEntry({
       message: "sil plugin registered.",
       api_url: getApiUrl(),
       api_url_source: getApiUrlSource(),
+      sil_api_base: getSilApiUrl(),
+      sil_api_base_source: getSilApiUrlSource(),
     });
   },
 });

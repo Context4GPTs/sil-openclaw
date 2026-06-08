@@ -440,6 +440,63 @@ describe("sil_whoami — refresh also fails (dead refresh token)", () => {
   });
 });
 
+describe("sil_whoami — 403 forbidden is terminal (NEVER refreshed)", () => {
+  it("403 user_not_provisioned → distinct terminal outcome, NO refresh attempted", async () => {
+    // Architect risk "401 vs 403 conflation": a 403 is a valid-but-unprovisioned
+    // (or principal-mismatch) token — refreshing it changes nothing. A tool that
+    // refreshed on any 4xx would burn a pointless refresh and still fail. The
+    // classifier splits 401/403 (unit-tested); THIS proves the WIRED tool acts
+    // on the split — 403 must not enter the refresh path.
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    const rec = installRouter((kind) =>
+      kind === "identity"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: { access_token: "x", refresh_token: "y" } },
+    );
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+
+    // NO refresh on a 403 (the load-bearing assertion), and exactly one read.
+    expect(rec.refresh.length).toBe(0);
+    expect(rec.identity.length).toBe(1);
+    // Surfaces a terminal, actionable outcome — not a success, not a transient
+    // "try again" (a 403 won't fix itself on retry), not a silent empty.
+    expect(payload["name"]).toBeUndefined();
+    expect(payload["addresses"]).toBeUndefined();
+    const blob = JSON.stringify(payload).toLowerCase();
+    // Carries the actionable provisioning/onboarding hint distinct from the
+    // 401/5xx outcomes (a 403 is "you aren't set up", not "auth expired" or
+    // "server hiccup").
+    expect(blob).toMatch(/provision|onboard|forbidden|not.*set.up/);
+    // NOT framed as a transient/temporary server condition — a 403 won't clear
+    // itself by waiting (it may legitimately tell the user to fix-then-retry,
+    // but it must not read as a passive "temporary, try later" blip).
+    expect(blob).not.toMatch(/temporar|transient|unavailable|try.again.later/);
+  });
+
+  it("does NOT clear tokens.json on a 403 (the token is valid, just unprovisioned)", async () => {
+    // Only a CONFIRMED invalid_grant clears tokens. A 403 token is still a valid
+    // credential (the human just isn't onboarded) — clearing it would force a
+    // pointless re-register. The dead-session clear must be scoped to 401/refresh.
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "identity"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: { access_token: "x", refresh_token: "y" } },
+    );
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    await getTool(api, TOOL).execute("c1", {});
+
+    // The valid token survives — not cleared on a 403.
+    expect(readTokens()).not.toBeNull();
+    expect(readTokens()!.access_token).toBe("valid-but-unprovisioned-at");
+  });
+});
+
 describe("sil_whoami — bounded refresh (no storm)", () => {
   it("a SECOND 401 after a successful refresh is terminal — no second refresh, no third read", async () => {
     // The cardinal risk: a freshly-rotated token still rejected must be terminal,
