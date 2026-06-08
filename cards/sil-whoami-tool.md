@@ -316,6 +316,20 @@ credentials wired, only `fetch` mocked) is the system-level proof and is green.
   stub 200 → `retryable`) encodes the latent-endpoint dependency in code —
   worth a `docs/knowledge/` note tying it to the sil-services follow-on.
 
+### QA coverage note (qa-developer — independent verifier)
+
+**Tests authored RED-first (51 new `it()` across 5 files; `src/__tests__/**`, qa-owned). Full suite 206 pass / 18 files; `pnpm typecheck` clean — re-run independently after the expert reported GREEN.**
+
+- `lib/identity-classify.test.ts` (unit, 14) — `classifyIdentityResponse` 200/401/403/5xx split + the **anti-false-green body gate**. **Mutation-verified**: forcing the classifier to accept any 200 as `ok` fails 6 of these (incl. "STUB body is NOT ok", "name-but-no-addresses is NOT ok") — the tests bite, not coincidentally green against the parallel impl.
+- `lib/sil-api-url.test.ts` (unit, 9) — `getSilApiUrl` resolution **independent of** `getApiUrl`/`sil_api_url` (the two-origin keys never cross-talk).
+- `lib/clear-tokens.test.ts` (unit, 4) — `clearTokens` removes tokens.json, tolerant of absence (no throw), scoped (leaves config.json).
+- `tools/whoami.test.ts` (unit, 9) — no-input shape; not-registered short-circuit (zero fetch, names `sil_register`, no empty/null/crash/hang); success result identity-only (no token/Bearer echo); tokens+JWT+**PII** leak-canary.
+- `whoami.integration.test.ts` (integration, 15; real tool+sil-client+credentials, only `fetch` mocked, URL-routed two-origin double) — happy-path real `{name,addresses}` + Bearer + sil-api origin + no-refresh-on-success; 401→refresh→rotate→retry-NEW-token→identity; refresh-also-fails→terminal+cleared+subsequent-`sil_register`-no-shortcircuit, **exactly 2 identity + 1 refresh** (no-storm); second-401-after-refresh terminal; **403 forbidden terminal at the wired tier** (no refresh, tokens NOT cleared, onboarding hint, not transient-framed); 5xx+network→retryable; two-origin (identity==sil-api, refresh==sil-web, no `auth0.com`); not-registered→zero fetch; rotated tokens reach only tokens.json + retry, never logs/result.
+
+**Every unit + integration acceptance criterion maps to ≥1 test.** e2e (SC9) correctly left out of scope (no live sil-api/Postgres; blocked on the sil-services follow-on) — not faked.
+
+**One signal for the review pass (behavioral question, not a test defect):** the `extractIdentity` gate rejects a 200 with a non-empty `name` but **zero** `addresses` → `retryable` → whoami surfaces "temporarily unavailable" + does not clear tokens. For a real, authenticated user who has simply not added an address yet, that is a non-transient condition mislabelled transient (a soft dead-end). The dev frames the strict gate as the anti-false-green feature (correct vs the stub), but the **empty-but-valid** case is a separate axis the acceptance criteria don't pin ("at least their name and addresses" is ambiguous on empty). I did not encode a contradicting test. When the real sil-api read lands, the architect/PO should decide whether name + empty-addresses is a valid identity; if yes, relax the `addresses.length === 0` reject in `sil-client.ts#extractIdentity` and I'll add the test. Until then the strict gate is acceptable (it cannot produce a false success).
+
 ### → Handoff to Review (next agent: code-quality-guardian)
 
 **Pay attention to:**
