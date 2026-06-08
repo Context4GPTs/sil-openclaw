@@ -35,6 +35,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerExampleTools } from "../tools/examples.js";
+import { registerIdentityTools } from "../tools/identity.js";
 import {
   createMockPluginApi,
   registeredToolNames,
@@ -68,10 +69,14 @@ function manifestToolNames(): Set<string> {
   return new Set(tools as string[]);
 }
 
-/** The set of names the real register code emits against a mock api. */
+/** The set of names the real register code emits against a mock api. Must call
+ * EVERY tool group that src/index.ts#register() wires, or the drift guard goes
+ * stale (a real tool would be registered + manifest-declared yet read as
+ * "missing from code" here). Mirror register() exactly. */
 function codeRegisteredNames(): Set<string> {
   const api = createMockPluginApi();
   registerExampleTools(api);
+  registerIdentityTools(api);
   return registeredToolNames(api);
 }
 
