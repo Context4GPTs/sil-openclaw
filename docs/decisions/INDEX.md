@@ -6,6 +6,6 @@ Sorted by `updated_at` descending (newest first). One row per doc in this folder
 
 | ID | Title | Tags | Updated |
 |---|---|---|---|
-| _(no entries yet)_ | | | |
+| [[sil-two-origin-model]] | Two sil origins: sil-web auth authority + sil-api domain reads | architecture, config, auth, contracts | 2026-06-08 |
 
 See [`../README.md`](../README.md) for the docs convention.

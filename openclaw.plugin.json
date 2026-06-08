@@ -11,7 +11,8 @@
     "tools": [
       "sil_echo",
       "sil_ping",
-      "sil_register"
+      "sil_register",
+      "sil_whoami"
     ]
   },
   "configSchema": {
@@ -21,26 +22,38 @@
       "sil_api_url": {
         "type": "string",
         "format": "uri",
-        "description": "Override for the sil backend URL. Falls back to the SIL_API_URL env var, then https://sil.4gpts.com. The skeleton's stub tools never call it; it exists to demonstrate the plugin-config override path."
+        "description": "Override for the sil-web origin (the auth authority — token refresh, registration). Falls back to the SIL_API_URL env var, then https://sil.4gpts.com."
+      },
+      "sil_api_base": {
+        "type": "string",
+        "format": "uri",
+        "description": "Override for the sil-api origin (the domain service — sil_whoami's identity read). Distinct from sil_api_url (sil-web). Falls back to the SIL_API_BASE env var, then https://api.sil.4gpts.com. Set this at deploy to pin the sil-api host (or to the same origin as sil_api_url if a single gateway fronts both)."
       }
     }
   },
   "uiHints": {
     "sil_api_url": {
-      "label": "sil backend URL",
-      "help": "Override only for staging or self-hosted deployments. Unused by the stub tools.",
+      "label": "sil-web URL (auth)",
+      "help": "The sil-web origin — handles registration and token refresh. Override only for staging or self-hosted deployments.",
       "placeholder": "https://sil.4gpts.com",
+      "advanced": true
+    },
+    "sil_api_base": {
+      "label": "sil-api URL (identity)",
+      "help": "The sil-api origin — sil_whoami reads the user's identity here. Distinct from the sil-web URL. Override for staging or self-hosted deployments.",
+      "placeholder": "https://api.sil.4gpts.com",
       "advanced": true
     }
   },
   "security": {
     "shipsRuntimeCode": true,
-    "packagingNote": "Compiled JavaScript ships under ./dist. register() stays synchronous and opens nothing — it only registers tools. ALL I/O happens inside a tool's execute(): sil_register calls sil-web over the network, writes tokens.json + config.json to the plugin data directory (owner-only, 0600), and arms a bounded background poll timer that stops on the first terminal claim outcome or after the session deadline. The PKCE verifier is held only in memory and is never written to disk. Tokens are never logged.",
+    "packagingNote": "Compiled JavaScript ships under ./dist. register() stays synchronous and opens nothing — it only registers tools. ALL I/O happens inside a tool's execute(): sil_register calls sil-web over the network, writes tokens.json + config.json to the plugin data directory (owner-only, 0600), and arms a bounded background poll timer that stops on the first terminal claim outcome or after the session deadline. sil_whoami reads the stored access token and calls sil-api for the user's identity, refreshing transparently via sil-web on a 401 (at most one refresh + one retry per call, no timer); a confirmed-dead session clears tokens.json. The PKCE verifier is held only in memory and is never written to disk. Tokens and identity PII are never logged.",
     "registersLongLivedService": false,
     "serviceIds": [],
     "runsTimers": true,
     "inboundHttpRoutes": [],
     "networkEndpoints": [
+      "https://api.sil.4gpts.com",
       "https://sil.4gpts.com"
     ],
     "filesystemScope": [
