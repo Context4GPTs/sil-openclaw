@@ -98,8 +98,17 @@ interface StoredTokens {
 /** One recorded outbound request. */
 interface Recorded {
   url: string;
+  /** The HTTP verb fetch was called with (defaults to "GET" when init omits it,
+   * mirroring the fetch spec). Recorded so the identity-read verb is assertable:
+   * the bug is the read using POST; the fix is GET-with-no-body. */
+  method: string;
   bearer: string | null;
+  /** The parsed request body, or null when none was sent. A correct identity GET
+   * carries NO body; the buggy POST carried `{ agent_id }`. */
   body: unknown;
+  /** Whether a request body was present AT ALL (distinct from a body that parses
+   * to null) — a GET must send no body, asserted independently of its content. */
+  hasBody: boolean;
 }
 
 type Reply = { status: number; body: unknown } | "network-error";
@@ -133,6 +142,10 @@ function installRouter(
         headers["Authorization"] ??
         headers["authorization"] ??
         null;
+      // The fetch spec defaults a method-less request to GET; mirror that so an
+      // implementation that passes no `method` reads as GET, not undefined.
+      const method = (init?.method ?? "GET").toUpperCase();
+      const hasBody = init?.body !== undefined && init?.body !== null;
       let body: unknown = null;
       if (typeof init?.body === "string") {
         try {
@@ -141,7 +154,7 @@ function installRouter(
           body = init.body;
         }
       }
-      const req: Recorded = { url, bearer, body };
+      const req: Recorded = { url, method, bearer, body, hasBody };
       all.push(req);
 
       let kind: "identity" | "refresh" | "other";
@@ -258,6 +271,17 @@ describe("sil_whoami — happy path (valid access token)", () => {
     expect(blob).not.toContain("\"kind\"");
     expect(blob).not.toContain("\"verified\"");
     expect(blob).not.toContain("\"note\"");
+
+    // The founder's reported bug, closed at the TOOL level: the full result
+    // envelope is `{ status: "ok", identity: { name, addresses } }` — NOT the
+    // `retryable` the bug produced. Assert the structured shape, not just markers.
+    expect(payload["status"]).toBe("ok");
+    expect(payload["status"]).not.toBe("retryable");
+    const identity = payload["identity"] as { name?: unknown; addresses?: unknown };
+    expect(identity).toBeDefined();
+    expect(identity.name).toBe("Ada Lovelace");
+    expect(Array.isArray(identity.addresses)).toBe(true);
+    expect((identity.addresses as unknown[]).length).toBe(1);
   });
 
   it("calls sil-api with Authorization: Bearer <stored access token>", async () => {
@@ -274,6 +298,46 @@ describe("sil_whoami — happy path (valid access token)", () => {
 
     expect(rec.identity.length).toBe(1);
     expect(bearerToken(rec.identity[0]!)).toBe("the-stored-access-token");
+  });
+
+  it("reads identity with HTTP GET and sends NO request body (the verb fix)", async () => {
+    // THE LOAD-BEARING RED for this card. The bug: fetchIdentity POSTs to
+    // <sil-api>/identity (the unauthenticated enrich STUB, which carries no
+    // `name`), instead of GET-ing the real authenticated self-read (sil-api PR
+    // #7, which derives the user from the JWT `req.user` and takes NO body).
+    //
+    // The pre-existing router routed on `url.includes("/identity")` and never
+    // inspected `init.method`, so a POST and a GET were indistinguishable to it
+    // — the suite stayed GREEN against the buggy POST AND would stay green if
+    // the dev broke the verb. This assertion is the ONLY in-repo signal for the
+    // bug class (the true cross-service proof is sil-stage's e2e, SC9, deferred).
+    //
+    // EXPECT THIS TEST RED against current code (tool sends POST + `{agent_id}`)
+    // and GREEN only after fetchIdentity switches POST→GET with no body.
+    seedTokens("valid-at", "valid-rt");
+    const rec = installRouter((kind) =>
+      kind === "identity"
+        ? { status: 200, body: identityEnvelope() }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    await getTool(api, TOOL).execute("c1", {});
+
+    expect(rec.identity.length).toBe(1);
+    const req = rec.identity[0]!;
+    // The verb is GET — the real self-read route, not the POST enrich stub.
+    expect(req.method).toBe("GET");
+    // And no request body at all: the GET derives the principal from the JWT;
+    // a GET-with-a-body is at best ignored, at worst a runtime error in strict
+    // environments. This asserts the absence of the body INDEPENDENTLY of its
+    // content (a parsed-null body and a never-sent body are different things).
+    expect(req.hasBody).toBe(false);
+    expect(req.body).toBeNull();
+    // Specifically: the stale POST payload `{ agent_id }` is gone — a "POST body
+    // adapted to a GET" would still carry agent_id and is also wrong.
+    expect(JSON.stringify(req.body ?? {})).not.toContain("agent_id");
   });
 
   it("targets the resolved sil-api origin (sil_api_base), not sil-web, not a hardcoded host", async () => {
@@ -342,6 +406,15 @@ describe("sil_whoami — transparent refresh (expired access, valid refresh)", (
     expect((rec.refresh[0]!.body as { refresh_token?: string }).refresh_token).toBe("valid-rt");
     // The RETRY carried the NEW access token (proves re-read after rotation).
     expect(bearerToken(rec.identity[1]!)).toBe("rotated-at");
+    // The taxonomy holds against the NEW request shape: BOTH identity reads —
+    // the initial AND the retry-after-refresh — are bodyless GETs (the verb fix
+    // must not regress the refresh-retry path back to a POST). The refresh leg
+    // (sil-web) stays a POST with a body, as its own contract requires.
+    for (const r of rec.identity) {
+      expect(r.method).toBe("GET");
+      expect(r.hasBody).toBe(false);
+    }
+    expect(rec.refresh[0]!.method).toBe("POST");
     // tokens.json now holds the rotated pair (old expired token is gone).
     const tokens = readTokens();
     expect(tokens!.access_token).toBe("rotated-at");
@@ -461,6 +534,11 @@ describe("sil_whoami — 403 forbidden is terminal (NEVER refreshed)", () => {
     // NO refresh on a 403 (the load-bearing assertion), and exactly one read.
     expect(rec.refresh.length).toBe(0);
     expect(rec.identity.length).toBe(1);
+    // The 403-terminal split is exercised against the NEW request shape: the
+    // read that produced the 403 was a bodyless GET (the verb fix must not
+    // perturb the 401-vs-403 taxonomy).
+    expect(rec.identity[0]!.method).toBe("GET");
+    expect(rec.identity[0]!.hasBody).toBe(false);
     // Surfaces a terminal, actionable outcome — not a success, not a transient
     // "try again" (a 403 won't fix itself on retry), not a silent empty.
     expect(payload["name"]).toBeUndefined();
@@ -546,6 +624,11 @@ describe("sil_whoami — transient failure (network / 5xx, distinguished from te
     expect(rec.refresh.length).toBe(0);
     // Tokens are NOT cleared on a transient (the token may be fine).
     expect(readTokens()).not.toBeNull();
+    // The transient path is bound to the NEW request shape: the read that hit
+    // the 5xx was a bodyless GET.
+    expect(rec.identity.length).toBe(1);
+    expect(rec.identity[0]!.method).toBe("GET");
+    expect(rec.identity[0]!.hasBody).toBe(false);
   });
 
   it("a network error (thrown fetch) on the identity read → retryable, not terminal", async () => {
@@ -560,6 +643,11 @@ describe("sil_whoami — transient failure (network / 5xx, distinguished from te
     expect(blob).toMatch(/retry|try.again|temporar|transient|network|later/);
     expect(rec.refresh.length).toBe(0);
     expect(readTokens()).not.toBeNull();
+    // The thrown-fetch path is bound to the NEW request shape: the attempted
+    // read (recorded before the throw) was a bodyless GET.
+    expect(rec.identity.length).toBe(1);
+    expect(rec.identity[0]!.method).toBe("GET");
+    expect(rec.identity[0]!.hasBody).toBe(false);
   });
 });
 
@@ -618,5 +706,20 @@ describe("sil_whoami — rotated tokens never leak to logs or the result", () =>
     const onDisk = JSON.parse(readFileSync(getTokensPath(), "utf8")) as StoredTokens;
     expect(onDisk.access_token).toBe(ROT_AT);
     expect(bearerToken(rec.identity[1]!)).toBe(ROT_AT);
+
+    // Hygiene asserted against the NEW GET request shape: the credential travels
+    // ONLY in the Authorization header, never in a request body. Both identity
+    // reads are bodyless GETs, and no recorded identity request body carries any
+    // token (the bug's POST body would have been a new exfil surface to audit;
+    // a bodyless GET removes it entirely).
+    for (const r of rec.identity) {
+      expect(r.method).toBe("GET");
+      expect(r.hasBody).toBe(false);
+      const reqBodyBlob = JSON.stringify(r.body ?? {});
+      expect(reqBodyBlob).not.toContain(ROT_AT);
+      expect(reqBodyBlob).not.toContain(ROT_RT);
+      expect(reqBodyBlob).not.toContain("valid-rt");
+      expect(reqBodyBlob).not.toContain("expired-at");
+    }
   });
 });

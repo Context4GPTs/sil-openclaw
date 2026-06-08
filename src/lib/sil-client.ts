@@ -23,21 +23,26 @@
  *
  * Wire contract for the sil-API identity read (a SECOND origin — sil-api, the
  * Fastify domain service — NOT sil-web; bare path, not /api/v1; see the
- * sil-whoami card). The Authorization header carries the stored access token:
+ * sil-whoami card). The authenticated self-read is a BODYLESS GET; the
+ * Authorization header carries the stored access token and IS the principal —
+ * sil-api derives the user from the JWT `sub`, not a request body:
  *
- *   POST <silApiUrl>/identity   Authorization: Bearer <access_token>
- *                               body { agent_id }
+ *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
+ *                               (no body, no content-type)
  *     200 <UCP envelope>{ result: { name, addresses } }  → ok (carries identity)
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     5xx / network / abort                               → retryable
  *
- * The identity lives in the envelope's `result` (the tool unwraps it so the
- * agent sees identity, not transport metadata). The real {name, addresses}
- * payload is LATENT on a sil-services follow-on (sil-api's /identity is still a
- * stub today); `classifyIdentityResponse` therefore narrows DEFENSIVELY — a 200
- * whose result has no usable identity (name) falls to `retryable`, NEVER to a
- * false `ok`, so the suite can't be green while the product promise is unmet.
+ * The VERB is load-bearing: sil-api's `POST /identity` is the agent enrich-STUB
+ * ({kind, verified, subject, ...} — no name/addresses); `GET /identity` is the
+ * real self-read returning {id, name, addresses} (sil-api `handlers/identity.ts`,
+ * PR #7). The identity lives in the envelope's `result` (the tool unwraps it so
+ * the agent sees identity, not transport metadata). `classifyIdentityResponse`
+ * still narrows DEFENSIVELY — a 200 whose result has no usable identity (no
+ * `name`) falls to `retryable`, NEVER to a false `ok`, so a stray stub 200 (or a
+ * malformed body) can't be green while the product promise is unmet. An EMPTY
+ * `addresses: []` IS a valid identity (a provisioned, address-less user).
  *
  * THE subtle correctness point (architect Risk "claim taxonomy mis-mapping"):
  * 200-pending and 200-success are BOTH HTTP 200. `classifyClaimResponse` branches
@@ -60,11 +65,6 @@ import { readTokens, writeTokens } from "./credentials.js";
 /** Per-request timeout: a stalled endpoint (DNS hang, SYN drop) must not wedge
  * a poll tick forever. Mirrors the 15s ceiling the klodi poller uses. */
 const REQUEST_TIMEOUT_MS = 15_000;
-
-/** The agent identity sent to sil-api's `SimplifiedAgentRequest.agent_id`. A
- * stable constant: this plugin is the agent. A per-deployment `sil_agent_id`
- * config key is YAGNI until per-deployment identity is actually wanted. */
-const AGENT_ID = "sil-openclaw";
 
 /** The user identity sil-web returns inside a successful claim. */
 export interface ClaimedUser {
@@ -92,9 +92,14 @@ export type RefreshOutcome =
   | { kind: "invalid_grant" }
   | { kind: "retryable" };
 
-/** A postal address as returned by the sil-api identity read (mirrors
- * `@sil/db`'s AddressRow, narrowed to the fields whoami surfaces; extra
- * fields are tolerated and passed through untyped). */
+/** A postal address as returned by the sil-api identity read. These fields are
+ * only optional HINTS — addresses pass through OPAQUE: `extractIdentity` filters
+ * to plain objects and never reads or remaps individual fields. The ACTUAL wire
+ * shape is sil-api's `AddressWire` (`street_address`, `address_locality`,
+ * `address_region`, `postal_code`, `address_country`, … — sil-services
+ * `packages/schemas/src/identity.ts`), NOT these `line1`/`city`/… names. Do NOT
+ * remap to these fields — that would silently drop real address data. Extra
+ * fields are tolerated and passed through untyped. */
 export interface IdentityAddress extends Record<string, unknown> {
   line1?: string;
   line2?: string;
@@ -248,11 +253,16 @@ export async function refreshSession(
 
 /**
  * Read the authenticated user's identity from sil-api (the SECOND origin — the
- * Fastify domain service, NOT sil-web). The stored access token is sent as
- * `Authorization: Bearer <token>`; the request body carries `agent_id` per
- * sil-api's `SimplifiedAgentRequest`. `on_behalf_of` is deliberately OMITTED so
- * the JWT `sub` is the principal — sending a mismatching `on_behalf_of` is a
- * guaranteed 403 `principal_mismatch`. A network error / timeout → `retryable`.
+ * Fastify domain service, NOT sil-web). This is a bodyless `GET <silApiUrl>/identity`:
+ * sil-api's authenticated self-read derives the principal from the JWT `sub`
+ * (the `Authorization: Bearer <token>` header), loads that user's addresses,
+ * and returns `{ id, name, addresses }` in the UCP envelope's `result`
+ * (sil-api `handlers/identity.ts` GET route — declares only a response schema,
+ * takes no request body). The verb is the whole point: POST hits the agent
+ * enrich-STUB (no name/addresses), GET hits the real self-read. No `agent_id`
+ * or `on_behalf_of` is sent — the GET self-read has no body, so the principal
+ * is unambiguously the token subject and the `principal_mismatch` 403 path is
+ * eliminated entirely. A network error / timeout → `retryable`.
  *
  * The Bearer header is built HERE and never logged; the token travels only in
  * the outbound request, never into the returned union.
@@ -264,7 +274,7 @@ export async function fetchIdentity(
   const url = `${stripTrailingSlash(silApiUrl)}/identity`;
   let res: Response;
   try {
-    res = await postJson(url, { agent_id: AGENT_ID }, { authorization: `Bearer ${token}` });
+    res = await getJson(url, { authorization: `Bearer ${token}` });
   } catch {
     return { kind: "retryable" };
   }
@@ -314,13 +324,18 @@ export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
  * null if it carries no usable identity. Defends against the latent wire shape:
  * the identity may be wrapped in the UCP envelope's `result` OR (if the
  * follow-on returns it bare) at the top level, so we try `result` first and
- * fall back to the body itself. A usable identity REQUIRES BOTH a non-empty
- * `name` string (the authoritative human name) AND a non-empty `addresses`
- * array — the full product promise is name AND addresses, so a half-identity is
- * NOT a clean read. Returning null here is what makes a partial 200 — or the
- * current /identity STUB shape ({kind, verified, subject, ...}, no name/no
- * addresses) — classify as `retryable`, never a false `ok`. Extra fields on
- * each address are preserved.
+ * fall back to the body itself.
+ *
+ * A usable identity REQUIRES a non-empty `name` string (the authoritative human
+ * name) and that `addresses` is an ARRAY — but the array may be EMPTY. sil-api
+ * returns `addresses: []` for a provisioned user who has onboarded a name but
+ * not yet added an address (`handlers/identity.ts` → `buildIdentityReadResult`);
+ * that is a real, authenticated identity, NOT a not-yet-ready read. Rejecting it
+ * would strand such a user on a false `retryable` they could never escape by
+ * retrying. The `name` gate is the load-bearing anti-false-green guard: the
+ * current /identity STUB shape ({kind, verified, subject, ...}) has NO name, so
+ * it still returns null → `retryable`, never a false `ok`. Extra fields on each
+ * address are preserved (addresses pass through opaque — see `IdentityAddress`).
  */
 function extractIdentity(body: unknown): Identity | null {
   const envelope = asRecord(body);
@@ -337,7 +352,6 @@ function extractIdentity(body: unknown): Identity | null {
   const addresses = rawAddresses.filter(
     (a): a is IdentityAddress => asRecord(a) !== null,
   );
-  if (addresses.length === 0) return null;
 
   return { name, addresses };
 }
@@ -385,6 +399,29 @@ async function postJson(
       method: "POST",
       headers: { "content-type": "application/json", ...extraHeaders },
       body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** GET with a hard per-request timeout (AbortController), sharing `postJson`'s
+ * timeout and never-log-the-token invariants. Sends NO `content-type` and NO
+ * body — a GET body is at best ignored and in strict fetch environments throws,
+ * and the sil-api self-read derives its principal from the Bearer JWT, not a
+ * body. Extra headers (e.g. an Authorization bearer) are passed straight to
+ * fetch and never logged. */
+async function getJson(
+  url: string,
+  extraHeaders?: Record<string, string>,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      method: "GET",
+      headers: { ...extraHeaders },
       signal: controller.signal,
     });
   } finally {

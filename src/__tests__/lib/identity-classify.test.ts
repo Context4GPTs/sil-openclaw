@@ -78,6 +78,18 @@ const STUB_BODY = {
   note: "stub",
 };
 
+/** sil-api returns addresses in its `AddressWire` shape (`street_address`,
+ * `address_locality`, `postal_code`, `address_country`, … — sil-services
+ * `packages/schemas/src/identity.ts`), NOT the `IdentityAddress` hint fields
+ * (`line1`/`city`/…). The classifier must pass addresses through OPAQUE — never
+ * remap fields, which would silently drop real address data. */
+const WIRE_ADDRESS = {
+  street_address: "12 Analytical Engine Way",
+  address_locality: "London",
+  postal_code: "EC1A 1AA",
+  address_country: "GB",
+};
+
 describe("classifyIdentityResponse — status taxonomy (the auth branch)", () => {
   it("200 with a real identity body → ok (carries the identity)", () => {
     const out = classifyIdentityResponse(200, REAL_IDENTITY);
@@ -86,6 +98,26 @@ describe("classifyIdentityResponse — status taxonomy (the auth branch)", () =>
       expect(out.identity.name).toBe("Ada Lovelace");
       expect(Array.isArray(out.identity.addresses)).toBe(true);
       expect(out.identity.addresses.length).toBe(1);
+    }
+  });
+
+  it("200 with a non-empty addresses array → ok, addresses pass through OPAQUE (AddressWire fields preserved, not remapped)", () => {
+    // Acceptance criterion: addresses are passed through opaquely — the sil-api
+    // `AddressWire` field names survive verbatim. A classifier that remapped to
+    // `line1`/`city`/… would drop these and this assertion catches it.
+    const out = classifyIdentityResponse(200, {
+      name: "Ada Lovelace",
+      addresses: [WIRE_ADDRESS],
+    });
+    expect(out.kind).toBe("ok");
+    if (out.kind === "ok") {
+      expect(out.identity.addresses).toHaveLength(1);
+      const addr = out.identity.addresses[0] as Record<string, unknown>;
+      // The wire field names are preserved verbatim (opaque passthrough).
+      expect(addr["street_address"]).toBe("12 Analytical Engine Way");
+      expect(addr["address_locality"]).toBe("London");
+      expect(addr["postal_code"]).toBe("EC1A 1AA");
+      expect(addr["address_country"]).toBe("GB");
     }
   });
 
@@ -169,18 +201,64 @@ describe("classifyIdentityResponse — the anti-false-green body gate on 200", (
     expect(out.kind).not.toBe("ok");
   });
 
-  it("200 with a name but NO addresses is NOT ok (both fields are required)", () => {
-    // The product promise is name AND addresses; a half-identity must not pass
-    // as a clean read.
+  it("200 with a name and an EMPTY addresses array → ok (empty address list is a valid identity)", () => {
+    // THE forced product decision for this card (was deferred on the sil-whoami
+    // card; sil-api PR #7 makes it concrete by returning `addresses: []` for a
+    // provisioned, address-less user). A valid `name` with zero addresses IS a
+    // usable identity — telling that user "temporarily unavailable, try again"
+    // is a false-transient dead-end they can never escape by retrying.
+    //
+    // EXPECT RED against the pre-fix `extractIdentity` (which rejects
+    // `addresses.length === 0`); GREEN only after that reject is removed.
+    const out = classifyIdentityResponse(200, { name: "Ada Lovelace", addresses: [] });
+    expect(out.kind).toBe("ok");
+    if (out.kind === "ok") {
+      expect(out.identity.name).toBe("Ada Lovelace");
+      expect(Array.isArray(out.identity.addresses)).toBe(true);
+      expect(out.identity.addresses).toHaveLength(0);
+    }
+  });
+
+  it("200 with a name and an empty addresses array wrapped in an envelope `result` → ok", () => {
+    // The same relax through the UCP-envelope unwrap path — the real sil-api
+    // `GET /identity` returns `{ result: { id, name, addresses: [] } }`.
+    const out = classifyIdentityResponse(200, {
+      protocol: "ucp",
+      version: "0.1",
+      domain: "identity",
+      result: { id: "u_1", name: "Ada Lovelace", addresses: [] },
+    });
+    expect(out.kind).toBe("ok");
+    if (out.kind === "ok") {
+      expect(out.identity.name).toBe("Ada Lovelace");
+      expect(out.identity.addresses).toHaveLength(0);
+    }
+  });
+
+  it("200 with a name but a MISSING `addresses` field is NOT ok (addresses must be an array)", () => {
+    // The relax is `addresses` may be EMPTY, NOT absent: a body with no
+    // `addresses` key at all is a malformed/partial read (the GET self-read
+    // always populates `addresses`, even to `[]`), so it stays `retryable`. This
+    // keeps the gate from sliding from "empty array OK" to "any name-only body OK".
     const out = classifyIdentityResponse(200, { name: "Ada Lovelace" });
     expect(out.kind).not.toBe("ok");
   });
 
-  it("200 with addresses but NO name is NOT ok", () => {
-    const out = classifyIdentityResponse(200, {
-      addresses: [{ line1: "x" }],
-    });
-    expect(out.kind).not.toBe("ok");
+  it("200 with a name but a NON-ARRAY `addresses` (e.g. null / object / string) is NOT ok", () => {
+    // The `Array.isArray` half of the gate stays: a non-array `addresses` is a
+    // malformed body, not an empty list. Only a genuine empty ARRAY is relaxed.
+    expect(classifyIdentityResponse(200, { name: "Ada", addresses: null }).kind).not.toBe("ok");
+    expect(classifyIdentityResponse(200, { name: "Ada", addresses: {} }).kind).not.toBe("ok");
+    expect(classifyIdentityResponse(200, { name: "Ada", addresses: "nope" }).kind).not.toBe("ok");
+  });
+
+  it("200 with addresses but NO name is NOT ok (the name gate is non-negotiable)", () => {
+    // The `name` requirement is the load-bearing anti-false-green guard and
+    // survives the relax unchanged — a body with addresses but no name (and the
+    // empty-array case below) must still be `retryable`, never `ok`.
+    expect(classifyIdentityResponse(200, { addresses: [{ line1: "x" }] }).kind).not.toBe("ok");
+    expect(classifyIdentityResponse(200, { addresses: [] }).kind).not.toBe("ok");
+    expect(classifyIdentityResponse(200, { name: "", addresses: [] }).kind).not.toBe("ok");
   });
 
   it("200 with an empty / null / non-object body is NOT ok (defensive)", () => {
