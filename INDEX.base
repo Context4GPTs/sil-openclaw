@@ -3,13 +3,7 @@ filters:
     - file.ext == "md"
     - type == "card"
     - file.name != "_TEMPLATE"
-    - or:
-        - file.path.startsWith("cards/")
-        - and:
-            - file.path.startsWith(".claude/worktrees/")
-            - not:
-                - file.path.contains("/cards/done/")
-                - file.path.contains("/cards/abandoned/")
+    - file.path.startsWith("cards/")
 formulas:
   days_since_update: if(updated, (today() - date(updated)).days, "")
   age_days: if(created, (today() - date(created)).days, "")

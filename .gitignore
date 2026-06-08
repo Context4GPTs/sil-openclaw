@@ -3,6 +3,11 @@
 .claude/worktree-description.txt
 *.worktree
 
+# Active-card symlinks → .claude/worktrees/ (local-only, for Obsidian board)
+cards/*.md
+!cards/_TEMPLATE.md
+!cards/README.md
+
 # Kanban runtime state (tick + sync logs)
 .claude/board-state.md
 .claude/sync.log

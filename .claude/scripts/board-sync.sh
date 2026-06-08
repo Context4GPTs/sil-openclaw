@@ -56,6 +56,13 @@ for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ca
   if git worktree add "$wt" "$branch" >/dev/null 2>&1; then
     log "$slug: worktree created from $ref"
 
+    # Create Obsidian symlink (cards/<slug>.md → worktree card file)
+    card_file="$wt/cards/$slug.md"
+    link_path="cards/$slug.md"
+    if [ -f "$card_file" ] && [ ! -e "$link_path" ]; then
+      ln -s "../$card_file" "$link_path" 2>/dev/null && log "$slug: symlink created"
+    fi
+
     # Sync env files (best-effort, mirrors worktree-ops Step 4a)
     find . -maxdepth 4 -type f \
       \( -name '.env' -o -name '.env.*' -o -name '.envrc' \) \
@@ -109,12 +116,32 @@ for wt in "$WT_ROOT"/card-*/; do
   [ -d cards/abandoned ] && find cards/abandoned -name "$slug.md" 2>/dev/null | grep -q . && settled=1
 
   if [ "$settled" -eq 1 ]; then
+    # Remove Obsidian symlink before teardown
+    [ -L "cards/$slug.md" ] && rm -f "cards/$slug.md"
     git worktree remove "$wt" --force >/dev/null 2>&1 || rm -rf "$wt"
     git branch -D "$branch" >/dev/null 2>&1 || true
     log "$slug: torn down (settled)"
   else
     log "$slug: upstream gone but not in done/abandoned — awaiting dispatcher"
   fi
+done
+
+# --- Phase E: reconcile Obsidian symlinks ---
+# Create missing symlinks for existing worktrees; remove dangling ones.
+for wt in "$WT_ROOT"/card-*/; do
+  [ -d "$wt" ] || continue
+  branch=$(git -C "$wt" branch --show-current 2>/dev/null)
+  [ -z "$branch" ] && continue
+  slug="${branch#card/}"
+  card_file="$wt/cards/$slug.md"
+  link_path="cards/$slug.md"
+  if [ -f "$card_file" ] && [ ! -e "$link_path" ]; then
+    ln -s "../$card_file" "$link_path" 2>/dev/null && log "$slug: symlink created (reconcile)"
+  fi
+done
+# Remove dangling symlinks in cards/
+for link in cards/*.md; do
+  [ -L "$link" ] && [ ! -e "$link" ] && rm -f "$link" && log "$(basename "$link" .md): dangling symlink removed"
 done
 
 exit 0

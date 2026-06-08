@@ -16,7 +16,13 @@ This file is a stub. The kanban board lives in worktree-resident frontmatter fil
 
 The previous base-branch-resident model committed the card file to `main` first and let it go stale once the worktree was created. `INDEX.base` (reading from `cards/` on `main`) showed wrong status for every active card, and cross-device coordination was impossible without mirror commits or a snapshot file.
 
-In the worktree-resident model, the card file lives in exactly one place: its `card/<slug>` branch, checked out as `.claude/worktrees/card-<slug>/cards/<slug>.md`. Every device reconciles its local worktrees from `origin/card/*` via `board-sync.sh`. Obsidian's `BOARD.base` reads from the worktree paths directly — no mirror, no snapshot, no staleness.
+In the worktree-resident model, the card file lives in exactly one place: its `card/<slug>` branch, checked out as `.claude/worktrees/card-<slug>/cards/<slug>.md`. Every device reconciles its local worktrees from `origin/card/*` via `board-sync.sh`.
+
+### Obsidian visibility via symlinks
+
+Obsidian's Bases plugin cannot reliably index files in dot-prefixed directories (`.claude/worktrees/`). To make active cards visible on the board, `board-sync.sh` maintains symlinks: `cards/<slug>.md` → `.claude/worktrees/card-<slug>/cards/<slug>.md`. These are local-only (gitignored). `INDEX.base` queries `cards/` — active cards appear via symlinks, done/abandoned cards via their real files in `cards/done/` and `cards/abandoned/`.
+
+If cards are missing from the board, run `board-sync.sh` to reconcile symlinks, or create them manually: `ln -s ../.claude/worktrees/card-<slug>/cards/<slug>.md cards/<slug>.md`.
 
 ## Required Obsidian plugins
 
@@ -24,5 +30,3 @@ Install via Settings → Community plugins → Browse:
 
 - **Kanban Bases View** (welchcanavan) — renders the kanban view of `INDEX.base` as drag-and-drop columns
 - **Calendar Bases** (edrickleong) — optional, for date-scheduled cards
-
-Obsidian indexes hidden (dot-prefixed) directories like `.claude/worktrees/` only when the vault setting "Files and links → Detect all file extensions" is on AND the dot-folder is not in the "Excluded files" list. Verify both before opening — otherwise the kanban will show only terminal cards.
