@@ -509,7 +509,44 @@ follow-on, not faked).
 
 ## Distillation — solutions-architect
 
-<!-- Runs in the worktree on the card branch after Review PASS. Pushes to the same PR. Per the `distillation` skill: SEARCH docs/ INDEX files first; edit existing docs rather than creating duplicates. Captures land at smallest viable scope: inline WHY comments, docs/decisions/, docs/knowledge/, docs/product/, or CLAUDE.md. Then flips status to pr-ready. -->
+Searched all three `docs/*/INDEX.md` first — all empty (this is the first card to
+capture into `docs/`; the predecessor `sil_register` merged before its distillation
+ran, so its learnings were never lifted). Created three cross-cutting docs and folded
+the orphaned register-card knowledge into them where it belonged, staying in scope.
+
+- **decisions/sil-two-origin-model.md** (NEW) — the plugin addresses TWO sil
+  services with DISTINCT config keys: `sil_api_url`=sil-web (auth authority —
+  claim/refresh, `/api/v1/*`, sole Auth0-secret holder) vs `sil_api_base`=sil-api
+  (domain reads — bare `/identity` + future fulfillment/payments/loyalty). Constrains
+  every future tool's origin choice. Folds in the register-card's "refresh only via
+  sil-web, never Auth0" invariant (same origin-authority decision). Notes the
+  `DEFAULT_SIL_API_BASE` placeholder for founder/devops to pin at deploy.
+- **knowledge/sil-response-classification.md** (NEW) — repo invariant: classify sil
+  responses on BODY SHAPE, not HTTP status, and never on `res.ok`. One doc covering
+  BOTH `200`-discriminants — claim's 200-pending-vs-200-success (folded in from the
+  orphaned register card) and identity's anti-false-green 200-with-no-name→`retryable`
+  (the gate that stops the suite green-ing against the `/identity` stub). Records the
+  mutation-verification and the empty-addresses open edge.
+- **knowledge/sil-api-identity-contract.md** (NEW) — single source of truth for the
+  sil-api identity-read contract (POST `/identity` bare path, Bearer, `{agent_id}`),
+  the request gotchas (`agent_id` required; OMIT `on_behalf_of` or guaranteed 403;
+  401-refreshable vs 403-terminal), and the LATENT cross-sibling dependency: sil-api's
+  `/identity` is still a stub, so the live PII happy path AND the sil-stage e2e (goal
+  SC9) are blocked on a sil-services follow-on that swaps only the `result` payload.
+- INDEX.md updated: decisions (1 row), knowledge (2 rows).
+
+**Deliberately NOT captured:**
+- No new inline `// WHY:` comments — the dev already commented every site of surprise
+  thoroughly: the refresh-once invariant (`src/tools/identity.ts:189,201-202,226-227`),
+  the two-origin model (`src/lib/config.ts:1-34`), the anti-false-green gate
+  (`src/lib/sil-client.ts:312-343`), `clearTokens` rationale
+  (`src/lib/credentials.ts:128-143`). Adding more would restate the code (forbidden by
+  the distillation skill + critical-thinking.md).
+- No `docs/product/` doc — the PO's three flow invariants (no dead ends / invisible
+  refresh / PII discipline) live in the card body and need no separate product doc yet;
+  no future card depends on extracting them.
+- No `CLAUDE.md` convention edit — the docs taxonomy already documents itself; this card
+  introduced no new project-wide convention beyond what the three docs capture.
 
 ## PR Ready
 
