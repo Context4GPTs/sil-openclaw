@@ -21,6 +21,24 @@
  *     401                                             → invalid_grant (terminal)
  *     5xx / network / abort                           → retryable
  *
+ * Wire contract for the sil-API identity read (a SECOND origin — sil-api, the
+ * Fastify domain service — NOT sil-web; bare path, not /api/v1; see the
+ * sil-whoami card). The Authorization header carries the stored access token:
+ *
+ *   POST <silApiUrl>/identity   Authorization: Bearer <access_token>
+ *                               body { agent_id }
+ *     200 <UCP envelope>{ result: { name, addresses } }  → ok (carries identity)
+ *     401                                                 → unauthorized (→ refresh)
+ *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
+ *     5xx / network / abort                               → retryable
+ *
+ * The identity lives in the envelope's `result` (the tool unwraps it so the
+ * agent sees identity, not transport metadata). The real {name, addresses}
+ * payload is LATENT on a sil-services follow-on (sil-api's /identity is still a
+ * stub today); `classifyIdentityResponse` therefore narrows DEFENSIVELY — a 200
+ * whose result has no usable identity (name) falls to `retryable`, NEVER to a
+ * false `ok`, so the suite can't be green while the product promise is unmet.
+ *
  * THE subtle correctness point (architect Risk "claim taxonomy mis-mapping"):
  * 200-pending and 200-success are BOTH HTTP 200. `classifyClaimResponse` branches
  * on the BODY SHAPE (both tokens present) — never on `res.ok` — so "keep polling"
@@ -42,6 +60,11 @@ import { readTokens, writeTokens } from "./credentials.js";
 /** Per-request timeout: a stalled endpoint (DNS hang, SYN drop) must not wedge
  * a poll tick forever. Mirrors the 15s ceiling the klodi poller uses. */
 const REQUEST_TIMEOUT_MS = 15_000;
+
+/** The agent identity sent to sil-api's `SimplifiedAgentRequest.agent_id`. A
+ * stable constant: this plugin is the agent. A per-deployment `sil_agent_id`
+ * config key is YAGNI until per-deployment identity is actually wanted. */
+const AGENT_ID = "sil-openclaw";
 
 /** The user identity sil-web returns inside a successful claim. */
 export interface ClaimedUser {
@@ -67,6 +90,38 @@ export type ClaimOutcome =
 export type RefreshOutcome =
   | { kind: "refreshed"; access_token: string; refresh_token: string }
   | { kind: "invalid_grant" }
+  | { kind: "retryable" };
+
+/** A postal address as returned by the sil-api identity read (mirrors
+ * `@sil/db`'s AddressRow, narrowed to the fields whoami surfaces; extra
+ * fields are tolerated and passed through untyped). */
+export interface IdentityAddress extends Record<string, unknown> {
+  line1?: string;
+  line2?: string;
+  city?: string;
+  region?: string;
+  postal_code?: string;
+  country?: string;
+}
+
+/** The authenticated user's identity, unwrapped from the sil-api envelope's
+ * `result`. The `name` is the authoritative human name; `addresses` is the
+ * user's address list (possibly empty). This is the REAL contract whoami
+ * surfaces — NOT the current /identity stub's {kind, verified, subject, ...}. */
+export interface Identity {
+  name: string;
+  addresses: IdentityAddress[];
+}
+
+/**
+ * Outcome of a single sil-api identity read (classified by status + body).
+ * `unauthorized` (401) is the ONLY refresh trigger; `forbidden` (403) is
+ * terminal — refreshing a valid-but-unprovisioned token changes nothing.
+ */
+export type IdentityOutcome =
+  | { kind: "ok"; identity: Identity }
+  | { kind: "unauthorized" }
+  | { kind: "forbidden"; reason: string }
   | { kind: "retryable" };
 
 /**
@@ -125,6 +180,32 @@ export function classifyRefreshResponse(status: number, body: unknown): RefreshO
 }
 
 /**
+ * Classify a sil-api identity response from its HTTP status AND body. Branches
+ * on STATUS (and, for 200, the body shape) — never on `res.ok`:
+ *   401 → unauthorized (the ONLY refresh trigger)
+ *   403 → forbidden (terminal; carries user_not_provisioned/principal_mismatch)
+ *   5xx / non-200 → retryable
+ *   200 → unwrap the envelope `result` and narrow to {name, addresses}; a 200
+ *         that yields no usable identity (no `name`) is `retryable`, NEVER `ok`
+ *         (the anti-false-green guard — a partial/garbage 200, or the current
+ *         /identity STUB shape with no name, must not read as success).
+ *
+ * Pure and exported — unit-tested in isolation like `classifyClaimResponse`;
+ * mis-splitting 401 (refreshable) from 403 (terminal) is the highest-risk
+ * auth-branch bug in this flow.
+ */
+export function classifyIdentityResponse(status: number, body: unknown): IdentityOutcome {
+  if (status === 401) return { kind: "unauthorized" };
+  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
+  if (status >= 500) return { kind: "retryable" };
+  if (status !== 200) return { kind: "retryable" };
+
+  const identity = extractIdentity(body);
+  if (identity === null) return { kind: "retryable" };
+  return { kind: "ok", identity };
+}
+
+/**
  * Attempt to claim the token pair for `sessionId` with `verifier`. The verifier
  * is sent in the body; sil-web derives the same challenge server-side and the
  * CAS compares digest-to-digest (the plugin sends the verifier, not the digest).
@@ -165,6 +246,32 @@ export async function refreshSession(
   return classifyRefreshResponse(res.status, body);
 }
 
+/**
+ * Read the authenticated user's identity from sil-api (the SECOND origin — the
+ * Fastify domain service, NOT sil-web). The stored access token is sent as
+ * `Authorization: Bearer <token>`; the request body carries `agent_id` per
+ * sil-api's `SimplifiedAgentRequest`. `on_behalf_of` is deliberately OMITTED so
+ * the JWT `sub` is the principal — sending a mismatching `on_behalf_of` is a
+ * guaranteed 403 `principal_mismatch`. A network error / timeout → `retryable`.
+ *
+ * The Bearer header is built HERE and never logged; the token travels only in
+ * the outbound request, never into the returned union.
+ */
+export async function fetchIdentity(
+  silApiUrl: string,
+  token: string,
+): Promise<IdentityOutcome> {
+  const url = `${stripTrailingSlash(silApiUrl)}/identity`;
+  let res: Response;
+  try {
+    res = await postJson(url, { agent_id: AGENT_ID }, { authorization: `Bearer ${token}` });
+  } catch {
+    return { kind: "retryable" };
+  }
+  const body = await readJsonBody(res);
+  return classifyIdentityResponse(res.status, body);
+}
+
 /** Result of the high-level refresh orchestration (read → refresh → rotate). */
 export type RefreshStoredResult =
   | { status: "refreshed" }
@@ -202,6 +309,48 @@ export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
   }
 }
 
+/**
+ * Unwrap + narrow a sil-api identity response body to a typed `Identity`, or
+ * null if it carries no usable identity. Defends against the latent wire shape:
+ * the identity may be wrapped in the UCP envelope's `result` OR (if the
+ * follow-on returns it bare) at the top level, so we try `result` first and
+ * fall back to the body itself. A usable identity REQUIRES BOTH a non-empty
+ * `name` string (the authoritative human name) AND a non-empty `addresses`
+ * array — the full product promise is name AND addresses, so a half-identity is
+ * NOT a clean read. Returning null here is what makes a partial 200 — or the
+ * current /identity STUB shape ({kind, verified, subject, ...}, no name/no
+ * addresses) — classify as `retryable`, never a false `ok`. Extra fields on
+ * each address are preserved.
+ */
+function extractIdentity(body: unknown): Identity | null {
+  const envelope = asRecord(body);
+  if (envelope === null) return null;
+
+  const result = asRecord(envelope["result"]);
+  const source = result ?? envelope;
+
+  const name = source["name"];
+  if (typeof name !== "string" || name.length === 0) return null;
+
+  const rawAddresses = source["addresses"];
+  if (!Array.isArray(rawAddresses)) return null;
+  const addresses = rawAddresses.filter(
+    (a): a is IdentityAddress => asRecord(a) !== null,
+  );
+  if (addresses.length === 0) return null;
+
+  return { name, addresses };
+}
+
+/** Pull the actionable reason out of a 403 body (`user_not_provisioned` /
+ * `principal_mismatch`), defaulting to a generic marker when the shape is
+ * unexpected — the tool surfaces this to drive the right recovery hint. */
+function extractForbiddenReason(body: unknown): string {
+  const obj = asRecord(body);
+  const error = obj?.["error"];
+  return typeof error === "string" && error.length > 0 ? error : "forbidden";
+}
+
 /** Narrow the `user` field of a claim body to a typed identity. */
 function extractUser(raw: unknown): ClaimedUser {
   const obj = asRecord(raw);
@@ -221,17 +370,20 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/** POST a JSON body with a hard per-request timeout (AbortController). */
+/** POST a JSON body with a hard per-request timeout (AbortController). Extra
+ * headers (e.g. an Authorization bearer) merge over the JSON content-type; the
+ * header values are passed straight to fetch and never logged. */
 async function postJson(
   url: string,
   body: Record<string, unknown>,
+  extraHeaders?: Record<string, string>,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     return await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...extraHeaders },
       body: JSON.stringify(body),
       signal: controller.signal,
     });

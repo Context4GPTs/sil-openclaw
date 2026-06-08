@@ -31,10 +31,12 @@
 import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "@sinclair/typebox";
 
-import { getApiUrl } from "../lib/config.js";
+import { getApiUrl, getSilApiUrl } from "../lib/config.js";
 import {
+  clearTokens,
   hasTokens,
   readConfig,
+  readTokens,
   writeConfig,
   writeTokens,
 } from "../lib/credentials.js";
@@ -45,11 +47,19 @@ import {
   startPoll,
   type PollDoneResult,
 } from "../lib/poller.js";
-import { claimSession, type ClaimOutcome } from "../lib/sil-client.js";
+import {
+  claimSession,
+  fetchIdentity,
+  refreshStoredTokens,
+  type ClaimOutcome,
+  type Identity,
+  type IdentityOutcome,
+} from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
 
 export function registerIdentityTools(api: PluginAPI): void {
   registerRegister(api);
+  registerWhoami(api);
 }
 
 function registerRegister(api: PluginAPI): void {
@@ -110,6 +120,160 @@ function registerRegister(api: PluginAPI): void {
           + " again to confirm (it will report already_registered).",
       });
     },
+  });
+}
+
+/**
+ * `sil_whoami` — read the registered user's live identity (name + addresses)
+ * from sil-api with the stored Bearer token, refreshing transparently on an
+ * expired access token.
+ *
+ * execute() flow (ALL I/O here; register() opens nothing, arms no timer —
+ * whoami is a synchronous request/response, NOT a poll):
+ *   1. Read tokens.json. Absent → terminal `not_registered` (run sil_register),
+ *      ZERO network calls (nothing to authenticate with).
+ *   2. fetchIdentity(sil-api, access_token). On `ok` → return the identity.
+ *      `forbidden` → terminal (distinct hint per reason). `retryable` → terminal
+ *      transient ("try again"). `unauthorized` (401) → the refresh path (3).
+ *   3. Refresh ONCE via refreshStoredTokens() (sil-web only, never Auth0; rotates
+ *      tokens.json). `refreshed` → re-read tokens, retry the identity read ONCE;
+ *      `must_reregister` → terminal (clear tokens on invalid_grant);
+ *      `retryable` → terminal transient.
+ *   4. The single retry: `ok` → return; anything non-ok (incl. a SECOND 401) →
+ *      terminal `must_reregister` + clear tokens. A freshly-rotated token still
+ *      rejected is structurally dead — NEVER refresh again. At most one refresh
+ *      + one retry per call.
+ *
+ * Privacy: the access/refresh tokens and the Bearer header never reach a log
+ * line or the result; identity PII (name, addresses) is in the result (the
+ * point) but never logged. Logs carry only non-credential status markers.
+ */
+function registerWhoami(api: PluginAPI): void {
+  api.registerTool({
+    name: "sil_whoami",
+    label: "Who am I on sil",
+    description:
+      "Return the registered user's identity (name and addresses) from sil,"
+      + " using the credentials stored by sil_register. If the access token has"
+      + " expired it is refreshed transparently and the read is retried. If you"
+      + " are not registered, or the session has fully expired, the result names"
+      + " the recovery action (run sil_register).",
+    parameters: Type.Object({}),
+    async execute() {
+      // 1 — not registered: terminal, zero network calls.
+      const stored = readTokens();
+      if (stored === null) {
+        return notRegistered();
+      }
+
+      // 2 — read identity with the stored access token.
+      const first = await fetchIdentity(getSilApiUrl(), stored.access_token);
+      if (first.kind !== "unauthorized") {
+        return identityOutcomeToResult(api, first);
+      }
+
+      // 3 — 401: refresh transparently, exactly once (sil-web; rotates tokens).
+      const refresh = await refreshStoredTokens();
+      if (refresh.status === "must_reregister") {
+        // The refresh token is dead. Clear the now-known-dead pair so the user's
+        // sil_register recovery is not blocked by stale presence.
+        if (refresh.reason === "invalid_grant") clearTokens();
+        api.logger.info("sil_whoami_must_reregister", { cause: refresh.reason });
+        return mustReregister();
+      }
+      if (refresh.status === "retryable") {
+        api.logger.info("sil_whoami_refresh_retryable", {});
+        return transient();
+      }
+
+      // refresh.status === "refreshed" — re-read the rotated pair and retry ONCE.
+      api.logger.info("sil_whoami_refreshed", {});
+      const rotated = readTokens();
+      if (rotated === null) {
+        // TOCTOU: tokens vanished between rotate and re-read — treat as terminal.
+        return mustReregister();
+      }
+      const retry = await fetchIdentity(getSilApiUrl(), rotated.access_token);
+      if (retry.kind === "ok") {
+        return identityResult(retry.identity);
+      }
+      if (retry.kind === "unauthorized") {
+        // A freshly-rotated token STILL rejected is structurally dead — terminal,
+        // never another refresh. Clear the dead pair.
+        clearTokens();
+        api.logger.info("sil_whoami_must_reregister", { cause: "retry_unauthorized" });
+        return mustReregister();
+      }
+      // 403 / 5xx on the retry — surface its own terminal/transient outcome.
+      return identityOutcomeToResult(api, retry);
+    },
+  });
+}
+
+/** Map a non-401 identity outcome to the agent-facing result. (401 is handled
+ * inline by the refresh path; it never reaches here.) */
+function identityOutcomeToResult(api: PluginAPI, outcome: IdentityOutcome) {
+  switch (outcome.kind) {
+    case "ok":
+      return identityResult(outcome.identity);
+    case "forbidden":
+      api.logger.warn("sil_whoami_forbidden", { reason: outcome.reason });
+      return forbidden(outcome.reason);
+    case "retryable":
+      api.logger.info("sil_whoami_retryable", {});
+      return transient();
+    case "unauthorized":
+      // Unreachable in practice (the caller intercepts 401), but the switch is
+      // exhaustive so a future refactor can't silently drop a variant.
+      return mustReregister();
+  }
+}
+
+/** Success: the identity payload ONLY — no token, no Bearer header. */
+function identityResult(identity: Identity) {
+  return jsonResult({ status: "ok", identity });
+}
+
+/** Not registered: a distinct, actionable outcome naming the recovery tool. No
+ * identity fields (name/addresses) so the agent can't mistake it for a read. */
+function notRegistered() {
+  return jsonResult({
+    status: "not_registered",
+    message:
+      "Not registered on sil. Run sil_register to authenticate, then call"
+      + " sil_whoami again.",
+    recovery: "sil_register",
+  });
+}
+
+/** Terminal: the session is fully expired (refresh rejected). Re-register. */
+function mustReregister() {
+  return jsonResult({
+    status: "must_reregister",
+    message:
+      "Your sil session has expired. Run sil_register to sign in again, then"
+      + " call sil_whoami again.",
+    recovery: "sil_register",
+  });
+}
+
+/** Terminal-but-distinct: the token is valid but the user isn't provisioned (or
+ * a principal mismatch). Refreshing would not help — guide the right recovery. */
+function forbidden(reason: string) {
+  const message =
+    reason === "user_not_provisioned"
+      ? "Your sil account is not fully set up. Complete onboarding (run"
+        + " sil_register) and try again."
+      : "sil rejected this request (" + reason + "). Run sil_register to"
+        + " re-establish your session, then try again.";
+  return jsonResult({ status: "forbidden", reason, message, recovery: "sil_register" });
+}
+
+/** Transient: a network/5xx blip — try again, NOT a re-register (false terminal). */
+function transient() {
+  return jsonResult({
+    status: "retryable",
+    message: "sil is temporarily unavailable. Please try sil_whoami again.",
   });
 }
 

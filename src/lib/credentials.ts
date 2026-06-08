@@ -31,6 +31,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -122,6 +123,24 @@ export function readTokens(): StoredTokens | null {
 /** Read the identity, or null if absent/unreadable/malformed. */
 export function readConfig(): StoredConfig | null {
   return readJson<StoredConfig>(getConfigPath());
+}
+
+/**
+ * Delete `tokens.json` if present (tolerant of absence — a no-op when the file
+ * is already gone). Called on a CONFIRMED terminal auth failure (a refresh that
+ * came back invalid_grant) so a known-dead bearer pair never lingers on disk:
+ * the product invariant is "a dead session never masquerades as live". Because
+ * the sil_register short-circuit is PRESENCE-based, leaving a dead tokens.json
+ * would wrongly short-circuit the user's re-registration recovery; clearing it
+ * lets the next sil_register mint a fresh session. Only ever called for a
+ * confirmed-dead pair — never on a transient/retryable blip (the token may be
+ * fine). The config.json identity is left untouched (it is not a credential and
+ * is overwritten on the next successful claim).
+ */
+export function clearTokens(): void {
+  const path = getTokensPath();
+  if (!existsSync(path)) return;
+  unlinkSync(path);
 }
 
 /**
