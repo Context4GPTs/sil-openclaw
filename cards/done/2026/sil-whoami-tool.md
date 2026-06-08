@@ -4,7 +4,7 @@ title: sil-whoami-tool
 slug: sil-whoami-tool
 work_type: feature
 tiers: [unit, integration, e2e]
-status: pr-ready
+status: done
 agents: []
 priority: 1
 created: 2026-06-08
@@ -13,7 +13,7 @@ base_branch: main
 worktree: /Users/knitlybak/GitHub/4gpts/sil/sil-openclaw/.claude/worktrees/card-sil-whoami-tool
 branch: card/sil-whoami-tool
 pr: https://github.com/Context4GPTs/sil-openclaw/pull/3
-merged_commit: null
+merged_commit: f6f9c96f2c398e579a3ccee77d2e879e5e416191
 epic_id: identity-plugin-tools
 origin: goal:identity-onboarding-slice
 ---
