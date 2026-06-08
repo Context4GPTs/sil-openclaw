@@ -4,15 +4,15 @@ title: sil-whoami-tool
 slug: sil-whoami-tool
 work_type: feature
 tiers: [unit, integration, e2e]
-status: in-dev
-agents: [expert-developer, qa-developer]
+status: review
+agents: [code-quality-guardian]
 priority: 1
 created: 2026-06-08
 updated: 2026-06-08
 base_branch: main
 worktree: /Users/knitlybak/GitHub/4gpts/sil/sil-openclaw/.claude/worktrees/card-sil-whoami-tool
 branch: card/sil-whoami-tool
-pr: null
+pr: https://github.com/Context4GPTs/sil-openclaw/pull/3
 merged_commit: null
 epic_id: identity-plugin-tools
 origin: goal:identity-onboarding-slice
@@ -251,13 +251,113 @@ boundary here and is owned E2E by sil-stage (goal SC9), exactly as the register 
 
 **Test strategy.** qa-developer writes RED first (`adversarial-testing`), expert-developer GREEN. Unit tier (mock api + temp dir, no network): `classifyIdentityResponse` (200/401/403/5xx — the highest-risk pure logic), `getSilApiUrl` resolution, `clearTokens`, the not-registered short-circuit (no fetch), the no-input tool shape, the success-result-carries-only-identity shape, the tokens/JWT/PII leak-canary. Integration tier (real tool + `sil-client` + `credentials` wired, **only `fetch` mocked**): happy-path read; 401→refresh→rotate→retry-success; refresh-also-fails (invalid_grant)→terminal `must_reregister`+clear (assert exactly 2 identity fetches + 1 refresh — the no-storm bound); transient 5xx/network→retryable outcome; two-origin assertion (identity host == sil-api origin, refresh host == sil-web origin, no auth0.com); not-registered→terminal hint, zero fetches. **Critical anti-false-green (PO's "latent-endpoint confusion"):** the happy-path mock must return the agreed *real* `{name, addresses}` contract and the test must assert the tool surfaces the authenticated user's name + addresses — NOT the current stub's `{kind, verified, subject, attributes, note}`, so the suite can't be green while the product promise is unmet. The true cross-service E2E (real sil-api + Postgres + real PII handler) is sil-stage's golden example (goal SC9) — out of scope here AND blocked on the sil-services follow-on (signaled).
 
-## In Dev — <agents>
+## In Dev — expert-developer, qa-developer
 
-<!-- implementation + test notes -->
+Built exactly to the architect's bottom-up handoff. Pure assembly of the merged,
+reviewed-PASS register-card parts plus the genuinely-new identity wrapper + the
+read→refresh→retry-once orchestration. **206 tests green; `pnpm build`,
+`pnpm typecheck`, full suite all pass.**
+
+**What was built (production only — qa owns `src/__tests__/**`):**
+
+1. **`src/lib/config.ts`** — `getSilApiUrl()` / `setSilApiUrl()` / `getSilApiUrlSource()`
+   + the `sil_api_base` key on `SilPluginConfig` + `applyPluginConfigOverrides`.
+   This is the **second origin** — sil-api (identity read), distinct from
+   sil-web's `sil_api_url` (refresh). Resolution mirrors `getApiUrl` exactly
+   (pluginConfig → `SIL_API_BASE` env → `DEFAULT_SIL_API_BASE`). Note the setter
+   is named `setSilApiUrl` (qa's pinned contract) though it backs the
+   `_silApiBase` field / `sil_api_base` key — a deliberate naming asymmetry to
+   match the test surface, not a bug.
+2. **`src/lib/credentials.ts`** — `clearTokens()` (atomic `unlinkSync`, tolerant
+   of absence; scoped to `tokens.json` only, leaves `config.json`). Added
+   `unlinkSync` to the existing `node:fs` import.
+3. **`src/lib/sil-client.ts`** — `classifyIdentityResponse(status, body)` (pure,
+   exported; 401→`unauthorized`, 403→`forbidden{reason}`, 5xx/non-200→`retryable`,
+   200→body-gated `ok`) + `fetchIdentity(silApiUrl, token)` (`POST <silApiUrl>/identity`,
+   `Authorization: Bearer`, body `{ agent_id: "sil-openclaw" }`). Reused
+   `postJson`/timeout/`readJsonBody`/`stripTrailingSlash` (extended `postJson`
+   with an optional `extraHeaders` arg for the Bearer). `refreshStoredTokens`
+   reused **verbatim**. The `extractIdentity` unwrapper requires **both** a
+   non-empty `name` AND a non-empty `addresses` array → null otherwise (this is
+   the anti-false-green gate: the current `/identity` stub shape and any partial
+   200 fall to `retryable`, never `ok`).
+4. **`src/tools/identity.ts`** — `registerWhoami(api)` wired into the existing
+   `registerIdentityTools`. Control flow exactly per the handoff: read token
+   (none → terminal `not_registered`, **zero fetch**) → `fetchIdentity` → on 401
+   only: `refreshStoredTokens` (sil-web) → on `refreshed` re-read rotated tokens
+   + retry **once** → second 401/non-ok → `clearTokens` + terminal `must_reregister`.
+   **At most one refresh + one retry — structurally cannot loop.** `forbidden`
+   and `retryable` get distinct terminal/transient outcomes; envelope `result`
+   unwrapped in `extractIdentity`. Result envelopes carry a `status` + a
+   `recovery: "sil_register"` hint where actionable; success nests identity under
+   `identity` (so `name`/`addresses` are never top-level on a non-success path).
+5. **`openclaw.plugin.json`** — `+ "sil_whoami"` in `contracts.tools` (sorted);
+   `+ sil_api_base` configSchema + uiHints; `+ https://api.sil.4gpts.com` as the
+   second `networkEndpoints` origin; `packagingNote` updated.
+6. **`src/index.ts`** — load log now also emits `sil_api_base` + its source
+   (config hosts, not credentials — safe; aids deploy-time two-origin diagnosis;
+   justifies the `getSilApiUrlSource` export).
+
+**Live verification.** Build gate PASS (`dist/index.js` emitted — the manifest
+`main` entry). Run/API/Browser/integration-smoke phases N/A: this is a library
+plugin with no server or UI. The integration test (real tool + sil-client +
+credentials wired, only `fetch` mocked) is the system-level proof and is green.
+
+**Design-impacting choices for distillation (solutions-architect):**
+- **Two-origin config model** (`sil_api_url`=sil-web vs `sil_api_base`=sil-api)
+  is cross-cutting — every future plugin tool calling a sil-api domain
+  (fulfillment/payments/loyalty) shares `sil_api_base`. Candidate for
+  `docs/decisions/`.
+- **`AGENT_ID = "sil-openclaw"` constant** + the **OMIT-`on_behalf_of`** rule
+  (so the JWT `sub` is the principal, structurally avoiding 403
+  `principal_mismatch`) is a non-obvious sil-api contract gotcha — candidate for
+  `docs/knowledge/`.
+- **The anti-false-green gate** (`extractIdentity` requires name + addresses;
+  stub 200 → `retryable`) encodes the latent-endpoint dependency in code —
+  worth a `docs/knowledge/` note tying it to the sil-services follow-on.
 
 ### → Handoff to Review (next agent: code-quality-guardian)
 
-<!-- what to pay attention to, known smells -->
+**Pay attention to:**
+- **Bounded refresh (the cardinal risk).** Verify the flow in
+  `registerWhoami.execute()` can take **at most one refresh + one retry**. A
+  second 401 after a successful refresh → `clearTokens` + `mustReregister`, never
+  another `refreshStoredTokens`. The integration test pins exact call counts
+  (1 identity + 1 refresh on dead-refresh; 2 identity + 1 refresh on
+  refresh-then-still-401) — confirm no code path escapes that bound.
+- **Two origins, asserted independently.** Identity → `getSilApiUrl()` (sil-api);
+  refresh → `getApiUrl()` via `refreshStoredTokens` (sil-web). Never `auth0.com`.
+  Outcomes branch on the `classifyIdentityResponse` / `RefreshStoredResult`
+  unions, never raw `res.ok`.
+- **Secret/PII hygiene.** Tokens, the refresh token, and the Bearer header never
+  reach a `logger.*` call or the `ToolResult`; identity PII (name/addresses) is
+  in the result but never logged. Logs carry only status markers
+  (`sil_whoami_refreshed`, `sil_whoami_must_reregister`, `sil_whoami_forbidden`,
+  …). Leak-canary tests cover success + not-registered + rotated-token paths.
+
+**Deliberate trade-offs / known smells (not defects):**
+- **Naming asymmetry:** `setSilApiUrl()` sets the `_silApiBase` field backing the
+  `sil_api_base` key. Done to match qa's pinned test contract; the *key* is
+  consistently `sil_api_base` everywhere user-facing (manifest, env, pluginConfig).
+- **`DEFAULT_SIL_API_BASE = "https://api.sil.4gpts.com"` is a documented
+  PLACEHOLDER.** The sil-api production URL is unpinned in the workspace; the
+  override chain means tests + staging always set it explicitly — only the
+  fallback is a guess. Flagged for founder/devops to pin at deploy (and recorded
+  on the card's architect resolutions).
+- **`getSilApiUrlSource()`** exists for the load-log symmetry with
+  `getApiUrlSource()` — not dead code, used in `index.ts`.
+
+**Latent live path — IMPORTANT for the reviewer.** The sil-api `/identity`
+endpoint that returns real `{name, addresses}` **does not exist yet** — sil-api's
+`/identity` is still a POST stub returning `{kind, verified, subject, attributes,
+note}`. The entire plugin-side contract here is built + proven against a **mocked
+sil-api boundary**; the live PII happy-path is blocked on a **sil-services
+follow-on** (signaled to the orchestrator in the card's Signals block). The
+`extractIdentity` gate is deliberately strict so the suite **cannot go green
+against the current stub** — that strictness is the feature, not an over-fit.
+No live network verification of the real read is possible in this repo (no live
+sil-api/Postgres); the true cross-service E2E is sil-stage's golden example
+(goal SC9).
 
 ## Review round 1 — code-quality-guardian
 
