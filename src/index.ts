@@ -27,6 +27,7 @@ import {
   type SilPluginConfig,
 } from "./lib/config.js";
 import { registerExampleTools } from "./tools/examples.js";
+import { registerIdentityTools } from "./tools/identity.js";
 
 export default definePluginEntry({
   id: "sil",
@@ -40,6 +41,7 @@ export default definePluginEntry({
     );
 
     registerExampleTools(api);
+    registerIdentityTools(api);
 
     api.logger.info("sil_plugin_loaded", {
       message: "sil plugin registered.",

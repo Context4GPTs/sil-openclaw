@@ -10,7 +10,8 @@
   "contracts": {
     "tools": [
       "sil_echo",
-      "sil_ping"
+      "sil_ping",
+      "sil_register"
     ]
   },
   "configSchema": {
@@ -34,14 +35,21 @@
   },
   "security": {
     "shipsRuntimeCode": true,
-    "packagingNote": "Compiled JavaScript ships under ./dist. The skeleton registers stub tools that return placeholder responses and perform no I/O — no network, no filesystem, no credentials. register() is synchronous and opens nothing.",
+    "packagingNote": "Compiled JavaScript ships under ./dist. register() stays synchronous and opens nothing — it only registers tools. ALL I/O happens inside a tool's execute(): sil_register calls sil-web over the network, writes tokens.json + config.json to the plugin data directory (owner-only, 0600), and arms a bounded background poll timer that stops on the first terminal claim outcome or after the session deadline. The PKCE verifier is held only in memory and is never written to disk. Tokens are never logged.",
     "registersLongLivedService": false,
     "serviceIds": [],
-    "runsTimers": false,
+    "runsTimers": true,
     "inboundHttpRoutes": [],
-    "networkEndpoints": [],
-    "filesystemScope": [],
-    "credentialsOnDisk": [],
+    "networkEndpoints": [
+      "https://sil.4gpts.com"
+    ],
+    "filesystemScope": [
+      "$SIL_DATA_DIR (default $XDG_DATA_HOME/sil, else ~/.local/share/sil) — tokens.json, config.json"
+    ],
+    "credentialsOnDisk": [
+      "tokens.json (access + refresh token)",
+      "config.json (user identity)"
+    ],
     "noNativeModules": true,
     "noChildProcess": true,
     "noInstallScripts": true,
