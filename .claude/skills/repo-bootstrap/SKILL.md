@@ -40,18 +40,27 @@ If anything is missing, list what's missing and stop. The founder re-copies and 
 
 Also confirm these are **NOT** present on disk (they're cc-setup-only — should never have been copied):
 
-- `.claude/agent-memory/`, `.claude/worktrees/`, `.claude/board-state.md`
+- `.claude/worktrees/`, `.claude/board-state.md`
 - `.claude/scheduled_tasks.lock`, `.claude/sync.log`
 - `.claude/AUDIT_REPORT.md`, `.claude/PARENT_CLAUDE.template.md`
 
 If any are present, delete them.
 
-**Historical-leak check** (this catches the case where a cc-setup-only file was committed to the target's git history in a past life — common for `.claude/scheduled_tasks.lock`, which is a lockfile Claude Code's built-in scheduled-tasks subsystem writes and sometimes fails to clean up on abnormal exit):
+`.claude/agent-memory/` is deliberately **excluded** from that delete-on-disk
+list: it is an on-disk-but-never-tracked runtime path (reconciled to gitignore in
+step 2), so a fresh on-disk copy is fine and a seeded one is harmless. What is
+**not** fine is `.claude/agent-memory/` being *tracked by git* — that is the exact
+defect the `scope-agent-memory-to-worktree` card removed (tracked memory dirties
+the base tree on every agent write and blocks `board-sync.sh`'s ff-pull). The
+historical-leak check below is what surfaces that tracked state.
 
-Run `git ls-files .claude/` in the target and check each result against the cc-setup-only list above. If any are **tracked by git** (even when absent from the worktree), surface them to the founder with the recommended cleanup:
+**Historical-leak check** (this catches the case where a cc-setup-only file was committed to the target's git history in a past life — common for `.claude/scheduled_tasks.lock`, which is a lockfile Claude Code's built-in scheduled-tasks subsystem writes and sometimes fails to clean up on abnormal exit; and for `.claude/agent-memory/**`, which earlier harness copies tracked on base before the worktree-scoping card):
+
+Run `git ls-files .claude/` in the target and check each result against the cc-setup-only list above **plus any `.claude/agent-memory/**` path**. If any are **tracked by git** (even when absent from the worktree), surface them to the founder with the recommended cleanup:
 
 ```
-git rm <path>          # untrack
+git rm <path>             # untrack a single cc-setup-only file
+git rm -r --cached .claude/agent-memory/   # untrack tracked agent-memory (keeps it on disk)
 # (.gitignore is reconciled in step 2)
 ```
 
@@ -68,10 +77,21 @@ Required lines in **both** modes:
 ```
 .claude/worktrees/
 .claude/worktree-description.txt
+.claude/agent-memory
 .claude/board-state.md
 .claude/sync.log
 .claude/scheduled_tasks.lock
 ```
+
+`.claude/agent-memory` is on-disk-but-never-tracked in **every** mode (like
+`.claude/worktrees/`): each agent's memory lives in whichever worktree its
+session is rooted in, surfaced on base via a gitignored symlink that
+`board-sync.sh` maintains. It must be ignored so agent writes never dirty the
+base tree. Use **no trailing slash** — a trailing-slash (dir-only) pattern would
+fail to ignore the base symlink (git treats a symlink as a non-directory), so it
+would surface as untracked dirt and re-block `board-sync.sh`'s ff-pull; the
+slash-less form matches both the real dir and the symlink. See the
+`scope-agent-memory-to-worktree` card.
 
 Additional required lines in **gitignored** mode (public-repo case — nothing kanban or Obsidian-related leaks into the published artifact):
 
