@@ -60,7 +60,7 @@ Convention: only one device runs `/board-tick` at a time. Other devices stay rea
 
 ## See also
 
-- [`BOARD.base`](../BOARD.base) — Obsidian Bases kanban view (reads from `.claude/worktrees/*/cards/` + `cards/done/` + `cards/abandoned/`)
+- [`INDEX.base`](../INDEX.base) — Obsidian Bases kanban view (reads from `.claude/worktrees/*/cards/` + `cards/done/` + `cards/abandoned/`)
 - [`.claude/skills/board/SKILL.md`](../.claude/skills/board/SKILL.md) — operating manual
 - [`.claude/commands/board-add.md`](../.claude/commands/board-add.md) — create a card
 - [`.claude/commands/board-tick.md`](../.claude/commands/board-tick.md) — dispatcher

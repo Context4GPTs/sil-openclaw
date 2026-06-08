@@ -1,6 +1,6 @@
 ---
 name: board
-description: "Read and operate on the project's kanban board. Cards live as frontmatter files INSIDE per-card worktrees (`.claude/worktrees/card-<slug>/cards/<slug>.md`) from birth through pr-ready; the base branch only sees them in `cards/done/` and `cards/abandoned/` after merge/abandon. Visualized by `BOARD.base` (Kanban Bases View). Find the active card, route it to the right agent based on its agents: tag, enforce per-stage handoffs. Use whenever the user says 'work the board', 'pick up the next card', refers to a card by title, or runs /board-tick."
+description: "Read and operate on the project's kanban board. Cards live as frontmatter files INSIDE per-card worktrees (`.claude/worktrees/card-<slug>/cards/<slug>.md`) from birth through pr-ready; the base branch only sees them in `cards/done/` and `cards/abandoned/` after merge/abandon. Visualized by `INDEX.base` (Kanban Bases View). Find the active card, route it to the right agent based on its agents: tag, enforce per-stage handoffs. Use whenever the user says 'work the board', 'pick up the next card', refers to a card by title, or runs /board-tick."
 ---
 
 # Board
