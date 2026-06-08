@@ -18,7 +18,7 @@
  */
 
 declare module "openclaw/plugin-sdk" {
-  import type { TObject } from "@sinclair/typebox";
+  import type { TObject } from "typebox";
 
   export interface PluginAPI {
     registerTool(tool: ToolDefinition): void;

@@ -24,7 +24,7 @@
  */
 
 import type { PluginAPI } from "openclaw/plugin-sdk";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 
 import { stubResult } from "../lib/tool-result.js";
 
