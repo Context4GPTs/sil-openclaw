@@ -42,7 +42,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@sinclair/typebox": "0.34.14"
+    "typebox": "^1.2.2"
   },
   "devDependencies": {
     "@types/node": "22.15.3",

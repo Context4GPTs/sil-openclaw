@@ -29,7 +29,7 @@
  */
 
 import type { PluginAPI } from "openclaw/plugin-sdk";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 
 import { getApiUrl, getSilApiUrl } from "../lib/config.js";
 import {
