@@ -4,8 +4,8 @@ title: sil-register-tool
 slug: sil-register-tool
 work_type: feature
 tiers: [unit, integration, e2e]
-status: review
-agents: [code-quality-guardian]
+status: done
+agents: []
 priority: 1
 created: 2026-06-08
 updated: 2026-06-08
@@ -13,7 +13,7 @@ base_branch: main
 worktree: /Users/knitlybak/GitHub/4gpts/sil/sil-openclaw/.claude/worktrees/card-sil-register-tool
 branch: card/sil-register-tool
 pr: https://github.com/Context4GPTs/sil-openclaw/pull/2
-merged_commit: null
+merged_commit: c16a30be0570bdb37b9bae8daed8ca1ec3b78aed
 epic_id: identity-plugin-tools
 origin: goal:identity-onboarding-slice
 ---
@@ -270,11 +270,40 @@ Built bottom-up exactly per the handoff order. No new npm deps (`node:crypto` on
 
 ## Review round 1 — code-quality-guardian
 
-<!-- verdict + issues; runs against the open PR's diff (PR was opened by expert-developer at the in-dev → review transition) -->
+**Verdict: PASS.** Reviewed against PR #2's diff (`main...card/sil-register-tool`, 15 files). Sanity-ran the suite in the worktree: `pnpm install` clean, `pnpm typecheck` clean, `pnpm test` **155/155 green** (13 files), `pnpm build` emits `dist/` clean. No `any`/`@ts-ignore`/`eslint-disable` anywhere in production source (`src/lib`, `src/tools`, `src/index.ts`); `tsconfig.json` has `strict: true`. No security defect, no misclassified claim status, no timer leak, no manifest drift, no weakened test. The two qa-flagged items are both resolved in the current code (details below). Findings are P3-only — noted for the distiller / next card, not blocking.
 
-### → Handoff back to In Dev (if FAIL/REVIEW)
+### Focus-area findings
 
-<!-- fix list -->
+**Security / OWASP (credential flow) — clean.**
+- **Tokens never logged.** Grepped every `logger.*` call in production source: the only logged fields are `session_id` and `user_id` (`identity.ts:100,168,176,185,187`; `index.ts:46`). No token/verifier reaches any log line at any level. Pinned by the `identity.test.ts` cross-level leak-canary test.
+- **PKCE verifier never on disk, never in a result.** Held only in the `claimStep` closure (`identity.ts:78,96,131-136`); only its S256 digest leaves the process, inside the auth URL. Pinned three ways (`identity.test.ts`, `credentials.test.ts`, the claim-body interceptor test).
+- **`tokens.json` / `config.json` `0600`, atomic.** `credentials.ts:writeJsonAtomic` writes a same-dir temp (`0600`) then `renameSync` then belt-and-braces `chmodSync(0600)`; dir created `0700`. Pinned by the perms tests incl. "no leftover world-readable temp."
+- **Refresh hits only sil-web, never Auth0.** `refreshStoredTokens` → `refreshSession` posts to `<resolved sil_api_url>/api/v1/auth/refresh` only; pinned by the integration "every request origin == resolved origin / no auth0.com" assertions. No Auth0 host anywhere in outbound requests.
+- **No secret in error paths.** Network/parse failures are caught and mapped to discriminated outcomes (`retryable`/`pending`); no token is interpolated into any message.
+
+**Correctness traps from Discovery — all handled correctly.**
+- **Claim branched on body shape, not `res.ok`.** `sil-client.ts#classifyClaimResponse:81-107` — 409/410/404 first, 5xx → retryable, then 200 classified by *both tokens present*; a partial/garbage 200 falls to the **safe non-terminal `pending`**, never a false success. The subtlest bug in the card is correct and exhaustively unit-pinned (incl. half-token → not success).
+- **PKCE S256 derivation matches sil-web byte-for-byte.** `pkce.ts:deriveChallenge` is `createHash("sha256").update(verifier).digest("base64url")`; pinned to the fixed RFC 7636 vector `dBjftJeZ…` → `E9Melhoa…` (the same vector sil-web pins) plus an independent in-test cross-check, so the assertion isn't circular.
+- **Poll loop bounded, no timer leak on ANY exit.** `poller.ts` routes every terminal (claimed / 409 / 410 / 404 / deadline / `stop()`) through one `settle()` that clears the interval once and fires `onDone` once; deadline checked before each tick; overlap guard prevents stacked in-flight ticks. `vi.getTimerCount()===0` asserted on terminal, deadline, and stop paths.
+- **`register()` synchronous, opens nothing.** `index.ts:register` only applies config overrides, calls the two registrars, and logs. No fetch, no timer, no unawaited promise. All I/O + the poll timer live in `execute()`. The install-hang guard in `index.test.ts` is intact.
+
+**qa review item #1 (un-awaited credential write on success) — RESOLVED in current code; the expert's reply is accurate.** The success write is **awaited inside the poll step**: `identity.ts#claimStep:142-146` does `await writeTokens(...)` then `await writeConfig(...)` *before* returning `{ done: true }`. `handleDone` (`:160`) writes nothing — it only logs. A write throw is caught by the poller's `tick()` try/catch (`poller.ts:103-112`) → treated as non-terminal → next tick re-polls → the CAS-consumed session returns **409 already_claimed** → terminal, no persist; the agent re-registers cleanly on its next call. So a disk-write failure is **not** an unhandled rejection and **not** a silent false-success. The only residue is a cosmetic doc-staleness: the integration-test helper `settleAsyncIo` (`register-claim.integration.test.ts`) still narrates "onDone fires the write un-awaited (identity.ts:165)", describing the superseded revision. Harmless (the drain still works) — flagged P3 for cleanup, not blocking.
+
+**qa review item #2 (security disclosure block) — truthful, but its test-pinning claim is inaccurate.** `openclaw.plugin.json#security` is honest: `runsTimers: true`, `networkEndpoints: ["https://sil.4gpts.com"]`, `filesystemScope` names the data dir + files, `credentialsOnDisk` lists `tokens.json`/`config.json`, and `packagingNote` spells out in-execute I/O + verifier-in-memory-only + tokens-never-logged. It no longer claims "no I/O." **However**, the card's repeated claim that `package-manifest.integration.test.ts` "pins this block's shape" is wrong — that test asserts package.json shape and the manifest's id/name/description/version/skills/contracts.tools/configSchema, but reads **nothing** under `security`. So the disclosure is currently truthful yet **unguarded** against future regression. P3 (see below).
+
+**Standard axes — clean.** Strict types, discriminated unions for both claim and refresh outcomes, named constants for the poll budget (`POLL_INTERVAL_MS`/`POLL_DEADLINE_MS`, deadline ≤ sil-web's 30-min TTL), no hardcoded secrets (the default URL is a documented config default with a pluginConfig→env→default override chain), no legacy/compat shims, no god object (clean split: pkce / credentials / sil-client / poller / tool), correct dependency direction, functions within length+complexity limits. The manifest drift guard (`manifest-contract.integration.test.ts`) was correctly updated to also call `registerIdentityTools` so it mirrors the real `register()` surface, and its failure-direction proofs still bite both ways.
+
+**Tier coverage — complete.** `tiers: [unit, integration, e2e]` populated; every acceptance criterion carries a tier tag; the unit + integration test files in the diff match the claimed coverage (77 new tests, full suite 155); the single `[e2e]` criterion is explicitly deferred to sil-stage / goal SC9 and the card says so. No gap.
+
+**Knowledge capture — satisfied for PASS.** Every non-obvious decision carries a thorough inline WHY comment (PKCE byte-match-or-uniform-404; 200-pending-vs-200-success discriminant; async-signature-over-sync-fs rationale; single-exit no-timer-leak; register()-opens-nothing; verifier-never-on-disk). `docs/decisions/INDEX.md` and `docs/knowledge/INDEX.md` are still empty — lifting the cross-cutting ones into docs is the distiller's job (guidance below), not a blocker.
+
+### P3 nits (non-blocking — for the distiller / next card)
+
+1. **Stale test-helper comment.** `register-claim.integration.test.ts#settleAsyncIo` (and a parallel drain note in `identity.test.ts`'s token-leak test) describe the old un-awaited-write revision and cite `identity.ts:165`. The write is now awaited in `claimStep`; the drain loop is harmless belt-and-braces against the async fs settle. Trim the comment to match reality when next touching the file.
+2. **`security` block is truthful but untested.** No test asserts the disclosure stays honest, despite the card narrative implying one does. A future edit could regress it to "no I/O" silently. Worth a small drift guard (assert `runsTimers === true`, `networkEndpoints`/`credentialsOnDisk`/`filesystemScope` non-empty whenever a real tool is registered) — natural to fold into `package-manifest.integration.test.ts`.
+3. **Distiller guidance.** Strong `docs/decisions/` candidates that currently live only as inline comments: (a) the PKCE cross-repo contract — plugin `deriveChallenge` MUST equal sil-web's, drift reads as a uniform 404 with no oracle, pinned by a shared vector; (b) the `200-pending` vs `200-success` body-shape discriminant (branch on token presence, never `res.ok`); (c) the deliberate async-signature-over-synchronous-fs trade-off in `credentials.ts` and *why* (fake-timer/threadpool race); (d) the security-disclosure invariants (verifier-in-memory-only, tokens-never-logged, `0600` atomic, sil-web-is-sole-auth-authority). All are cross-cutting constraints on the upcoming `sil_whoami`/refresh card.
+
+No handoff back to In Dev — this PASSes. Status → `distilling`.
 
 ## Distillation — solutions-architect
 
