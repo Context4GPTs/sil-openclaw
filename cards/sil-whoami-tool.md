@@ -4,8 +4,8 @@ title: sil-whoami-tool
 slug: sil-whoami-tool
 work_type: feature
 tiers: [unit, integration, e2e]
-status: review
-agents: [code-quality-guardian]
+status: distilling
+agents: [solutions-architect]
 priority: 1
 created: 2026-06-08
 updated: 2026-06-08
@@ -375,11 +375,137 @@ sil-api/Postgres); the true cross-service E2E is sil-stage's golden example
 
 ## Review round 1 — code-quality-guardian
 
-<!-- verdict + issues; runs against the open PR's diff (PR was opened by expert-developer at the in-dev → review transition) -->
+**Verdict: PASS** (one non-blocking P3 nit, carried from the register card).
 
-### → Handoff back to In Dev (if FAIL/REVIEW)
+Reviewed against PR #3 diff (`git diff main...card/sil-whoami-tool`). Sanity gate
+re-run independently: `pnpm install` clean, `pnpm typecheck` clean (strict, no
+`any`), `pnpm test` **206 pass / 18 files GREEN**. This is a PASS on green tests.
 
-<!-- fix list -->
+### Anti-false-green gate — VERIFIED REAL (mutation-checked, not trusted)
+
+I did not take qa's mutation claim on faith. I temporarily weakened
+`extractIdentity` (`src/lib/sil-client.ts`) to accept ANY 200 as `ok` and re-ran:
+**exactly 6 tests went red** — `identity-classify.test.ts`'s "STUB body is NOT
+ok", "wrapped STUB is NOT ok", "name-but-no-addresses is NOT ok",
+"addresses-but-no-name is NOT ok", "empty/null/non-object is NOT ok", and "does
+NOT branch on res.ok". File restored; suite back to 206 GREEN. The gate genuinely
+bites: the suite **cannot go green while `sil_whoami` returns the current
+`/identity` stub shape** `{kind,verified,subject,attributes,note}`. This is the
+feature, not over-fit. Matches qa's report precisely.
+
+### Refresh choreography (the cardinal risk) — CORRECT, read from code
+
+Traced `registerWhoami.execute()` (`src/tools/identity.ts:162-209`) line by line,
+not just via tests:
+- First `fetchIdentity` → if `first.kind !== "unauthorized"`, returns immediately
+  (`:171-173`) — **no refresh on success / 403 / 5xx**.
+- On 401 → exactly ONE `refreshStoredTokens()` (`:176`). `must_reregister` →
+  terminal + `clearTokens()` **only on `invalid_grant`** (`:177-183`); `retryable`
+  → terminal transient (`:184-187`); `refreshed` → re-read rotated tokens, exactly
+  ONE retry (`:190-196`).
+- Retry: `ok` → return (`:197-199`); `unauthorized` → `clearTokens()` + terminal,
+  **NEVER another refresh** (`:200-206`); 403/5xx → `identityOutcomeToResult`
+  (`:208`).
+- **Structurally at most one refresh + one retry — no path loops.** Exact
+  call-count assertions pin it: 1 identity + 1 refresh on dead-refresh; 2 identity
+  + 1 refresh on refresh-then-still-401 (`whoami.integration.test.ts:388-417,
+  501-526`). The exhaustive switch in `identityOutcomeToResult` (`:215-229`) keeps
+  a future refactor from silently dropping a variant.
+
+### 403 handling — CORRECT
+
+`classifyIdentityResponse` (`sil-client.ts:197-206`) splits 401→`unauthorized`,
+403→`forbidden{reason}`; only 401 reaches the refresh branch (the `!==
+"unauthorized"` short-circuit). 403 → terminal, **no refresh, no `clearTokens`**
+(the token is valid, just unprovisioned). Both pinned at the wired tier
+(`whoami.integration.test.ts:443-498`).
+
+### Two origins — CORRECT, no auth0 leak
+
+Identity → `getSilApiUrl()` (sil-api, `sil_api_base`); refresh → `getApiUrl()` via
+`refreshStoredTokens` (sil-web, `sil_api_url`). Distinct keys, distinct resolvers,
+**no cross-talk** (`config.ts:79-87`; pinned `sil-api-url.test.ts:86-103`).
+`grep auth0` across `src/` + manifest: zero production hits — every match is a doc
+comment, a test assertion proving Auth0 is never contacted, or a test fixture
+`subject` string. Origins asserted independently + no-auth0 on every request
+(`whoami.integration.test.ts:353-384`).
+
+### Secret / PII hygiene — CLEAN
+
+Read every `logger.*` call in `identity.ts`: all carry only non-credential markers
+(`session_id`, `cause` enum, `reason` enum, or `{}`). No token, Bearer, name, or
+address reaches a log line. `identityResult` (`:233-235`) returns `{status,
+identity}` only — never the token/Bearer. Leak-canary covers success +
+not-registered + rotated-token across all four levels (`whoami.test.ts:221-276`,
+`whoami.integration.test.ts:581-622`). `clearTokens` (`credentials.ts:135-143`) is
+atomic `unlinkSync`, absence-tolerant, scoped to `tokens.json` (leaves
+`config.json`), files stay `0600`.
+
+### Reuse, types, manifest, complexity — all PASS
+
+- **Reuse:** `readTokens`/`writeTokens`/`refreshStoredTokens`/`postJson`/
+  `readJsonBody`/`stripTrailingSlash` reused; `postJson` extended with an additive
+  optional `extraHeaders` for the Bearer. New code = identity wrapper + classifier
+  + `getSilApiUrl` + `clearTokens` + orchestration only. Outcomes branch on the
+  classifier/refresh unions, never `res.ok`.
+- **Types:** strict `tsc` clean; boundaries narrow `unknown` via `asRecord`; no
+  `any`, no `@ts-ignore`/`@ts-expect-error`, no `eslint-disable`.
+- **Manifest drift guard:** `contracts.tools` = `["sil_echo","sil_ping",
+  "sil_register","sil_whoami"]` — sorted + dup-free (verified). Both manifest
+  integration tests green (20 tests). Second origin `https://api.sil.4gpts.com`
+  added to `networkEndpoints`; `configSchema`/`uiHints` carry `sil_api_base`;
+  `packagingNote` updated and accurate.
+- **Hardcoded values:** `AGENT_ID = "sil-openclaw"` and `REQUEST_TIMEOUT_MS =
+  15_000` are named constants with justifying comments; `DEFAULT_SIL_API_BASE` is a
+  documented placeholder overridable via config/env. No magic numbers in logic.
+- **Complexity:** `execute()` is ~46 lines, linear, cyclomatic ~8, nesting depth 2.
+  Kept as one function deliberately so the "at most one refresh + one retry"
+  bound is structurally visible; helpers are small + single-purpose. Acceptable.
+
+### Empty-addresses behavior — ACCEPTED for now (signal for PO, not a defect)
+
+The flagged behavioral signal: a 200 with a valid `name` but ZERO `addresses`
+classifies as `retryable` ("temporarily unavailable") because `extractIdentity`
+(`sil-client.ts:325-343`) requires `addresses.length > 0`. **Decision: accept (a),
+do not block.** Reasoning: (1) the acceptance criteria say "at least their name
+and addresses" — genuinely ambiguous on the empty case, never pinned; (2) the live
+PII read is latent on the sil-services follow-on, so no real user can reach this
+path today — it is a latent-path edge, exactly the kind not to block on; (3) the
+strict gate's job *right now* (cannot false-green against the stub) is correct and
+load-bearing, while relaxing `addresses.length === 0` is a forward-looking product
+call best made when the real read lands. qa recorded this cleanly and encoded no
+contradicting test. **Signal to PO/architect:** when the real sil-api identity-read
+ships, decide whether `name` + empty-`addresses` is a valid identity; if yes, relax
+the reject in `extractIdentity` and qa adds the test. Until then the strict gate is
+the safer default (it cannot produce a false success).
+
+### Non-blocking nit (P3) — no fix required this card
+
+- **`package-manifest.integration.test.ts` asserts nothing under `security`.** The
+  second `networkEndpoints` origin (and the `credentialsOnDisk`/`filesystemScope`
+  disclosure) is **truthful and correct** but not regression-guarded by a test —
+  the exact P3 the register-card review flagged and this card's own risk list
+  re-noted. Not a defect (the disclosure is accurate); a future hardening could add
+  a small assertion that `security.networkEndpoints` contains both origins. Left as
+  a carried-forward nit, consistent with how the register card treated it.
+
+### Knowledge-capture check — adequate, queued for distilling
+
+Non-obvious logic carries inline WHY throughout (module headers, `AGENT_ID`,
+`clearTokens`, `extractIdentity`'s anti-false-green rationale, the two-origin
+model in `config.ts`). The dev queued three distillation candidates (two-origin
+config model → `docs/decisions/`; `AGENT_ID` + omit-`on_behalf_of` 403 gotcha →
+`docs/knowledge/`; anti-false-green gate tying to the sil-services follow-on →
+`docs/knowledge/`). Appropriate to capture in the distilling stage — no gap that
+blocks PASS.
+
+### Tier coverage — matches
+
+`tiers: [unit, integration, e2e]` frontmatter matches the criteria tags and the
+test files present (unit: `identity-classify`, `sil-api-url`, `clear-tokens`,
+`whoami`; integration: `whoami.integration` + the two manifest tests; e2e
+correctly out of scope — owned by sil-stage goal SC9, blocked on the sil-services
+follow-on, not faked).
 
 ## Distillation — solutions-architect
 
