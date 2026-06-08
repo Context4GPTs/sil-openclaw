@@ -4,8 +4,8 @@ title: sil-whoami-tool
 slug: sil-whoami-tool
 work_type: feature
 tiers: [unit, integration, e2e]
-status: distilling
-agents: [solutions-architect]
+status: pr-ready
+agents: []
 priority: 1
 created: 2026-06-08
 updated: 2026-06-08
