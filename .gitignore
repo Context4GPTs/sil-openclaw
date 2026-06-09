@@ -1,29 +1,16 @@
-# Worktree-specific
-.claude/worktrees/
-.claude/worktree-description.txt
+# cc-setup harness — local-only in this PUBLIC repo. The entire .claude/ tree
+# (skills, agents, hooks, commands, settings, worktrees, agent-memory, runtime
+# logs) is gitignored so the orchestration harness never ships in the public
+# plugin repo. The files live on-disk locally; the board runs from there.
+# To untrack any committed before this rule: git rm -r --cached .claude/
+.claude/
 *.worktree
 
-# Active-card symlinks → .claude/worktrees/ (local-only, for Obsidian board)
+# Cards are local-only in the public repo (gitignored mode): living card files
+# never land on a public branch; only the templates are tracked.
 cards/*.md
 !cards/_TEMPLATE.md
 !cards/README.md
-
-# Agent memory — never tracked on any branch; lives on-disk in whichever
-# worktree the agent session is rooted in, surfaced on base via a gitignored
-# symlink (board-sync.sh), exactly like the cards/*.md block above. The whole
-# tree is ignored with no !-exempt: every file here (incl. each agent's
-# MEMORY.md index) is living content, not static scaffolding, so exempting any
-# of it would re-introduce the base churn this rule exists to prevent.
-# NO trailing slash on purpose: a trailing-slash pattern matches directories
-# only and would NOT ignore the base symlink (git sees a symlink as a non-dir),
-# leaving it as untracked dirt that re-blocks board-sync's ff-pull gate. The
-# slash-less form matches BOTH a real agent-memory dir (and everything under it)
-# AND the symlink — verified against git check-ignore.
-.claude/agent-memory
-
-# Kanban runtime state (tick + sync logs)
-.claude/board-state.md
-.claude/sync.log
 
 # Editor directories and files
 
@@ -42,7 +29,6 @@ cards/*.md
 .obsidian/workspace-mobile.json
 .obsidian/cache
 .obsidian/plugins/*/data.json
-.claude/scheduled_tasks.lock
 
 # Dependencies
 node_modules/
