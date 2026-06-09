@@ -1,7 +1,7 @@
 {
   "id": "sil",
   "name": "sil",
-  "description": "Skeleton OpenClaw plugin for sil — registers stub tools a developer copies to add real ones.",
+  "description": "sil commerce plugin for OpenClaw — register on sil, read your identity, and search and look up products in the sil catalog.",
   "version": "0.1.0",
   "skills": ["./skill"],
   "activation": {
@@ -9,8 +9,6 @@
   },
   "contracts": {
     "tools": [
-      "sil_echo",
-      "sil_ping",
       "sil_product_get",
       "sil_register",
       "sil_search",
