@@ -7,11 +7,12 @@
  * against a mock api, assert no-throw + the `sil_plugin_loaded` marker
  * fires." A full dockerized publish-shape smoke is a follow-up card.
  *
- * The distinction from index.test.ts: that file mocks the tool group
- * (registerExampleTools) to isolate the WIRING. This file runs the
- * ENTIRE real register path end-to-end — real entry module, real tool
- * registration, real config resolution, real marker — with only the
- * ambient SDK shim (`openclaw/plugin-sdk/plugin-entry`) stubbed, because
+ * The distinction from index.test.ts: that file asserts the entry
+ * contract narrowly (sync register, the single load marker, config
+ * precedence). This file runs the ENTIRE real register path end-to-end —
+ * real entry module, real tool registration, real config resolution, real
+ * marker — with only the ambient SDK shim
+ * (`openclaw/plugin-sdk/plugin-entry`) stubbed, because
  * that module is provided by the OpenClaw runtime, not an npm package,
  * and cannot be resolved outside a host. That is the closest a no-Docker
  * env gets to "the host loaded it without error."

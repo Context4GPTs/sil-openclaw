@@ -4,7 +4,7 @@ Internal contributor-facing instructions for the `sil-openclaw` plugin.
 
 ## What this repo is, in one line
 
-`sil-openclaw` is a standalone OpenClaw plugin (TypeScript, Node 22+, ESM). The plugin lives at the **repo root** — there is no `adapters/` nesting. It is a skeleton: it registers stub tools that return placeholder responses, and exists to be copied when adding real tools. Its structure mirrors the klodi OpenClaw adapter, flattened to one repo and stripped of marketplace machinery (no NATS transport, no persistent service, no vendoring).
+`sil-openclaw` is a standalone OpenClaw plugin (TypeScript, Node 22+, ESM) that exposes sil's UCP commerce tools to an agent — identity (`sil_register`, `sil_whoami`) and catalog (`sil_search`, `sil_product_get`). The plugin lives at the **repo root** — there is no `adapters/` nesting. Its structure mirrors the klodi OpenClaw adapter, flattened to one repo and stripped of marketplace machinery (no NATS transport, no persistent service, no vendoring).
 
 **UCP reference.** This plugin implements UCP commerce tools. The spec and SDKs
 live at `../../vendor/ucp/` (see parent `CLAUDE.md` for the full map). Before
@@ -26,9 +26,9 @@ types, check `../../vendor/ucp/js-sdk/src/` (`@ucp-js/sdk`, Zod-generated).
 
 ## How to add a tool
 
-The stub tools in `src/tools/examples.ts` (`sil_ping`, `sil_echo`) are the canonical pattern. To add a real tool, do all three steps — the third is the one that silently breaks the plugin if skipped:
+The real tool groups in `src/tools/` are the canonical pattern: `identity.ts` (`sil_register`, `sil_whoami`) is the reference — it sets the `jsonResult` success shape and the structured-error/recovery envelope every tool follows — and `catalog.ts` (`sil_search`, `sil_product_get`) is the catalog counterpart. To add a real tool, do all three steps — the third is the one that silently breaks the plugin if skipped:
 
-1. **Register the tool in a group.** Add an `api.registerTool({ name, label, description, parameters: Type.Object({...}), async execute(callId, params) {...} })` call inside a `registerXTools(api)` function in `src/tools/` (reuse `registerExampleTools`, or add a new group). Return a `ToolResult` — `jsonResult(<data>)` for real payloads, `stubResult(name, params)` for a placeholder.
+1. **Register the tool in a group.** Add an `api.registerTool({ name, label, description, parameters: Type.Object({...}), async execute(callId, params) {...} })` call inside a `registerXTools(api)` function in `src/tools/` (extend `registerIdentityTools` / `registerCatalogTools`, or add a new group). Return a `ToolResult` via `jsonResult(<data>)`.
 2. **Wire the group into `register()`.** If you added a new `registerXTools` group, call it from `register(api)` in `src/index.ts`. (Adding a tool to an existing group needs no change here.)
 3. **Add the tool's name to `contracts.tools`.** List the new `name` in `openclaw.plugin.json#contracts.tools`.
 

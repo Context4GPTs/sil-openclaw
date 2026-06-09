@@ -15,21 +15,20 @@
  *     is applied; an empty string is ignored; a value sitting on
  *     `api.config` (the WRONG, non-plugin-scoped source) is ignored.
  *
- * Also pins the two lib helpers the architect's strategy calls out at
- * the unit tier — `jsonResult` / `stubResult` shape and
- * `applyPluginConfigOverrides` precedence — co-located here because
- * they share the config-reset machinery and the entry contract is what
- * wires them together.
+ * Also pins the lib helper the architect's strategy calls out at the
+ * unit tier — `jsonResult` shape — and `applyPluginConfigOverrides`
+ * precedence, co-located here because they share the config-reset
+ * machinery and the entry contract is what wires them together.
  *
  * Contract this file pins for the implementation (expert-developer):
  *   - default export of src/index.ts is the value returned by
  *     definePluginEntry({ id, name, description, register });
- *   - register(api) calls registerExampleTools(api), applies
- *     pluginConfig overrides, and logs `sil_plugin_loaded` once;
+ *   - register(api) wires the real tool groups (so register() populates
+ *     the api with tools), applies pluginConfig overrides, and logs
+ *     `sil_plugin_loaded` once;
  *   - src/lib/config.ts exports applyPluginConfigOverrides, getApiUrl,
  *     getApiUrlSource, setApiUrl (env-fallback override pattern);
- *   - src/lib/tool-result.ts exports jsonResult(data) and
- *     stubResult(name, params).
+ *   - src/lib/tool-result.ts exports jsonResult(data).
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
@@ -58,19 +57,13 @@ vi.mock("openclaw/plugin-sdk/plugin-entry", () => ({
   }),
 }));
 
-// Spy on the tool-group registrar so the entry-contract assertions are
-// about WIRING (register calls the group), independent of how many
-// tools the group registers — that's examples.test.ts's job.
-vi.mock("../tools/examples.js", () => ({ registerExampleTools: vi.fn() }));
-
-import { registerExampleTools } from "../tools/examples.js";
 import {
   applyPluginConfigOverrides,
   getApiUrl,
   getApiUrlSource,
   setApiUrl,
 } from "../lib/config.js";
-import { jsonResult, stubResult } from "../lib/tool-result.js";
+import { jsonResult } from "../lib/tool-result.js";
 import { createMockPluginApi } from "./helpers/mock-plugin-api.js";
 
 beforeAll(async () => {
@@ -101,10 +94,18 @@ describe("plugin entry — registration contract", () => {
     expect(capturedEntry!.description.length).toBeGreaterThan(0);
   });
 
-  it("wires the example tool group into register()", () => {
+  it("wires the real tool groups into register() — registers exactly the real tool set", () => {
+    // register() runs the real tool groups (no mock), so it populates the
+    // api with exactly the four real tools and NO example stub. This pins
+    // the wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
-    expect(registerExampleTools).toHaveBeenCalledWith(api);
+    expect([...api._tools.keys()].sort()).toEqual([
+      "sil_product_get",
+      "sil_register",
+      "sil_search",
+      "sil_whoami",
+    ]);
   });
 
   it("completes synchronously without throwing", () => {
@@ -271,26 +272,5 @@ describe("jsonResult — tool-result shape", () => {
     expect(jsonResult(null).content[0]!.text).toBe("null");
     expect(jsonResult("hello").content[0]!.text).toBe('"hello"');
     expect(jsonResult(42).content[0]!.text).toBe("42");
-  });
-});
-
-describe("stubResult — uniform placeholder shape", () => {
-  it("produces a jsonResult whose payload is { stub, tool, echo }", () => {
-    const params = { hello: "world" };
-    const result = stubResult("sil_ping", params);
-    expect(result.content[0]!.type).toBe("text");
-    const payload = JSON.parse(result.content[0]!.text!) as Record<
-      string,
-      unknown
-    >;
-    expect(payload).toEqual({ stub: true, tool: "sil_ping", echo: params });
-    expect(result.isError).toBeUndefined();
-  });
-
-  it("echoes empty params as an empty object (no silent drop)", () => {
-    const payload = JSON.parse(
-      stubResult("sil_echo", {}).content[0]!.text!,
-    ) as Record<string, unknown>;
-    expect(payload["echo"]).toEqual({});
   });
 });

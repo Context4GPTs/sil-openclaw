@@ -1,25 +1,28 @@
 # sil — OpenClaw plugin
 
-A skeleton [OpenClaw](https://docs.openclaw.ai) plugin for **sil**. It registers stub tools that load in an OpenClaw host and return placeholder responses — the starting point you copy to build real tools.
+A [OpenClaw](https://docs.openclaw.ai) plugin for **sil**. It exposes the sil commerce tools to an agent running in an OpenClaw host: register an identity, read it back, and search and look up purchasable products in the sil catalog.
 
 ## Tools
 
 | Tool | Arguments | Returns |
 |---|---|---|
-| `sil_ping` | _(none)_ | Stub payload confirming the plugin's tools are registered and invocable. |
-| `sil_echo` | `message: string` | Stub payload echoing the supplied `message` back, proving a typed parameter round-trips. |
+| `sil_register` | _(none)_ | Starts browser-based registration. Returns an `auth_url` for the user to open; the plugin polls in the background and stores credentials once sign-in completes. |
+| `sil_whoami` | _(none)_ | The registered user's identity (name and addresses), refreshing an expired token transparently. |
+| `sil_search` | `query?`, `category?`, `price_min?`, `price_max?`, `cursor?`, `limit?` | A ranked list of purchasable variants (`id`, `title`, `price`, `availability`, `checkout_url`, `source`) plus a pagination `cursor`. |
+| `sil_product_get` | `ids: string[]` | The matching products in UCP shape with fresh detail (description, options, featured variant), each variant carrying an `inputs` correlation; unresolved ids come back in `not_found`. |
 
-Every tool returns the same envelope — a single text content block whose JSON body is `{ "stub": true, "tool": "<name>", "echo": <params> }`. No tool performs network, filesystem, or credential I/O.
+Every tool returns the same envelope — a single text content block whose JSON body carries a `status` (`ok`, `not_registered`, `must_reregister`, `forbidden`, `invalid_request`, or `retryable`) and, on success, the tool's payload. All I/O happens inside a tool's `execute()`; `register()` opens nothing.
 
 ## Configuration
 
-One optional plugin-scoped key, resolved at call time (override → env → default):
+Two optional plugin-scoped keys, resolved at call time (override → env → default):
 
 | Key | Env fallback | Default | Purpose |
 |---|---|---|---|
-| `sil_api_url` | `SIL_API_URL` | `https://sil.4gpts.com` | Backend URL. Unused by the stub tools; demonstrates the plugin-config override path. |
+| `sil_api_url` | `SIL_API_URL` | `https://sil.4gpts.com` | sil-web origin — the auth authority (registration, token refresh). |
+| `sil_api_base` | `SIL_API_BASE` | `https://api.sil.4gpts.com` | sil-api origin — the domain service (`sil_whoami` identity reads, `sil_search` / `sil_product_get` catalog calls). |
 
-Set it under `plugins.sil.config.sil_api_url` in your OpenClaw config.
+Set them under `plugins.sil.config` in your OpenClaw config. Override only for staging or self-hosted deployments.
 
 ## Developing
 
@@ -32,7 +35,7 @@ pnpm typecheck   # tsc --noEmit
 
 ### How to add a tool
 
-The stubs in `src/tools/examples.ts` are the pattern. Adding a real tool is three steps:
+`src/tools/identity.ts` (`sil_register`, `sil_whoami`) is the reference group — it sets the `jsonResult` success shape and the structured-error envelope every real tool follows; `src/tools/catalog.ts` is the catalog counterpart. Adding a real tool is three steps:
 
 1. Register the tool with `api.registerTool({...})` inside a `registerXTools(api)` group in `src/tools/`.
 2. Wire that group into `register()` in `src/index.ts` (only needed for a new group).

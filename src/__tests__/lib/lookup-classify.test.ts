@@ -190,8 +190,8 @@ function notFoundMsg(id: string): Record<string, unknown> {
   return { type: "info", code: "not_found", content: id };
 }
 
-/** The current skeleton STUB shape (`stubResult` → `{ stub, tool, echo }`). A 200
- * carrying this must NEVER read as a clean lookup (complete-work-is-stub-free). */
+/** A stub-shaped 200 (`{ stub, tool, echo }`). Such a body must NEVER read as a
+ * clean lookup (complete-work-is-stub-free). */
 const STUB_BODY = { stub: true, tool: "sil_product_get", echo: { ids: ["x"] } };
 
 describe("classifyLookupResponse — the four distinct outcomes stay distinct", () => {

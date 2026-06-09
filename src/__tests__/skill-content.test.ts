@@ -8,8 +8,9 @@
  * of the same name. Covers the card's "Skill is discoverable" criteria:
  *   - skill/SKILL.md exists, its YAML frontmatter PARSES, and exposes a
  *     non-empty `name` and `description`;
- *   - the skill body names EVERY stub tool the plugin registers, so the
- *     agent's session-start tool check has a source of truth.
+ *   - the skill body names EVERY real tool the plugin registers
+ *     (`sil_register`, `sil_whoami`, `sil_search`, `sil_product_get`), so
+ *     the agent's session-start tool check has a source of truth.
  *
  * Frontmatter is parsed with a small self-contained extractor (no
  * gray-matter dependency assumed — the skeleton's dep set is minimal)
@@ -27,7 +28,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { registerExampleTools } from "../tools/examples.js";
+import { registerIdentityTools } from "../tools/identity.js";
+import { registerCatalogTools } from "../tools/catalog.js";
 import {
   createMockPluginApi,
   registeredToolNames,
@@ -80,9 +82,14 @@ function skillBody(content: string): string {
   return content.slice(3 + closeMatch.index + closeMatch[0].length);
 }
 
+/** The set of names the real register code emits against a mock api. Must
+ * call EVERY tool group that src/index.ts#register() wires, so the skill
+ * body is checked against the REAL tool surface (`sil_register`,
+ * `sil_whoami`, `sil_search`, `sil_product_get`). Mirror register(). */
 function registeredNames(): Set<string> {
   const api = createMockPluginApi();
-  registerExampleTools(api);
+  registerIdentityTools(api);
+  registerCatalogTools(api);
   return registeredToolNames(api);
 }
 
@@ -110,11 +117,19 @@ describe("skill/SKILL.md — discoverability", () => {
 });
 
 describe("skill/SKILL.md — body is a source of truth for the tool surface", () => {
-  it("names EVERY registered stub tool in its body", () => {
+  it("names EVERY registered real tool in its body", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
     const names = registeredNames();
     expect(names.size).toBeGreaterThan(0); // sanity: there ARE tools
     const missing = [...names].filter((name) => !body.includes(name));
     expect(missing).toEqual([]);
+  });
+
+  it("names no removed example tool (sil_ping / sil_echo) in its body", () => {
+    // The card's contributor-mental-model goal: the skill no longer
+    // presents the deleted stubs as a real, callable tool surface.
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+    expect(body).not.toContain("sil_ping");
+    expect(body).not.toContain("sil_echo");
   });
 });

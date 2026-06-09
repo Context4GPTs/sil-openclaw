@@ -142,8 +142,8 @@ function envelope(result: unknown): unknown {
   };
 }
 
-/** The current skeleton STUB shape (`stubResult` → `{ stub, tool, echo }`). A
- * 200 carrying this must NEVER read as a clean empty match (complete-work-is-stub-free). */
+/** A stub-shaped 200 (`{ stub, tool, echo }`). Such a body must NEVER read as a
+ * clean empty match (complete-work-is-stub-free). */
 const STUB_BODY = { stub: true, tool: "sil_search", echo: { query: "chair" } };
 
 describe("classifySearchResponse — the three distinct sil-api outcomes stay distinct", () => {

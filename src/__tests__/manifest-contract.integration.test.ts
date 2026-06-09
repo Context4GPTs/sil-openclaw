@@ -18,23 +18,25 @@
  *     deliberately-perturbed sets so the guardrail's bite is itself
  *     tested, not just asserted.
  *
- * No mocks of the registration code — `registerExampleTools` runs for
- * real against the mock api. Only the host/network is absent (the mock
- * api is a pure in-memory capture), which is exactly the integration
- * contract: real components, real file, no live host.
+ * No mocks of the registration code — the real tool groups
+ * (`registerIdentityTools`, `registerCatalogTools`) run for real against
+ * the mock api. Only the host/network is absent (the mock api is a pure
+ * in-memory capture), which is exactly the integration contract: real
+ * components, real file, no live host.
  *
  * Contract this file pins for the implementation (expert-developer):
  *   - openclaw.plugin.json exists at the repo root with a
  *     `contracts.tools` string array;
- *   - registerExampleTools(api) registers exactly the tools named there
- *     (and the manifest names exactly the tools it registers).
+ *   - the real tool groups register exactly the tools named there (and
+ *     the manifest names exactly the tools they register) — the set on
+ *     both sides equals { sil_product_get, sil_register, sil_search,
+ *     sil_whoami }.
  */
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { registerExampleTools } from "../tools/examples.js";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
 import {
@@ -76,7 +78,6 @@ function manifestToolNames(): Set<string> {
  * "missing from code" here). Mirror register() exactly. */
 function codeRegisteredNames(): Set<string> {
   const api = createMockPluginApi();
-  registerExampleTools(api);
   registerIdentityTools(api);
   registerCatalogTools(api);
   return registeredToolNames(api);
@@ -90,10 +91,6 @@ describe("openclaw.plugin.json — manifest shape", () => {
   it("declares a non-empty contracts.tools array", () => {
     const names = manifestToolNames();
     expect(names.size).toBeGreaterThan(0);
-  });
-
-  it("declares at least two tools (the skeleton ships a pattern, not one example)", () => {
-    expect(manifestToolNames().size).toBeGreaterThanOrEqual(2);
   });
 
   it("has no duplicate tool names", () => {
@@ -119,6 +116,30 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
 
   it("the two sets are exactly equal (no drift in either direction)", () => {
     expect(sorted(codeRegisteredNames())).toEqual(sorted(manifestToolNames()));
+  });
+
+  it("both sides equal exactly the real tool set — no example tool survives", () => {
+    // The card's spine: after removing the skeleton examples, the manifest
+    // AND the code both name exactly the four real tools. Pinned by literal
+    // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
+    // not just the symmetric drift check above.
+    const expected = [
+      "sil_product_get",
+      "sil_register",
+      "sil_search",
+      "sil_whoami",
+    ];
+    expect(sorted(codeRegisteredNames())).toEqual(expected);
+    expect(sorted(manifestToolNames())).toEqual(expected);
+  });
+
+  it("neither side names a removed example tool (sil_ping / sil_echo)", () => {
+    const code = codeRegisteredNames();
+    const manifest = manifestToolNames();
+    for (const removed of ["sil_ping", "sil_echo"]) {
+      expect(code.has(removed)).toBe(false);
+      expect(manifest.has(removed)).toBe(false);
+    }
   });
 
   it("sil_search is BOTH registered by register() and declared in contracts.tools", () => {
