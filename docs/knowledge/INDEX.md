@@ -6,7 +6,7 @@ Sorted by `updated_at` descending (newest first). One row per doc in this folder
 
 | ID | Title | Tags | Updated |
 |---|---|---|---|
-| [[sil-api-catalog-contract]] | sil-api catalog search — bare POST /catalog/search, @sil/schemas is wire truth (not @ucp-js/sdk), wrong-boilerplate hazard | sil-api, catalog, search, contract, wire-types, cross-sibling, gotcha | 2026-06-09 |
+| [[sil-api-catalog-contract]] | sil-api catalog reads — bare POST /catalog/{search,lookup}, @sil/schemas is wire truth (not @ucp-js/sdk), wrong-boilerplate hazard | sil-api, catalog, search, lookup, contract, wire-types, cross-sibling, gotcha | 2026-06-09 |
 | [[sil-response-classification]] | Classify sil responses on body shape, not HTTP status (incl. catalog empty-vs-garbage 200) | sil-api, sil-web, http, classification, false-green | 2026-06-09 |
 | [[skeleton-stubs-are-compliant-until-touched]] | The sil_ping/sil_echo skeleton stubs are NOT a stub-free violation — de-stubbing is gated on touch | stub, skeleton, complete-work-is-stub-free, examples, copy-me, gotcha, review | 2026-06-08 |
 | [[typecheck-is-the-only-test-type-gate]] | pnpm typecheck is the only gate that type-checks tests (build excludes them, test strips types) | tooling, typescript, vitest, tsconfig, gotcha, false-green, ci-gate | 2026-06-08 |
