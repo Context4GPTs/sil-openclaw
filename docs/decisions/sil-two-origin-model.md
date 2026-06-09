@@ -4,8 +4,8 @@ title: The plugin talks to two sil origins (sil-web auth authority + sil-api dom
 tags: [architecture, config, auth, contracts, sil-api, sil-web]
 card: sil-whoami-tool
 commit: a635103
-updated_at: 2026-06-08
-updated_by_card: sil-whoami-tool
+updated_at: 2026-06-09
+updated_by_card: sil-search-plugin-tool
 ---
 
 This plugin addresses **two distinct sil services at two distinct origins**, resolved from two distinct config keys — never one. Any future tool must pick the right origin for what it is doing.
@@ -13,7 +13,7 @@ This plugin addresses **two distinct sil services at two distinct origins**, res
 | Service | Config key (resolution: pluginConfig → env → default) | What it owns | Used by |
 |---|---|---|---|
 | **sil-web** (`apps/sil-web`, Next) | `sil_api_url` → `SIL_API_URL` → `DEFAULT_API_URL` (`https://sil.4gpts.com`) | The **auth authority**: PKCE claim (`POST /api/v1/sessions/{id}/claim`) and token refresh (`POST /api/v1/auth/refresh`). `/api/v1/*` paths. | `claimSession`, `refreshSession`, `refreshStoredTokens` (`src/lib/sil-client.ts`) |
-| **sil-api** (`services/sil-api`, Fastify) | `sil_api_base` → `SIL_API_BASE` → `DEFAULT_SIL_API_BASE` (placeholder, see below) | The **domain service**: identity read and all future commerce domains (fulfillment, payments, loyalty). **Bare** paths (`/identity`, NOT `/api/v1/identity`). | `fetchIdentity` (`src/lib/sil-client.ts`); resolver `getSilApiUrl()` (`src/lib/config.ts:79`) |
+| **sil-api** (`services/sil-api`, Fastify) | `sil_api_base` → `SIL_API_BASE` → `DEFAULT_SIL_API_BASE` (placeholder, see below) | The **domain service**: identity read, catalog, and all future commerce domains (fulfillment, payments, loyalty). **Bare** paths (`/identity`, `/catalog/search` — NOT `/api/v1/...`). | `fetchIdentity`, `searchCatalog` (`src/lib/sil-client.ts`); resolver `getSilApiUrl()` (`src/lib/config.ts:79`) |
 
 ## Why two keys, not one
 
@@ -22,7 +22,9 @@ This plugin addresses **two distinct sil services at two distinct origins**, res
 
 ## The constraint on future work
 
-> Any new plugin tool that calls a sil-api **domain** (fulfillment, payments, loyalty, …) uses `getSilApiUrl()` / `sil_api_base` — the same origin as `fetchIdentity`. Only PKCE/claim/refresh use `getApiUrl()` / `sil_api_url`. The two resolvers (`config.ts:61` and `config.ts:79`) never cross-talk; keep it that way.
+> Any new plugin tool that calls a sil-api **domain** (catalog, fulfillment, payments, loyalty, …) uses `getSilApiUrl()` / `sil_api_base` — the same origin as `fetchIdentity`. Only PKCE/claim/refresh use `getApiUrl()` / `sil_api_url`. The two resolvers (`config.ts:61` and `config.ts:79`) never cross-talk; keep it that way.
+
+**Catalog is the second domain to prove this rule** (`searchCatalog` → bare `/catalog/search` on `getSilApiUrl()`, `sil-client.ts:441`). The catalog card's Intent stated the path WRONG (`/api/v1/catalog/search` via sil-web) — propagated from the goal's card-fanout template; the next catalog card (`sil_product_get`) carries the same wrong boilerplate. See [[sil-api-catalog-contract]] for that hazard and [[sil-shared-catalog-client]] for the shared catalog-client layer the domains reuse.
 
 When you add a sil-api origin to anything, also add it to `openclaw.plugin.json#security.networkEndpoints` — the disclosure must name **both** origins.
 
