@@ -3,24 +3,26 @@ id: sil-response-classification
 title: Classify sil responses on body shape, not HTTP status (and never on res.ok)
 tags: [sil-api, sil-web, http, classification, gotcha, false-green]
 card: sil-whoami-tool
-commit: c6b18f7
-updated_at: 2026-06-08
-updated_by_card: sil-identity-read-verb-fix
+commit: c78bc59
+updated_at: 2026-06-09
+updated_by_card: sil-search-plugin-tool
 ---
 
 Every sil HTTP response is classified by a **pure, exported, unit-tested classifier** that branches on HTTP status **and, for `200`, the response body shape** — never on `res.ok`. This exists because sil returns semantically-distinct outcomes under the *same* HTTP status, so the status code alone is not enough to decide what happened.
 
-The classifiers all live in `src/lib/sil-client.ts`: `classifyClaimResponse`, `classifyRefreshResponse`, `classifyIdentityResponse`. Each returns a discriminated union so the meaning is decided in one place and callers switch on `kind`.
+The classifiers all live in `src/lib/sil-client.ts`: `classifyClaimResponse`, `classifyRefreshResponse`, `classifyIdentityResponse`, `classifySearchResponse`. Each returns a discriminated union so the meaning is decided in one place and callers switch on `kind`.
 
-## The two-200s traps (why body shape, not status)
+## The 200-is-ambiguous traps (why body shape, not status)
 
 1. **Claim: `200`-pending vs `200`-success.** `POST /api/v1/sessions/{id}/claim` returns HTTP `200` both while the browser leg is still in progress (`{status:"pending"}`) and when the tokens are ready (`{access_token, refresh_token, user}`). The discriminant is **the presence of both tokens in the body** (`classifyClaimResponse`, `sil-client.ts:136`) — *not* the status. A malformed/partial `200` falls to the **safe non-terminal** `pending`, never to a false `success` that would persist a non-credential as tokens.
 
 2. **Identity: anti-false-green `200`.** The authenticated self-read is **`GET /identity`** (a bodyless GET — `fetchIdentity`, `sil-client.ts:270`), which returns HTTP `200` with the real `{name, addresses}` payload. The discriminant is the **non-empty `name`**: `extractIdentity` (`sil-client.ts:340`) requires a non-empty `name` string AND that `addresses` is an **array** (which **may be empty** — `addresses: []` is a real, authenticated identity for a user who onboarded a name but no address; see below). Any `200` that yields no usable `name` — sil-api's *enrich-stub* shape `{kind, verified, subject, attributes, note}` that `POST /identity` still returns (no name), or a partial/garbage `200` — classifies as `retryable`, **never `ok`**. This is the load-bearing guard: **the test suite cannot go green while `sil_whoami` reads the stub shape** — i.e. it cannot false-green while the product promise (real PII over the wire) is unmet. The verb is itself load-bearing: POST hits the enrich-stub (no name), GET hits the real self-read. See [[sil-api-identity-contract]].
 
+3. **Catalog search: empty-match `200` vs no-array `200`.** `POST /catalog/search` returns HTTP `200` both for a genuine empty match (`result.products: []` — a SUCCESS, "nothing matched") and for a partial / garbage / stub-shaped body. The discriminant is **`Array.isArray(result.products)`**: `extractSearchResult` (`sil-client.ts:593`) requires `result` to be an object AND `result.products` to be a real array. A genuine empty array → `ok` with an empty product list (the most common benign outcome — surfacing it as an error would make an agent treat "nothing matched" as a failure and retry pointlessly). A `200` whose `result.products` is absent or non-array → `retryable`, **never `ok`** — the anti-false-green guard, the exact analogue of identity's `name`-gate. Unlike `extractIdentity`, there is **no bare-top-level fallback** (a search response is always enveloped, so a top-level `products` is malformed). See [[sil-api-catalog-contract]] for the full status→outcome table and [[sil-shared-catalog-client]] for the reusable normalizers.
+
 ## Why `res.ok` is banned
 
-`res.ok` is true for the entire `2xx` range and tells you nothing about *which* `200` you got. Branching on it would conflate "keep polling" with "success" (claim) and "stub placeholder" with "real identity" (identity) — the two highest-risk subtle bugs in the flow. The classifier unit tests are **mutation-verified**: forcing `extractIdentity` to accept any `200` as `ok` (drop the non-empty-`name` and `Array.isArray` gates) turns **7 tests red** in `identity-classify.test.ts`, so the guard demonstrably bites rather than coincidentally passing.
+`res.ok` is true for the entire `2xx` range and tells you nothing about *which* `200` you got. Branching on it would conflate "keep polling" with "success" (claim), "stub placeholder" with "real identity" (identity), and "nothing matched" with "garbage body" (catalog search) — the highest-risk subtle bugs in the flow. The classifier unit tests are **mutation-verified**: forcing `extractIdentity` to accept any `200` as `ok` (drop the non-empty-`name` and `Array.isArray` gates) turns **7 tests red** in `identity-classify.test.ts`; likewise weakening `extractSearchResult`'s `Array.isArray(products)` gate to coerce garbage → `[]` turns the anti-false-green tests red in the catalog search suites. The guards demonstrably bite rather than coincidentally passing.
 
 ## When you add a new sil call
 

@@ -12,6 +12,7 @@
       "sil_echo",
       "sil_ping",
       "sil_register",
+      "sil_search",
       "sil_whoami"
     ]
   },
