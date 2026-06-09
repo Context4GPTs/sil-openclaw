@@ -36,6 +36,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerExampleTools } from "../tools/examples.js";
 import { registerIdentityTools } from "../tools/identity.js";
+import { registerCatalogTools } from "../tools/catalog.js";
 import {
   createMockPluginApi,
   registeredToolNames,
@@ -77,6 +78,7 @@ function codeRegisteredNames(): Set<string> {
   const api = createMockPluginApi();
   registerExampleTools(api);
   registerIdentityTools(api);
+  registerCatalogTools(api);
   return registeredToolNames(api);
 }
 
@@ -117,6 +119,15 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
 
   it("the two sets are exactly equal (no drift in either direction)", () => {
     expect(sorted(codeRegisteredNames())).toEqual(sorted(manifestToolNames()));
+  });
+
+  it("sil_search is BOTH registered by register() and declared in contracts.tools", () => {
+    // The card's self-enforcing-registration criterion, pinned by name: the new
+    // catalog tool must appear on BOTH sides of the equal set — registered by
+    // registerCatalogTools (now wired into codeRegisteredNames) AND listed in
+    // openclaw.plugin.json#contracts.tools.
+    expect(codeRegisteredNames().has("sil_search")).toBe(true);
+    expect(manifestToolNames().has("sil_search")).toBe(true);
   });
 });
 
