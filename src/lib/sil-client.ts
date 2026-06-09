@@ -48,6 +48,34 @@
  *     401                                            → unauthorized (terminal here)
  *     5xx / network / abort                          → retryable
  *
+ * Wire contract for the sil-API catalog LOOKUP (SAME origin/path style as search —
+ * sil-api, bare `/catalog/lookup`, NOT /api/v1; see the sil-product-get card). The
+ * lookup COMPANION to search: an agent passes ids it already holds and gets fresh
+ * RICH detail back (search is LEAN). sil-api owns enrichment + the `not_found`
+ * messaging + the envelope; the plugin sends just `{ ids }` (NO filters/context,
+ * NO envelope). The two structural deltas from search's response: NO `pagination`
+ * (a batch resolve, not a list) and a `messages[]` carrying the misses:
+ *
+ *   POST <silApiUrl>/catalog/lookup   Authorization: Bearer <access_token>
+ *     body { ids: string[] }                         (≥1; no filters/context)
+ *     200 <UCP envelope>{ result: { products: SilCatalogProduct[],
+ *            messages?:[{ type:"info", code:"not_found", content:<id> }] } } → ok
+ *     400 (schema: empty `ids` / request_too_large)  → invalid_request
+ *     401                                            → unauthorized (terminal here)
+ *     5xx / network / abort                          → retryable
+ *
+ * A lookup MISS is partial-SUCCESS data, NEVER an error: an unresolved id is a
+ * `not_found` info `message` (the server omits `messages` entirely on full
+ * success), surfaced on the `ok` outcome as a `not_found: string[]`. Each looked-up
+ * variant carries an `inputs:[{ id, match }]` correlation (lookup's defining
+ * feature over search — the response does NOT preserve request order and one id
+ * may resolve to a variant of another id's product, so `inputs` is the only way to
+ * map a request id to its result). `classifyLookupResponse` gates `ok` on a real
+ * `Array.isArray(result.products)` — a 200 with no usable products array is
+ * `retryable`, NEVER a false-green; a genuine ALL-MISSED lookup is a 200 whose
+ * `result.products` IS `[]` WITH a populated `not_found` → `ok` (success: "none of
+ * these exist anymore"), the discriminator being array PRESENCE, never length.
+ *
  * `SilCatalogProduct` = a UCP product PLUS a required `source`; each variant PLUS
  * a required non-empty `checkout_url` (sil-services `@sil/schemas` catalog.ts —
  * the byte-shape of truth; `@ucp-js/sdk` carries ZERO catalog types). The plugin
@@ -238,6 +266,92 @@ export type SearchOutcome =
   | { kind: "invalid_request"; error: string; message: string }
   | { kind: "retryable" };
 
+/** Which request id resolved to a looked-up variant, and how. Lookup's defining
+ * feature over search: the response does NOT preserve request order and one id
+ * may resolve to a VARIANT of another id's product, so `inputs` is the only way
+ * to correlate "the id I asked about" → "the variant I got back". `match` is an
+ * OPEN string (UCP well-known values `exact` — a direct variant/sku/barcode hit —
+ * and `featured` — a product-id hit where the server picked a representative
+ * variant), passed through as-is. `id` is required; a missing/non-string `match`
+ * is dropped (not coerced). */
+export interface LookupInput {
+  id: string;
+  match?: string;
+}
+
+/** The featured variant of a looked-up product, projected to the purchase-decision
+ * fields a lookup caller needs. Richer than {@link SearchVariant}: adds `sku` and
+ * `options` (which specific configuration this is — e.g. "Blue / Large") and the
+ * lookup-only `inputs` correlation. `price`/`availability` pass through opaque;
+ * `checkout_url` is the non-empty acquisition target (re-fetched live — freshness
+ * is the reason this tool exists). Optional fields are omitted when absent rather
+ * than emitted as `undefined`. */
+export interface LookupVariant {
+  id: string;
+  title: string;
+  price: SearchPrice;
+  availability: SearchAvailability;
+  checkout_url: string;
+  sku?: string;
+  options?: SelectedOption[];
+  inputs?: LookupInput[];
+}
+
+/** One option selection on a variant, passed through OPAQUE from the UCP
+ * `SelectedOption` (well-known fields `{ name, label }`, e.g. "Size: Large") —
+ * the tool does NOT read or remap individual fields; it filters to plain objects
+ * and passes them through verbatim, exactly as identity `addresses` pass through.
+ * Surfaced so a lookup caller knows WHICH variant of a product they are buying. */
+export type SelectedOption = Record<string, unknown>;
+
+/** One looked-up product, projected to its RICH agent-facing detail (the deliberate
+ * split vs search's LEAN six: a lookup caller is making a purchase decision, so it
+ * gets `description`, `categories`, `handle`). Carries the product-level identity
+ * AND the single featured `variant` (what to buy) — mirroring search's structural
+ * shape; the split is rich-vs-lean FIELDS, not a different envelope. `categories`/
+ * `handle` are omitted when absent. `description`/`categories` pass through opaque
+ * (the tool surfaces them, it does not interpret them). */
+export interface LookupProduct {
+  id: string;
+  title: string;
+  description: Record<string, unknown>;
+  price_range: unknown;
+  source: string;
+  categories?: Record<string, unknown>[];
+  handle?: string;
+  variant: LookupVariant;
+}
+
+/** The normalized lookup payload: the resolved products (in server order — lookup
+ * does NOT guarantee request order, and the tool does not re-sort; the agent
+ * correlates via each variant's `inputs`) plus `not_found`, the request ids that
+ * resolved to nothing. `not_found` is OMITTED when every id resolved (the
+ * server-side `messages`-absent-on-full-success contract surfaced as no key) and
+ * is the partial-success DATA, never an error. */
+export interface LookupResult {
+  products: LookupProduct[];
+  not_found?: string[];
+}
+
+/**
+ * Outcome of a single sil-api catalog lookup (classified by status + body).
+ * Models {@link SearchOutcome} — the SAME four error/success classes so the two
+ * catalog tools present ONE agent-facing error vocabulary, NOT a divergent one.
+ * The `ok` variant carries the projected `products` + optional `not_found`
+ * DIRECTLY (no nested `result`). `unauthorized` (401) is terminal — a single
+ * round-trip, no transparent refresh (parity with `sil_search`; the refresh
+ * choreography is `sil_whoami`'s, an additive follow-on across both tools).
+ *
+ * Structural deltas from `SearchOutcome`, both handled here: NO `cursor` (lookup
+ * is a batch resolve, not a list) and a `not_found` id list parsed from the
+ * server's `not_found` info `messages`.
+ */
+export type LookupOutcome =
+  | { kind: "ok"; products: LookupProduct[]; not_found?: string[] }
+  | { kind: "unauthorized" }
+  | { kind: "invalid_request"; error: string; message: string }
+  | { kind: "retryable" };
+
 /**
  * Classify a claim response from its HTTP status AND body. The discriminant for
  * the two-200s split is the PRESENCE OF BOTH TOKENS in the body — never the
@@ -353,6 +467,48 @@ export function classifySearchResponse(status: number, body: unknown): SearchOut
 }
 
 /**
+ * Classify a sil-api catalog-LOOKUP response from its HTTP status AND body.
+ * Branches on STATUS (and, for 200, the body shape) — never on `res.ok`. The
+ * SAME class structure as `classifySearchResponse` (so the two catalog tools
+ * share one error vocabulary), minus search's `empty_search_input` subtlety:
+ *   400 → invalid_request (a SCHEMA-validation 400 — an empty/missing `ids`
+ *         rejected by `CatalogLookupRequest.ids` `minItems:1`, or a
+ *         `request_too_large` over-batch — surface the server's `{ error,
+ *         message }`. NOTE: this is NOT search's `empty_search_input` SourceError,
+ *         which never arises on the lookup route; do not special-case it.)
+ *   401 → unauthorized (terminal here — single round-trip, no refresh; parity
+ *         with search)
+ *   5xx / other non-200 → retryable
+ *   200 → unwrap the envelope `result`, normalize, and require `result.products`
+ *         to be a real ARRAY. A 200 that yields no usable products array (a
+ *         partial / garbage / stub-shaped body) is `retryable`, NEVER `ok` — the
+ *         anti-false-green guard, the analogue of the identity `name`-gate and
+ *         search's products-array gate.
+ *
+ * THE subtle correctness point: an all-MISSED lookup is a genuine SUCCESS — a 200
+ * whose `result.products` IS an empty array WITH a populated `not_found` list
+ * ("none of these ids exist anymore"). It is `ok` with empty `products` + full
+ * `not_found`, distinct from the no-array guard above. The discriminator between
+ * "valid all-missed" and "garbage 200" is envelope/`products`-array PRESENCE,
+ * NEVER array length — exactly as search distinguishes empty-match from a
+ * partial-200 false-green.
+ *
+ * Pure and exported — unit-tested in isolation like `classifySearchResponse`.
+ */
+export function classifyLookupResponse(status: number, body: unknown): LookupOutcome {
+  if (status === 400) {
+    const { error, message } = extractApiError(body);
+    return { kind: "invalid_request", error, message };
+  }
+  if (status === 401) return { kind: "unauthorized" };
+  if (status !== 200) return { kind: "retryable" };
+
+  const result = extractLookupResult(body);
+  if (result === null) return { kind: "retryable" };
+  return { kind: "ok", ...result };
+}
+
+/**
  * Attempt to claim the token pair for `sessionId` with `verifier`. The verifier
  * is sent in the body; sil-web derives the same challenge server-side and the
  * CAS compares digest-to-digest (the plugin sends the verifier, not the digest).
@@ -454,6 +610,36 @@ export async function searchCatalog(
   }
   const body = await readJsonBody(res);
   return classifySearchResponse(res.status, body);
+}
+
+/**
+ * Resolve catalog ids against sil-api (the SAME origin as the identity read and
+ * `searchCatalog` — NOT sil-web; bare `/catalog/lookup`, no `/api/v1`). The agent
+ * already holds the ids (from a prior `sil_search`, a saved list, or cart
+ * validation); this re-fetches CURRENT detail for them — building NO UCP envelope
+ * and filling NO defaults. The body is just `{ ids }` (the simplified contract;
+ * `filters`/`context` are sil-api options this tool does not expose). The ids are
+ * forwarded AS GIVEN — sil-api owns dedup (its seam already dedups) and any batch
+ * cap; the tool does not pre-dedup (which would mask a seam regression).
+ *
+ * The Bearer header is built HERE and never logged; the token travels only in the
+ * outbound request, never into the returned union. A network error / timeout maps
+ * to `retryable`.
+ */
+export async function lookupCatalog(
+  silApiUrl: string,
+  token: string,
+  ids: string[],
+): Promise<LookupOutcome> {
+  const url = `${stripTrailingSlash(silApiUrl)}/catalog/lookup`;
+  let res: Response;
+  try {
+    res = await postJson(url, { ids }, { authorization: `Bearer ${token}` });
+  } catch {
+    return { kind: "retryable" };
+  }
+  const body = await readJsonBody(res);
+  return classifyLookupResponse(res.status, body);
 }
 
 /** Result of the high-level refresh orchestration (read → refresh → rotate). */
@@ -663,6 +849,184 @@ function projectVariant(raw: unknown): SearchVariant | null {
     availability: extractAvailability(variant["availability"]),
     checkout_url: checkoutUrl,
   };
+}
+
+/**
+ * Unwrap + narrow a sil-api catalog-LOOKUP response body to a typed
+ * {@link LookupResult}, or null if it carries no usable products array. Mirrors
+ * `extractSearchResult`'s structure and shares its load-bearing anti-false-green
+ * guard — `result.products` MUST be a real ARRAY; a 200 lacking it (partial /
+ * garbage / stub `{ stub: true }`) returns null → `retryable`. An EMPTY array is a
+ * VALID all-missed lookup (the products gate passes; `not_found` carries the ids)
+ * — distinct from the no-array guard. The two structural deltas from search:
+ *   - NO cursor hoist — lookup is a batch resolve, not a list (no `pagination`).
+ *   - `not_found` is parsed from `result.messages`: each `{ code: 'not_found',
+ *     content: <id> }` entry's `content` IS a missed request id (server emits one
+ *     per unresolved id, in input order, and OMITS `messages` on full success).
+ *     The `not_found` key is omitted here when there are no misses.
+ *
+ * Products unusable in lookup terms (no projectable featured variant, missing
+ * `checkout_url`) are dropped via `projectLookupProduct` returning null, never
+ * fabricated — same null-drop discipline as search.
+ */
+function extractLookupResult(body: unknown): LookupResult | null {
+  const envelope = asRecord(body);
+  if (envelope === null) return null;
+
+  const result = asRecord(envelope["result"]);
+  if (result === null) return null;
+
+  const rawProducts = result["products"];
+  if (!Array.isArray(rawProducts)) return null;
+
+  const products = rawProducts
+    .map(projectLookupProduct)
+    .filter((p): p is LookupProduct => p !== null);
+
+  const notFound = extractNotFound(result["messages"]);
+  return notFound.length === 0 ? { products } : { products, not_found: notFound };
+}
+
+/**
+ * Project one `SilCatalogProduct` to the agent-facing {@link LookupProduct}, or
+ * null if it is unusable. RICHER than search's `projectProduct`: carries the
+ * product-level `description`, `price_range`, `categories?` and `handle?` (a lookup
+ * caller is making a purchase decision) plus the featured variant nested under
+ * `variant`. Picks the FIRST (featured) variant — `lookup_catalog` returns one
+ * featured variant per product; UCP: "Platforms SHOULD treat the first element as
+ * featured". A product whose featured variant has no non-empty `checkout_url`, or
+ * that is missing any required field, is dropped rather than surfaced as a
+ * non-purchasable result.
+ */
+function projectLookupProduct(raw: unknown): LookupProduct | null {
+  const product = asRecord(raw);
+  if (product === null) return null;
+
+  const id = product["id"];
+  const title = product["title"];
+  const source = product["source"];
+  if (typeof id !== "string" || id.length === 0) return null;
+  if (typeof title !== "string") return null;
+  if (typeof source !== "string" || source.length === 0) return null;
+
+  const description = asRecord(product["description"]);
+  if (description === null) return null;
+  const priceRange = product["price_range"];
+  if (asRecord(priceRange) === null) return null;
+
+  const variants = product["variants"];
+  if (!Array.isArray(variants) || variants.length === 0) return null;
+  const variant = projectLookupVariant(variants[0]);
+  if (variant === null) return null;
+
+  const result: LookupProduct = {
+    id,
+    title,
+    description,
+    price_range: priceRange,
+    source,
+    variant,
+  };
+  const categories = passThroughObjects(product["categories"]);
+  if (categories !== null) result.categories = categories;
+  const handle = product["handle"];
+  if (typeof handle === "string" && handle.length > 0) result.handle = handle;
+  return result;
+}
+
+/**
+ * Project a `SilCatalogVariant` to the agent-facing {@link LookupVariant}, or null
+ * if it is not a usable purchasable variant. RICHER than search's `projectVariant`:
+ * adds `sku`, `options` (which configuration this variant is), and the lookup-only
+ * `inputs` correlation. Requires `id`, `title`, a price object, and a non-empty
+ * `checkout_url`; `price`/`availability` pass through opaque. Optional rich fields
+ * are omitted when absent rather than emitted as `undefined`.
+ */
+function projectLookupVariant(raw: unknown): LookupVariant | null {
+  const variant = asRecord(raw);
+  if (variant === null) return null;
+
+  const id = variant["id"];
+  const title = variant["title"];
+  const checkoutUrl = variant["checkout_url"];
+  if (typeof id !== "string" || id.length === 0) return null;
+  if (typeof title !== "string") return null;
+  if (typeof checkoutUrl !== "string" || checkoutUrl.length === 0) return null;
+
+  const price = extractPrice(variant["price"]);
+  if (price === null) return null;
+
+  const result: LookupVariant = {
+    id,
+    title,
+    price,
+    availability: extractAvailability(variant["availability"]),
+    checkout_url: checkoutUrl,
+  };
+  const sku = variant["sku"];
+  if (typeof sku === "string" && sku.length > 0) result.sku = sku;
+  const options = passThroughObjects(variant["options"]);
+  if (options !== null) result.options = options;
+  const inputs = extractInputs(variant["inputs"]);
+  if (inputs !== null) result.inputs = inputs;
+  return result;
+}
+
+/** Pass a wire array of objects through OPAQUE — filter to plain objects, preserve
+ * each verbatim, never read or remap individual fields. Used for `categories` and
+ * the variant's `options`: contextual display data the tool SURFACES but does not
+ * interpret (it is not a purchasability gate — that is `checkout_url`/`price`).
+ * Mirrors how identity `addresses` pass through (the wire field names — `value` vs
+ * `name` on a category — are the source's to define, not the tool's to assert).
+ * Returns null when the field is absent/non-array or yields no usable object, so
+ * the caller omits the key rather than emitting an empty array. */
+function passThroughObjects(raw: unknown): Record<string, unknown>[] | null {
+  if (!Array.isArray(raw)) return null;
+  const objects = raw.filter(
+    (o): o is Record<string, unknown> => asRecord(o) !== null,
+  );
+  return objects.length === 0 ? null : objects;
+}
+
+/** Narrow a wire `inputs` correlation array to {@link LookupInput}[] — each entry
+ * needs a non-empty `id` (the request id that resolved to this variant); a missing
+ * or non-string `match` is dropped (not coerced). Returns null when the field is
+ * absent or yields no usable entry, so the caller omits the key. Surfacing this is
+ * what makes a multi-id lookup correlatable — without it the agent cannot map "the
+ * id I asked about" to "the variant I got back". */
+function extractInputs(raw: unknown): LookupInput[] | null {
+  if (!Array.isArray(raw)) return null;
+  const inputs = raw
+    .map((i): LookupInput | null => {
+      const obj = asRecord(i);
+      if (obj === null) return null;
+      const id = obj["id"];
+      if (typeof id !== "string" || id.length === 0) return null;
+      const match = obj["match"];
+      return typeof match === "string" ? { id, match } : { id };
+    })
+    .filter((i): i is LookupInput => i !== null);
+  return inputs.length === 0 ? null : inputs;
+}
+
+/** Parse the missed request ids out of a wire `messages` array. Each
+ * `{ code: 'not_found', content: <id> }` info entry's `content` IS an unresolved
+ * id (sil-api emits one per miss, in input order; `messages` is OMITTED on full
+ * success). Returns the ids in order — an empty array when there are no misses
+ * (the caller then omits the `not_found` key). Only `not_found` codes are
+ * surfaced; any other message code (a future UCP `warning`/`delayed_fulfillment`)
+ * is ignored here — broader message passthrough is out of scope. */
+function extractNotFound(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const ids: string[] = [];
+  for (const entry of raw) {
+    const obj = asRecord(entry);
+    if (obj === null) continue;
+    if (obj["code"] !== "not_found") continue;
+    const content = obj["content"];
+    if (typeof content === "string" && content.length > 0) ids.push(content);
+  }
+  return ids;
 }
 
 /** Narrow a wire price (`{ amount: number, currency: string }`) — passed through
