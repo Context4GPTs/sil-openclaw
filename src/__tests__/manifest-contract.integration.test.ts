@@ -129,6 +129,17 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(codeRegisteredNames().has("sil_search")).toBe(true);
     expect(manifestToolNames().has("sil_search")).toBe(true);
   });
+
+  it("sil_product_get is BOTH registered by register() and declared in contracts.tools", () => {
+    // The sibling lookup tool's self-enforcing-registration criterion, pinned by
+    // name. registerCatalogTools is ALREADY wired into codeRegisteredNames (search
+    // added the call), so adding sil_product_get as a second tool in that group is
+    // picked up automatically — it must appear on BOTH sides of the equal set:
+    // registered by registerCatalogTools AND listed in
+    // openclaw.plugin.json#contracts.tools.
+    expect(codeRegisteredNames().has("sil_product_get")).toBe(true);
+    expect(manifestToolNames().has("sil_product_get")).toBe(true);
+  });
 });
 
 describe("the drift guard actually bites (failure-direction proof)", () => {
