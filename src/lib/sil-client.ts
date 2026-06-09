@@ -34,6 +34,36 @@
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     5xx / network / abort                               → retryable
  *
+ * Wire contract for the sil-API catalog search (SAME origin as the identity
+ * read — sil-api, bare path, NOT /api/v1; see the sil-search card). A simplified
+ * structured query in, ranked purchasable products out. sil-api owns the UCP
+ * envelope + enrichment; the plugin sends NO envelope and fills NO defaults:
+ *
+ *   POST <silApiUrl>/catalog/search   Authorization: Bearer <access_token>
+ *     body { query?, filters?:{ categories?, price?:{ min?, max? } },
+ *            pagination?:{ cursor?, limit? } }       (no context, no envelope)
+ *     200 <UCP envelope>{ result: { products: SilCatalogProduct[],
+ *                                   pagination?:{ has_next_page, cursor? } } } → ok
+ *     400 { error:"empty_search_input", message }    → invalid_request
+ *     401                                            → unauthorized (terminal here)
+ *     5xx / network / abort                          → retryable
+ *
+ * `SilCatalogProduct` = a UCP product PLUS a required `source`; each variant PLUS
+ * a required non-empty `checkout_url` (sil-services `@sil/schemas` catalog.ts —
+ * the byte-shape of truth; `@ucp-js/sdk` carries ZERO catalog types). The plugin
+ * does NOT depend on `@sil/schemas` (cross-repo): it re-declares the read-subset
+ * it consumes locally (the `Search*` types below) and narrows the untrusted body
+ * defensively in `extractSearchResult`, exactly as `extractIdentity` does. The
+ * tool unwraps `result`, picks the FIRST (featured) variant per product (UCP:
+ * "Platforms SHOULD treat the first element as featured"), projects the six
+ * agent-facing fields, and hoists `result.pagination.cursor` to a top-level
+ * cursor (present iff `has_next_page`). `classifySearchResponse` gates `ok` on a
+ * real `Array.isArray(result.products)` — a 200 with no usable products array is
+ * `retryable`, NEVER a false-green empty match (the same anti-false-green guard
+ * as the identity `name`-gate). A genuine empty match is a 200 whose
+ * `result.products` IS an empty array → `ok` + `products: []` (success, not an
+ * error — UCP: "empty search returns an empty array … this is not an error").
+ *
  * The VERB is load-bearing: sil-api's `POST /identity` is the agent enrich-STUB
  * ({kind, verified, subject, ...} — no name/addresses); `GET /identity` is the
  * real self-read returning {id, name, addresses} (sil-api `handlers/identity.ts`,
@@ -129,6 +159,71 @@ export type IdentityOutcome =
   | { kind: "forbidden"; reason: string }
   | { kind: "retryable" };
 
+/** The simplified search query an agent sends — a free-text `query` plus
+ * optional filters and pagination. Maps 1:1 into the sil-api `CatalogSearchRequest`
+ * body (`searchCatalog` builds the nested shape). All fields optional at this
+ * layer; the at-least-one-input rule is enforced by the tool, not here. */
+export interface SearchParams {
+  query?: string;
+  category?: string;
+  price_min?: number;
+  price_max?: number;
+  cursor?: string;
+  limit?: number;
+}
+
+/** A currency-tagged price, passed through OPAQUE from sil-api's UCP `Price`
+ * (`{ amount: <minor units>, currency: <ISO 4217> }`). Extra fields tolerated. */
+export interface SearchPrice extends Record<string, unknown> {
+  amount: number;
+  currency: string;
+}
+
+/** Variant availability, passed through OPAQUE from sil-api's UCP `Availability`
+ * object (`{ available?, status? }`) — NOT flattened to a bare boolean, which
+ * would drop the `status` signal sil-api may carry. Both fields are optional in
+ * the wire shape; extra fields are tolerated and passed through. */
+export interface SearchAvailability extends Record<string, unknown> {
+  available?: boolean;
+  status?: string;
+}
+
+/** One agent-facing search result: a single purchasable variant (the featured
+ * first variant of its product) projected to the six fields the card promises.
+ * `price`/`availability` pass through opaque; `source` is the product-level
+ * source tag, hoisted onto the flat result so the agent sees provenance without
+ * the nested product/variant structure. */
+export interface SearchProduct {
+  id: string;
+  title: string;
+  price: SearchPrice;
+  availability: SearchAvailability;
+  checkout_url: string;
+  source: string;
+}
+
+/** The normalized search payload: the ranked products in server order (the tool
+ * does NOT re-rank) plus the opaque pagination cursor, present iff another page
+ * remains. `cursor` is hoisted from `result.pagination.cursor`; its ABSENCE is
+ * end-of-results — never inferred from `products.length`. */
+export interface SearchResult {
+  products: SearchProduct[];
+  cursor?: string;
+}
+
+/**
+ * Outcome of a single sil-api catalog search (classified by status + body).
+ * Models `IdentityOutcome`, with `invalid_request` for sil-api's structured 400
+ * (`empty_search_input`) carried through to the agent. `unauthorized` (401) is
+ * terminal in this card — a single round-trip, no transparent refresh (the
+ * refresh choreography is `sil_whoami`'s; adding it here is additive follow-on).
+ */
+export type SearchOutcome =
+  | { kind: "ok"; result: SearchResult }
+  | { kind: "unauthorized" }
+  | { kind: "invalid_request"; error: string; message: string }
+  | { kind: "retryable" };
+
 /**
  * Classify a claim response from its HTTP status AND body. The discriminant for
  * the two-200s split is the PRESENCE OF BOTH TOKENS in the body — never the
@@ -211,6 +306,39 @@ export function classifyIdentityResponse(status: number, body: unknown): Identit
 }
 
 /**
+ * Classify a sil-api catalog-search response from its HTTP status AND body.
+ * Branches on STATUS (and, for 200, the body shape) — never on `res.ok`:
+ *   400 → invalid_request (surface sil-api's structured `{ error, message }`,
+ *         e.g. `empty_search_input` — distinct from both the empty-match success
+ *         and a transient failure; the agent must learn to fix its query, not
+ *         retry or re-register)
+ *   401 → unauthorized (terminal here — single round-trip, no refresh in SC1)
+ *   5xx / other non-200 → retryable
+ *   200 → unwrap the envelope `result`, normalize, and require `result.products`
+ *         to be a real ARRAY. A 200 that yields no usable products array (a
+ *         partial / garbage / stub-shaped body) is `retryable`, NEVER `ok` — the
+ *         anti-false-green guard, the analogue of the identity `name`-gate. A
+ *         genuine empty match (200 whose `result.products` IS `[]`) is `ok` with
+ *         an empty product list: a SUCCESS, distinct from the no-array guard.
+ *
+ * Pure and exported — unit-tested in isolation like `classifyIdentityResponse`;
+ * conflating the empty-match success with a partial-200 false-green, or with the
+ * 400/401/5xx error classes, is the highest-risk subtle bug in this flow.
+ */
+export function classifySearchResponse(status: number, body: unknown): SearchOutcome {
+  if (status === 400) {
+    const { error, message } = extractApiError(body);
+    return { kind: "invalid_request", error, message };
+  }
+  if (status === 401) return { kind: "unauthorized" };
+  if (status !== 200) return { kind: "retryable" };
+
+  const result = extractSearchResult(body);
+  if (result === null) return { kind: "retryable" };
+  return { kind: "ok", result };
+}
+
+/**
  * Attempt to claim the token pair for `sessionId` with `verifier`. The verifier
  * is sent in the body; sil-web derives the same challenge server-side and the
  * CAS compares digest-to-digest (the plugin sends the verifier, not the digest).
@@ -280,6 +408,38 @@ export async function fetchIdentity(
   }
   const body = await readJsonBody(res);
   return classifyIdentityResponse(res.status, body);
+}
+
+/**
+ * Run a catalog search against sil-api (the SAME origin as the identity read —
+ * NOT sil-web; bare `/catalog/search`, no `/api/v1`). The simplified
+ * {@link SearchParams} are mapped into the sil-api `CatalogSearchRequest` body
+ * (`{ query?, filters:{ categories?, price:{ min?, max? } }, pagination:{ cursor?, limit? } }`)
+ * — building NO UCP envelope and filling NO defaults the agent did not supply.
+ * Only the keys the agent actually provided are emitted (an absent filter is an
+ * omitted key, not an empty object), so a free-text-only query sends just
+ * `{ query }` and sil-api applies its own context resolution.
+ *
+ * The Bearer header is built HERE and never logged; the token travels only in
+ * the outbound request, never into the returned union. A network error / timeout
+ * maps to `retryable`.
+ */
+export async function searchCatalog(
+  silApiUrl: string,
+  token: string,
+  params: SearchParams,
+): Promise<SearchOutcome> {
+  const url = `${stripTrailingSlash(silApiUrl)}/catalog/search`;
+  let res: Response;
+  try {
+    res = await postJson(url, buildSearchBody(params), {
+      authorization: `Bearer ${token}`,
+    });
+  } catch {
+    return { kind: "retryable" };
+  }
+  const body = await readJsonBody(res);
+  return classifySearchResponse(res.status, body);
 }
 
 /** Result of the high-level refresh orchestration (read → refresh → rotate). */
@@ -363,6 +523,173 @@ function extractForbiddenReason(body: unknown): string {
   const obj = asRecord(body);
   const error = obj?.["error"];
   return typeof error === "string" && error.length > 0 ? error : "forbidden";
+}
+
+/**
+ * Map the simplified {@link SearchParams} into the sil-api `CatalogSearchRequest`
+ * body. Only keys the agent supplied are emitted — an absent filter is an OMITTED
+ * key (sil-api's body is `additionalProperties: false`, but every field is
+ * optional), never an empty `{}`. The singular `category` maps into the UCP
+ * `filters.categories` ARRAY (sil-api's filter is multi-taxonomy; the simplified
+ * contract takes one). `price_min`/`price_max` map into `filters.price.{min,max}`.
+ * The tool clamps nothing and validates no cursor opacity — sil-api owns those.
+ */
+function buildSearchBody(params: SearchParams): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (typeof params.query === "string") body["query"] = params.query;
+
+  const filters: Record<string, unknown> = {};
+  if (typeof params.category === "string") {
+    filters["categories"] = [params.category];
+  }
+  const price: Record<string, unknown> = {};
+  if (typeof params.price_min === "number") price["min"] = params.price_min;
+  if (typeof params.price_max === "number") price["max"] = params.price_max;
+  if (Object.keys(price).length > 0) filters["price"] = price;
+  if (Object.keys(filters).length > 0) body["filters"] = filters;
+
+  const pagination: Record<string, unknown> = {};
+  if (typeof params.cursor === "string") pagination["cursor"] = params.cursor;
+  if (typeof params.limit === "number") pagination["limit"] = params.limit;
+  if (Object.keys(pagination).length > 0) body["pagination"] = pagination;
+
+  return body;
+}
+
+/**
+ * Unwrap + narrow a sil-api catalog-search response body to a typed
+ * {@link SearchResult}, or null if it carries no usable products array. The
+ * products live in the UCP envelope's `result.products`; `result` is required —
+ * unlike `extractIdentity` there is NO bare-top-level fallback, because a search
+ * response is always enveloped (sil-api `buildEnvelope`) and a top-level
+ * `products` would be a malformed body, not an alternate contract.
+ *
+ * The load-bearing anti-false-green guard: `result.products` MUST be a real
+ * ARRAY. A 200 lacking it (a partial / garbage / stub `{ stub: true }` body)
+ * returns null → `retryable`, never a false-green empty match. An EMPTY array is
+ * a VALID empty match (a genuine "nothing matched") and returns an empty
+ * `products` list — distinct from the no-array guard. Individual products that
+ * are unusable (no projectable featured variant, missing checkout_url) are
+ * dropped via `projectProduct` returning null, never fabricated.
+ *
+ * The opaque cursor is hoisted from `result.pagination.cursor` and surfaced ONLY
+ * when `pagination.has_next_page` is true (end-of-results is the absent cursor —
+ * never derived from `products.length`).
+ */
+function extractSearchResult(body: unknown): SearchResult | null {
+  const envelope = asRecord(body);
+  if (envelope === null) return null;
+
+  const result = asRecord(envelope["result"]);
+  if (result === null) return null;
+
+  const rawProducts = result["products"];
+  if (!Array.isArray(rawProducts)) return null;
+
+  const products = rawProducts
+    .map(projectProduct)
+    .filter((p): p is SearchProduct => p !== null);
+
+  const cursor = extractCursor(result["pagination"]);
+  return cursor === null ? { products } : { products, cursor };
+}
+
+/**
+ * Project one `SilCatalogProduct` to the flat agent-facing {@link SearchProduct},
+ * or null if it is unusable. Picks the FIRST (featured) variant — UCP: "Platforms
+ * SHOULD treat the first element as featured" — and requires the six fields it
+ * promises: product `id`/`source`, variant `id`/`title`/`checkout_url`, and a
+ * price object. A product whose featured variant has no non-empty `checkout_url`
+ * (the one field the agent acts on to buy) is dropped rather than surfaced as a
+ * non-purchasable result. `price`/`availability` pass through opaque.
+ */
+function projectProduct(raw: unknown): SearchProduct | null {
+  const product = asRecord(raw);
+  if (product === null) return null;
+
+  const productId = product["id"];
+  const source = product["source"];
+  if (typeof productId !== "string" || productId.length === 0) return null;
+  if (typeof source !== "string" || source.length === 0) return null;
+
+  const variants = product["variants"];
+  if (!Array.isArray(variants) || variants.length === 0) return null;
+  const variant = asRecord(variants[0]);
+  if (variant === null) return null;
+
+  const variantId = variant["id"];
+  const title = variant["title"];
+  const checkoutUrl = variant["checkout_url"];
+  if (typeof variantId !== "string" || variantId.length === 0) return null;
+  if (typeof title !== "string") return null;
+  if (typeof checkoutUrl !== "string" || checkoutUrl.length === 0) return null;
+
+  const price = extractPrice(variant["price"]);
+  if (price === null) return null;
+
+  return {
+    id: variantId,
+    title,
+    price,
+    availability: extractAvailability(variant["availability"]),
+    checkout_url: checkoutUrl,
+    source,
+  };
+}
+
+/** Narrow a wire price (`{ amount: number, currency: string }`) — passed through
+ * opaque (extra fields preserved), or null if the two required fields are absent
+ * (an unpriced variant is not a usable purchasable result). */
+function extractPrice(raw: unknown): SearchPrice | null {
+  const obj = asRecord(raw);
+  if (obj === null) return null;
+  const amount = obj["amount"];
+  const currency = obj["currency"];
+  if (typeof amount !== "number" || typeof currency !== "string") return null;
+  return { ...obj, amount, currency };
+}
+
+/** Narrow a wire availability object (`{ available?, status? }`) — passed through
+ * opaque (NOT flattened to a bare boolean; extra fields preserved). A missing or
+ * non-object availability yields an empty object (the agent reads no signal,
+ * rather than the tool inventing one). */
+function extractAvailability(raw: unknown): SearchAvailability {
+  const obj = asRecord(raw);
+  if (obj === null) return {};
+  const result: SearchAvailability = { ...obj };
+  const available = obj["available"];
+  const status = obj["status"];
+  result.available = typeof available === "boolean" ? available : undefined;
+  result.status = typeof status === "string" ? status : undefined;
+  return result;
+}
+
+/** Hoist the opaque next-page cursor from a wire `pagination` object. Returns the
+ * cursor string ONLY when `has_next_page` is true AND a non-empty `cursor` is
+ * present; null otherwise (last page, or no pagination). End-of-results is the
+ * absent cursor — never `products.length === limit`. */
+function extractCursor(raw: unknown): string | null {
+  const obj = asRecord(raw);
+  if (obj === null) return null;
+  if (obj["has_next_page"] !== true) return null;
+  const cursor = obj["cursor"];
+  return typeof cursor === "string" && cursor.length > 0 ? cursor : null;
+}
+
+/** Pull sil-api's structured `{ error, message }` out of a 400 body, defaulting
+ * each field when the shape is unexpected so the agent always gets an actionable
+ * (if generic) hint rather than `undefined`. */
+function extractApiError(body: unknown): { error: string; message: string } {
+  const obj = asRecord(body);
+  const error = obj?.["error"];
+  const message = obj?.["message"];
+  return {
+    error: typeof error === "string" && error.length > 0 ? error : "invalid_request",
+    message:
+      typeof message === "string" && message.length > 0
+        ? message
+        : "The search request was rejected. Provide a search query or at least one filter.",
+  };
 }
 
 /** Narrow the `user` field of a claim body to a typed identity. */

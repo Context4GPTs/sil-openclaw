@@ -28,6 +28,7 @@ import {
   getSilApiUrlSource,
   type SilPluginConfig,
 } from "./lib/config.js";
+import { registerCatalogTools } from "./tools/catalog.js";
 import { registerExampleTools } from "./tools/examples.js";
 import { registerIdentityTools } from "./tools/identity.js";
 
@@ -44,6 +45,7 @@ export default definePluginEntry({
 
     registerExampleTools(api);
     registerIdentityTools(api);
+    registerCatalogTools(api);
 
     api.logger.info("sil_plugin_loaded", {
       message: "sil plugin registered.",
