@@ -55,9 +55,11 @@
  * it consumes locally (the `Search*` types below) and narrows the untrusted body
  * defensively in `extractSearchResult`, exactly as `extractIdentity` does. The
  * tool unwraps `result`, picks the FIRST (featured) variant per product (UCP:
- * "Platforms SHOULD treat the first element as featured"), projects the six
- * agent-facing fields, and hoists `result.pagination.cursor` to a top-level
- * cursor (present iff `has_next_page`). `classifySearchResponse` gates `ok` on a
+ * "Platforms SHOULD treat the first element as featured"), projects each to the
+ * product-level `{ id, title, source }` plus the nested featured `variant`
+ * `{ id, title, price, availability, checkout_url }`, and hoists
+ * `result.pagination.cursor` to a top-level cursor (present iff `has_next_page`).
+ * `classifySearchResponse` gates `ok` on a
  * real `Array.isArray(result.products)` — a 200 with no usable products array is
  * `retryable`, NEVER a false-green empty match (the same anti-false-green guard
  * as the identity `name`-gate). A genuine empty match is a 200 whose
@@ -188,18 +190,28 @@ export interface SearchAvailability extends Record<string, unknown> {
   status?: string;
 }
 
-/** One agent-facing search result: a single purchasable variant (the featured
- * first variant of its product) projected to the six fields the card promises.
- * `price`/`availability` pass through opaque; `source` is the product-level
- * source tag, hoisted onto the flat result so the agent sees provenance without
- * the nested product/variant structure. */
-export interface SearchProduct {
+/** The single purchasable variant the agent acts on — the featured (first)
+ * variant of a product, projected to the five fields the agent needs to present
+ * and buy it. `price`/`availability` pass through opaque; `checkout_url` is the
+ * non-empty acquisition target. */
+export interface SearchVariant {
   id: string;
   title: string;
   price: SearchPrice;
   availability: SearchAvailability;
   checkout_url: string;
+}
+
+/** One agent-facing search result. Carries BOTH identities the agent needs:
+ * product-level `id`/`title`/`source` (what was ranked + its provenance) AND the
+ * nested featured `variant` (what to buy). Keeping the product id distinct from
+ * the variant id matters — the ranked match is the product, the purchase target
+ * is the variant; flattening them would lose one. */
+export interface SearchProduct {
+  id: string;
+  title: string;
   source: string;
+  variant: SearchVariant;
 }
 
 /** The normalized search payload: the ranked products in server order (the tool
@@ -214,12 +226,14 @@ export interface SearchResult {
 /**
  * Outcome of a single sil-api catalog search (classified by status + body).
  * Models `IdentityOutcome`, with `invalid_request` for sil-api's structured 400
- * (`empty_search_input`) carried through to the agent. `unauthorized` (401) is
+ * (`empty_search_input`) carried through to the agent. The `ok` variant carries
+ * the projected `products` + optional hoisted `cursor` DIRECTLY (no nested
+ * `result` — the normalized payload IS the outcome). `unauthorized` (401) is
  * terminal in this card — a single round-trip, no transparent refresh (the
  * refresh choreography is `sil_whoami`'s; adding it here is additive follow-on).
  */
 export type SearchOutcome =
-  | { kind: "ok"; result: SearchResult }
+  | { kind: "ok"; products: SearchProduct[]; cursor?: string }
   | { kind: "unauthorized" }
   | { kind: "invalid_request"; error: string; message: string }
   | { kind: "retryable" };
@@ -335,7 +349,7 @@ export function classifySearchResponse(status: number, body: unknown): SearchOut
 
   const result = extractSearchResult(body);
   if (result === null) return { kind: "retryable" };
-  return { kind: "ok", result };
+  return { kind: "ok", ...result };
 }
 
 /**
@@ -595,32 +609,47 @@ function extractSearchResult(body: unknown): SearchResult | null {
 }
 
 /**
- * Project one `SilCatalogProduct` to the flat agent-facing {@link SearchProduct},
- * or null if it is unusable. Picks the FIRST (featured) variant — UCP: "Platforms
- * SHOULD treat the first element as featured" — and requires the six fields it
- * promises: product `id`/`source`, variant `id`/`title`/`checkout_url`, and a
- * price object. A product whose featured variant has no non-empty `checkout_url`
- * (the one field the agent acts on to buy) is dropped rather than surfaced as a
- * non-purchasable result. `price`/`availability` pass through opaque.
+ * Project one `SilCatalogProduct` to the agent-facing {@link SearchProduct}, or
+ * null if it is unusable. Carries the product-level `id`/`title`/`source` AND the
+ * featured variant nested under `variant`. Picks the FIRST (featured) variant —
+ * UCP: "Platforms SHOULD treat the first element as featured". A product whose
+ * featured variant has no non-empty `checkout_url` (the one field the agent acts
+ * on to buy), or that is missing any required field, is dropped rather than
+ * surfaced as a non-purchasable result.
  */
 function projectProduct(raw: unknown): SearchProduct | null {
   const product = asRecord(raw);
   if (product === null) return null;
 
   const productId = product["id"];
+  const productTitle = product["title"];
   const source = product["source"];
   if (typeof productId !== "string" || productId.length === 0) return null;
+  if (typeof productTitle !== "string") return null;
   if (typeof source !== "string" || source.length === 0) return null;
 
   const variants = product["variants"];
   if (!Array.isArray(variants) || variants.length === 0) return null;
-  const variant = asRecord(variants[0]);
+  const variant = projectVariant(variants[0]);
   if (variant === null) return null;
 
-  const variantId = variant["id"];
+  return { id: productId, title: productTitle, source, variant };
+}
+
+/**
+ * Project a `SilCatalogVariant` to the agent-facing {@link SearchVariant}, or
+ * null if it is not a usable purchasable variant. Requires `id`, `title`, a price
+ * object, and a non-empty `checkout_url`; `price`/`availability` pass through
+ * opaque.
+ */
+function projectVariant(raw: unknown): SearchVariant | null {
+  const variant = asRecord(raw);
+  if (variant === null) return null;
+
+  const id = variant["id"];
   const title = variant["title"];
   const checkoutUrl = variant["checkout_url"];
-  if (typeof variantId !== "string" || variantId.length === 0) return null;
+  if (typeof id !== "string" || id.length === 0) return null;
   if (typeof title !== "string") return null;
   if (typeof checkoutUrl !== "string" || checkoutUrl.length === 0) return null;
 
@@ -628,12 +657,11 @@ function projectProduct(raw: unknown): SearchProduct | null {
   if (price === null) return null;
 
   return {
-    id: variantId,
+    id,
     title,
     price,
     availability: extractAvailability(variant["availability"]),
     checkout_url: checkoutUrl,
-    source,
   };
 }
 

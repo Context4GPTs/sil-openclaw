@@ -48,7 +48,11 @@ import { Type } from "typebox";
 
 import { getSilApiUrl } from "../lib/config.js";
 import { readTokens } from "../lib/credentials.js";
-import { searchCatalog, type SearchParams, type SearchResult } from "../lib/sil-client.js";
+import {
+  searchCatalog,
+  type SearchOutcome,
+  type SearchParams,
+} from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
 
 export function registerCatalogTools(api: PluginAPI): void {
@@ -131,7 +135,7 @@ function registerSearch(api: PluginAPI): void {
       const outcome = await searchCatalog(getSilApiUrl(), stored.access_token, search);
       switch (outcome.kind) {
         case "ok":
-          return searchResult(outcome.result);
+          return searchResult(outcome);
         case "invalid_request":
           api.logger.info("sil_search_invalid_request", { error: outcome.error });
           return invalidRequest(outcome.error, outcome.message);
@@ -182,9 +186,12 @@ function hasUsableInput(params: SearchParams): boolean {
 }
 
 /** Success: the ranked products + optional cursor — no token, no Bearer header.
- * An empty `products` list is a valid, successful empty match. */
-function searchResult(result: SearchResult) {
-  return jsonResult({ status: "ok", ...result });
+ * An empty `products` list is a valid, successful empty match. The `ok` outcome
+ * already carries `products` (+ optional `cursor`); spread its payload (minus the
+ * `kind` discriminant) onto the agent-facing `{ status: "ok", ... }` envelope. */
+function searchResult(outcome: Extract<SearchOutcome, { kind: "ok" }>) {
+  const { kind: _kind, ...payload } = outcome;
+  return jsonResult({ status: "ok", ...payload });
 }
 
 /** Not registered: a distinct, actionable outcome naming the recovery tool. No
