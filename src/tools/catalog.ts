@@ -49,7 +49,9 @@ import { Type } from "typebox";
 import { getSilApiUrl } from "../lib/config.js";
 import { readTokens } from "../lib/credentials.js";
 import {
+  lookupCatalog,
   searchCatalog,
+  type LookupOutcome,
   type SearchOutcome,
   type SearchParams,
 } from "../lib/sil-client.js";
@@ -57,9 +59,7 @@ import { jsonResult } from "../lib/tool-result.js";
 
 export function registerCatalogTools(api: PluginAPI): void {
   registerSearch(api);
-  // The sibling card `sil-product-get-plugin-tool` (SC2) adds registerProductGet(api)
-  // here as a second call in this same group — no structural change, reusing the
-  // shared sil-client catalog layer and this error-envelope taxonomy.
+  registerProductGet(api);
 }
 
 function registerSearch(api: PluginAPI): void {
@@ -117,7 +117,7 @@ function registerSearch(api: PluginAPI): void {
       // 1 — not registered: terminal, zero network calls.
       const stored = readTokens();
       if (stored === null) {
-        return notRegistered();
+        return notRegistered("sil_search");
       }
 
       // Narrow the untrusted params (the SDK types `params` as
@@ -141,12 +141,144 @@ function registerSearch(api: PluginAPI): void {
           return invalidRequest(outcome.error, outcome.message);
         case "unauthorized":
           api.logger.info("sil_search_unauthorized", {});
-          return mustReregister();
+          return mustReregister("sil_search");
         case "retryable":
           api.logger.info("sil_search_retryable", {});
-          return transient();
+          return transient("sil_search");
       }
     },
+  });
+}
+
+/**
+ * `sil_product_get` — the lookup COMPANION to `sil_search`. The agent passes ids
+ * it already holds (from a prior `sil_search`, a saved list, deep links, or cart
+ * validation) and gets back the matching products in UCP shape, each with its
+ * FRESH featured variant `{ id, title, price, availability, checkout_url, ... }`.
+ * RICH where search is LEAN: lookup adds the description, the variant's options,
+ * and — its defining feature — the per-variant `inputs` correlation, because the
+ * response does NOT preserve request order and one id can resolve to a variant of
+ * another id's product. The agent builds no envelope and fills no defaults; the
+ * tool sends just `{ ids }`, sil-api owns enrichment + the `not_found` messaging.
+ *
+ * `execute()` flow (ALL I/O here; `register()` opens nothing — a synchronous
+ * request/response, NOT a poll). MIRRORS `sil_search` and shares its taxonomy:
+ *   1. Not registered (no stored tokens) → terminal `not_registered` + a
+ *      `recovery: sil_register` hint, ZERO network calls. Mirrors `sil_whoami`.
+ *   2. Client-side guard: an empty `ids` (after dropping non-strings) is rejected
+ *      with a structured validation error and NO network call (sil-api's
+ *      `minItems:1` schema 400 is the authoritative backstop).
+ *   3. lookupCatalog(getSilApiUrl(), token, ids) → map the `LookupOutcome`:
+ *        ok            → the resolved products + the `not_found` id list (a PARTIAL
+ *                        or ALL-MISSED hit is `status:"ok"` — a SUCCESS, never an
+ *                        error, with NO recovery hint: re-running won't conjure a
+ *                        delisted product);
+ *        invalid_request (400) → surface sil-api's `{ error, message }`;
+ *        unauthorized  (401)   → terminal re-register (single round-trip — parity
+ *                                with `sil_search`, no transparent refresh);
+ *        retryable (5xx/net)   → transient "try again", NO re-register hint.
+ *
+ * The unfound-ids outcome is the headline: a lookup that resolves SOME (or NONE)
+ * of its ids is a success the agent relays ("3 of your 4 items are still
+ * available; 1 is no longer listed"), distinguished from the two true-error
+ * classes (not-registered/401 and source/transport failure) by DISTINCT recovery
+ * hints. One wrong hint = one misdirected user.
+ *
+ * Privacy + freshness: the access token and Bearer header never reach a log line
+ * or the result; the products are always live-fetched (never cached — freshness is
+ * the reason this tool exists; a cached `checkout_url`/price is a broken purchase).
+ */
+function registerProductGet(api: PluginAPI): void {
+  api.registerTool({
+    name: "sil_product_get",
+    label: "Look up sil products by id",
+    description:
+      "Look up sil products or variants by id — the companion to sil_search."
+      + " Pass `ids` (one or more product/variant ids you already hold, e.g. from"
+      + " a prior sil_search result) and get the matching products back with FRESH"
+      + " detail: each product's description plus its featured purchasable variant"
+      + " (id, title, price, availability, checkout_url, options). Re-fetch right"
+      + " before the user buys — prices, availability, and checkout_url are"
+      + " point-in-time, not guarantees. Each variant carries an `inputs` list"
+      + " correlating it back to the id(s) you asked about (the response is NOT in"
+      + " request order). Ids that no longer resolve come back in a `not_found`"
+      + " list — that is a normal outcome, not an error (the other products are"
+      + " still valid). Requires registration (run sil_register first).",
+    parameters: Type.Object({
+      ids: Type.Array(Type.String(), {
+        minItems: 1,
+        description:
+          "Product or variant ids to resolve (at least one). Typically ids from a"
+          + " prior sil_search result, a saved list, or a deep link.",
+      }),
+    }),
+    async execute(_callId, params) {
+      // 1 — not registered: terminal, zero network calls.
+      const stored = readTokens();
+      if (stored === null) {
+        return notRegistered("sil_product_get");
+      }
+
+      // Narrow the untrusted params (the SDK types `params` as
+      // Record<string, unknown>; the host validates against the schema, but the
+      // read site still guards — non-string entries are dropped, not coerced).
+      const ids = readIds(params);
+
+      // 2 — client-side input guard: reject an empty `ids` before any network
+      // call (sil-api's `minItems:1` schema 400 is the authoritative backstop).
+      if (ids.length === 0) {
+        return invalidIds();
+      }
+
+      // 3 — look up and map the outcome to the agent-facing envelope (the SAME
+      // taxonomy as sil_search). A partial/all-missed hit is `ok` + `not_found`.
+      const outcome = await lookupCatalog(getSilApiUrl(), stored.access_token, ids);
+      switch (outcome.kind) {
+        case "ok":
+          return lookupResult(outcome);
+        case "invalid_request":
+          api.logger.info("sil_product_get_invalid_request", { error: outcome.error });
+          return invalidRequest(outcome.error, outcome.message);
+        case "unauthorized":
+          api.logger.info("sil_product_get_unauthorized", {});
+          return mustReregister("sil_product_get");
+        case "retryable":
+          api.logger.info("sil_product_get_retryable", {});
+          return transient("sil_product_get");
+      }
+    },
+  });
+}
+
+/** Narrow the untrusted `params` to a string[] of ids. A non-string entry is
+ * DROPPED (treated as absent), not coerced — the host has already validated
+ * against the schema, but a drifted on-disk call must not slip a non-string into
+ * the id list. No `any`, no unchecked `as`. */
+function readIds(params: Record<string, unknown>): string[] {
+  const raw = params["ids"];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((id): id is string => typeof id === "string");
+}
+
+/** Success: the resolved products + optional `not_found` id list — no token, no
+ * Bearer header. An empty `products` list WITH a `not_found` list is a valid,
+ * successful all-missed lookup. The `ok` outcome already carries `products` (+
+ * optional `not_found`); spread its payload (minus the `kind` discriminant) onto
+ * the agent-facing `{ status: "ok", ... }` envelope. A `not_found` list is
+ * partial-success DATA, NOT an error and NOT a recovery hint. */
+function lookupResult(outcome: Extract<LookupOutcome, { kind: "ok" }>) {
+  const { kind: _kind, ...payload } = outcome;
+  return jsonResult({ status: "ok", ...payload });
+}
+
+/** Client-side validation: the request named no usable id. Distinct from a sil-api
+ * 400 (which carries the server's structured error) — this never hit the network.
+ * No `recovery: sil_register` (auth is fine; the input is the problem). */
+function invalidIds() {
+  return jsonResult({
+    status: "invalid_request",
+    error: "empty_ids",
+    message: "Provide at least one product or variant id to look up.",
   });
 }
 
@@ -195,13 +327,14 @@ function searchResult(outcome: Extract<SearchOutcome, { kind: "ok" }>) {
 }
 
 /** Not registered: a distinct, actionable outcome naming the recovery tool. No
- * products field so the agent can't mistake it for an empty match. */
-function notRegistered() {
+ * products field so the agent can't mistake it for an empty match. The `tool`
+ * name keeps the message actionable per-tool (re-run THIS tool) while the
+ * status/recovery taxonomy stays shared across the catalog tools. */
+function notRegistered(tool: string) {
   return jsonResult({
     status: "not_registered",
     message:
-      "Not registered on sil. Run sil_register to authenticate, then call"
-      + " sil_search again.",
+      `Not registered on sil. Run sil_register to authenticate, then call ${tool} again.`,
     recovery: "sil_register",
   });
 }
@@ -227,23 +360,24 @@ function invalidRequest(error: string, message: string) {
   return jsonResult({ status: "invalid_request", error, message });
 }
 
-/** Terminal: the session is dead (401). Re-register. Single round-trip — this
- * card does no transparent refresh (that is `sil_whoami`'s, an additive follow-on). */
-function mustReregister() {
+/** Terminal: the session is dead (401). Re-register. Single round-trip — these
+ * tools do no transparent refresh (that is `sil_whoami`'s, an additive follow-on).
+ * The `tool` name keeps the message actionable while the taxonomy stays shared. */
+function mustReregister(tool: string) {
   return jsonResult({
     status: "must_reregister",
     message:
-      "Your sil session has expired. Run sil_register to sign in again, then"
-      + " call sil_search again.",
+      `Your sil session has expired. Run sil_register to sign in again, then call ${tool} again.`,
     recovery: "sil_register",
   });
 }
 
 /** Transient: a network/5xx blip — try again, NOT a re-register (a false terminal
- * on a transient would send the agent down a recovery path that can't fix it). */
-function transient() {
+ * on a transient would send the agent down a recovery path that can't fix it).
+ * The `tool` name keeps the retry guidance actionable; the taxonomy is shared. */
+function transient(tool: string) {
   return jsonResult({
     status: "retryable",
-    message: "sil is temporarily unavailable. Please try sil_search again.",
+    message: `sil is temporarily unavailable. Please try ${tool} again.`,
   });
 }

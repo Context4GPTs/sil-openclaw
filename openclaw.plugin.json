@@ -11,6 +11,7 @@
     "tools": [
       "sil_echo",
       "sil_ping",
+      "sil_product_get",
       "sil_register",
       "sil_search",
       "sil_whoami"
@@ -48,7 +49,7 @@
   },
   "security": {
     "shipsRuntimeCode": true,
-    "packagingNote": "Compiled JavaScript ships under ./dist. register() stays synchronous and opens nothing — it only registers tools. ALL I/O happens inside a tool's execute(): sil_register calls sil-web over the network, writes tokens.json + config.json to the plugin data directory (owner-only, 0600), and arms a bounded background poll timer that stops on the first terminal claim outcome or after the session deadline. sil_whoami reads the stored access token and calls sil-api for the user's identity, refreshing transparently via sil-web on a 401 (at most one refresh + one retry per call, no timer); a confirmed-dead session clears tokens.json. The PKCE verifier is held only in memory and is never written to disk. Tokens and identity PII are never logged.",
+    "packagingNote": "Compiled JavaScript ships under ./dist. register() stays synchronous and opens nothing — it only registers tools. ALL I/O happens inside a tool's execute(): sil_register calls sil-web over the network, writes tokens.json + config.json to the plugin data directory (owner-only, 0600), and arms a bounded background poll timer that stops on the first terminal claim outcome or after the session deadline. sil_whoami reads the stored access token and calls sil-api for the user's identity, refreshing transparently via sil-web on a 401 (at most one refresh + one retry per call, no timer); a confirmed-dead session clears tokens.json. sil_search and sil_product_get read the stored access token and call sil-api's catalog endpoints (search / lookup) with it — read-only, no token write, no timer, a single round-trip (a 401 is a terminal re-register hint, no refresh). The PKCE verifier is held only in memory and is never written to disk. Tokens and identity PII are never logged.",
     "registersLongLivedService": false,
     "serviceIds": [],
     "runsTimers": true,
