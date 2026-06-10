@@ -148,6 +148,10 @@ function registerSearch(api: PluginAPI): void {
       );
       switch (recovered.kind) {
         case "result":
+          // On a silent recovery (`refreshed`: a 401 was healed by the refresh+retry)
+          // emit the operator marker so a thrashing session is visible in logs —
+          // logs-only, no token material, NOT a payload field (the agent never sees it).
+          if (recovered.refreshed) api.logger.info("sil_search_refreshed", {});
           return mapSearchOutcome(api, recovered.outcome);
         case "must_reregister":
           // A dead refresh token (invalid_grant) is cleared so the agent's
@@ -284,6 +288,10 @@ function registerProductGet(api: PluginAPI): void {
       );
       switch (recovered.kind) {
         case "result":
+          // On a silent recovery (`refreshed`: a 401 was healed by the refresh+retry)
+          // emit the operator marker so a thrashing session is visible in logs —
+          // logs-only, no token material, NOT a payload field (the agent never sees it).
+          if (recovered.refreshed) api.logger.info("sil_product_get_refreshed", {});
           return mapLookupOutcome(api, recovered.outcome);
         case "must_reregister":
           if (recovered.reason === "invalid_grant") clearTokens();

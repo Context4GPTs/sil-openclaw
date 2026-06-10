@@ -184,6 +184,10 @@ function registerWhoami(api: PluginAPI): void {
         case "result":
           // The first non-401 outcome, OR the retry's non-401 outcome (ok /
           // forbidden / retryable) — mapped to its terminal/transient/success result.
+          // On a silent recovery (`refreshed`: a 401 was healed by the refresh+retry)
+          // emit the operator marker so a thrashing session is visible in logs —
+          // logs-only, no token material, NOT a payload field (the agent never sees it).
+          if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
           return identityOutcomeToResult(api, recovered.outcome);
         case "must_reregister":
           // The refresh token is dead (invalid_grant) → clear the now-known-dead

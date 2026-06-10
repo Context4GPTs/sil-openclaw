@@ -691,6 +691,14 @@ export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
  *
  *   result             — pass `outcome` through the caller's normal mapping (the
  *                        first non-401 outcome, OR the retry's non-401 outcome).
+ *                        `refreshed` discriminates the two: `false` when `outcome`
+ *                        is the first-try passthrough (no refresh happened),
+ *                        `true` when it was produced via the refresh+retry recovery
+ *                        path. The caller emits its `<tool>_refreshed` operator log
+ *                        marker on (and ONLY on) `refreshed: true` — a logs-only
+ *                        seam for the otherwise-invisible silent recovery; it adds
+ *                        NO field to the agent-facing payload (outcome 1 stays
+ *                        invisible to the agent).
  *   must_reregister     — terminal: refresh failed. `invalid_grant` is a dead
  *                        refresh token (the caller clears tokens); `no_stored_tokens`
  *                        is the pre-refresh or post-rotate TOCTOU empty read (nothing
@@ -702,7 +710,7 @@ export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
  *                        tokens + goes terminal). NEVER a second refresh.
  */
 export type RefreshRetryResult<O> =
-  | { kind: "result"; outcome: O }
+  | { kind: "result"; outcome: O; refreshed: boolean }
   | { kind: "must_reregister"; reason: "invalid_grant" | "no_stored_tokens" }
   | { kind: "retryable" }
   | { kind: "second_unauthorized" };
@@ -742,7 +750,10 @@ export async function refreshAndRetryOnce<O>(
   retryWithToken: (accessToken: string) => Promise<O>,
 ): Promise<RefreshRetryResult<O>> {
   if (!isUnauthorized(first)) {
-    return { kind: "result", outcome: first };
+    // First-try passthrough: no refresh happened, so the caller must NOT emit its
+    // `<tool>_refreshed` marker. `refreshed: false` is the negative half of the
+    // observability discriminant.
+    return { kind: "result", outcome: first, refreshed: false };
   }
 
   const refresh = await refreshStoredTokens();
@@ -767,7 +778,10 @@ export async function refreshAndRetryOnce<O>(
     // never another refresh cycle.
     return { kind: "second_unauthorized" };
   }
-  return { kind: "result", outcome: retry };
+  // Silent-recovery success: this outcome was produced via refresh+retry, so the
+  // caller emits its `<tool>_refreshed` operator marker. `refreshed: true` is the
+  // positive half of the observability discriminant — logs-only, never a payload field.
+  return { kind: "result", outcome: retry, refreshed: true };
 }
 
 /**
