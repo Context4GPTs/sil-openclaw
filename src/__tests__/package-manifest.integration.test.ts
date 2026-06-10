@@ -129,7 +129,7 @@ describe("openclaw.plugin.json — manifest shape", () => {
   });
 
   it("declares a configSchema with at least one property", () => {
-    // The skeleton's minimal config-override surface (sil_api_url).
+    // The skeleton's minimal config-override surface (sil_web_url).
     expect(manifest.configSchema).toBeTypeOf("object");
     expect(manifest.configSchema!.properties).toBeTypeOf("object");
     expect(

@@ -11,7 +11,7 @@
  *   - register(api) opens no socket, arms no timer, starts no
  *     long-lived resource — it returns and does not hold the event loop
  *     open (the klodi install-hang failure mode, architect Risk #2);
- *   - the pluginConfig override path: a non-empty `sil_api_url` override
+ *   - the pluginConfig override path: a non-empty `sil_web_url` override
  *     is applied; an empty string is ignored; a value sitting on
  *     `api.config` (the WRONG, non-plugin-scoped source) is ignored.
  *
@@ -26,8 +26,8 @@
  *   - register(api) wires the real tool groups (so register() populates
  *     the api with tools), applies pluginConfig overrides, and logs
  *     `sil_plugin_loaded` once;
- *   - src/lib/config.ts exports applyPluginConfigOverrides, getApiUrl,
- *     getApiUrlSource, setApiUrl (env-fallback override pattern);
+ *   - src/lib/config.ts exports applyPluginConfigOverrides, getWebUrl,
+ *     getWebUrlSource, setWebUrl (env-fallback override pattern);
  *   - src/lib/tool-result.ts exports jsonResult(data).
  */
 
@@ -59,9 +59,9 @@ vi.mock("openclaw/plugin-sdk/plugin-entry", () => ({
 
 import {
   applyPluginConfigOverrides,
-  getApiUrl,
-  getApiUrlSource,
-  setApiUrl,
+  getWebUrl,
+  getWebUrlSource,
+  setWebUrl,
 } from "../lib/config.js";
 import { jsonResult } from "../lib/tool-result.js";
 import { createMockPluginApi } from "./helpers/mock-plugin-api.js";
@@ -74,8 +74,8 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   // Reset module-level config state so each test starts at "default".
-  setApiUrl("");
-  delete process.env["SIL_API_URL"];
+  setWebUrl("");
+  delete process.env["SIL_WEB_URL"];
 });
 
 describe("plugin entry — registration contract", () => {
@@ -186,49 +186,49 @@ describe("plugin entry — opens no long-lived resource (install-hang guard)", (
 });
 
 describe("plugin entry — pluginConfig override precedence", () => {
-  it("applies a non-empty `sil_api_url` override from pluginConfig", () => {
+  it("applies a non-empty `sil_web_url` override from pluginConfig", () => {
     const api = createMockPluginApi({
-      pluginConfig: { sil_api_url: "https://api.staging.example.com" },
+      pluginConfig: { sil_web_url: "https://api.staging.example.com" },
     });
     capturedRegisterFn!(api);
-    expect(getApiUrl()).toBe("https://api.staging.example.com");
-    expect(getApiUrlSource()).toBe("config");
+    expect(getWebUrl()).toBe("https://api.staging.example.com");
+    expect(getWebUrlSource()).toBe("config");
   });
 
   it("ignores an empty-string override (falls back to env/default)", () => {
-    const api = createMockPluginApi({ pluginConfig: { sil_api_url: "" } });
+    const api = createMockPluginApi({ pluginConfig: { sil_web_url: "" } });
     capturedRegisterFn!(api);
-    expect(getApiUrl()).not.toBe("");
-    expect(getApiUrlSource()).not.toBe("config");
+    expect(getWebUrl()).not.toBe("");
+    expect(getWebUrlSource()).not.toBe("config");
   });
 
-  it("ignores `sil_api_url` sitting on api.config (only pluginConfig is plugin-scoped)", () => {
+  it("ignores `sil_web_url` sitting on api.config (only pluginConfig is plugin-scoped)", () => {
     // The #1 config footgun: reading the FULL OpenClawConfig tree
     // (api.config) instead of the plugin-scoped api.pluginConfig.
     const api = createMockPluginApi({
-      config: { sil_api_url: "https://wrong-source.example.com" },
+      config: { sil_web_url: "https://wrong-source.example.com" },
       pluginConfig: {},
     });
     capturedRegisterFn!(api);
-    expect(getApiUrl()).not.toBe("https://wrong-source.example.com");
+    expect(getWebUrl()).not.toBe("https://wrong-source.example.com");
   });
 });
 
 describe("applyPluginConfigOverrides — unit precedence", () => {
   beforeEach(() => {
-    setApiUrl("");
-    delete process.env["SIL_API_URL"];
+    setWebUrl("");
+    delete process.env["SIL_WEB_URL"];
   });
 
   it("is a no-op for undefined pluginConfig", () => {
     applyPluginConfigOverrides(undefined);
-    expect(getApiUrlSource()).toBe("default");
+    expect(getWebUrlSource()).toBe("default");
   });
 
   it("applies a non-empty string override", () => {
-    applyPluginConfigOverrides({ sil_api_url: "https://x.example.com" });
-    expect(getApiUrl()).toBe("https://x.example.com");
-    expect(getApiUrlSource()).toBe("config");
+    applyPluginConfigOverrides({ sil_web_url: "https://x.example.com" });
+    expect(getWebUrl()).toBe("https://x.example.com");
+    expect(getWebUrlSource()).toBe("config");
   });
 
   it("ignores a non-string override (defensive runtime narrowing)", () => {
@@ -236,22 +236,22 @@ describe("applyPluginConfigOverrides — unit precedence", () => {
     // could be hand-edited between schema validation and load — a
     // number where a string is expected must not poison the value.
     applyPluginConfigOverrides({
-      sil_api_url: 123 as unknown as string,
+      sil_web_url: 123 as unknown as string,
     });
-    expect(getApiUrlSource()).toBe("default");
+    expect(getWebUrlSource()).toBe("default");
   });
 
-  it("falls back to the SIL_API_URL env var when no override is set", () => {
-    process.env["SIL_API_URL"] = "https://env.example.com";
-    expect(getApiUrl()).toBe("https://env.example.com");
-    expect(getApiUrlSource()).toBe("env");
+  it("falls back to the SIL_WEB_URL env var when no override is set", () => {
+    process.env["SIL_WEB_URL"] = "https://env.example.com";
+    expect(getWebUrl()).toBe("https://env.example.com");
+    expect(getWebUrlSource()).toBe("env");
   });
 
   it("override beats env (config source wins over env)", () => {
-    process.env["SIL_API_URL"] = "https://env.example.com";
-    applyPluginConfigOverrides({ sil_api_url: "https://override.example.com" });
-    expect(getApiUrl()).toBe("https://override.example.com");
-    expect(getApiUrlSource()).toBe("config");
+    process.env["SIL_WEB_URL"] = "https://env.example.com";
+    applyPluginConfigOverrides({ sil_web_url: "https://override.example.com" });
+    expect(getWebUrl()).toBe("https://override.example.com");
+    expect(getWebUrlSource()).toBe("config");
   });
 });
 

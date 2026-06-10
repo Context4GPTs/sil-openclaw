@@ -32,7 +32,7 @@
  *     / credentials.ts / identity.ts — the dev's call) reads the stored
  *     refresh token, POSTs <host>/api/v1/auth/refresh { refresh_token },
  *     rotates tokens.json on 200, and returns a terminal "must re-register"
- *     signal on 401 — contacting ONLY the resolved sil_api_url origin.
+ *     signal on 401 — contacting ONLY the resolved sil_web_url origin.
  */
 
 import {
@@ -56,7 +56,7 @@ import { join } from "node:path";
 
 import { registerIdentityTools } from "../tools/identity.js";
 import { refreshStoredTokens } from "../lib/sil-client.js";
-import { setApiUrl, getApiUrl } from "../lib/config.js";
+import { setWebUrl, getWebUrl } from "../lib/config.js";
 import { getDataDir, readTokens } from "../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -164,7 +164,7 @@ beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-claim-int-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
-  setApiUrl(HOST); // pin a known origin so host assertions are exact
+  setWebUrl(HOST); // pin a known origin so host assertions are exact
   vi.useFakeTimers();
 });
 
@@ -172,7 +172,7 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   vi.restoreAllMocks();
-  setApiUrl("");
+  setWebUrl("");
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   rmSync(dataDir, { recursive: true, force: true });
@@ -353,14 +353,14 @@ describe("claim lifecycle — budget exhaustion (never unbounded)", () => {
 });
 
 describe("claim lifecycle — only sil-web is contacted (no Auth0 leg)", () => {
-  it("every claim request targets the resolved sil_api_url origin", async () => {
+  it("every claim request targets the resolved sil_web_url origin", async () => {
     const fx = installFetch(() => ({ status: 200, body: SUCCESS_BODY }));
     const api = createMockPluginApi();
     registerIdentityTools(api);
     await getTool(api, TOOL).execute("c1", {});
     await vi.advanceTimersByTimeAsync(10_000);
 
-    const resolvedOrigin = new URL(getApiUrl()).origin;
+    const resolvedOrigin = new URL(getWebUrl()).origin;
     for (const url of fx.calledUrls) {
       expect(new URL(url).origin).toBe(resolvedOrigin);
     }
@@ -382,7 +382,7 @@ describe("SC8 (in-repo) — two instances, two data dirs, independent tokens", (
     try {
       // --- Instance A ---
       process.env["SIL_DATA_DIR"] = dirA;
-      setApiUrl(HOST);
+      setWebUrl(HOST);
       installFetch(() => ({
         status: 200,
         body: { access_token: "at-A", refresh_token: "rt-A", user: { id: "user-42" } },
@@ -398,7 +398,7 @@ describe("SC8 (in-repo) — two instances, two data dirs, independent tokens", (
 
       // --- Instance B (separate data dir) ---
       process.env["SIL_DATA_DIR"] = dirB;
-      setApiUrl(HOST);
+      setWebUrl(HOST);
       vi.useFakeTimers();
       installFetch(() => ({
         status: 200,
@@ -464,14 +464,14 @@ describe("SC7/F7 — token refresh via sil-web, never Auth0", () => {
     expect(tokens!.refresh_token).toBe("rotated-rt");
   });
 
-  it("contacts ONLY the resolved sil_api_url origin (Auth0 is never called directly)", async () => {
+  it("contacts ONLY the resolved sil_web_url origin (Auth0 is never called directly)", async () => {
     const fx = installFetch(() => ({
       status: 200,
       body: { access_token: "rotated-at", refresh_token: "rotated-rt" },
     }));
     await refreshStoredTokens();
 
-    const resolvedOrigin = new URL(getApiUrl()).origin;
+    const resolvedOrigin = new URL(getWebUrl()).origin;
     expect(fx.calledUrls.length).toBeGreaterThan(0);
     for (const url of fx.calledUrls) {
       expect(new URL(url).origin).toBe(resolvedOrigin);

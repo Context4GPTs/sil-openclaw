@@ -92,7 +92,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { refreshAndRetryOnce } from "../../lib/sil-client.js";
-import { setApiUrl } from "../../lib/config.js";
+import { setWebUrl } from "../../lib/config.js";
 import * as credentials from "../../lib/credentials.js";
 import { getDataDir, getTokensPath, readTokens } from "../../lib/credentials.js";
 
@@ -185,14 +185,14 @@ beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-refresh-retry-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
-  // refreshStoredTokens posts to getApiUrl() (sil-web). Pin it to a known host.
-  setApiUrl(SIL_WEB);
+  // refreshStoredTokens posts to getWebUrl() (sil-web). Pin it to a known host.
+  setWebUrl(SIL_WEB);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  setApiUrl("");
-  delete process.env["SIL_API_URL"];
+  setWebUrl("");
+  delete process.env["SIL_WEB_URL"];
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   rmSync(dataDir, { recursive: true, force: true });

@@ -12,9 +12,9 @@
  * boundary, exactly as whoami's integration suite proved its read flow.
  *
  * TWO ORIGINS: the search read targets the resolved **sil-api** origin
- * (`getSilApiUrl`), at the BARE path `/catalog/search` — NOT `/api/v1`. On a 401
+ * (`getApiUrl`), at the BARE path `/catalog/search` — NOT `/api/v1`. On a 401
  * the tool now refreshes transparently against the **sil-web** origin
- * (`getApiUrl`, via the real `refreshStoredTokens`) and retries the search ONCE —
+ * (`getWebUrl`, via the real `refreshStoredTokens`) and retries the search ONCE —
  * the SAME refresh-and-retry-once choreography `sil_whoami` performs (this card
  * makes 401 recovery uniform across every sil-api-calling tool; FLAG-10). Both
  * origins are pinned to distinct known hosts so the origin + path assertions are
@@ -65,7 +65,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerCatalogTools } from "../tools/catalog.js";
-import { setApiUrl, setSilApiUrl, getApiUrl, getSilApiUrl } from "../lib/config.js";
+import { setWebUrl, setApiUrl, getWebUrl, getApiUrl } from "../lib/config.js";
 import { getDataDir, getTokensPath, readTokens } from "../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -289,16 +289,16 @@ beforeEach(() => {
   process.env["SIL_DATA_DIR"] = dataDir;
   // Pin BOTH origins to distinct known hosts so the origin/path assertions are
   // exact and a misfire onto sil-web is caught.
-  setApiUrl(SIL_WEB);
-  setSilApiUrl(SIL_API);
+  setWebUrl(SIL_WEB);
+  setApiUrl(SIL_API);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  setWebUrl("");
   setApiUrl("");
-  setSilApiUrl("");
+  delete process.env["SIL_WEB_URL"];
   delete process.env["SIL_API_URL"];
-  delete process.env["SIL_API_BASE"];
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   rmSync(dataDir, { recursive: true, force: true });
@@ -324,8 +324,8 @@ describe("sil_search — param → request mapping (bare path, sil-api origin, B
     expect(u.pathname).toBe("/catalog/search");
     expect(req.url).not.toContain("/api/v1");
     // sil-api origin, NOT sil-web.
-    expect(u.origin).toBe(new URL(getSilApiUrl()).origin);
-    expect(u.origin).not.toBe(new URL(getApiUrl()).origin);
+    expect(u.origin).toBe(new URL(getApiUrl()).origin);
+    expect(u.origin).not.toBe(new URL(getWebUrl()).origin);
     // It is a POST carrying a body, with the stored Bearer token.
     expect(req.method).toBe("POST");
     expect(req.hasBody).toBe(true);
@@ -697,8 +697,8 @@ describe("sil_search — 401 → transparent refresh-and-retry-once (outcome 1: 
     expect(rec.search.length).toBe(2); // failed read + exactly one retry
     expect(rec.refresh.length).toBe(1); // exactly one refresh, never more
     // The refresh hit sil-web; the searches hit sil-api — origins asserted apart.
-    const silApiOrigin = new URL(getSilApiUrl()).origin;
-    const silWebOrigin = new URL(getApiUrl()).origin;
+    const silApiOrigin = new URL(getApiUrl()).origin;
+    const silWebOrigin = new URL(getWebUrl()).origin;
     for (const r of rec.search) expect(new URL(r.url).origin).toBe(silApiOrigin);
     for (const r of rec.refresh) expect(new URL(r.url).origin).toBe(silWebOrigin);
     // No Auth0 contacted on any path (sil-web is the sole auth authority).

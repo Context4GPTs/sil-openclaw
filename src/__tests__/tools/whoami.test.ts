@@ -50,7 +50,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerIdentityTools } from "../../tools/identity.js";
-import { setApiUrl, setSilApiUrl } from "../../lib/config.js";
+import { setWebUrl, setApiUrl } from "../../lib/config.js";
 import { getDataDir, getTokensPath, getConfigPath } from "../../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -110,19 +110,19 @@ beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-whoami-unit-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
+  setWebUrl("");
   setApiUrl("");
-  setSilApiUrl("");
+  delete process.env["SIL_WEB_URL"];
   delete process.env["SIL_API_URL"];
-  delete process.env["SIL_API_BASE"];
 });
 
 afterEach(() => {
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
+  setWebUrl("");
   setApiUrl("");
-  setSilApiUrl("");
+  delete process.env["SIL_WEB_URL"];
   delete process.env["SIL_API_URL"];
-  delete process.env["SIL_API_BASE"];
   rmSync(dataDir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });

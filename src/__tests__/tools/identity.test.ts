@@ -40,7 +40,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerIdentityTools } from "../../tools/identity.js";
-import { setApiUrl } from "../../lib/config.js";
+import { setWebUrl } from "../../lib/config.js";
 import { getDataDir } from "../../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -89,15 +89,15 @@ beforeEach(() => {
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
   // Reset config singleton + env so each test starts at the default host.
-  setApiUrl("");
-  delete process.env["SIL_API_URL"];
+  setWebUrl("");
+  delete process.env["SIL_WEB_URL"];
 });
 
 afterEach(() => {
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
-  setApiUrl("");
-  delete process.env["SIL_API_URL"];
+  setWebUrl("");
+  delete process.env["SIL_WEB_URL"];
   rmSync(dataDir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
@@ -200,8 +200,8 @@ describe("sil_register — host override resolution (pluginConfig → env → de
     vi.useRealTimers();
   });
 
-  it("builds the auth URL against the SIL_API_URL env override", async () => {
-    process.env["SIL_API_URL"] = "https://api.staging.example.com";
+  it("builds the auth URL against the SIL_WEB_URL env override", async () => {
+    process.env["SIL_WEB_URL"] = "https://api.staging.example.com";
     const api = createMockPluginApi();
     registerIdentityTools(api);
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
@@ -210,10 +210,10 @@ describe("sil_register — host override resolution (pluginConfig → env → de
   });
 
   it("a pluginConfig override beats the env (config wins)", async () => {
-    process.env["SIL_API_URL"] = "https://env.example.com";
+    process.env["SIL_WEB_URL"] = "https://env.example.com";
     // The config singleton is set the way register() would via
     // applyPluginConfigOverrides; assert config precedence holds.
-    setApiUrl("https://config.example.com");
+    setWebUrl("https://config.example.com");
     const api = createMockPluginApi();
     registerIdentityTools(api);
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));

@@ -20,7 +20,7 @@
  *      any filter is rejected with a structured validation error and makes NO
  *      network call (sil-api's `empty_search_input` 400 is the authoritative
  *      backstop). A filter-only request (e.g. `category` alone) is a valid browse.
- *   3. searchCatalog(getSilApiUrl(), token, params) → map the `SearchOutcome`:
+ *   3. searchCatalog(getApiUrl(), token, params) → map the `SearchOutcome`:
  *        ok            → the ranked products + cursor;
  *        invalid_request (400) → surface sil-api's `{ error, message }`;
  *        unauthorized  (401)   → refresh-and-retry ONCE via the shared
@@ -51,7 +51,7 @@
 import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
-import { getSilApiUrl } from "../lib/config.js";
+import { getApiUrl } from "../lib/config.js";
 import { clearTokens, readTokens } from "../lib/credentials.js";
 import {
   lookupCatalog,
@@ -140,11 +140,11 @@ function registerSearch(api: PluginAPI): void {
       // 3 — search; on a 401 refresh-and-retry ONCE via the shared choreography
       // (the SAME path sil_whoami / sil_product_get use — 401 recovery is uniform
       // across every sil-api-calling tool, never per-tool).
-      const first = await searchCatalog(getSilApiUrl(), stored.access_token, search);
+      const first = await searchCatalog(getApiUrl(), stored.access_token, search);
       const recovered = await refreshAndRetryOnce(
         first,
         (o): boolean => o.kind === "unauthorized",
-        (accessToken) => searchCatalog(getSilApiUrl(), accessToken, search),
+        (accessToken) => searchCatalog(getApiUrl(), accessToken, search),
       );
       switch (recovered.kind) {
         case "result":
@@ -211,7 +211,7 @@ function mapSearchOutcome(api: PluginAPI, outcome: SearchOutcome) {
  *   2. Client-side guard: an empty `ids` (after dropping non-strings) is rejected
  *      with a structured validation error and NO network call (sil-api's
  *      `minItems:1` schema 400 is the authoritative backstop).
- *   3. lookupCatalog(getSilApiUrl(), token, ids) → map the `LookupOutcome`:
+ *   3. lookupCatalog(getApiUrl(), token, ids) → map the `LookupOutcome`:
  *        ok            → the resolved products + the `not_found` id list (a PARTIAL
  *                        or ALL-MISSED hit is `status:"ok"` — a SUCCESS, never an
  *                        error, with NO recovery hint: re-running won't conjure a
@@ -280,11 +280,11 @@ function registerProductGet(api: PluginAPI): void {
       // 3 — look up; on a 401 refresh-and-retry ONCE via the shared choreography
       // (the SAME path sil_whoami / sil_search use). A partial/all-missed hit is
       // `ok` + `not_found`.
-      const first = await lookupCatalog(getSilApiUrl(), stored.access_token, ids);
+      const first = await lookupCatalog(getApiUrl(), stored.access_token, ids);
       const recovered = await refreshAndRetryOnce(
         first,
         (o): boolean => o.kind === "unauthorized",
-        (accessToken) => lookupCatalog(getSilApiUrl(), accessToken, ids),
+        (accessToken) => lookupCatalog(getApiUrl(), accessToken, ids),
       );
       switch (recovered.kind) {
         case "result":

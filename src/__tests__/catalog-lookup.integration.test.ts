@@ -12,9 +12,9 @@
  * exactly as sil_search's integration suite proved its read flow.
  *
  * TWO ORIGINS: the lookup read targets the resolved **sil-api** origin
- * (`getSilApiUrl`), at the BARE path `/catalog/lookup` — NOT `/api/v1`. On a 401
+ * (`getApiUrl`), at the BARE path `/catalog/lookup` — NOT `/api/v1`. On a 401
  * the tool now refreshes transparently against the **sil-web** origin
- * (`getApiUrl`, via the real `refreshStoredTokens`) and retries the lookup ONCE —
+ * (`getWebUrl`, via the real `refreshStoredTokens`) and retries the lookup ONCE —
  * the SAME refresh-and-retry-once choreography sil_whoami / sil_search perform
  * (this card makes 401 recovery uniform across every sil-api-calling tool;
  * FLAG-10). Both origins are pinned to distinct known hosts so the origin + path
@@ -69,7 +69,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerCatalogTools } from "../tools/catalog.js";
-import { setApiUrl, setSilApiUrl, getApiUrl, getSilApiUrl } from "../lib/config.js";
+import { setWebUrl, setApiUrl, getWebUrl, getApiUrl } from "../lib/config.js";
 import { getDataDir, getTokensPath, readTokens } from "../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -313,16 +313,16 @@ beforeEach(() => {
   process.env["SIL_DATA_DIR"] = dataDir;
   // Pin BOTH origins to distinct known hosts so the origin/path assertions are exact
   // and a misfire onto sil-web is caught.
-  setApiUrl(SIL_WEB);
-  setSilApiUrl(SIL_API);
+  setWebUrl(SIL_WEB);
+  setApiUrl(SIL_API);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  setWebUrl("");
   setApiUrl("");
-  setSilApiUrl("");
+  delete process.env["SIL_WEB_URL"];
   delete process.env["SIL_API_URL"];
-  delete process.env["SIL_API_BASE"];
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   rmSync(dataDir, { recursive: true, force: true });
@@ -348,8 +348,8 @@ describe("sil_product_get — param → request mapping (bare path, sil-api orig
     expect(u.pathname).toBe("/catalog/lookup");
     expect(req.url).not.toContain("/api/v1");
     // sil-api origin, NOT sil-web.
-    expect(u.origin).toBe(new URL(getSilApiUrl()).origin);
-    expect(u.origin).not.toBe(new URL(getApiUrl()).origin);
+    expect(u.origin).toBe(new URL(getApiUrl()).origin);
+    expect(u.origin).not.toBe(new URL(getWebUrl()).origin);
     // It is a POST carrying a body, with the stored Bearer token.
     expect(req.method).toBe("POST");
     expect(req.hasBody).toBe(true);
@@ -711,8 +711,8 @@ describe("sil_product_get — 401 → transparent refresh-and-retry-once (outcom
     expect(rec.lookup.length).toBe(2); // failed read + exactly one retry
     expect(rec.refresh.length).toBe(1); // exactly one refresh, never more
     // The refresh hit sil-web; the lookups hit sil-api — origins asserted apart.
-    const silApiOrigin = new URL(getSilApiUrl()).origin;
-    const silWebOrigin = new URL(getApiUrl()).origin;
+    const silApiOrigin = new URL(getApiUrl()).origin;
+    const silWebOrigin = new URL(getWebUrl()).origin;
     for (const r of rec.lookup) expect(new URL(r.url).origin).toBe(silApiOrigin);
     for (const r of rec.refresh) expect(new URL(r.url).origin).toBe(silWebOrigin);
     // No Auth0 contacted on any path (sil-web is the sole auth authority).

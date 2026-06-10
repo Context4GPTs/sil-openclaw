@@ -19,8 +19,8 @@ Two optional plugin-scoped keys, resolved at call time (override → env → def
 
 | Key | Env fallback | Default | Purpose |
 |---|---|---|---|
-| `sil_api_url` | `SIL_API_URL` | `https://sil.4gpts.com` | sil-web origin — the auth authority (registration, token refresh). |
-| `sil_api_base` | `SIL_API_BASE` | `https://api.sil.4gpts.com` | sil-api origin — the domain service (`sil_whoami` identity reads, `sil_search` / `sil_product_get` catalog calls). |
+| `sil_web_url` | `SIL_WEB_URL` | `https://sil.4gpts.com` | sil-web origin — the auth authority (registration, token refresh). |
+| `sil_api_url` | `SIL_API_URL` | `https://sil-api.4gpts.com` | sil-api origin — the domain service (`sil_whoami` identity reads, `sil_search` / `sil_product_get` catalog calls). |
 
 Set them under `plugins.sil.config` in your OpenClaw config. Override only for staging or self-hosted deployments.
 
