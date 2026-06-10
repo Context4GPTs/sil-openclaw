@@ -119,7 +119,7 @@
  * node:fetch (global) only; no dependency.
  */
 
-import { getApiUrl } from "./config.js";
+import { getWebUrl } from "./config.js";
 import { readTokens, writeTokens } from "./credentials.js";
 
 /** Per-request timeout: a stalled endpoint (DNS hang, SYN drop) must not wedge
@@ -655,7 +655,7 @@ export type RefreshStoredResult =
  * SC7/F7 entry point: read the stored refresh token, exchange it via sil-web,
  * and rotate `tokens.json` with the new pair on success.
  *
- * Contacts ONLY the resolved `sil_api_url` origin — sil-web is the sole auth
+ * Contacts ONLY the resolved `sil_web_url` origin — sil-web is the sole auth
  * authority; the plugin never talks to Auth0 directly (sil-web holds the Auth0
  * client secret). On a 401 the refresh token is dead: return a terminal
  * "must re-register" signal and DO NOT rotate (a rejected refresh must never be
@@ -667,7 +667,7 @@ export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
     return { status: "must_reregister", reason: "no_stored_tokens" };
   }
 
-  const outcome = await refreshSession(getApiUrl(), stored.refresh_token);
+  const outcome = await refreshSession(getWebUrl(), stored.refresh_token);
   switch (outcome.kind) {
     case "refreshed":
       await writeTokens({

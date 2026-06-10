@@ -5,16 +5,16 @@
  * resolved at call time from three sources, in order:
  *
  *   sil-WEB (auth authority — claim + token refresh):
- *     1. `api.pluginConfig.sil_api_url`  2. `SIL_API_URL`  3. `DEFAULT_API_URL`
+ *     1. `api.pluginConfig.sil_web_url`  2. `SIL_WEB_URL`  3. `DEFAULT_WEB_URL`
  *   sil-API (commerce/identity reads — `sil_whoami`):
- *     1. `api.pluginConfig.sil_api_base`  2. `SIL_API_BASE`  3. `DEFAULT_SIL_API_BASE`
+ *     1. `api.pluginConfig.sil_api_url`  2. `SIL_API_URL`  3. `DEFAULT_API_URL`
  *
  * The two-origin reality is load-bearing (see the sil-whoami card): refresh
  * is on sil-web (the only holder of the Auth0 client secret), the identity
  * read is on sil-api (the Fastify domain service). They are different
  * services and likely different origins, so they get DISTINCT keys — never
- * overload `sil_api_url` for the sil-api read. Every future plugin tool that
- * calls a sil-api domain (fulfillment/payments/loyalty) shares `sil_api_base`.
+ * overload `sil_web_url` for the sil-api read. Every future plugin tool that
+ * calls a sil-api domain (fulfillment/payments/loyalty) shares `sil_api_url`.
  *
  * This mirrors the reference adapter's `lib/paths.ts` override pattern
  * (`klodi-plugin/adapters/openclaw`): the override and env routes coexist so
@@ -24,17 +24,16 @@
  */
 
 // sil-web origin (auth authority). Used by refreshStoredTokens / claim.
-const DEFAULT_API_URL = "https://sil.4gpts.com";
+const DEFAULT_WEB_URL = "https://sil.4gpts.com";
 
-// sil-api origin (domain reads). The sil-api production URL is unpinned in the
-// workspace; this is a documented PLACEHOLDER for founder/devops to pin at
-// deploy via `sil_api_base` / `SIL_API_BASE` (or to the same origin if a single
-// gateway fronts both services). Tests + staging always set it explicitly via
-// the override chain — only this fallback is a guess. See the sil-whoami card.
-const DEFAULT_SIL_API_BASE = "https://api.sil.4gpts.com";
+// sil-api origin (domain reads). Pinned to the deployed sil-api Railway service
+// at `sil-api.4gpts.com`. Deployments may still override via `sil_api_url` /
+// `SIL_API_URL` (or point at the same origin if a single gateway fronts both
+// services); tests + staging set it explicitly through the override chain.
+const DEFAULT_API_URL = "https://sil-api.4gpts.com";
 
+let _webUrl: string | null = null;
 let _apiUrl: string | null = null;
-let _silApiBase: string | null = null;
 
 export type ConfigSource = "config" | "env" | "default";
 
@@ -50,14 +49,32 @@ export type ConfigSource = "config" | "env" | "default";
  * schema file is authoritative for the user-facing surface.
  */
 export interface SilPluginConfig {
+  sil_web_url?: string;
   sil_api_url?: string;
-  sil_api_base?: string;
+}
+
+export function setWebUrl(url: string): void {
+  _webUrl = url === "" ? null : url;
+}
+
+export function getWebUrl(): string {
+  return _webUrl ?? process.env["SIL_WEB_URL"] ?? DEFAULT_WEB_URL;
+}
+
+export function getWebUrlSource(): ConfigSource {
+  if (_webUrl !== null) return "config";
+  if (process.env["SIL_WEB_URL"]) return "env";
+  return "default";
 }
 
 export function setApiUrl(url: string): void {
   _apiUrl = url === "" ? null : url;
 }
 
+/**
+ * Resolve the sil-API origin (the identity/commerce read service), distinct
+ * from `getWebUrl()` (sil-web). `sil_whoami` posts its identity read here.
+ */
 export function getApiUrl(): string {
   return _apiUrl ?? process.env["SIL_API_URL"] ?? DEFAULT_API_URL;
 }
@@ -65,24 +82,6 @@ export function getApiUrl(): string {
 export function getApiUrlSource(): ConfigSource {
   if (_apiUrl !== null) return "config";
   if (process.env["SIL_API_URL"]) return "env";
-  return "default";
-}
-
-export function setSilApiUrl(url: string): void {
-  _silApiBase = url === "" ? null : url;
-}
-
-/**
- * Resolve the sil-API origin (the identity/commerce read service), distinct
- * from `getApiUrl()` (sil-web). `sil_whoami` posts its identity read here.
- */
-export function getSilApiUrl(): string {
-  return _silApiBase ?? process.env["SIL_API_BASE"] ?? DEFAULT_SIL_API_BASE;
-}
-
-export function getSilApiUrlSource(): ConfigSource {
-  if (_silApiBase !== null) return "config";
-  if (process.env["SIL_API_BASE"]) return "env";
   return "default";
 }
 
@@ -105,11 +104,11 @@ export function applyPluginConfigOverrides(
   // PluginAPI.pluginConfig is `Record<string, unknown>` because the SDK
   // cannot know each plugin's schema, so callers cast to SilPluginConfig
   // at the boundary. The cast trusts a JSON file on disk — keep the guard.
-  const { sil_api_url, sil_api_base } = pluginConfig;
+  const { sil_web_url, sil_api_url } = pluginConfig;
+  if (typeof sil_web_url === "string" && sil_web_url.length > 0) {
+    setWebUrl(sil_web_url);
+  }
   if (typeof sil_api_url === "string" && sil_api_url.length > 0) {
     setApiUrl(sil_api_url);
-  }
-  if (typeof sil_api_base === "string" && sil_api_base.length > 0) {
-    setSilApiUrl(sil_api_base);
   }
 }

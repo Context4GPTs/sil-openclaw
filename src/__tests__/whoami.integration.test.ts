@@ -12,8 +12,8 @@
  * against a mocked boundary, exactly as the register card proved its claim flow.
  *
  * TWO ORIGINS (architect "two-origin reality"): the identity read targets the
- * resolved **sil-api** origin (`getSilApiUrl`); the refresh targets the resolved
- * **sil-web** origin (`getApiUrl`, via `refreshStoredTokens`). The fetch double
+ * resolved **sil-api** origin (`getApiUrl`); the refresh targets the resolved
+ * **sil-web** origin (`getWebUrl`, via `refreshStoredTokens`). The fetch double
  * routes by URL and records every request so both origins are asserted
  * independently and Auth0 is proven never contacted.
  *
@@ -63,7 +63,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerIdentityTools } from "../tools/identity.js";
-import { setApiUrl, setSilApiUrl, getApiUrl, getSilApiUrl } from "../lib/config.js";
+import { setWebUrl, setApiUrl, getWebUrl, getApiUrl } from "../lib/config.js";
 import { getDataDir, getTokensPath, readTokens } from "../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -248,16 +248,16 @@ beforeEach(() => {
   process.env["SIL_DATA_DIR"] = dataDir;
   // Pin BOTH origins to distinct known hosts so the two-origin assertions are
   // exact and independent.
-  setApiUrl(SIL_WEB);
-  setSilApiUrl(SIL_API);
+  setWebUrl(SIL_WEB);
+  setApiUrl(SIL_API);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  setWebUrl("");
   setApiUrl("");
-  setSilApiUrl("");
+  delete process.env["SIL_WEB_URL"];
   delete process.env["SIL_API_URL"];
-  delete process.env["SIL_API_BASE"];
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   rmSync(dataDir, { recursive: true, force: true });
@@ -354,7 +354,7 @@ describe("sil_whoami — happy path (valid access token)", () => {
     expect(JSON.stringify(req.body ?? {})).not.toContain("agent_id");
   });
 
-  it("targets the resolved sil-api origin (sil_api_base), not sil-web, not a hardcoded host", async () => {
+  it("targets the resolved sil-api origin (sil_api_url), not sil-web, not a hardcoded host", async () => {
     seedTokens("valid-at", "valid-rt");
     const rec = installRouter((kind) =>
       kind === "identity"
@@ -366,11 +366,11 @@ describe("sil_whoami — happy path (valid access token)", () => {
 
     await getTool(api, TOOL).execute("c1", {});
 
-    const silApiOrigin = new URL(getSilApiUrl()).origin;
+    const silApiOrigin = new URL(getApiUrl()).origin;
     expect(rec.identity.length).toBe(1);
     expect(new URL(rec.identity[0]!.url).origin).toBe(silApiOrigin);
     // It is NOT the sil-web origin (the two must not be conflated).
-    expect(new URL(rec.identity[0]!.url).origin).not.toBe(new URL(getApiUrl()).origin);
+    expect(new URL(rec.identity[0]!.url).origin).not.toBe(new URL(getWebUrl()).origin);
   });
 
   it("makes NO refresh request when the first read succeeds", async () => {
@@ -479,8 +479,8 @@ describe("sil_whoami — transparent refresh (expired access, valid refresh)", (
 
     await getTool(api, TOOL).execute("c1", {});
 
-    const silApiOrigin = new URL(getSilApiUrl()).origin;
-    const silWebOrigin = new URL(getApiUrl()).origin;
+    const silApiOrigin = new URL(getApiUrl()).origin;
+    const silWebOrigin = new URL(getWebUrl()).origin;
     // Two origins, asserted INDEPENDENTLY.
     for (const r of rec.identity) {
       expect(new URL(r.url).origin).toBe(silApiOrigin);

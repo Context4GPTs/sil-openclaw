@@ -31,7 +31,7 @@
 import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
-import { getApiUrl, getSilApiUrl } from "../lib/config.js";
+import { getWebUrl, getApiUrl } from "../lib/config.js";
 import {
   clearTokens,
   hasTokens,
@@ -87,7 +87,7 @@ function registerRegister(api: PluginAPI): void {
       const sessionId = newSessionId();
       const verifier = newVerifier();
       const challenge = deriveChallenge(verifier);
-      const apiUrl = getApiUrl();
+      const apiUrl = getWebUrl();
 
       // 3 — build the auth URL. Opening it (by the user's browser) is what
       // creates the pending session server-side; the plugin does not pre-POST.
@@ -174,11 +174,11 @@ function registerWhoami(api: PluginAPI): void {
       // choreography (the SAME `refreshAndRetryOnce` path sil_search /
       // sil_product_get use — 401 recovery is uniform across every
       // sil-api-calling tool, factored so the three cannot drift apart).
-      const first = await fetchIdentity(getSilApiUrl(), stored.access_token);
+      const first = await fetchIdentity(getApiUrl(), stored.access_token);
       const recovered = await refreshAndRetryOnce(
         first,
         (o): boolean => o.kind === "unauthorized",
-        (accessToken) => fetchIdentity(getSilApiUrl(), accessToken),
+        (accessToken) => fetchIdentity(getApiUrl(), accessToken),
       );
       switch (recovered.kind) {
         case "result":

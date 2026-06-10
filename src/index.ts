@@ -24,10 +24,10 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
 import {
   applyPluginConfigOverrides,
+  getWebUrl,
+  getWebUrlSource,
   getApiUrl,
   getApiUrlSource,
-  getSilApiUrl,
-  getSilApiUrlSource,
   type SilPluginConfig,
 } from "./lib/config.js";
 import { registerCatalogTools } from "./tools/catalog.js";
@@ -49,10 +49,10 @@ export default definePluginEntry({
 
     api.logger.info("sil_plugin_loaded", {
       message: "sil plugin registered.",
-      api_url: getApiUrl(),
-      api_url_source: getApiUrlSource(),
-      sil_api_base: getSilApiUrl(),
-      sil_api_base_source: getSilApiUrlSource(),
+      api_url: getWebUrl(),
+      api_url_source: getWebUrlSource(),
+      sil_api_url: getApiUrl(),
+      sil_api_url_source: getApiUrlSource(),
     });
   },
 });

@@ -46,7 +46,7 @@ import { join } from "node:path";
 
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerIdentityTools } from "../tools/identity.js";
-import { setApiUrl, setSilApiUrl } from "../lib/config.js";
+import { setWebUrl, setApiUrl } from "../lib/config.js";
 import { getDataDir, getTokensPath, readTokens } from "../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -332,16 +332,16 @@ beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-parity-int-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
-  setApiUrl(SIL_WEB);
-  setSilApiUrl(SIL_API);
+  setWebUrl(SIL_WEB);
+  setApiUrl(SIL_API);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  setWebUrl("");
   setApiUrl("");
-  setSilApiUrl("");
+  delete process.env["SIL_WEB_URL"];
   delete process.env["SIL_API_URL"];
-  delete process.env["SIL_API_BASE"];
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   rmSync(dataDir, { recursive: true, force: true });
