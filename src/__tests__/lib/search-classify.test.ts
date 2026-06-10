@@ -23,20 +23,20 @@
  *
  *   2. The empty-match-is-SUCCESS vs the anti-false-green guard (the subtlest
  *      pair, mirroring `extractIdentity`'s `name`-gate at sil-client.ts:340-357):
- *        200 { result: { products: [] } }  → ok + empty list   (a VALID empty match,
+ *        200 { ucp, products: [] }         → ok + empty list   (a VALID empty match,
  *                                            NOT an error — UCP "this is not an error")
- *        200 with NO usable `products` array (partial / garbage / `{stub:true}`)
+ *        200 with NO usable top-level `products` array (partial / garbage / `{stub:true}`)
  *                                          → retryable, NEVER ok (the false-green guard:
  *                                            a stub/malformed 200 must not read as a
  *                                            clean empty match — see complete-work-is-stub-free)
- *      `ok` is gated on the envelope unwrapping AND `Array.isArray(result.products)` —
- *      the empty-array case is the success, the missing/non-array case is the fault.
+ *      `ok` is gated on a real top-level `Array.isArray(products)` — the empty-array
+ *      case is the success, the missing/non-array case is the fault.
  *
  *   3. The PROJECTION + cursor hoist (the read-subset normalizer the sibling
- *      `sil_product_get` reuses): unwrap `result` → server-order products → pick
+ *      `sil_product_get` reuses): read the FLAT body → server-order products → pick
  *      the FIRST (featured) variant per product → project to
  *      `{ id, title, price, availability, checkout_url }` + product-level `source` →
- *      hoist `result.pagination.cursor` to a top-level `cursor` (present iff
+ *      hoist `pagination.cursor` to a top-level `cursor` (present iff
  *      `has_next_page`, ABSENT otherwise — end-of-results is the absent cursor,
  *      never a short page). `availability` passes through as the UCP OBJECT
  *      (`{ available?, status? }`), never flattened to a bare boolean.
@@ -55,11 +55,12 @@
  *     source: string;
  *   }
  *   The classifier branches on `status` (and, for 200, the body shape) — NEVER on
- *   `res.ok`. It accepts the products either bare or unwrapped from the UCP
- *   envelope's `result`. The exact field/variant projection is the dev's to shape,
- *   but the FIELD NAMES below and the cursor-hoist + empty-vs-error split ARE the
- *   immutable spec (assert the projected `variant.checkout_url`, the passthrough
- *   `availability` object, and the hoisted `cursor`).
+ *   `res.ok`. It reads `products` off the FLAT sil-api envelope (`{ ucp, products,
+ *   pagination? }` — top level, no `result` wrapper). The exact field/variant
+ *   projection is the dev's to shape, but the FIELD NAMES below and the cursor-hoist
+ *   + empty-vs-error split ARE the immutable spec (assert the projected
+ *   `variant.checkout_url`, the passthrough `availability` object, and the hoisted
+ *   `cursor`).
  *   (If the dev sites the classifier elsewhere, re-export it from sil-client.ts so
  *   this isolation test still binds — the classifier is the spec, not its file.)
  *
@@ -129,16 +130,17 @@ const PRODUCT_B = {
   source: "uplift",
 };
 
-/** Wrap a `CatalogSearchResult` in the real UCP envelope `buildEnvelope` emits. */
+/** Wrap a `CatalogSearchResult` in the FLAT UCP envelope sil-api actually emits —
+ * `withUcpMeta(body) → { ucp, ...body }` (sil-services `.../sil-api/src/envelope.ts`):
+ * the result body's fields (`products`, `pagination`) sit at the TOP LEVEL beside
+ * `ucp`, NOT under a `result` wrapper. The `result` arg here IS a CatalogSearchResult
+ * object whose keys are spread onto the envelope. A non-object `result` is spread as
+ * nothing (the flat body then carries only `ucp`) — exactly the malformed/garbage
+ * case the anti-false-green gate must still reject. */
 function envelope(result: unknown): unknown {
   return {
-    protocol: "ucp",
-    version: "0.1",
-    domain: "catalog",
-    request_id: "req-1",
-    issued_at: "2026-06-09T00:00:00.000Z",
-    enrichment: { agent_id: "auth0|abc", enriched: true, source: "sil-api" },
-    result,
+    ucp: { version: "0.1", status: "success" },
+    ...(result !== null && typeof result === "object" ? (result as Record<string, unknown>) : {}),
   };
 }
 
@@ -225,7 +227,7 @@ describe("classifySearchResponse — the three distinct sil-api outcomes stay di
 });
 
 describe("classifySearchResponse — empty match is SUCCESS, not error", () => {
-  it("200 { result: { products: [] } } → ok with an EMPTY products list and NO cursor", () => {
+  it("200 { ucp, products: [] } → ok with an EMPTY products list and NO cursor", () => {
     // UCP: an empty search returns an empty array — "this is not an error". The
     // agent must see status ok + an empty list, never an error branch.
     const out = classifySearchResponse(
@@ -341,6 +343,90 @@ describe("classifySearchResponse — projection (first/featured variant, six fie
       expect(p.variant.title).toBe("Aeron Chair — Graphite, Size B");
       expect(p.variant.price).toEqual({ amount: 159900, currency: "USD" });
       expect(p.variant.checkout_url).toBe("https://buy.example.com/aeron-a1");
+    }
+  });
+
+  it("DROPS the wide SilCatalogProduct fields — the lean projection carries NO categories/tags/price_range/extra-variant/raw-envelope keys (founder context-window guard, AC4)", () => {
+    // AC4 — the context-window guard, asserted by ABSENCE (not just presence). A
+    // full `SilCatalogProduct` carries `description`, `price_range`, `categories`,
+    // `tags`, extra UCP metadata, and multiple non-featured variants. The unwrap fix
+    // must NOT widen the agent-facing payload by one field: the projected search
+    // product is EXACTLY `{ id, title, source, variant: { id, title, price,
+    // availability, checkout_url } }`. A regression that spreads the raw envelope or
+    // returns the whole product would flood the agent's context window — this test
+    // is the wall against it.
+    const WIDE_VARIANT = {
+      id: "gid://variant/wide1",
+      title: "Wide — Featured",
+      // A pile of extra variant fields lookup surfaces but SEARCH must drop.
+      sku: "WIDE-SKU-1",
+      options: [{ name: "Color", label: "Graphite" }],
+      inputs: [{ id: "gid://product/wide", match: "featured" }],
+      barcode: "0123456789",
+      price: { amount: 159900, currency: "USD" },
+      availability: { available: true, status: "in_stock" },
+      checkout_url: "https://buy.example.com/wide-1",
+    };
+    const WIDE_VARIANT_2 = {
+      id: "gid://variant/wide2",
+      title: "Wide — Non-featured",
+      price: { amount: 169900, currency: "USD" },
+      availability: { available: false, status: "out_of_stock" },
+      checkout_url: "https://buy.example.com/wide-2",
+    };
+    const WIDE_PRODUCT = {
+      id: "gid://product/wide",
+      title: "Wide Product",
+      source: "herman-miller",
+      // The wide fields the agent does NOT need to reason/pick/checkout.
+      description: { plain: "A very detailed description.", html: "<p>…</p>" },
+      price_range: {
+        min: { amount: 159900, currency: "USD" },
+        max: { amount: 169900, currency: "USD" },
+      },
+      categories: [{ name: "Office Furniture" }, { name: "Chairs" }],
+      tags: ["ergonomic", "premium"],
+      handle: "wide-product",
+      vendor: "Herman Miller",
+      extra_ucp_metadata: { provenance: "sil-api", scored: true },
+      variants: [WIDE_VARIANT, WIDE_VARIANT_2],
+    };
+
+    const out = classifySearchResponse(200, envelope({ products: [WIDE_PRODUCT] }));
+    expect(out.kind).toBe("ok");
+    if (out.kind === "ok") {
+      const p = out.products[0]! as unknown as Record<string, unknown>;
+      // EXACT lean product shape — these three keys and no others.
+      expect(Object.keys(p).sort()).toEqual(["id", "source", "title", "variant"]);
+      // The wide product fields are GONE (not merely undefined-by-coincidence).
+      for (const wide of [
+        "description",
+        "price_range",
+        "categories",
+        "tags",
+        "handle",
+        "vendor",
+        "extra_ucp_metadata",
+        "variants",
+      ]) {
+        expect(p[wide]).toBeUndefined();
+      }
+      // EXACT lean variant shape — the FEATURED variant, five keys and no others.
+      const v = p["variant"] as Record<string, unknown>;
+      expect(v["id"]).toBe("gid://variant/wide1"); // featured (first), never wide2
+      expect(Object.keys(v).sort()).toEqual([
+        "availability",
+        "checkout_url",
+        "id",
+        "price",
+        "title",
+      ]);
+      // The lookup-only / raw variant fields must NOT leak through search.
+      for (const wide of ["sku", "options", "inputs", "barcode"]) {
+        expect(v[wide]).toBeUndefined();
+      }
+      // And no raw second-variant material rode along.
+      expect(JSON.stringify(p)).not.toContain("gid://variant/wide2");
     }
   });
 

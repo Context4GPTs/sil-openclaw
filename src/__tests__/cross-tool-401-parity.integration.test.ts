@@ -70,61 +70,57 @@ function identityEnvelope(): unknown {
   };
 }
 
-/** A real search envelope with one product (sil_search's ok shape). */
+/** A real search envelope with one product (sil_search's ok shape). FLAT shape
+ * (`{ ucp, products, pagination }` — top level, no `result` wrapper;
+ * `withUcpMeta(body)`), the only shape sil-api emits. */
 function searchEnvelope(): unknown {
   return {
-    protocol: "ucp",
-    version: "0.1",
-    domain: "catalog",
-    result: {
-      products: [
-        {
-          id: "gid://product/a",
-          title: "Aeron Chair",
-          source: "herman-miller",
-          variants: [
-            {
-              id: "gid://variant/a1",
-              title: "Aeron Chair — Graphite",
-              price: { amount: 159900, currency: "USD" },
-              availability: { available: true, status: "in_stock" },
-              checkout_url: "https://buy.example.com/aeron-a1",
-            },
-          ],
-        },
-      ],
-      pagination: { has_next_page: false },
-    },
+    ucp: { version: "0.1", status: "success" },
+    products: [
+      {
+        id: "gid://product/a",
+        title: "Aeron Chair",
+        source: "herman-miller",
+        variants: [
+          {
+            id: "gid://variant/a1",
+            title: "Aeron Chair — Graphite",
+            price: { amount: 159900, currency: "USD" },
+            availability: { available: true, status: "in_stock" },
+            checkout_url: "https://buy.example.com/aeron-a1",
+          },
+        ],
+      },
+    ],
+    pagination: { has_next_page: false },
   };
 }
 
-/** A real lookup envelope with one product (sil_product_get's ok shape). */
+/** A real lookup envelope with one product (sil_product_get's ok shape). FLAT shape
+ * (`{ ucp, products }` — top level, no `result` wrapper; `withUcpMeta(body)`), the
+ * only shape sil-api emits. */
 function lookupEnvelope(): unknown {
   return {
-    protocol: "ucp",
-    version: "0.1",
-    domain: "catalog",
-    result: {
-      products: [
-        {
-          id: "gid://product/a",
-          title: "Aeron Chair",
-          description: { plain: "An ergonomic office chair." },
-          price_range: { min: { amount: 159900, currency: "USD" }, max: { amount: 159900, currency: "USD" } },
-          source: "herman-miller",
-          variants: [
-            {
-              id: "gid://variant/a1",
-              title: "Aeron Chair — Graphite",
-              price: { amount: 159900, currency: "USD" },
-              availability: { available: true, status: "in_stock" },
-              checkout_url: "https://buy.example.com/aeron-a1",
-              inputs: [{ id: "gid://product/a", match: "featured" }],
-            },
-          ],
-        },
-      ],
-    },
+    ucp: { version: "0.1", status: "success" },
+    products: [
+      {
+        id: "gid://product/a",
+        title: "Aeron Chair",
+        description: { plain: "An ergonomic office chair." },
+        price_range: { min: { amount: 159900, currency: "USD" }, max: { amount: 159900, currency: "USD" } },
+        source: "herman-miller",
+        variants: [
+          {
+            id: "gid://variant/a1",
+            title: "Aeron Chair — Graphite",
+            price: { amount: 159900, currency: "USD" },
+            availability: { available: true, status: "in_stock" },
+            checkout_url: "https://buy.example.com/aeron-a1",
+            inputs: [{ id: "gid://product/a", match: "featured" }],
+          },
+        ],
+      },
+    ],
   };
 }
 

@@ -82,15 +82,16 @@ function seedTokens(access = "stored-at", refresh = "stored-rt"): void {
   );
 }
 
-/** A 200 real (empty-match) envelope, so a forwarded request resolves cleanly. */
+/** A 200 real (empty-match) envelope, so a forwarded request resolves cleanly. The
+ * FLAT sil-api shape (`{ ucp, products, pagination }` — top level, no `result`
+ * wrapper; `withUcpMeta(body)`), the only shape sil-api emits. */
 function okEnvelopeFetch(): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(
       JSON.stringify({
-        protocol: "ucp",
-        version: "0.1",
-        domain: "catalog",
-        result: { products: [], pagination: { has_next_page: false } },
+        ucp: { version: "0.1", status: "success" },
+        products: [],
+        pagination: { has_next_page: false },
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     ),
