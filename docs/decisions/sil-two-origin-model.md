@@ -4,8 +4,8 @@ title: The plugin talks to two sil origins (sil-web auth authority + sil-api dom
 tags: [architecture, config, auth, contracts, sil-api, sil-web]
 card: sil-whoami-tool
 commit: a635103
-updated_at: 2026-06-09
-updated_by_card: sil-search-plugin-tool
+updated_at: 2026-06-10
+updated_by_card: uniform-401-refresh-across-catalog-tools
 ---
 
 This plugin addresses **two distinct sil services at two distinct origins**, resolved from two distinct config keys — never one. Any future tool must pick the right origin for what it is doing.
@@ -32,4 +32,4 @@ When you add a sil-api origin to anything, also add it to `openclaw.plugin.json#
 
 `DEFAULT_SIL_API_BASE` (`config.ts:34`) is a **documented placeholder** (`https://api.sil.4gpts.com`) — the sil-api production URL is unpinned anywhere in the workspace. The override chain means tests and staging always set it explicitly via `sil_api_base` / `SIL_API_BASE`; only the fallback is a guess. Founder/devops must pin it at deploy (or set it to the same origin if a single gateway fronts both services).
 
-See [[sil-api-identity-contract]] for the sil-api request/response shape, and [[sil-response-classification]] for how outcomes from both origins are classified.
+See [[sil-api-identity-contract]] for the sil-api request/response shape, and [[sil-response-classification]] for how outcomes from both origins are classified. The cross-origin handshake — a 401 on a sil-api domain read triggers a refresh against **sil-web** (never sil-api, never Auth0), then one retry of the sil-api read — is the shared `refreshAndRetryOnce` choreography in [[sil-uniform-401-refresh-retry]].
