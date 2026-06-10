@@ -26,8 +26,9 @@
  *   request body (CatalogSearchRequest, additionalProperties:false):
  *     { query?, filters?: { categories?: string[], price?: { min?, max? } },
  *       pagination?: { cursor?, limit? }, context? }
- *   response (200): the UCP envelope buildEnvelope emits, whose `result` is a
- *     CatalogSearchResult { products: SilCatalogProduct[], pagination?, messages? }.
+ *   response (200): the FLAT UCP envelope sil-api emits (`withUcpMeta(body) →
+ *     { ucp, ...body }`), carrying a CatalogSearchResult at the TOP LEVEL:
+ *     { ucp, products: SilCatalogProduct[], pagination?, messages? } — no `result` wrapper.
  *   400 { error: "empty_search_input", message }  → invalid_request envelope
  *   401                                           → refresh-and-retry-once (see below)
  *   500 / network / timeout                       → retryable envelope
@@ -131,22 +132,20 @@ const PRODUCT_B = {
   source: "uplift",
 };
 
-/** The REAL sil-api search envelope (buildEnvelope output). The presence of a
- * required `source` per product and a non-empty `checkout_url` per variant is
- * what makes the suite anti-false-green: a `{ stub: true }` echo carries none of
- * these, so the assertions below cannot pass against the skeleton stub. */
+/** The REAL sil-api search envelope — the FLAT shape sil-api actually emits
+ * (`withUcpMeta(body) → { ucp, ...body }`: `products`/`pagination` at the TOP LEVEL
+ * beside `ucp`, NOT under a `result` wrapper). The presence of a required `source`
+ * per product and a non-empty `checkout_url` per variant is what makes the suite
+ * anti-false-green: a `{ stub: true }` echo carries none of these, so the assertions
+ * below cannot pass against the skeleton stub. */
 function searchEnvelope(
   products: unknown[],
   pagination: unknown = { has_next_page: false },
 ): unknown {
   return {
-    protocol: "ucp",
-    version: "0.1",
-    domain: "catalog",
-    request_id: "req-int-1",
-    issued_at: "2026-06-09T00:00:00.000Z",
-    enrichment: { agent_id: "auth0|abc", on_behalf_of: "auth0|abc", enriched: true, source: "sil-api" },
-    result: { products, pagination },
+    ucp: { version: "0.1", status: "success" },
+    products,
+    pagination,
   };
 }
 
@@ -493,7 +492,7 @@ describe("sil_search — happy path normalizes the REAL envelope (anti-false-gre
 });
 
 describe("sil_search — the three distinct sil-api outcomes surface as three distinguishable envelopes", () => {
-  it("empty match: 200 { result: { products: [] } } → status ok, products [], NO cursor, NO recovery hint (NOT an error)", async () => {
+  it("empty match: 200 { ucp, products: [] } → status ok, products [], NO cursor, NO recovery hint (NOT an error)", async () => {
     // UCP: an empty search returns an empty array — "this is not an error". This
     // is the SUCCESS arm, distinct from the 400/500 error arms below.
     seedTokens("at", "rt");

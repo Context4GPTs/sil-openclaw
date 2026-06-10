@@ -24,8 +24,9 @@
  * (PR #18; sil-services `@sil/schemas` catalog.ts + envelope.ts) and the UCP
  * catalog-lookup spec:
  *   request body (CatalogLookupRequest): { ids: string[] }  (no envelope, no defaults)
- *   response (200): the UCP envelope buildEnvelope emits, whose `result` is a
- *     CatalogLookupResult { products: SilCatalogProduct[], messages? } — each
+ *   response (200): the FLAT UCP envelope sil-api emits (`withUcpMeta(body) →
+ *     { ucp, ...body }`), carrying a CatalogLookupResult at the TOP LEVEL:
+ *     { ucp, products: SilCatalogProduct[], messages? } — no `result` wrapper. Each
  *     product with a required `source`, each variant with a non-empty `checkout_url`,
  *     an `availability` object, and the REQUIRED lookup `inputs` correlation.
  *     `messages` carries one { type:"info", code:"not_found", content:<id> } per
@@ -153,23 +154,20 @@ const PRODUCT_B = {
   source: "uplift",
 };
 
-/** The REAL sil-api lookup envelope (buildEnvelope output). The presence of a
- * required `source` per product, a non-empty `checkout_url` + an `inputs`
- * correlation per variant is what makes the suite anti-false-green: a
- * `{ stub: true }` echo carries none of these, so the assertions below cannot pass
- * against the skeleton stub. `messages` is included only when there are misses. */
+/** The REAL sil-api lookup envelope — the FLAT shape sil-api actually emits
+ * (`withUcpMeta(body) → { ucp, ...body }`: `products`/`messages` at the TOP LEVEL
+ * beside `ucp`, NOT under a `result` wrapper). The presence of a required `source`
+ * per product, a non-empty `checkout_url` + an `inputs` correlation per variant is
+ * what makes the suite anti-false-green: a `{ stub: true }` echo carries none of
+ * these, so the assertions below cannot pass against the skeleton stub. `messages`
+ * is included only when there are misses. */
 function lookupEnvelope(products: unknown[], messages?: unknown[]): unknown {
-  const result: Record<string, unknown> = { products };
-  if (messages !== undefined) result["messages"] = messages;
-  return {
-    protocol: "ucp",
-    version: "0.1",
-    domain: "catalog",
-    request_id: "req-int-1",
-    issued_at: "2026-06-09T00:00:00.000Z",
-    enrichment: { agent_id: "auth0|abc", on_behalf_of: "auth0|abc", enriched: true, source: "sil-api" },
-    result,
+  const envelope: Record<string, unknown> = {
+    ucp: { version: "0.1", status: "success" },
+    products,
   };
+  if (messages !== undefined) envelope["messages"] = messages;
+  return envelope;
 }
 
 /** A single `not_found` info message, exactly as sil-api emits per unresolved id. */

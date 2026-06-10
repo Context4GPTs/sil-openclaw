@@ -30,31 +30,30 @@
  *      (the headline lookup risk; UCP §Identifiers Not Found: "return success with
  *      the found products … MAY include informational messages indicating which
  *      identifiers were not found"):
- *        200 { result: { products:[…found…], messages:[{type:"info",code:"not_found",content:"<id>"}] } }
+ *        200 { ucp, products:[…found…], messages:[{type:"info",code:"not_found",content:"<id>"}] }
  *                          → ok + found products + not_found:[<the unfound ids>]
- *        200 { result: { products:[], messages:[…not_found for every id…] } }
+ *        200 { ucp, products:[], messages:[…not_found for every id…] }
  *                          → ok + products:[] + not_found:[<all ids>]   (all-missed IS a success)
- *        200 { result: { products:[…all resolved…] } } (NO messages key)
+ *        200 { ucp, products:[…all resolved…] } (NO messages key)
  *                          → ok + NO not_found key                       (every id resolved)
- *      The `not_found` ids come from `result.messages` entries whose
+ *      The `not_found` ids come from the top-level `messages` entries whose
  *      `code === "not_found"`; `content` is the id (sil-api emits exactly this,
  *      `messages` OMITTED on full success). A `not_found` is DATA on the ok result,
  *      NEVER an error and NEVER a recovery hint.
  *
  *   3. The anti-false-green body gate on 200 (mirroring `extractIdentity`'s
  *      `name`-gate / `extractSearchResult`'s array-gate — complete-work-is-stub-free):
- *        200 { result: { products: [] } }      → ok + empty list   (a VALID all-missed,
+ *        200 { ucp, products: [] }             → ok + empty list   (a VALID all-missed,
  *                                                 distinct from the no-array fault)
- *        200 with NO usable `products` array (partial / garbage / `{stub:true}`)
+ *        200 with NO usable top-level `products` array (partial / garbage / `{stub:true}`)
  *                                              → retryable, NEVER ok (the false-green guard:
  *                                                a stub/malformed 200 must not read as ok)
- *      `ok` is gated on the envelope unwrapping AND `Array.isArray(result.products)` —
- *      the empty-array case is the all-missed success, the missing/non-array case is
- *      the fault. SUBTLE: distinguish by PRESENCE of a real products array, NEVER by
- *      array length.
+ *      `ok` is gated on a real top-level `Array.isArray(products)` — the empty-array
+ *      case is the all-missed success, the missing/non-array case is the fault.
+ *      SUBTLE: distinguish by PRESENCE of a real products array, NEVER by array length.
  *
  *   4. The RICH projection + the `inputs` correlation (lookup's defining feature
- *      over search — the read-subset normalizer): unwrap `result` → products (NOT
+ *      over search — the read-subset normalizer): read the FLAT body → products (NOT
  *      re-ordered; the response does not preserve request order) → per product pick
  *      the FIRST (featured) variant → project the RICH product subset
  *      (`id`,`title`,`description`,`categories?`,`price_range`,`source`,`handle?`)
@@ -171,16 +170,17 @@ const PRODUCT_B = {
   source: "uplift",
 };
 
-/** Wrap a `CatalogLookupResult` in the real UCP envelope `buildEnvelope` emits. */
+/** Wrap a `CatalogLookupResult` in the FLAT UCP envelope sil-api actually emits —
+ * `withUcpMeta(body) → { ucp, ...body }` (sil-services `.../sil-api/src/envelope.ts`):
+ * the result body's fields (`products`, `messages`) sit at the TOP LEVEL beside `ucp`,
+ * NOT under a `result` wrapper. The `result` arg here IS a CatalogLookupResult object
+ * whose keys are spread onto the envelope. A non-object `result` is spread as nothing
+ * (the flat body then carries only `ucp`) — exactly the malformed/garbage case the
+ * anti-false-green gate must still reject. */
 function envelope(result: unknown): unknown {
   return {
-    protocol: "ucp",
-    version: "0.1",
-    domain: "catalog",
-    request_id: "req-1",
-    issued_at: "2026-06-09T00:00:00.000Z",
-    enrichment: { agent_id: "auth0|abc", enriched: true, source: "sil-api" },
-    result,
+    ucp: { version: "0.1", status: "success" },
+    ...(result !== null && typeof result === "object" ? (result as Record<string, unknown>) : {}),
   };
 }
 
@@ -483,6 +483,99 @@ describe("classifyLookupResponse — rich projection (first/featured variant, ri
       expect(avail).not.toBe(true);
       expect(avail["available"]).toBe(true);
       expect(avail["status"]).toBe("in_stock");
+    }
+  });
+
+  it("is BOUNDED — the rich projection drops `tags`/raw-envelope/extra-variant keys; lookup is richer than search but is NOT the raw envelope (founder context-window guard, AC4)", () => {
+    // AC4 (lookup half) — lookup is DELIBERATELY richer than search (it adds
+    // description/price_range/categories?/handle? + variant sku?/options?/inputs? for a
+    // purchase decision), but it is still a BOUNDED projection, never the raw
+    // `SilCatalogProduct`/envelope. A product carrying fields OUTSIDE the bounded set
+    // (`tags`, `vendor`, extra UCP metadata, non-featured variants) must have them
+    // DROPPED — asserted by the exact key set, not just field presence.
+    const WIDE_FEATURED = {
+      id: "gid://variant/wide1",
+      title: "Wide — Featured",
+      sku: "WIDE-SKU-1",
+      options: [{ name: "Color", label: "Graphite" }],
+      price: { amount: 159900, currency: "USD" },
+      availability: { available: true, status: "in_stock" },
+      checkout_url: "https://buy.example.com/wide-1",
+      inputs: [{ id: "gid://product/wide", match: "featured" }],
+      // Variant fields OUTSIDE the bounded lookup-variant set — must be dropped.
+      barcode: "0123456789",
+      weight: { value: 20, unit: "kg" },
+    };
+    const WIDE_NON_FEATURED = {
+      id: "gid://variant/wide2",
+      title: "Wide — Non-featured",
+      price: { amount: 169900, currency: "USD" },
+      availability: { available: false, status: "out_of_stock" },
+      checkout_url: "https://buy.example.com/wide-2",
+      inputs: [{ id: "gid://variant/wide2", match: "exact" }],
+    };
+    const WIDE_PRODUCT = {
+      id: "gid://product/wide",
+      handle: "wide-product",
+      title: "Wide Product",
+      description: { plain: "A very detailed description." },
+      categories: [{ name: "Office Furniture" }],
+      price_range: {
+        min: { amount: 159900, currency: "USD" },
+        max: { amount: 169900, currency: "USD" },
+      },
+      source: "herman-miller",
+      variants: [WIDE_FEATURED, WIDE_NON_FEATURED],
+      // Product fields OUTSIDE the bounded lookup-product set — must be dropped.
+      tags: ["ergonomic", "premium"],
+      vendor: "Herman Miller",
+      extra_ucp_metadata: { provenance: "sil-api", scored: true },
+    };
+
+    const out = classifyLookupResponse(200, envelope({ products: [WIDE_PRODUCT] }));
+    expect(out.kind).toBe("ok");
+    if (out.kind === "ok") {
+      const p = out.products[0]! as unknown as Record<string, unknown>;
+      // The projected product key set is a SUBSET of the bounded rich shape — and
+      // carries NONE of the out-of-bounds keys.
+      const allowedProductKeys = new Set([
+        "id",
+        "title",
+        "description",
+        "price_range",
+        "source",
+        "categories",
+        "handle",
+        "variant",
+      ]);
+      for (const key of Object.keys(p)) {
+        expect(allowedProductKeys.has(key)).toBe(true);
+      }
+      for (const wide of ["tags", "vendor", "extra_ucp_metadata", "variants"]) {
+        expect(p[wide]).toBeUndefined();
+      }
+      // The featured (first) variant — its key set is a SUBSET of the bounded
+      // lookup-variant shape, with NONE of the out-of-bounds variant keys.
+      const v = p["variant"] as Record<string, unknown>;
+      expect(v["id"]).toBe("gid://variant/wide1"); // featured, never wide2
+      const allowedVariantKeys = new Set([
+        "id",
+        "title",
+        "price",
+        "availability",
+        "checkout_url",
+        "sku",
+        "options",
+        "inputs",
+      ]);
+      for (const key of Object.keys(v)) {
+        expect(allowedVariantKeys.has(key)).toBe(true);
+      }
+      for (const wide of ["barcode", "weight"]) {
+        expect(v[wide]).toBeUndefined();
+      }
+      // No raw non-featured-variant material rode along.
+      expect(JSON.stringify(p)).not.toContain("gid://variant/wide2");
     }
   });
 

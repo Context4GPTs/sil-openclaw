@@ -57,38 +57,35 @@ interface Captured {
   body: unknown;
 }
 
-/** The REAL sil-api lookup envelope (buildEnvelope output), one product whose
- * featured variant carries the required `inputs` correlation — so a forwarded
- * request resolves cleanly through the classifier and the wrapper returns `ok`. */
+/** The REAL sil-api lookup envelope, one product whose featured variant carries the
+ * required `inputs` correlation — so a forwarded request resolves cleanly through the
+ * classifier and the wrapper returns `ok`. FLAT shape (`{ ucp, products }` — top
+ * level, no `result` wrapper; `withUcpMeta(body)`), the only shape sil-api emits. */
 function lookupEnvelope(): unknown {
   return {
-    protocol: "ucp",
-    version: "0.1",
-    domain: "catalog",
-    result: {
-      products: [
-        {
-          id: "gid://product/a",
-          title: "Aeron Chair",
-          description: { plain: "An ergonomic office chair." },
-          price_range: {
-            min: { amount: 159900, currency: "USD" },
-            max: { amount: 159900, currency: "USD" },
-          },
-          source: "herman-miller",
-          variants: [
-            {
-              id: "gid://variant/a1",
-              title: "Aeron Chair — Graphite, Size B",
-              price: { amount: 159900, currency: "USD" },
-              availability: { available: true, status: "in_stock" },
-              checkout_url: "https://buy.example.com/aeron-a1",
-              inputs: [{ id: "gid://product/a", match: "featured" }],
-            },
-          ],
+    ucp: { version: "0.1", status: "success" },
+    products: [
+      {
+        id: "gid://product/a",
+        title: "Aeron Chair",
+        description: { plain: "An ergonomic office chair." },
+        price_range: {
+          min: { amount: 159900, currency: "USD" },
+          max: { amount: 159900, currency: "USD" },
         },
-      ],
-    },
+        source: "herman-miller",
+        variants: [
+          {
+            id: "gid://variant/a1",
+            title: "Aeron Chair — Graphite, Size B",
+            price: { amount: 159900, currency: "USD" },
+            availability: { available: true, status: "in_stock" },
+            checkout_url: "https://buy.example.com/aeron-a1",
+            inputs: [{ id: "gid://product/a", match: "featured" }],
+          },
+        ],
+      },
+    ],
   };
 }
 
