@@ -42,8 +42,10 @@
  *   POST <silApiUrl>/catalog/search   Authorization: Bearer <access_token>
  *     body { query?, filters?:{ categories?, price?:{ min?, max? } },
  *            pagination?:{ cursor?, limit? } }       (no context, no envelope)
- *     200 <UCP envelope>{ result: { products: SilCatalogProduct[],
- *                                   pagination?:{ has_next_page, cursor? } } } → ok
+ *     200 <FLAT UCP envelope>{ ucp, products: SilCatalogProduct[],
+ *                              pagination?:{ has_next_page, cursor? } } → ok
+ *         (sil-api's `withUcpMeta(body) → { ucp, ...body }`: `products`/`pagination`
+ *          at the TOP LEVEL beside `ucp`, NO `result` wrapper)
  *     400 { error:"empty_search_input", message }    → invalid_request
  *     401                                            → unauthorized (→ refresh)
  *     5xx / network / abort                          → retryable
@@ -58,8 +60,10 @@
  *
  *   POST <silApiUrl>/catalog/lookup   Authorization: Bearer <access_token>
  *     body { ids: string[] }                         (≥1; no filters/context)
- *     200 <UCP envelope>{ result: { products: SilCatalogProduct[],
- *            messages?:[{ type:"info", code:"not_found", content:<id> }] } } → ok
+ *     200 <FLAT UCP envelope>{ ucp, products: SilCatalogProduct[],
+ *            messages?:[{ type:"info", code:"not_found", content:<id> }] } → ok
+ *         (same flat `withUcpMeta` shape: `products`/`messages` at the TOP LEVEL
+ *          beside `ucp`, NO `result` wrapper)
  *     400 (schema: empty `ids` / request_too_large)  → invalid_request
  *     401                                            → unauthorized (→ refresh)
  *     5xx / network / abort                          → retryable
@@ -71,28 +75,31 @@
  * feature over search — the response does NOT preserve request order and one id
  * may resolve to a variant of another id's product, so `inputs` is the only way to
  * map a request id to its result). `classifyLookupResponse` gates `ok` on a real
- * `Array.isArray(result.products)` — a 200 with no usable products array is
- * `retryable`, NEVER a false-green; a genuine ALL-MISSED lookup is a 200 whose
- * `result.products` IS `[]` WITH a populated `not_found` → `ok` (success: "none of
- * these exist anymore"), the discriminator being array PRESENCE, never length.
+ * `Array.isArray(products)` on the FLAT envelope's top-level `products` — a 200
+ * with no usable products array is `retryable`, NEVER a false-green; a genuine
+ * ALL-MISSED lookup is a 200 whose top-level `products` IS `[]` WITH a populated
+ * `not_found` → `ok` (success: "none of these exist anymore"), the discriminator
+ * being array PRESENCE, never length.
  *
  * `SilCatalogProduct` = a UCP product PLUS a required `source`; each variant PLUS
  * a required non-empty `checkout_url` (sil-services `@sil/schemas` catalog.ts —
  * the byte-shape of truth; `@ucp-js/sdk` carries ZERO catalog types). The plugin
  * does NOT depend on `@sil/schemas` (cross-repo): it re-declares the read-subset
  * it consumes locally (the `Search*` types below) and narrows the untrusted body
- * defensively in `extractSearchResult`, exactly as `extractIdentity` does. The
- * tool unwraps `result`, picks the FIRST (featured) variant per product (UCP:
- * "Platforms SHOULD treat the first element as featured"), projects each to the
- * product-level `{ id, title, source }` plus the nested featured `variant`
- * `{ id, title, price, availability, checkout_url }`, and hoists
- * `result.pagination.cursor` to a top-level cursor (present iff `has_next_page`).
- * `classifySearchResponse` gates `ok` on a
- * real `Array.isArray(result.products)` — a 200 with no usable products array is
- * `retryable`, NEVER a false-green empty match (the same anti-false-green guard
- * as the identity `name`-gate). A genuine empty match is a 200 whose
- * `result.products` IS an empty array → `ok` + `products: []` (success, not an
- * error — UCP: "empty search returns an empty array … this is not an error").
+ * defensively in `extractSearchResult`. The tool reads `products` straight off the
+ * FLAT envelope's top level (NO `result` unwrap — search/lookup are always flat,
+ * only the identity read carries the `result ?? envelope` dual shape), picks the
+ * FIRST (featured) variant per product (UCP: "Platforms SHOULD treat the first
+ * element as featured"), projects each to the product-level `{ id, title, source }`
+ * plus the nested featured `variant` `{ id, title, price, availability,
+ * checkout_url }`, and hoists the top-level `pagination.cursor` to a top-level
+ * cursor (present iff `has_next_page`). `classifySearchResponse` gates `ok` on a
+ * real `Array.isArray(products)` over that top-level `products` — a 200 with no
+ * usable products array is `retryable`, NEVER a false-green empty match (the same
+ * anti-false-green guard as the identity `name`-gate). A genuine empty match is a
+ * 200 whose top-level `products` IS an empty array → `ok` + `products: []`
+ * (success, not an error — UCP: "empty search returns an empty array … this is not
+ * an error").
  *
  * The VERB is load-bearing: sil-api's `POST /identity` is the agent enrich-STUB
  * ({kind, verified, subject, ...} — no name/addresses); `GET /identity` is the
@@ -244,8 +251,9 @@ export interface SearchProduct {
 
 /** The normalized search payload: the ranked products in server order (the tool
  * does NOT re-rank) plus the opaque pagination cursor, present iff another page
- * remains. `cursor` is hoisted from `result.pagination.cursor`; its ABSENCE is
- * end-of-results — never inferred from `products.length`. */
+ * remains. `cursor` is hoisted from the flat envelope's top-level
+ * `pagination.cursor`; its ABSENCE is end-of-results — never inferred from
+ * `products.length`. */
 export interface SearchResult {
   products: SearchProduct[];
   cursor?: string;
@@ -445,12 +453,15 @@ export function classifyIdentityResponse(status: number, body: unknown): Identit
  *   401 → unauthorized (the refresh trigger — the caller drives transparent
  *         refresh-and-retry-once via `refreshAndRetryOnce`, not terminal)
  *   5xx / other non-200 → retryable
- *   200 → unwrap the envelope `result`, normalize, and require `result.products`
- *         to be a real ARRAY. A 200 that yields no usable products array (a
- *         partial / garbage / stub-shaped body) is `retryable`, NEVER `ok` — the
- *         anti-false-green guard, the analogue of the identity `name`-gate. A
- *         genuine empty match (200 whose `result.products` IS `[]`) is `ok` with
- *         an empty product list: a SUCCESS, distinct from the no-array guard.
+ *   200 → read `products` off sil-api's FLAT envelope (`{ ucp, products,
+ *         pagination? }` — top level, no `result` wrapper), normalize, and require
+ *         `products` to be a real ARRAY. A 200 that yields no usable top-level
+ *         products array (a partial / garbage / stub-shaped body, or one carrying
+ *         only `ucp` metadata) is `retryable`, NEVER `ok` — the
+ *         `Array.isArray(products)` gate is the anti-false-green guard, the
+ *         analogue of the identity `name`-gate. A genuine empty match (200 whose
+ *         top-level `products` IS `[]`) is `ok` with an empty product list: a
+ *         SUCCESS, distinct from the no-array guard.
  *
  * Pure and exported — unit-tested in isolation like `classifyIdentityResponse`;
  * conflating the empty-match success with a partial-200 false-green, or with the
@@ -482,19 +493,21 @@ export function classifySearchResponse(status: number, body: unknown): SearchOut
  *   401 → unauthorized (the refresh trigger — the caller drives transparent
  *         refresh-and-retry-once via `refreshAndRetryOnce`, parity with search)
  *   5xx / other non-200 → retryable
- *   200 → unwrap the envelope `result`, normalize, and require `result.products`
- *         to be a real ARRAY. A 200 that yields no usable products array (a
- *         partial / garbage / stub-shaped body) is `retryable`, NEVER `ok` — the
- *         anti-false-green guard, the analogue of the identity `name`-gate and
- *         search's products-array gate.
+ *   200 → read `products` off sil-api's FLAT envelope (`{ ucp, products,
+ *         messages? }` — top level, no `result` wrapper), normalize, and require
+ *         `products` to be a real ARRAY. A 200 that yields no usable top-level
+ *         products array (a partial / garbage / stub-shaped body) is `retryable`,
+ *         NEVER `ok` — the `Array.isArray(products)` gate is the anti-false-green
+ *         guard, the analogue of the identity `name`-gate and search's
+ *         products-array gate.
  *
  * THE subtle correctness point: an all-MISSED lookup is a genuine SUCCESS — a 200
- * whose `result.products` IS an empty array WITH a populated `not_found` list
+ * whose top-level `products` IS an empty array WITH a populated `not_found` list
  * ("none of these ids exist anymore"). It is `ok` with empty `products` + full
  * `not_found`, distinct from the no-array guard above. The discriminator between
- * "valid all-missed" and "garbage 200" is envelope/`products`-array PRESENCE,
- * NEVER array length — exactly as search distinguishes empty-match from a
- * partial-200 false-green.
+ * "valid all-missed" and "garbage 200" is the `products`-array PRESENCE, NEVER
+ * array length — exactly as search distinguishes empty-match from a partial-200
+ * false-green.
  *
  * Pure and exported — unit-tested in isolation like `classifySearchResponse`.
  */
@@ -863,39 +876,40 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
 
 /**
  * Unwrap + narrow a sil-api catalog-search response body to a typed
- * {@link SearchResult}, or null if it carries no usable products array. The
- * products live in the UCP envelope's `result.products`; `result` is required —
- * unlike `extractIdentity` there is NO bare-top-level fallback, because a search
- * response is always enveloped (sil-api `buildEnvelope`) and a top-level
- * `products` would be a malformed body, not an alternate contract.
+ * {@link SearchResult}, or null if it carries no usable products array. sil-api
+ * emits a FLAT UCP envelope (`withUcpMeta(body) → { ucp, ...body }` —
+ * sil-services `.../sil-api/src/envelope.ts`): `products` and `pagination` sit at
+ * the TOP LEVEL beside `ucp`, there is NO `result` wrapper. Read them straight
+ * off the body. (There is no nested-`result` fallback to keep: search has no
+ * second route that ever returns one, so a `result`-wrapper expectation would be
+ * dead weight and — worse — a latent false-green a stray `result` key could shadow
+ * the real top-level `products`.)
  *
- * The load-bearing anti-false-green guard: `result.products` MUST be a real
- * ARRAY. A 200 lacking it (a partial / garbage / stub `{ stub: true }` body)
- * returns null → `retryable`, never a false-green empty match. An EMPTY array is
- * a VALID empty match (a genuine "nothing matched") and returns an empty
- * `products` list — distinct from the no-array guard. Individual products that
- * are unusable (no projectable featured variant, missing checkout_url) are
- * dropped via `projectProduct` returning null, never fabricated.
+ * The load-bearing anti-false-green guard is the `Array.isArray(products)` check:
+ * a 200 lacking a real top-level `products` array (a partial / garbage / stub
+ * `{ stub: true }` body, or one carrying only `ucp` metadata) returns null →
+ * `retryable`, never a false-green empty match. An EMPTY array is a VALID empty
+ * match (a genuine "nothing matched") and returns an empty `products` list —
+ * distinct from the no-array guard. Individual products that are unusable (no
+ * projectable featured variant, missing checkout_url) are dropped via
+ * `projectProduct` returning null, never fabricated.
  *
- * The opaque cursor is hoisted from `result.pagination.cursor` and surfaced ONLY
- * when `pagination.has_next_page` is true (end-of-results is the absent cursor —
- * never derived from `products.length`).
+ * The opaque cursor is hoisted from `pagination.cursor` and surfaced ONLY when
+ * `pagination.has_next_page` is true (end-of-results is the absent cursor — never
+ * derived from `products.length`).
  */
 function extractSearchResult(body: unknown): SearchResult | null {
   const envelope = asRecord(body);
   if (envelope === null) return null;
 
-  const result = asRecord(envelope["result"]);
-  if (result === null) return null;
-
-  const rawProducts = result["products"];
+  const rawProducts = envelope["products"];
   if (!Array.isArray(rawProducts)) return null;
 
   const products = rawProducts
     .map(projectProduct)
     .filter((p): p is SearchProduct => p !== null);
 
-  const cursor = extractCursor(result["pagination"]);
+  const cursor = extractCursor(envelope["pagination"]);
   return cursor === null ? { products } : { products, cursor };
 }
 
@@ -958,17 +972,23 @@ function projectVariant(raw: unknown): SearchVariant | null {
 
 /**
  * Unwrap + narrow a sil-api catalog-LOOKUP response body to a typed
- * {@link LookupResult}, or null if it carries no usable products array. Mirrors
- * `extractSearchResult`'s structure and shares its load-bearing anti-false-green
- * guard — `result.products` MUST be a real ARRAY; a 200 lacking it (partial /
- * garbage / stub `{ stub: true }`) returns null → `retryable`. An EMPTY array is a
- * VALID all-missed lookup (the products gate passes; `not_found` carries the ids)
- * — distinct from the no-array guard. The two structural deltas from search:
+ * {@link LookupResult}, or null if it carries no usable products array. Like
+ * `extractSearchResult`, it reads sil-api's FLAT UCP envelope
+ * (`withUcpMeta(body) → { ucp, ...body }`): `products` and `messages` sit at the
+ * TOP LEVEL beside `ucp`, there is NO `result` wrapper — read them straight off
+ * the body (no nested-`result` fallback; lookup has no route that returns one).
+ *
+ * It shares search's load-bearing anti-false-green guard — `Array.isArray(products)`
+ * on the TOP-LEVEL `products`; a 200 lacking it (partial / garbage / stub
+ * `{ stub: true }`, or only `ucp` metadata) returns null → `retryable`. An EMPTY
+ * array is a VALID all-missed lookup (the products gate passes; `not_found`
+ * carries the ids) — distinct from the no-array guard. The two structural deltas
+ * from search:
  *   - NO cursor hoist — lookup is a batch resolve, not a list (no `pagination`).
- *   - `not_found` is parsed from `result.messages`: each `{ code: 'not_found',
- *     content: <id> }` entry's `content` IS a missed request id (server emits one
- *     per unresolved id, in input order, and OMITS `messages` on full success).
- *     The `not_found` key is omitted here when there are no misses.
+ *   - `not_found` is parsed from the top-level `messages`: each
+ *     `{ code: 'not_found', content: <id> }` entry's `content` IS a missed request
+ *     id (server emits one per unresolved id, in input order, and OMITS `messages`
+ *     on full success). The `not_found` key is omitted here when there are no misses.
  *
  * Products unusable in lookup terms (no projectable featured variant, missing
  * `checkout_url`) are dropped via `projectLookupProduct` returning null, never
@@ -978,17 +998,14 @@ function extractLookupResult(body: unknown): LookupResult | null {
   const envelope = asRecord(body);
   if (envelope === null) return null;
 
-  const result = asRecord(envelope["result"]);
-  if (result === null) return null;
-
-  const rawProducts = result["products"];
+  const rawProducts = envelope["products"];
   if (!Array.isArray(rawProducts)) return null;
 
   const products = rawProducts
     .map(projectLookupProduct)
     .filter((p): p is LookupProduct => p !== null);
 
-  const notFound = extractNotFound(result["messages"]);
+  const notFound = extractNotFound(envelope["messages"]);
   return notFound.length === 0 ? { products } : { products, not_found: notFound };
 }
 
