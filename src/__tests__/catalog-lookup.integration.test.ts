@@ -11,12 +11,14 @@
  * projection + `inputs` correlation, and token privacy — against a mocked boundary,
  * exactly as sil_search's integration suite proved its read flow.
  *
- * ONE ORIGIN: the lookup read targets the resolved **sil-api** origin
- * (`getSilApiUrl`), at the BARE path `/catalog/lookup` — NOT `/api/v1`, NOT the
- * sil-web origin (`getApiUrl`). Both origins are pinned to distinct known hosts so
- * the origin + path assertions are exact, and a misfire onto sil-web is caught.
- * (Lookup does no refresh choreography in SC2 — a single round-trip; the 401 path is
- * a terminal re-register hint, parity with sil_search.)
+ * TWO ORIGINS: the lookup read targets the resolved **sil-api** origin
+ * (`getSilApiUrl`), at the BARE path `/catalog/lookup` — NOT `/api/v1`. On a 401
+ * the tool now refreshes transparently against the **sil-web** origin
+ * (`getApiUrl`, via the real `refreshStoredTokens`) and retries the lookup ONCE —
+ * the SAME refresh-and-retry-once choreography sil_whoami / sil_search perform
+ * (this card makes 401 recovery uniform across every sil-api-calling tool;
+ * FLAG-10). Both origins are pinned to distinct known hosts so the origin + path
+ * assertions are exact, and a misfire is caught.
  *
  * Wire shapes pinned to the ALREADY-MERGED sil-api `/catalog/lookup` contract
  * (PR #18; sil-services `@sil/schemas` catalog.ts + envelope.ts) and the UCP
@@ -29,8 +31,13 @@
  *     `messages` carries one { type:"info", code:"not_found", content:<id> } per
  *     unresolved id, and is OMITTED entirely on full success.
  *   400 (schema reject)  → invalid_request envelope
- *   401                  → terminal re-register envelope
+ *   401                  → refresh-and-retry-once (see below)
  *   500 / network / timeout → retryable envelope
+ *
+ *   refresh (sil-web):  POST <sil-web>/api/v1/auth/refresh { refresh_token }
+ *     200 { access_token, refresh_token }  → rotate tokens.json, retry lookup once
+ *     401 { error: "invalid_grant" }       → terminal re-register, tokens cleared
+ *     5xx / network                        → transient retryable, NO retry
  *
  * THE anti-false-green (complete-work-is-stub-free): the happy-path mock returns the
  * REAL `SilCatalogProduct` lookup envelope shape (each product with a required
@@ -57,13 +64,13 @@ import {
   beforeEach,
   afterEach,
 } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerCatalogTools } from "../tools/catalog.js";
 import { setApiUrl, setSilApiUrl, getApiUrl, getSilApiUrl } from "../lib/config.js";
-import { getDataDir, getTokensPath } from "../lib/credentials.js";
+import { getDataDir, getTokensPath, readTokens } from "../lib/credentials.js";
 import {
   createMockPluginApi,
   getTool,
@@ -187,15 +194,22 @@ type Reply = { status: number; body: unknown } | "network-error";
 /**
  * A URL-routing fetch double cloned from catalog-search.integration.test.ts.
  * `reply(kind, nthOfKind, req)` decides each response given whether the request is a
- * `lookup` (sil-api /catalog/lookup) or `other`. Records every request (url, method,
- * bearer, body) so origin, path, the Bearer header, the mapped body, and call COUNTS
- * are all assertable.
+ * `lookup` (sil-api /catalog/lookup), a `refresh` (sil-web /auth/refresh — the
+ * transparent 401 recovery leg, reached via the real `refreshStoredTokens`), or
+ * `other`. Records every request (url, method, bearer, body) so origin, path, the
+ * Bearer header, the mapped body, and call COUNTS (including "exactly one refresh")
+ * are all assertable. The `refresh` bucket is what makes the no-storm bound testable.
  */
 function installRouter(
-  reply: (kind: "lookup" | "other", nthOfKind: number, req: Recorded) => Reply,
-): { all: Recorded[]; lookup: Recorded[] } {
+  reply: (
+    kind: "lookup" | "refresh" | "other",
+    nthOfKind: number,
+    req: Recorded,
+  ) => Reply,
+): { all: Recorded[]; lookup: Recorded[]; refresh: Recorded[] } {
   const all: Recorded[] = [];
   const lookup: Recorded[] = [];
+  const refresh: Recorded[] = [];
 
   vi.spyOn(globalThis, "fetch").mockImplementation(
     (input: unknown, init?: RequestInit) => {
@@ -215,11 +229,20 @@ function installRouter(
       const req: Recorded = { url, method, bearer, body, hasBody };
       all.push(req);
 
-      const kind: "lookup" | "other" = url.includes("/catalog/lookup") ? "lookup" : "other";
+      // Check refresh first (sil-web /auth/refresh) so it is never misrouted to
+      // the lookup bucket.
+      let kind: "lookup" | "refresh" | "other";
+      if (url.includes("/auth/refresh")) kind = "refresh";
+      else if (url.includes("/catalog/lookup")) kind = "lookup";
+      else kind = "other";
+
       let nthOfKind: number;
       if (kind === "lookup") {
         lookup.push(req);
         nthOfKind = lookup.length - 1;
+      } else if (kind === "refresh") {
+        refresh.push(req);
+        nthOfKind = refresh.length - 1;
       } else {
         nthOfKind = all.length - 1;
       }
@@ -237,7 +260,7 @@ function installRouter(
     },
   );
 
-  return { all, lookup };
+  return { all, lookup, refresh };
 }
 
 /** Parse a ToolResult payload. */
@@ -269,6 +292,19 @@ function logBlob(api: MockPluginAPI): string {
   return [api.logger.info, api.logger.warn, api.logger.error, api.logger.debug]
     .flatMap((fn) => vi.mocked(fn).mock.calls.map((c) => JSON.stringify(c)))
     .join("\n");
+}
+
+/**
+ * Count how many `api.logger.info(marker, …)` calls used `marker` as their first
+ * argument. The marker name is the FIRST positional arg of the info call (the
+ * convention every `sil_*` log marker in this plugin follows). Used to assert the
+ * `sil_product_get_refreshed` operator marker fires exactly once on the
+ * silent-recovery path and ZERO times on a first-try (no-refresh) success.
+ */
+function infoMarkerCount(api: MockPluginAPI, marker: string): number {
+  return vi
+    .mocked(api.logger.info)
+    .mock.calls.filter((c) => c[0] === marker).length;
 }
 
 beforeEach(() => {
@@ -393,6 +429,13 @@ describe("sil_product_get — happy path normalizes the REAL envelope (anti-fals
     expect(avail["status"]).toBe("in_stock");
     // The inputs correlation — lookup's defining feature — is surfaced.
     expect(v["inputs"]).toEqual([{ id: "gid://product/a", match: "featured" }]);
+
+    // NEGATIVE half of the observability seam (review-round-1 fix): this is a
+    // FIRST-TRY success (no 401, no refresh), so the `sil_product_get_refreshed`
+    // marker must NOT fire. The marker means "this success was a silent recovery";
+    // on a plain success it would be a false signal that the session is thrashing.
+    // The marker keys off the helper's `refreshed:false` passthrough discriminant.
+    expect(infoMarkerCount(api, "sil_product_get_refreshed")).toBe(0);
   });
 
   it("a known id returns its featured variant with a FRESH, non-empty checkout_url", async () => {
@@ -520,55 +563,365 @@ describe("sil_product_get — unfound ids are a SUCCESS surfaced as a not_found 
     expect(payload["not_found"]).toBeUndefined();
   });
 
-  it("the partial-hit success is DISTINCT from both the 401 and the 500 error envelopes", async () => {
-    async function payloadFor(reply: Reply): Promise<Record<string, unknown>> {
+  it("the partial-hit success is DISTINCT from both the dead-401 (re-register) and the 500 (transient) envelopes", async () => {
+    // The partial hit is `ok`; a 401 whose refresh is also dead terminates at
+    // `must_reregister`; a first-call 500 is `retryable`. Three distinct statuses.
+    // (The 401 case now drives the refresh leg via the `refresh` route — a dead
+    // refresh keeps it terminal, so the three-way distinction is preserved under
+    // the refresh-and-retry-once path this card introduces.)
+    const partialHit = await (async () => {
       seedTokens("at", "rt");
-      installRouter((kind) => (kind === "lookup" ? reply : { status: 200, body: {} }));
+      installRouter((kind) =>
+        kind === "lookup"
+          ? { status: 200, body: lookupEnvelope([PRODUCT_A], [notFoundMsg("gone")]) }
+          : { status: 200, body: {} },
+      );
       const api = createMockPluginApi();
       registerCatalogTools(api);
       const p = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["x"] }));
       vi.restoreAllMocks();
       return p;
-    }
+    })();
 
-    const partialHit = await payloadFor({
-      status: 200,
-      body: lookupEnvelope([PRODUCT_A], [notFoundMsg("gone")]),
-    });
-    const unauthorized = await payloadFor({ status: 401, body: { error: "unauthorized" } });
-    const sourceFail = await payloadFor({ status: 500, body: { error: "source_unavailable" } });
+    const unauthorized = await (async () => {
+      seedTokens("expired-at", "dead-rt");
+      installRouter((kind) => {
+        if (kind === "lookup") return { status: 401, body: { error: "unauthorized" } };
+        if (kind === "refresh") return { status: 401, body: { error: "invalid_grant" } };
+        return { status: 500, body: {} };
+      });
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const p = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["x"] }));
+      vi.restoreAllMocks();
+      return p;
+    })();
+
+    const sourceFail = await (async () => {
+      seedTokens("at", "rt");
+      installRouter((kind) =>
+        kind === "lookup" ? { status: 500, body: { error: "source_unavailable" } } : { status: 200, body: {} },
+      );
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const p = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["x"] }));
+      vi.restoreAllMocks();
+      return p;
+    })();
 
     // Three distinct agent-facing statuses — a partial hit is ok, the others are not.
     expect(new Set([partialHit["status"], unauthorized["status"], sourceFail["status"]]).size).toBe(3);
     expect(partialHit["status"]).toBe("ok");
+    expect(unauthorized["status"]).toBe("must_reregister");
+    expect(sourceFail["status"]).toBe("retryable");
   });
 });
 
-describe("sil_product_get — the failure outcomes surface as distinguishable error envelopes", () => {
-  it("401 → terminal re-register envelope (recovery sil_register), single round-trip, NOT a false-green", async () => {
-    seedTokens("dead-at", "dead-rt");
-    const rec = installRouter((kind) =>
-      kind === "lookup" ? { status: 401, body: { error: "unauthorized" } } : { status: 200, body: {} },
-    );
+describe("sil_product_get — 401 → transparent refresh-and-retry-once (outcome 1: the agent never sees the 401)", () => {
+  it("401 → refresh once via sil-web → rotate tokens.json → retry the lookup once with the NEW token → normal lookup result", async () => {
+    // AC[integration]: outcome 1 — a registered agent whose access token is
+    // expired gets the normal `{ status: ok, products, not_found? }`,
+    // indistinguishable from a call that never 401'd. The card brings
+    // sil_product_get onto sil_whoami's refresh-and-retry-once choreography.
+    // EXPECT RED against current code (catalog.ts 401 is terminal mustReregister,
+    // no refresh) and GREEN once it routes through the shared helper.
+    seedTokens("expired-at", "valid-rt");
+    const rec = installRouter((kind, nth) => {
+      if (kind === "lookup") {
+        // First lookup 401 (expired); second (after refresh) returns products.
+        return nth === 0
+          ? { status: 401, body: { error: "unauthorized" } }
+          : { status: 200, body: lookupEnvelope([PRODUCT_A]) };
+      }
+      if (kind === "refresh") {
+        return { status: 200, body: { access_token: "rotated-at", refresh_token: "rotated-rt" } };
+      }
+      return { status: 500, body: {} };
+    });
     const api = createMockPluginApi();
     registerCatalogTools(api);
 
-    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }));
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
 
-    // A SINGLE round-trip — lookup does NOT do the transparent refresh-and-retry
-    // choreography whoami performs (parity with sil_search: SC2 is single round-trip).
-    expect(rec.lookup.length).toBe(1);
-    // No refresh call leaked onto sil-web.
-    for (const r of rec.all) {
-      expect(r.url).not.toContain("/auth/refresh");
+    // The agent sees a normal success — NOT a re-register, NOT a silent all-missed.
+    expect(payload["status"]).toBe("ok");
+    const products = payload["products"] as Array<Record<string, unknown>>;
+    expect(Array.isArray(products)).toBe(true);
+    expect(products).toHaveLength(1);
+    expect(products[0]!["id"]).toBe("gid://product/a");
+    // The refresh is INVISIBLE TO THE AGENT: no refreshed/retried marker, no
+    // recovery hint IN THE PAYLOAD. (This payload contract is correct and stays.)
+    expect(payload["refreshed"]).toBeUndefined();
+    expect(payload["retried"]).toBeUndefined();
+    expect(payload["recovery"]).toBeUndefined();
+    // The retry carried the ROTATED access token (proves the re-read after rotation).
+    expect(rec.lookup.length).toBe(2);
+    expect(bearerToken(rec.lookup[1]!)).toBe("rotated-at");
+    // The refresh used the STORED refresh token.
+    expect(rec.refresh.length).toBe(1);
+    expect((rec.refresh[0]!.body as { refresh_token?: string }).refresh_token).toBe("valid-rt");
+
+    // OPERATOR-OBSERVABILITY SEAM (review-round-1 fix; card line 161): the silent
+    // recovery is invisible in the PAYLOAD but MUST be observable in operator logs
+    // — a session that refreshes on (nearly) every call is the degrading-session
+    // signal on-call needs, and the card's own risk-mitigation names the
+    // `sil_*_refreshed` marker by hand. Assert the `sil_product_get_refreshed` INFO
+    // marker fired EXACTLY ONCE on this recovered-401 path. RED until the tool
+    // emits it (logs-only — NOT a payload field) when the helper reports
+    // `refreshed: true`.
+    expect(infoMarkerCount(api, "sil_product_get_refreshed")).toBe(1);
+    // The marker is logs-only — it does NOT add any field to the agent payload
+    // (outcome 1's invisible-to-the-agent contract stays inviolate).
+    expect(payload["sil_product_get_refreshed"]).toBeUndefined();
+    // The marker carries NO token material (the privacy invariant holds on the
+    // marker too — its meta must never carry a token value).
+    const refreshedMarkerArgs = vi
+      .mocked(api.logger.info)
+      .mock.calls.filter((c) => c[0] === "sil_product_get_refreshed");
+    const refreshedMarkerBlob = JSON.stringify(refreshedMarkerArgs);
+    expect(refreshedMarkerBlob).not.toContain("rotated-at");
+    expect(refreshedMarkerBlob).not.toContain("rotated-rt");
+    expect(refreshedMarkerBlob).not.toContain("valid-rt");
+    expect(refreshedMarkerBlob).not.toContain("expired-at");
+    expect(refreshedMarkerBlob).not.toMatch(/Bearer/i);
+  });
+
+  it("makes EXACTLY one refresh (sil-web) + EXACTLY two catalog reads (the failed read + one retry) — no loop, no storm", async () => {
+    // AC[integration]: the silent path does not loop or storm. Exactly 1 refresh
+    // + 2 catalog calls on a recovered 401.
+    seedTokens("expired-at", "valid-rt");
+    const rec = installRouter((kind, nth) => {
+      if (kind === "lookup") {
+        return nth === 0
+          ? { status: 401, body: { error: "unauthorized" } }
+          : { status: 200, body: lookupEnvelope([PRODUCT_A]) };
+      }
+      if (kind === "refresh") {
+        return { status: 200, body: { access_token: "rotated-at", refresh_token: "rotated-rt" } };
+      }
+      return { status: 500, body: {} };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] });
+
+    expect(rec.lookup.length).toBe(2); // failed read + exactly one retry
+    expect(rec.refresh.length).toBe(1); // exactly one refresh, never more
+    // The refresh hit sil-web; the lookups hit sil-api — origins asserted apart.
+    const silApiOrigin = new URL(getSilApiUrl()).origin;
+    const silWebOrigin = new URL(getApiUrl()).origin;
+    for (const r of rec.lookup) expect(new URL(r.url).origin).toBe(silApiOrigin);
+    for (const r of rec.refresh) expect(new URL(r.url).origin).toBe(silWebOrigin);
+    // No Auth0 contacted on any path (sil-web is the sole auth authority).
+    for (const r of rec.all) expect(r.url).not.toMatch(/auth0\.com/i);
+  });
+
+  it("persists the rotated pair to tokens.json and leaks NO token to the result or any log line", async () => {
+    // AC[integration]: tokens.json holds the rotated pair, and neither old nor new
+    // token value appears in any logger call or the returned payload.
+    const ROT_AT = "rotated-secret-access";
+    const ROT_RT = "rotated-secret-refresh";
+    seedTokens("expired-at", "valid-rt");
+    const rec = installRouter((kind, nth) => {
+      if (kind === "lookup") {
+        return nth === 0
+          ? { status: 401, body: { error: "unauthorized" } }
+          : { status: 200, body: lookupEnvelope([PRODUCT_A]) };
+      }
+      if (kind === "refresh") return { status: 200, body: { access_token: ROT_AT, refresh_token: ROT_RT } };
+      return { status: 500, body: {} };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
+
+    // tokens.json now holds the rotated pair (the refresh persisted).
+    const tokens = readTokens();
+    expect(tokens!.access_token).toBe(ROT_AT);
+    expect(tokens!.refresh_token).toBe(ROT_RT);
+    // The rotated token reached the retry's Authorization header, and ONLY there.
+    expect(bearerToken(rec.lookup[1]!)).toBe(ROT_AT);
+    // No token (old or rotated) in the result.
+    const resultBlob = JSON.stringify(payload);
+    expect(resultBlob).not.toContain(ROT_AT);
+    expect(resultBlob).not.toContain(ROT_RT);
+    expect(resultBlob).not.toContain("valid-rt");
+    expect(resultBlob).not.toContain("expired-at");
+    // No token in any log line, and never a Bearer string.
+    const logs = logBlob(api);
+    expect(logs).not.toContain(ROT_AT);
+    expect(logs).not.toContain(ROT_RT);
+    expect(logs).not.toContain("valid-rt");
+    expect(logs).not.toContain("expired-at");
+    expect(logs).not.toMatch(/Bearer/i);
+    // Nor in any request BODY (the credential rides only the header).
+    for (const r of [...rec.lookup, ...rec.refresh]) {
+      const b = JSON.stringify(r.body ?? {});
+      expect(b).not.toContain(ROT_AT);
+      expect(b).not.toContain("expired-at");
     }
-    // Terminal, actionable re-register — not a success, not a silent all-missed.
-    expect(payload["status"]).not.toBe("ok");
+  });
+});
+
+describe("sil_product_get — 401 → second 401 / dead refresh is terminal (outcome 2: re-register, refreshed at most once)", () => {
+  it("refresh OK but the retried read is ALSO 401 → terminal re-register, exactly ONE refresh (a freshly-rotated-still-401 is structurally dead)", async () => {
+    // AC[integration]: the no-storm bound. A retry that is still 401 must be
+    // terminal, never a second refresh.
+    seedTokens("expired-at", "valid-rt");
+    const rec = installRouter((kind) => {
+      // Lookup ALWAYS 401 (even after a good refresh — structurally dead).
+      if (kind === "lookup") return { status: 401, body: { error: "unauthorized" } };
+      if (kind === "refresh") {
+        return { status: 200, body: { access_token: "rotated-at", refresh_token: "rotated-rt" } };
+      }
+      return { status: 500, body: {} };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
+
+    // Exactly: lookup(401) → refresh(200) → retry-lookup(401) → STOP.
+    expect(rec.lookup.length).toBe(2); // initial + exactly one retry
+    expect(rec.refresh.length).toBe(1); // exactly one refresh, NEVER a second
+    expect(payload["status"]).toBe("must_reregister");
     expect(payload["products"]).toBeUndefined();
+    expect(payload["recovery"]).toBe("sil_register");
     const blob = JSON.stringify(payload).toLowerCase();
     expect(blob).toMatch(/re-?register|sil_register|session.*expired/);
   });
 
+  it("refresh returns invalid_grant (sil-web 401) → terminal re-register, tokens.json cleared, NO catalog retry", async () => {
+    // AC[integration]: a dead refresh token. Terminal re-register, the dead pair
+    // cleared, and NO retry of the lookup (there is no rotated token to retry).
+    seedTokens("expired-at", "dead-rt");
+    const rec = installRouter((kind) => {
+      if (kind === "lookup") return { status: 401, body: { error: "unauthorized" } };
+      if (kind === "refresh") return { status: 401, body: { error: "invalid_grant" } };
+      return { status: 500, body: {} };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
+
+    expect(payload["status"]).toBe("must_reregister");
+    expect(payload["recovery"]).toBe("sil_register");
+    // No retry after a failed refresh — exactly ONE lookup (the original 401) +
+    // ONE refresh.
+    expect(rec.lookup.length).toBe(1);
+    expect(rec.refresh.length).toBe(1);
+    // The confirmed-dead pair is cleared so sil_register does not short-circuit.
+    expect(existsSync(getTokensPath())).toBe(false);
+    expect(readTokens()).toBeNull();
+  });
+
+  it("the second-401 / dead-refresh terminal leaks NO token to any log line or the payload", async () => {
+    // AC[integration]: privacy holds on the terminal path too.
+    seedTokens("expired-at", "dead-rt");
+    installRouter((kind) => {
+      if (kind === "lookup") return { status: 401, body: { error: "unauthorized" } };
+      if (kind === "refresh") return { status: 401, body: { error: "invalid_grant" } };
+      return { status: 500, body: {} };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
+
+    const resultBlob = JSON.stringify(payload);
+    expect(resultBlob).not.toContain("expired-at");
+    expect(resultBlob).not.toContain("dead-rt");
+    const logs = logBlob(api);
+    expect(logs).not.toContain("expired-at");
+    expect(logs).not.toContain("dead-rt");
+    expect(logs).not.toMatch(/Bearer/i);
+  });
+});
+
+describe("sil_product_get — 401 → transient refresh failure is 'try again', NOT a re-register (outcome 3)", () => {
+  it("the refresh leg returns 5xx → transient retryable, NO recovery:sil_register, NO catalog retry", async () => {
+    // AC[integration]: a refresh-leg 5xx is a blip, not a dead session.
+    seedTokens("expired-at", "valid-rt");
+    const rec = installRouter((kind) => {
+      if (kind === "lookup") return { status: 401, body: { error: "unauthorized" } };
+      if (kind === "refresh") return { status: 503, body: { error: "unavailable" } };
+      return { status: 500, body: {} };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
+
+    expect(payload["status"]).toBe("retryable");
+    expect(payload["recovery"]).not.toBe("sil_register");
+    const blob = JSON.stringify(payload).toLowerCase();
+    expect(blob).not.toMatch(/sil_register/);
+    expect(blob).toMatch(/retry|try.again|temporar|unavailable|later/);
+    // The refresh was attempted once; the lookup was NOT retried (no rotated token).
+    expect(rec.refresh.length).toBe(1);
+    expect(rec.lookup.length).toBe(1);
+    // Tokens are NOT cleared on a transient (the pair may be fine).
+    expect(readTokens()).not.toBeNull();
+  });
+
+  it("the refresh leg throws (network error) → transient retryable, NO re-register, NO catalog retry", async () => {
+    seedTokens("expired-at", "valid-rt");
+    const rec = installRouter((kind) => {
+      if (kind === "lookup") return { status: 401, body: { error: "unauthorized" } };
+      if (kind === "refresh") return "network-error";
+      return { status: 500, body: {} };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
+
+    expect(payload["status"]).toBe("retryable");
+    expect(JSON.stringify(payload).toLowerCase()).not.toMatch(/sil_register/);
+    expect(rec.refresh.length).toBe(1);
+    expect(rec.lookup.length).toBe(1);
+    expect(readTokens()).not.toBeNull();
+  });
+
+  it("a first-call 5xx (before any 401) keeps its existing transient outcome and attempts NO refresh (the refresh path is reachable only via a 401)", async () => {
+    // AC[integration]: this card does NOT alter the non-401 branches. A 5xx on the
+    // ORIGINAL lookup must NOT trigger the refresh path.
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) => {
+      if (kind === "lookup") return { status: 500, body: { error: "source_unavailable" } };
+      return { status: 200, body: { access_token: "x", refresh_token: "y" } };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
+
+    expect(payload["status"]).toBe("retryable");
+    expect(rec.lookup.length).toBe(1); // single round-trip
+    expect(rec.refresh.length).toBe(0); // NO refresh — a first-call 5xx is not a 401
+  });
+});
+
+describe("sil_product_get — the failure outcomes surface as distinguishable error envelopes", () => {
   it("400 (schema reject) → invalid_request envelope, distinct from the all-missed success and the transient", async () => {
     seedTokens("at", "rt");
     installRouter((kind) =>
@@ -627,24 +980,39 @@ describe("sil_product_get — the failure outcomes surface as distinguishable er
     expect(payload["status"]).not.toBe("ok");
   });
 
-  it("401 is DISTINCT from the 500 transient outcome (different recovery guidance)", async () => {
-    async function payloadFor(reply: Reply): Promise<Record<string, unknown>> {
-      seedTokens("at", "rt");
-      installRouter((kind) => (kind === "lookup" ? reply : { status: 200, body: {} }));
+  it("a 401 with a DEAD refresh (re-register) is DISTINCT from a first-call 500 (transient) — different recovery guidance", async () => {
+    // AC[integration]: the recovery-hint discriminator. A 401 whose refresh token
+    // is also dead (invalid_grant) terminates at re-register with the sil_register
+    // hint; a first-call 5xx is transient with NO hint. The two must stay
+    // distinguishable envelopes (one wrong hint = one misdirected user).
+    const deadRefresh = await (async () => {
+      seedTokens("expired-at", "dead-rt");
+      installRouter((kind) => {
+        if (kind === "lookup") return { status: 401, body: { error: "unauthorized" } };
+        if (kind === "refresh") return { status: 401, body: { error: "invalid_grant" } };
+        return { status: 500, body: {} };
+      });
       const api = createMockPluginApi();
       registerCatalogTools(api);
       const p = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["x"] }));
       vi.restoreAllMocks();
       return p;
-    }
+    })();
 
-    const unauthorized = await payloadFor({ status: 401, body: { error: "unauthorized" } });
-    const transient = await payloadFor({ status: 500, body: { error: "source_unavailable" } });
+    const transient = await (async () => {
+      seedTokens("at", "rt");
+      installRouter((kind) =>
+        kind === "lookup" ? { status: 500, body: { error: "source_unavailable" } } : { status: 200, body: {} },
+      );
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const p = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["x"] }));
+      vi.restoreAllMocks();
+      return p;
+    })();
 
-    // The 401 carries a re-register hint; the 5xx does NOT (re-registering can't fix
-    // a server fault). The two must be distinguishable envelopes.
-    expect(unauthorized["status"]).not.toBe(transient["status"]);
-    expect(JSON.stringify(unauthorized).toLowerCase()).toMatch(/sil_register|re-?register/);
+    expect(deadRefresh["status"]).not.toBe(transient["status"]);
+    expect(JSON.stringify(deadRefresh).toLowerCase()).toMatch(/sil_register|re-?register/);
     expect(JSON.stringify(transient).toLowerCase()).not.toMatch(/sil_register/);
   });
 });

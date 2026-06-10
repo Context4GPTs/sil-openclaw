@@ -4,8 +4,8 @@ title: One shared catalog client + locally-redeclared read-subset types (no @sil
 tags: [architecture, contracts, dependencies, catalog, sil-api, reuse]
 card: sil-search-plugin-tool
 commit: 6df1061
-updated_at: 2026-06-09
-updated_by_card: sil-product-get-plugin-tool
+updated_at: 2026-06-10
+updated_by_card: uniform-401-refresh-across-catalog-tools
 ---
 
 All sil-api **catalog** tools share ONE client layer in `src/lib/sil-client.ts` and ONE error-envelope taxonomy in `src/tools/catalog.ts`, and the plugin **re-declares the catalog wire fields it consumes LOCALLY** — it does **not** depend on `@sil/schemas` (cross-repo) or `@ucp-js/sdk` (no catalog types). `sil_search` (SC1) established this; the sibling lookup tool `sil_product_get` (SC2) reused it rather than re-deriving a parallel one — and validated the design by exercising exactly the seams it was meant to share (see "What SC2 actually reused vs added" below).
@@ -34,6 +34,8 @@ In `src/tools/catalog.ts`: `registerCatalogTools(api)` (line 58) is the group. S
 ## The constraint on SC2 (and any future catalog tool)
 
 > Add the new tool's register fn as a call inside `registerCatalogTools` (don't make a new group). Reuse `searchCatalog`'s shape, the `SearchOutcome`-style union, the `projectProduct`/`projectVariant`/`extractPrice`/`extractAvailability`/`extractCursor`/`extractApiError` normalizers, and the `catalog.ts` error-envelope helpers. Re-declare any *additional* rich fields you consume locally and narrow them — never add a dependency on `@sil/schemas` or `@ucp-js/sdk`. Classify on body shape with a pure exported classifier (see [[sil-response-classification]]).
+
+A 401 from the catalog read is **not** terminal: route it through the shared `refreshAndRetryOnce` choreography (refresh-once → retry-once), never a per-tool 401 handler — see [[sil-uniform-401-refresh-retry]] for that constraint and the call-site mapping.
 
 Origin/path for the catalog endpoint is governed by [[sil-two-origin-model]] (bare `/catalog/search` on `getSilApiUrl()`); the wire contract + the propagated-boilerplate hazard are in [[sil-api-catalog-contract]].
 
