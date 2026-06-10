@@ -45,7 +45,7 @@
  *     200 <UCP envelope>{ result: { products: SilCatalogProduct[],
  *                                   pagination?:{ has_next_page, cursor? } } } → ok
  *     400 { error:"empty_search_input", message }    → invalid_request
- *     401                                            → unauthorized (terminal here)
+ *     401                                            → unauthorized (→ refresh)
  *     5xx / network / abort                          → retryable
  *
  * Wire contract for the sil-API catalog LOOKUP (SAME origin/path style as search —
@@ -61,7 +61,7 @@
  *     200 <UCP envelope>{ result: { products: SilCatalogProduct[],
  *            messages?:[{ type:"info", code:"not_found", content:<id> }] } } → ok
  *     400 (schema: empty `ids` / request_too_large)  → invalid_request
- *     401                                            → unauthorized (terminal here)
+ *     401                                            → unauthorized (→ refresh)
  *     5xx / network / abort                          → retryable
  *
  * A lookup MISS is partial-SUCCESS data, NEVER an error: an unresolved id is a
@@ -256,9 +256,10 @@ export interface SearchResult {
  * Models `IdentityOutcome`, with `invalid_request` for sil-api's structured 400
  * (`empty_search_input`) carried through to the agent. The `ok` variant carries
  * the projected `products` + optional hoisted `cursor` DIRECTLY (no nested
- * `result` — the normalized payload IS the outcome). `unauthorized` (401) is
- * terminal in this card — a single round-trip, no transparent refresh (the
- * refresh choreography is `sil_whoami`'s; adding it here is additive follow-on).
+ * `result` — the normalized payload IS the outcome). `unauthorized` (401) is the
+ * refresh trigger — the caller routes it through {@link refreshAndRetryOnce}
+ * (transparent refresh-and-retry-once), the SAME choreography `sil_whoami` uses;
+ * it is no longer terminal for the catalog tools.
  */
 export type SearchOutcome =
   | { kind: "ok"; products: SearchProduct[]; cursor?: string }
@@ -338,9 +339,10 @@ export interface LookupResult {
  * Models {@link SearchOutcome} — the SAME four error/success classes so the two
  * catalog tools present ONE agent-facing error vocabulary, NOT a divergent one.
  * The `ok` variant carries the projected `products` + optional `not_found`
- * DIRECTLY (no nested `result`). `unauthorized` (401) is terminal — a single
- * round-trip, no transparent refresh (parity with `sil_search`; the refresh
- * choreography is `sil_whoami`'s, an additive follow-on across both tools).
+ * DIRECTLY (no nested `result`). `unauthorized` (401) is the refresh trigger —
+ * the caller routes it through {@link refreshAndRetryOnce} (transparent
+ * refresh-and-retry-once, parity with `sil_search` and `sil_whoami`); it is no
+ * longer terminal for the catalog tools.
  *
  * Structural deltas from `SearchOutcome`, both handled here: NO `cursor` (lookup
  * is a batch resolve, not a list) and a `not_found` id list parsed from the
@@ -440,7 +442,8 @@ export function classifyIdentityResponse(status: number, body: unknown): Identit
  *         e.g. `empty_search_input` — distinct from both the empty-match success
  *         and a transient failure; the agent must learn to fix its query, not
  *         retry or re-register)
- *   401 → unauthorized (terminal here — single round-trip, no refresh in SC1)
+ *   401 → unauthorized (the refresh trigger — the caller drives transparent
+ *         refresh-and-retry-once via `refreshAndRetryOnce`, not terminal)
  *   5xx / other non-200 → retryable
  *   200 → unwrap the envelope `result`, normalize, and require `result.products`
  *         to be a real ARRAY. A 200 that yields no usable products array (a
@@ -476,8 +479,8 @@ export function classifySearchResponse(status: number, body: unknown): SearchOut
  *         `request_too_large` over-batch — surface the server's `{ error,
  *         message }`. NOTE: this is NOT search's `empty_search_input` SourceError,
  *         which never arises on the lookup route; do not special-case it.)
- *   401 → unauthorized (terminal here — single round-trip, no refresh; parity
- *         with search)
+ *   401 → unauthorized (the refresh trigger — the caller drives transparent
+ *         refresh-and-retry-once via `refreshAndRetryOnce`, parity with search)
  *   5xx / other non-200 → retryable
  *   200 → unwrap the envelope `result`, normalize, and require `result.products`
  *         to be a real ARRAY. A 200 that yields no usable products array (a
@@ -677,6 +680,94 @@ export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
     case "retryable":
       return { status: "retryable" };
   }
+}
+
+/**
+ * The discriminant {@link refreshAndRetryOnce} returns for the caller to map to
+ * its own agent-facing envelope. Generic over the caller's outcome union `O`
+ * (`SearchOutcome` / `LookupOutcome` / `IdentityOutcome`) — the helper only ever
+ * surfaces an `O` produced by the first call or the retry, never one it
+ * fabricates, so `O` stays parametric (no `any`, no cast).
+ *
+ *   result             — pass `outcome` through the caller's normal mapping (the
+ *                        first non-401 outcome, OR the retry's non-401 outcome).
+ *   must_reregister     — terminal: refresh failed. `invalid_grant` is a dead
+ *                        refresh token (the caller clears tokens); `no_stored_tokens`
+ *                        is the pre-refresh or post-rotate TOCTOU empty read (nothing
+ *                        to clear). NO retry was made.
+ *   retryable           — transient: the refresh leg blipped (5xx/network). NO retry;
+ *                        the caller surfaces "try again", NEVER a re-register.
+ *   second_unauthorized — the retry with the freshly-rotated token was ALSO 401, so
+ *                        the rotated pair is structurally dead (the caller clears
+ *                        tokens + goes terminal). NEVER a second refresh.
+ */
+export type RefreshRetryResult<O> =
+  | { kind: "result"; outcome: O }
+  | { kind: "must_reregister"; reason: "invalid_grant" | "no_stored_tokens" }
+  | { kind: "retryable" }
+  | { kind: "second_unauthorized" };
+
+/**
+ * THE single 401 refresh-and-retry-once choreography, shared by every
+ * sil-api-calling tool (`sil_search`, `sil_product_get`, `sil_whoami`) so the 401
+ * behaviour cannot drift apart between them (FLAG-10). The control flow IS the
+ * contract — straight-line, AT MOST one refresh + AT MOST one retry, no loop:
+ *
+ *   1. `first` not unauthorized           → passthrough `{ result, first }`. The
+ *                                            refresh path is reachable ONLY via a 401.
+ *   2. `first` unauthorized → refresh ONCE via {@link refreshStoredTokens} (sil-web;
+ *      rotates tokens.json):
+ *        must_reregister (invalid_grant /  → terminal, NO retry (a failed refresh
+ *          no_stored_tokens)                 leaves no rotated token to retry with).
+ *        retryable (5xx/network)           → transient, NO retry.
+ *        refreshed                         → re-read the rotated pair THROUGH the
+ *                                            module's `readTokens` (so a TOCTOU on
+ *                                            the on-disk pair is observed):
+ *          re-read empty (TOCTOU)          → must_reregister(no_stored_tokens), NO retry.
+ *          re-read ok → retry ONCE with the rotated access token:
+ *            retry still unauthorized      → second_unauthorized (the rotated token is
+ *                                            structurally dead — NEVER refresh again).
+ *            retry otherwise               → `{ result, retry }`.
+ *
+ * The helper owns the bound, the rotation re-read, and the TOCTOU + second-401
+ * guards. The caller owns ONLY: the `isUnauthorized` predicate, the token-bearing
+ * `retryWithToken` thunk (closing over its params + the rotated token), the
+ * envelope mapping, `clearTokens()` on the clearing terminals, and logging.
+ * Credential side-effects beyond the rotation `refreshStoredTokens` already does
+ * stay at the call site (mirrors `identity.ts`).
+ */
+export async function refreshAndRetryOnce<O>(
+  first: O,
+  isUnauthorized: (outcome: O) => boolean,
+  retryWithToken: (accessToken: string) => Promise<O>,
+): Promise<RefreshRetryResult<O>> {
+  if (!isUnauthorized(first)) {
+    return { kind: "result", outcome: first };
+  }
+
+  const refresh = await refreshStoredTokens();
+  if (refresh.status === "must_reregister") {
+    return { kind: "must_reregister", reason: refresh.reason };
+  }
+  if (refresh.status === "retryable") {
+    return { kind: "retryable" };
+  }
+
+  // refresh.status === "refreshed" — re-read the rotated pair through the module
+  // binding (the TOCTOU seam: tokens.json may have vanished between the rotate
+  // inside refreshStoredTokens and this read).
+  const rotated = readTokens();
+  if (rotated === null) {
+    return { kind: "must_reregister", reason: "no_stored_tokens" };
+  }
+
+  const retry = await retryWithToken(rotated.access_token);
+  if (isUnauthorized(retry)) {
+    // A freshly-rotated token STILL rejected is structurally dead — terminal,
+    // never another refresh cycle.
+    return { kind: "second_unauthorized" };
+  }
+  return { kind: "result", outcome: retry };
 }
 
 /**

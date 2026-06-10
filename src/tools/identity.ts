@@ -50,7 +50,7 @@ import {
 import {
   claimSession,
   fetchIdentity,
-  refreshStoredTokens,
+  refreshAndRetryOnce,
   type ClaimOutcome,
   type Identity,
   type IdentityOutcome,
@@ -132,17 +132,21 @@ function registerRegister(api: PluginAPI): void {
  * whoami is a synchronous request/response, NOT a poll):
  *   1. Read tokens.json. Absent → terminal `not_registered` (run sil_register),
  *      ZERO network calls (nothing to authenticate with).
- *   2. fetchIdentity(sil-api, access_token). On `ok` → return the identity.
- *      `forbidden` → terminal (distinct hint per reason). `retryable` → terminal
- *      transient ("try again"). `unauthorized` (401) → the refresh path (3).
- *   3. Refresh ONCE via refreshStoredTokens() (sil-web only, never Auth0; rotates
- *      tokens.json). `refreshed` → re-read tokens, retry the identity read ONCE;
- *      `must_reregister` → terminal (clear tokens on invalid_grant);
- *      `retryable` → terminal transient.
- *   4. The single retry: `ok` → return; anything non-ok (incl. a SECOND 401) →
- *      terminal `must_reregister` + clear tokens. A freshly-rotated token still
- *      rejected is structurally dead — NEVER refresh again. At most one refresh
- *      + one retry per call.
+ *   2. fetchIdentity(sil-api, access_token), then route the outcome through the
+ *      SHARED `refreshAndRetryOnce` choreography — the SAME path sil_search and
+ *      sil_product_get use, so 401 recovery is uniform across every
+ *      sil-api-calling tool (factored so the three cannot drift apart; FLAG-10).
+ *      The helper owns the bounded refresh-and-retry-once: on a 401 it refreshes
+ *      ONCE via sil-web (rotates tokens.json), re-reads the rotated pair, and
+ *      retries the read ONCE; a non-401 first outcome passes straight through.
+ *   3. Map the helper's discriminant to the agent-facing result:
+ *        result            → ok / forbidden / retryable mapped as usual (the first
+ *                            non-401, OR the retry's non-401 outcome);
+ *        must_reregister    → terminal (clear tokens on invalid_grant);
+ *        second_unauthorized→ terminal + clear tokens (a freshly-rotated token still
+ *                            rejected is structurally dead — NEVER a second refresh);
+ *        retryable          → terminal transient ("try again").
+ *      At most one refresh + one retry per call (structural in the helper).
  *
  * Privacy: the access/refresh tokens and the Bearer header never reach a log
  * line or the result; identity PII (name, addresses) is in the result (the
@@ -166,46 +170,38 @@ function registerWhoami(api: PluginAPI): void {
         return notRegistered();
       }
 
-      // 2 — read identity with the stored access token.
+      // 2 — read identity; on a 401 refresh-and-retry ONCE via the shared
+      // choreography (the SAME `refreshAndRetryOnce` path sil_search /
+      // sil_product_get use — 401 recovery is uniform across every
+      // sil-api-calling tool, factored so the three cannot drift apart).
       const first = await fetchIdentity(getSilApiUrl(), stored.access_token);
-      if (first.kind !== "unauthorized") {
-        return identityOutcomeToResult(api, first);
+      const recovered = await refreshAndRetryOnce(
+        first,
+        (o): boolean => o.kind === "unauthorized",
+        (accessToken) => fetchIdentity(getSilApiUrl(), accessToken),
+      );
+      switch (recovered.kind) {
+        case "result":
+          // The first non-401 outcome, OR the retry's non-401 outcome (ok /
+          // forbidden / retryable) — mapped to its terminal/transient/success result.
+          return identityOutcomeToResult(api, recovered.outcome);
+        case "must_reregister":
+          // The refresh token is dead (invalid_grant) → clear the now-known-dead
+          // pair so the user's sil_register recovery is not blocked by stale
+          // presence; a TOCTOU empty re-read (no_stored_tokens) has nothing to clear.
+          if (recovered.reason === "invalid_grant") clearTokens();
+          api.logger.info("sil_whoami_must_reregister", { cause: recovered.reason });
+          return mustReregister();
+        case "second_unauthorized":
+          // A freshly-rotated token STILL rejected is structurally dead — terminal,
+          // never another refresh. Clear the dead pair.
+          clearTokens();
+          api.logger.info("sil_whoami_must_reregister", { cause: "retry_unauthorized" });
+          return mustReregister();
+        case "retryable":
+          api.logger.info("sil_whoami_refresh_retryable", {});
+          return transient();
       }
-
-      // 3 — 401: refresh transparently, exactly once (sil-web; rotates tokens).
-      const refresh = await refreshStoredTokens();
-      if (refresh.status === "must_reregister") {
-        // The refresh token is dead. Clear the now-known-dead pair so the user's
-        // sil_register recovery is not blocked by stale presence.
-        if (refresh.reason === "invalid_grant") clearTokens();
-        api.logger.info("sil_whoami_must_reregister", { cause: refresh.reason });
-        return mustReregister();
-      }
-      if (refresh.status === "retryable") {
-        api.logger.info("sil_whoami_refresh_retryable", {});
-        return transient();
-      }
-
-      // refresh.status === "refreshed" — re-read the rotated pair and retry ONCE.
-      api.logger.info("sil_whoami_refreshed", {});
-      const rotated = readTokens();
-      if (rotated === null) {
-        // TOCTOU: tokens vanished between rotate and re-read — treat as terminal.
-        return mustReregister();
-      }
-      const retry = await fetchIdentity(getSilApiUrl(), rotated.access_token);
-      if (retry.kind === "ok") {
-        return identityResult(retry.identity);
-      }
-      if (retry.kind === "unauthorized") {
-        // A freshly-rotated token STILL rejected is structurally dead — terminal,
-        // never another refresh. Clear the dead pair.
-        clearTokens();
-        api.logger.info("sil_whoami_must_reregister", { cause: "retry_unauthorized" });
-        return mustReregister();
-      }
-      // 403 / 5xx on the retry — surface its own terminal/transient outcome.
-      return identityOutcomeToResult(api, retry);
     },
   });
 }

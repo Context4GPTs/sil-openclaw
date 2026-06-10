@@ -23,9 +23,14 @@
  *   3. searchCatalog(getSilApiUrl(), token, params) → map the `SearchOutcome`:
  *        ok            → the ranked products + cursor;
  *        invalid_request (400) → surface sil-api's `{ error, message }`;
- *        unauthorized  (401)   → terminal re-register (single round-trip — no
- *                                transparent refresh in this card; that is the
- *                                additive follow-on `sil_whoami` already does);
+ *        unauthorized  (401)   → refresh-and-retry ONCE via the shared
+ *                                `refreshAndRetryOnce` choreography (sil-web refresh,
+ *                                re-read rotated pair, retry once). The agent never
+ *                                sees a recovered 401; a second 401 or a dead refresh
+ *                                is terminal re-register (tokens cleared); a refresh
+ *                                5xx/network blip is transient "try again". 401
+ *                                recovery is UNIFORM across sil_search /
+ *                                sil_product_get / sil_whoami — never per-tool;
  *        retryable (5xx/net)   → transient "try again", NO re-register hint.
  *
  * The three distinct sil-api outcomes (empty match 200 / invalid 400 / source
@@ -47,9 +52,10 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
 import { getSilApiUrl } from "../lib/config.js";
-import { readTokens } from "../lib/credentials.js";
+import { clearTokens, readTokens } from "../lib/credentials.js";
 import {
   lookupCatalog,
+  refreshAndRetryOnce,
   searchCatalog,
   type LookupOutcome,
   type SearchOutcome,
@@ -131,23 +137,56 @@ function registerSearch(api: PluginAPI): void {
         return invalidInput();
       }
 
-      // 3 — search and map the outcome to the agent-facing envelope.
-      const outcome = await searchCatalog(getSilApiUrl(), stored.access_token, search);
-      switch (outcome.kind) {
-        case "ok":
-          return searchResult(outcome);
-        case "invalid_request":
-          api.logger.info("sil_search_invalid_request", { error: outcome.error });
-          return invalidRequest(outcome.error, outcome.message);
-        case "unauthorized":
-          api.logger.info("sil_search_unauthorized", {});
+      // 3 — search; on a 401 refresh-and-retry ONCE via the shared choreography
+      // (the SAME path sil_whoami / sil_product_get use — 401 recovery is uniform
+      // across every sil-api-calling tool, never per-tool).
+      const first = await searchCatalog(getSilApiUrl(), stored.access_token, search);
+      const recovered = await refreshAndRetryOnce(
+        first,
+        (o): boolean => o.kind === "unauthorized",
+        (accessToken) => searchCatalog(getSilApiUrl(), accessToken, search),
+      );
+      switch (recovered.kind) {
+        case "result":
+          return mapSearchOutcome(api, recovered.outcome);
+        case "must_reregister":
+          // A dead refresh token (invalid_grant) is cleared so the agent's
+          // sil_register recovery is not blocked by stale presence; a TOCTOU
+          // empty re-read (no_stored_tokens) has nothing to clear.
+          if (recovered.reason === "invalid_grant") clearTokens();
+          api.logger.info("sil_search_must_reregister", { cause: recovered.reason });
+          return mustReregister("sil_search");
+        case "second_unauthorized":
+          // A freshly-rotated token STILL rejected is structurally dead — clear it.
+          clearTokens();
+          api.logger.info("sil_search_must_reregister", { cause: "retry_unauthorized" });
           return mustReregister("sil_search");
         case "retryable":
-          api.logger.info("sil_search_retryable", {});
+          api.logger.info("sil_search_refresh_retryable", {});
           return transient("sil_search");
       }
     },
   });
+}
+
+/** Map a search outcome that has ALREADY cleared the 401-recovery path (so it is
+ * never `unauthorized` — that is the refresh trigger, handled by the caller via
+ * {@link refreshAndRetryOnce}) to the agent-facing envelope. The `unauthorized`
+ * arm is structurally unreachable but kept exhaustive so a future refactor can't
+ * silently drop a variant — it falls to the same terminal re-register. */
+function mapSearchOutcome(api: PluginAPI, outcome: SearchOutcome) {
+  switch (outcome.kind) {
+    case "ok":
+      return searchResult(outcome);
+    case "invalid_request":
+      api.logger.info("sil_search_invalid_request", { error: outcome.error });
+      return invalidRequest(outcome.error, outcome.message);
+    case "retryable":
+      api.logger.info("sil_search_retryable", {});
+      return transient("sil_search");
+    case "unauthorized":
+      return mustReregister("sil_search");
+  }
 }
 
 /**
@@ -174,8 +213,12 @@ function registerSearch(api: PluginAPI): void {
  *                        error, with NO recovery hint: re-running won't conjure a
  *                        delisted product);
  *        invalid_request (400) → surface sil-api's `{ error, message }`;
- *        unauthorized  (401)   → terminal re-register (single round-trip — parity
- *                                with `sil_search`, no transparent refresh);
+ *        unauthorized  (401)   → refresh-and-retry ONCE via the shared
+ *                                `refreshAndRetryOnce` choreography (parity with
+ *                                `sil_search` and `sil_whoami` — 401 recovery is
+ *                                uniform). Recovered 401 is invisible; second 401 /
+ *                                dead refresh is terminal re-register (tokens
+ *                                cleared); a refresh 5xx/network blip is transient;
  *        retryable (5xx/net)   → transient "try again", NO re-register hint.
  *
  * The unfound-ids outcome is the headline: a lookup that resolves SOME (or NONE)
@@ -230,24 +273,52 @@ function registerProductGet(api: PluginAPI): void {
         return invalidIds();
       }
 
-      // 3 — look up and map the outcome to the agent-facing envelope (the SAME
-      // taxonomy as sil_search). A partial/all-missed hit is `ok` + `not_found`.
-      const outcome = await lookupCatalog(getSilApiUrl(), stored.access_token, ids);
-      switch (outcome.kind) {
-        case "ok":
-          return lookupResult(outcome);
-        case "invalid_request":
-          api.logger.info("sil_product_get_invalid_request", { error: outcome.error });
-          return invalidRequest(outcome.error, outcome.message);
-        case "unauthorized":
-          api.logger.info("sil_product_get_unauthorized", {});
+      // 3 — look up; on a 401 refresh-and-retry ONCE via the shared choreography
+      // (the SAME path sil_whoami / sil_search use). A partial/all-missed hit is
+      // `ok` + `not_found`.
+      const first = await lookupCatalog(getSilApiUrl(), stored.access_token, ids);
+      const recovered = await refreshAndRetryOnce(
+        first,
+        (o): boolean => o.kind === "unauthorized",
+        (accessToken) => lookupCatalog(getSilApiUrl(), accessToken, ids),
+      );
+      switch (recovered.kind) {
+        case "result":
+          return mapLookupOutcome(api, recovered.outcome);
+        case "must_reregister":
+          if (recovered.reason === "invalid_grant") clearTokens();
+          api.logger.info("sil_product_get_must_reregister", { cause: recovered.reason });
+          return mustReregister("sil_product_get");
+        case "second_unauthorized":
+          clearTokens();
+          api.logger.info("sil_product_get_must_reregister", { cause: "retry_unauthorized" });
           return mustReregister("sil_product_get");
         case "retryable":
-          api.logger.info("sil_product_get_retryable", {});
+          api.logger.info("sil_product_get_refresh_retryable", {});
           return transient("sil_product_get");
       }
     },
   });
+}
+
+/** Map a lookup outcome that has ALREADY cleared the 401-recovery path (never
+ * `unauthorized` — the refresh trigger handled by {@link refreshAndRetryOnce}) to
+ * the agent-facing envelope. The `unauthorized` arm is structurally unreachable
+ * but kept exhaustive (falls to the same terminal re-register) so a future
+ * refactor can't silently drop a variant. */
+function mapLookupOutcome(api: PluginAPI, outcome: LookupOutcome) {
+  switch (outcome.kind) {
+    case "ok":
+      return lookupResult(outcome);
+    case "invalid_request":
+      api.logger.info("sil_product_get_invalid_request", { error: outcome.error });
+      return invalidRequest(outcome.error, outcome.message);
+    case "retryable":
+      api.logger.info("sil_product_get_retryable", {});
+      return transient("sil_product_get");
+    case "unauthorized":
+      return mustReregister("sil_product_get");
+  }
 }
 
 /** Narrow the untrusted `params` to a string[] of ids. A non-string entry is
@@ -360,9 +431,10 @@ function invalidRequest(error: string, message: string) {
   return jsonResult({ status: "invalid_request", error, message });
 }
 
-/** Terminal: the session is dead (401). Re-register. Single round-trip — these
- * tools do no transparent refresh (that is `sil_whoami`'s, an additive follow-on).
- * The `tool` name keeps the message actionable while the taxonomy stays shared. */
+/** Terminal: the session is dead — reached only after the shared refresh-and-retry
+ * choreography ({@link refreshAndRetryOnce}) has exhausted its one refresh + one
+ * retry (a second 401, or a dead `invalid_grant` refresh token). Re-register. The
+ * `tool` name keeps the message actionable while the taxonomy stays shared. */
 function mustReregister(tool: string) {
   return jsonResult({
     status: "must_reregister",
