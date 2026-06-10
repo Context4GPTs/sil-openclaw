@@ -270,6 +270,19 @@ function logBlob(api: MockPluginAPI): string {
     .join("\n");
 }
 
+/**
+ * Count how many `api.logger.info(marker, …)` calls used `marker` as their first
+ * argument. The marker name is the FIRST positional arg of the info call (the
+ * convention every `sil_*` log marker in this plugin follows). Used to assert the
+ * `sil_search_refreshed` operator marker fires exactly once on the silent-recovery
+ * path and ZERO times on a first-try (no-refresh) success.
+ */
+function infoMarkerCount(api: MockPluginAPI, marker: string): number {
+  return vi
+    .mocked(api.logger.info)
+    .mock.calls.filter((c) => c[0] === marker).length;
+}
+
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-search-int-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
@@ -433,6 +446,13 @@ describe("sil_search — happy path normalizes the REAL envelope (anti-false-gre
     expect(typeof avail).toBe("object");
     expect(avail["available"]).toBe(true);
     expect(avail["status"]).toBe("in_stock");
+
+    // NEGATIVE half of the observability seam (review-round-1 fix): this is a
+    // FIRST-TRY success (no 401, no refresh), so the `sil_search_refreshed` marker
+    // must NOT fire. The marker means "this success was a silent recovery"; on a
+    // plain success it would be a false signal that the session is thrashing. The
+    // marker keys off the helper's `refreshed:false` passthrough discriminant.
+    expect(infoMarkerCount(api, "sil_search_refreshed")).toBe(0);
   });
 
   it("hoists result.pagination.cursor to a top-level cursor when has_next_page is true", async () => {
@@ -617,7 +637,8 @@ describe("sil_search — 401 → transparent refresh-and-retry-once (outcome 1: 
     expect(Array.isArray(products)).toBe(true);
     expect(products).toHaveLength(1);
     expect(products[0]!["id"]).toBe("gid://product/a");
-    // The refresh is INVISIBLE: no refreshed/retried marker, no recovery hint.
+    // The refresh is INVISIBLE TO THE AGENT: no refreshed/retried marker, no
+    // recovery hint IN THE PAYLOAD. (This payload contract is correct and stays.)
     expect(payload["refreshed"]).toBeUndefined();
     expect(payload["retried"]).toBeUndefined();
     expect(payload["recovery"]).toBeUndefined();
@@ -627,6 +648,30 @@ describe("sil_search — 401 → transparent refresh-and-retry-once (outcome 1: 
     // The refresh used the STORED refresh token.
     expect(rec.refresh.length).toBe(1);
     expect((rec.refresh[0]!.body as { refresh_token?: string }).refresh_token).toBe("valid-rt");
+
+    // OPERATOR-OBSERVABILITY SEAM (review-round-1 fix; card line 161): the silent
+    // recovery is invisible in the PAYLOAD but MUST be observable in operator logs
+    // — a session that refreshes on (nearly) every call is the degrading-session
+    // signal on-call needs, and the card's own risk-mitigation names the
+    // `sil_*_refreshed` marker by hand. Assert the `sil_search_refreshed` INFO
+    // marker fired EXACTLY ONCE on this recovered-401 path. RED until the tool
+    // emits it (logs-only — NOT a payload field) when the helper reports
+    // `refreshed: true`.
+    expect(infoMarkerCount(api, "sil_search_refreshed")).toBe(1);
+    // The marker is logs-only — it does NOT add any field to the agent payload
+    // (outcome 1's invisible-to-the-agent contract stays inviolate).
+    expect(payload["sil_search_refreshed"]).toBeUndefined();
+    // The marker carries NO token material (the privacy invariant holds on the
+    // marker too — its meta must never carry a token value).
+    const refreshedMarkerArgs = vi
+      .mocked(api.logger.info)
+      .mock.calls.filter((c) => c[0] === "sil_search_refreshed");
+    const refreshedMarkerBlob = JSON.stringify(refreshedMarkerArgs);
+    expect(refreshedMarkerBlob).not.toContain("rotated-at");
+    expect(refreshedMarkerBlob).not.toContain("rotated-rt");
+    expect(refreshedMarkerBlob).not.toContain("valid-rt");
+    expect(refreshedMarkerBlob).not.toContain("expired-at");
+    expect(refreshedMarkerBlob).not.toMatch(/Bearer/i);
   });
 
   it("makes EXACTLY one refresh (sil-web) + EXACTLY two catalog reads (the failed read + one retry) — no loop, no storm", async () => {

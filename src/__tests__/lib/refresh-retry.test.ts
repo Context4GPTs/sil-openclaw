@@ -28,7 +28,7 @@
  * `src/lib/sil-client.ts` (or a colocated `src/lib/refresh-retry.ts`):
  *
  *   export type RefreshRetryResult<O> =
- *     | { kind: "result"; outcome: O }
+ *     | { kind: "result"; outcome: O; refreshed: boolean }
  *     | { kind: "must_reregister"; reason: "invalid_grant" | "no_stored_tokens" }
  *     | { kind: "retryable" }
  *     | { kind: "second_unauthorized" };
@@ -39,14 +39,27 @@
  *     retryWithToken: (accessToken: string) => Promise<O>,
  *   ): Promise<RefreshRetryResult<O>>;
  *
+ * The `result` variant carries a `refreshed: boolean` DISCRIMINANT (added by the
+ * review-round-1 fix, card §"→ Handoff back to In Dev"): `false` when the result
+ * is the first-try passthrough (no refresh happened), `true` when it was produced
+ * via the refresh+retry recovery path. The helper already knows this bit from its
+ * own straight-line control flow; surfacing it lets each caller emit its
+ * `<tool>_refreshed` operator log marker on (and ONLY on) the silent-recovery
+ * success — restoring the `sil_*_refreshed` observability seam the card's
+ * risk-mitigation (line 161) names, uniformly across all three tools, WITHOUT
+ * leaking any field into the agent-facing payload (outcome 1 stays invisible).
+ *
  * Behaviour (the immutable spec):
- *   - first NOT unauthorized            → { kind: "result", outcome: first }, and
- *                                          NEITHER refreshStoredTokens NOR the thunk
- *                                          is called (refresh is reachable only via
- *                                          a first-call 401).
+ *   - first NOT unauthorized            → { kind: "result", outcome: first,
+ *                                            refreshed: false }, and NEITHER
+ *                                          refreshStoredTokens NOR the thunk is
+ *                                          called (refresh is reachable only via a
+ *                                          first-call 401).
  *   - first unauthorized, refresh OK,
- *     re-read OK, retry NOT unauthorized → { kind: "result", outcome: <retry> };
- *                                          exactly ONE refresh + exactly ONE retry.
+ *     re-read OK, retry NOT unauthorized → { kind: "result", outcome: <retry>,
+ *                                            refreshed: true }; exactly ONE refresh
+ *                                          + exactly ONE retry (the silent-recovery
+ *                                          path — `refreshed` MUST be true here).
  *   - first unauthorized, refresh OK,
  *     re-read OK, retry STILL 401        → { kind: "second_unauthorized" }; exactly
  *                                          ONE refresh (NEVER a second), exactly ONE
@@ -210,6 +223,13 @@ describe("refreshAndRetryOnce — one-refresh-max success (the bound is structur
     expect(result.kind).toBe("result");
     if (result.kind === "result") {
       expect(result.outcome).toEqual({ kind: "ok", marker: "retried-ok" });
+      // The `refreshed` discriminant MUST be true on the silent-recovery path:
+      // this success was produced via refresh+retry, so the caller emits its
+      // `<tool>_refreshed` operator log marker. (review-round-1 fix; card line
+      // 161 + §"→ Handoff back to In Dev".) RED until the helper widens the
+      // `result` variant with `refreshed: boolean` and sets it true at the
+      // post-retry return.
+      expect(result.refreshed).toBe(true);
     }
     // EXACTLY one refresh and EXACTLY one retry — the bound is structural.
     expect(rec.refresh.length).toBe(1);
@@ -412,6 +432,12 @@ describe("refreshAndRetryOnce — a non-401 first outcome passes through untouch
       // The SAME first outcome, passed straight through.
       expect(result.outcome).toBe(first);
       expect(result.outcome).toEqual({ kind: "ok", marker: "first-call-ok" });
+      // The `refreshed` discriminant MUST be false on the passthrough path: no
+      // refresh happened, so the caller must NOT emit its `<tool>_refreshed`
+      // marker. This is the negative half of the discriminant the marker keys off
+      // (review-round-1 fix). RED until the helper sets `refreshed: false` at the
+      // first-try passthrough return.
+      expect(result.refreshed).toBe(false);
     }
     // No refresh, no retry — the helper did not touch the network at all.
     expect(rec.refresh.length).toBe(0);
@@ -441,6 +467,8 @@ describe("refreshAndRetryOnce — a non-401 first outcome passes through untouch
     expect(result.kind).toBe("result");
     if (result.kind === "result") {
       expect(result.outcome).toBe(first);
+      // A second non-401 passthrough — `refreshed` is false here too (no refresh).
+      expect(result.refreshed).toBe(false);
     }
     expect(rec.refresh.length).toBe(0);
     expect(retryCalls).toBe(0);

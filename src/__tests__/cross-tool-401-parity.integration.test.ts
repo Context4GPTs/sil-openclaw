@@ -263,6 +263,23 @@ function callArgs(readKind: ReadKind): Record<string, unknown> {
   return {}; // whoami takes no params
 }
 
+/** The per-tool silent-success operator marker each tool MUST emit on a recovered
+ * 401 (review-round-1 fix; card line 161). The marker name is tool-specific but
+ * the BEHAVIOUR (emit exactly once on silent recovery) must be uniform — that
+ * uniformity is what this parity guard pins so the seam cannot drift per-tool. */
+function refreshedMarkerFor(readKind: ReadKind): string {
+  if (readKind === "search") return "sil_search_refreshed";
+  if (readKind === "lookup") return "sil_product_get_refreshed";
+  return "sil_whoami_refreshed";
+}
+
+/** Count `api.logger.info(marker, …)` calls whose first positional arg is `marker`. */
+function infoMarkerCount(api: MockPluginAPI, marker: string): number {
+  return vi
+    .mocked(api.logger.info)
+    .mock.calls.filter((c) => c[0] === marker).length;
+}
+
 /** One observation of a tool's 401 behaviour under a given refresh-leg scenario. */
 interface Observation {
   readKind: ReadKind;
@@ -271,6 +288,10 @@ interface Observation {
   readCount: number;
   refreshCount: number;
   tokensCleared: boolean;
+  /** How many times THIS tool emitted its own `<tool>_refreshed` operator marker
+   * (review-round-1 fix). 1 on a recovered 401, 0 otherwise — folded into the
+   * anti-divergence guard so the restored seam cannot disappear per-tool again. */
+  refreshedMarkerCount: number;
 }
 
 /**
@@ -300,6 +321,7 @@ async function observeAllTools(
       readCount: rec.read.length,
       refreshCount: rec.refresh.length,
       tokensCleared: !existsSync(getTokensPath()),
+      refreshedMarkerCount: infoMarkerCount(api, refreshedMarkerFor(readKind)),
     });
     vi.restoreAllMocks();
   }
@@ -345,11 +367,22 @@ describe("cross-tool 401 parity — all three tools share ONE refresh-and-retry-
       expect(o.hasRecoveryHint).toBe(false);
       expect(o.refreshCount).toBe(1); // exactly one refresh
       expect(o.readCount).toBe(2); // failed read + one retry
+      // OBSERVABILITY-SEAM PARITY (review-round-1 fix; card line 161): every tool
+      // emits its own `<tool>_refreshed` operator marker EXACTLY ONCE on this
+      // silent-recovery path — the seam restored uniformly across all three. Folded
+      // into THIS anti-divergence guard so the marker cannot drift/disappear
+      // per-tool again (the same FLAG-10 failure mode, applied to logging). RED
+      // until all three tools emit the marker via the helper's `refreshed:true`.
+      expect(o.refreshedMarkerCount).toBe(1);
     }
     // The equality across tools IS the guard: collapse each dimension to a set.
     expect(new Set(observed.map((o) => o.status)).size).toBe(1);
     expect(new Set(observed.map((o) => o.refreshCount)).size).toBe(1);
     expect(new Set(observed.map((o) => o.readCount)).size).toBe(1);
+    // The marker-emission behaviour is uniform across tools (all 1). A tool that
+    // silently recovered WITHOUT emitting its marker would show 0 here while the
+    // others show 1 — set size 2, and the seam has drifted. Pin it to size 1.
+    expect(new Set(observed.map((o) => o.refreshedMarkerCount)).size).toBe(1);
   });
 
   it("sub-outcome second-401: every tool refreshes EXACTLY once, retries once, then terminates re-register (no tool storms)", async () => {

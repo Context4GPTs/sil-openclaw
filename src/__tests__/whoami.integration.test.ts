@@ -228,6 +228,20 @@ function logBlob(api: MockPluginAPI): string {
     .join("\n");
 }
 
+/**
+ * Count how many `api.logger.info(marker, …)` calls used `marker` as their first
+ * argument. The marker name is the FIRST positional arg of the info call (the
+ * convention every `sil_*` log marker in this plugin follows). Used to assert the
+ * `sil_whoami_refreshed` operator marker fires exactly once on the silent-recovery
+ * path and ZERO times on a first-try (no-refresh) success — restoring the seam
+ * `origin/main:identity.ts` emitted but the refactor dropped (review round 1).
+ */
+function infoMarkerCount(api: MockPluginAPI, marker: string): number {
+  return vi
+    .mocked(api.logger.info)
+    .mock.calls.filter((c) => c[0] === marker).length;
+}
+
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-whoami-int-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
@@ -373,6 +387,10 @@ describe("sil_whoami — happy path (valid access token)", () => {
 
     expect(rec.identity.length).toBe(1);
     expect(rec.refresh.length).toBe(0); // refresh is taken ONLY on a real 401
+    // NEGATIVE half of the observability seam (review-round-1 fix): a first-try
+    // success took no refresh, so the `sil_whoami_refreshed` marker must NOT fire.
+    // The marker keys off the helper's `refreshed:false` passthrough discriminant.
+    expect(infoMarkerCount(api, "sil_whoami_refreshed")).toBe(0);
   });
 });
 
@@ -421,6 +439,26 @@ describe("sil_whoami — transparent refresh (expired access, valid refresh)", (
     expect(tokens!.refresh_token).toBe("rotated-rt");
     // The agent sees identity — never an expiry/refresh state.
     expect(JSON.stringify(payload)).toContain("Ada Lovelace");
+
+    // OPERATOR-OBSERVABILITY SEAM (review-round-1 fix; card line 161): the silent
+    // recovery is invisible in the PAYLOAD but MUST be observable in operator logs.
+    // `origin/main:identity.ts` emitted `sil_whoami_refreshed` here; the consolidation
+    // dropped it (the regression this fix restores). Assert the marker fired EXACTLY
+    // ONCE on the recovered-401 path. RED until whoami re-emits it via the helper's
+    // `refreshed: true` signal — logs-only, NOT a payload field.
+    expect(infoMarkerCount(api, "sil_whoami_refreshed")).toBe(1);
+    // Logs-only — the marker does NOT add a field to the agent-facing payload.
+    expect(payload["sil_whoami_refreshed"]).toBeUndefined();
+    // The marker carries NO token material (privacy invariant holds on the marker).
+    const refreshedMarkerArgs = vi
+      .mocked(api.logger.info)
+      .mock.calls.filter((c) => c[0] === "sil_whoami_refreshed");
+    const refreshedMarkerBlob = JSON.stringify(refreshedMarkerArgs);
+    expect(refreshedMarkerBlob).not.toContain("rotated-at");
+    expect(refreshedMarkerBlob).not.toContain("rotated-rt");
+    expect(refreshedMarkerBlob).not.toContain("valid-rt");
+    expect(refreshedMarkerBlob).not.toContain("expired-at");
+    expect(refreshedMarkerBlob).not.toMatch(/Bearer/i);
   });
 
   it("the refresh contacts ONLY sil-web (never Auth0); identity ONLY sil-api", async () => {
