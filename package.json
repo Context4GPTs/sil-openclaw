@@ -1,26 +1,45 @@
 {
   "name": "@4gpts/sil",
   "version": "0.1.0",
-  "description": "OpenClaw plugin skeleton for sil — registers stub tools a developer can copy to add real ones.",
+  "description": "OpenClaw plugin for sil — register an identity and search and look up products in the sil commerce catalog from an agent.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Context4GPTs/sil-openclaw.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Context4GPTs/sil-openclaw/issues"
+  },
   "homepage": "https://4gpts.com",
   "keywords": [
     "openclaw",
     "openclaw-plugin",
     "sil",
+    "commerce",
+    "catalog",
     "agent",
+    "ucp",
     "4gpts"
   ],
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "main": "./dist/index.js",
   "files": [
     "dist",
     "skill",
     "openclaw.plugin.json",
     "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE",
     "NOTICE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "openclaw": {
     "extensions": [
       "./dist/index.js"
@@ -32,14 +51,41 @@
     "build": {
       "openclawVersion": "2026.4.15",
       "pluginSdkVersion": "2026.4.15"
+    },
+    "hostTargets": [
+      "darwin-arm64",
+      "darwin-x64",
+      "linux-x64",
+      "linux-arm64",
+      "win32-x64"
+    ],
+    "environment": {
+      "externalServices": [
+        "sil-web",
+        "sil-api"
+      ]
+    },
+    "install": {
+      "npmSpec": "@4gpts/sil",
+      "localPath": "./",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.4.15"
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "pnpm clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "dev": "tsc -p tsconfig.build.json --watch",
     "test": "vitest run --passWithNoTests",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sync-version": "node scripts/sync-version.mjs",
+    "preversion": "pnpm typecheck && pnpm test",
+    "version": "pnpm sync-version && node scripts/changelog.mjs cut && git add openclaw.plugin.json CHANGELOG.md",
+    "postversion": "git push --follow-tags",
+    "prepack": "pnpm build",
+    "release": "node scripts/release.mjs",
+    "release:dry": "node scripts/release.mjs --dry-run"
   },
   "dependencies": {
     "typebox": "^1.2.2"

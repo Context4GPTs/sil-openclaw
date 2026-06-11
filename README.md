@@ -43,6 +43,34 @@ pnpm typecheck   # tsc --noEmit
 
 A drift-guard test set-compares the manifest's `contracts.tools` against the names `register()` registers and fails if they disagree, so step 3 is enforced, not optional. The full contributor guide — including why `register()` must stay synchronous — is in [`CLAUDE.md`](./CLAUDE.md).
 
+## Releasing
+
+`@4gpts/sil` publishes to **npm** (`@4gpts/sil`) and to **ClawHub** (the `code-plugin` family). Two steps — bump on every change, publish when ready:
+
+```bash
+# 1. Bump — your cadence, run on every shippable change:
+pnpm version patch        # or: minor | major
+#   runs typecheck + tests, bumps package.json#version, mirrors it into
+#   openclaw.plugin.json, commits, tags v<x.y.z>, and pushes (commit + tag).
+
+# 2. Publish — build once, ship the same tarball to both registries:
+pnpm release:dry          # full build → pack → publish pipeline, uploads NOTHING
+pnpm release              # npm publish + clawhub package publish
+```
+
+`package.json#version` is the single source of truth — `scripts/sync-version.mjs` keeps `openclaw.plugin.json`'s version in lock-step, and a version-parity test fails if they ever drift. `pnpm release` builds a clean `dist/`, packs one tarball, and uploads those exact bytes to both registries (no drift between what npm and ClawHub serve). It refuses to publish a dirty or untagged tree, or when you are not logged in — so run `pnpm version` first.
+
+**Changelog:** keep the `## [Unreleased]` section of [`CHANGELOG.md`](./CHANGELOG.md) current as you work ([Keep a Changelog](https://keepachangelog.com/) format). `pnpm version` promotes it to a dated release section inside the version commit, and `pnpm release` attaches those notes to the ClawHub release (`clawhub package publish --changelog`). After a real publish, `clawhub package readiness @4gpts/sil` reports any remaining readiness blockers.
+
+**One-time prerequisites:**
+
+```bash
+npm login                            # npm auth (publishConfig already sets access: public)
+npm i -g clawhub && clawhub login    # ClawHub CLI + auth
+```
+
+Releases publish under the **`4gpts`** ClawHub org — the `CLAWHUB_OWNER` default, mirroring the `@4gpts` npm scope. You authenticate as an org member with `clawhub login` (and `npm login`); override the org with `CLAWHUB_OWNER` if needed.
+
 ## License
 
 [Apache-2.0](./LICENSE). See [`NOTICE`](./NOTICE).
