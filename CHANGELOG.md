@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-11
+
 ### Changed
 
 - **Renamed the published package.** npm: `@4gpts/sil` → **`sil-openclaw`** (unscoped —
