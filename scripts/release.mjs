@@ -122,6 +122,9 @@ function publishNpm(tarball) {
 function publishClawhub(tarball) {
   const owner = process.env.CLAWHUB_OWNER || DEFAULT_CLAWHUB_OWNER;
   const sha = capture("git", ["rev-parse", "HEAD"]);
+  // The release notes for this version, straight from CHANGELOG.md (empty if
+  // the version has no section yet — then we just omit --changelog).
+  const changelog = (tryCapture("node", ["scripts/changelog.mjs", "show", version]) ?? "").trim();
   const args = [
     "package",
     "publish",
@@ -135,9 +138,13 @@ function publishClawhub(tarball) {
     "--source-commit",
     sha,
   ];
+  if (changelog) args.push("--changelog", changelog);
   if (DRY_RUN) args.push("--dry-run");
   else args.push("--tags", "latest");
-  log(`clawhub package publish${DRY_RUN ? " --dry-run" : ""} (owner=${owner}, repo=${sourceRepo()})`);
+  log(
+    `clawhub package publish${DRY_RUN ? " --dry-run" : ""} (owner=${owner}, repo=${sourceRepo()}` +
+      `, changelog=${changelog ? "yes" : "none"})`,
+  );
   runInherit("clawhub", args);
 }
 
@@ -155,3 +162,6 @@ log(
     ? "dry-run complete — nothing was uploaded."
     : `published ${pkg.name}@${version} to npm + ClawHub.`,
 );
+if (!DRY_RUN) {
+  log(`next: \`clawhub package readiness ${pkg.name}\` to check ClawHub readiness blockers.`);
+}

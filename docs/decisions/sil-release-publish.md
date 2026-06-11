@@ -30,10 +30,14 @@ We lean on npm's `preversion`/`version`/`postversion` hooks rather than scriptin
 
 `scripts/release.mjs` builds a clean `dist/`, runs `npm pack` **once**, then hands that one tarball to both `npm publish <tarball>` and `clawhub package publish <tarball>`. Both registries serve **the same bytes** — there is no separate per-registry build, so they cannot drift. Real publishes fail closed: the preflight requires a clean tree, HEAD tagged `v<version>`, a logged-in npm (`npm whoami`), and `clawhub` on PATH. `--dry-run` skips those gates (it is a pure preview) and uploads nothing. ClawHub attribution (`--owner`, `--source-repo`, `--source-commit`) is derived from `package.json#repository` + `git`, with the owner overridable via `CLAWHUB_OWNER` (default `blackbak`).
 
+## 5. Release notes flow through `CHANGELOG.md`
+
+The changelog is [Keep a Changelog](https://keepachangelog.com/) format. `## [Unreleased]` accumulates as you work; the `version` lifecycle runs `scripts/changelog.mjs cut` to promote it to a dated `## [<version>]` section **inside the version commit**, and `release.mjs` reads that section (`changelog.mjs show <version>`) and passes it to `clawhub package publish --changelog`, so every ClawHub release carries its notes. `CHANGELOG.md` + `SECURITY.md` ship in the npm `files` allowlist (a `code-plugin` is judged on source provenance and scan state — `clawhub package readiness <name>` reports the blockers post-publish).
+
 ## 4. `build` cleans `dist/` first
 
 `tsc` does **not** prune outputs orphaned by a deleted source — `dist/tools/examples.js` (from the removed skeleton tools) was still shipping in `npm pack` because `dist/` is gitignored and never rebuilt from scratch. `build` is now `pnpm clean && tsc` (clean = a zero-dep `node -e rmSync`), so the published tarball always matches the current source exactly. `prepack: pnpm build` is the backstop that keeps a bare `npm pack`/`npm publish` honest too.
 
 ## Not done (deferred)
 
-CI publishing — ClawHub supports tag-triggered OIDC trusted publishing and a reusable workflow — is a deliberate follow-up. Today the flow is **local scripts only** (`npm login` + `clawhub login`, then `pnpm version …` / `pnpm release`). See [`README.md`](../../README.md#releasing) and [`CLAUDE.md`](../../CLAUDE.md#releasing) for the operator's guide.
+CI publishing is a deliberate follow-up: both **npm provenance** (`npm publish --provenance`) and ClawHub **trusted publishing** (`clawhub package trusted-publisher`) require an OIDC-enabled CI (e.g. GitHub Actions on tag push) and so cannot be produced from a local publish. When that lands, a manual publish made while a trusted-publisher config exists will additionally need `clawhub package publish --manual-override-reason`. Today the flow is **local scripts only** (`npm login` + `clawhub login`, then `pnpm version …` / `pnpm release`). See [`README.md`](../../README.md#releasing) and [`CLAUDE.md`](../../CLAUDE.md#releasing) for the operator's guide.

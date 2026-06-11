@@ -60,6 +60,8 @@ pnpm release              # npm publish + clawhub package publish
 
 `package.json#version` is the single source of truth — `scripts/sync-version.mjs` keeps `openclaw.plugin.json`'s version in lock-step, and a version-parity test fails if they ever drift. `pnpm release` builds a clean `dist/`, packs one tarball, and uploads those exact bytes to both registries (no drift between what npm and ClawHub serve). It refuses to publish a dirty or untagged tree, or when you are not logged in — so run `pnpm version` first.
 
+**Changelog:** keep the `## [Unreleased]` section of [`CHANGELOG.md`](./CHANGELOG.md) current as you work ([Keep a Changelog](https://keepachangelog.com/) format). `pnpm version` promotes it to a dated release section inside the version commit, and `pnpm release` attaches those notes to the ClawHub release (`clawhub package publish --changelog`). After a real publish, `clawhub package readiness @4gpts/sil` reports any remaining readiness blockers.
+
 **One-time prerequisites:**
 
 ```bash

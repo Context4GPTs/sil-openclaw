@@ -34,7 +34,7 @@ types, check `../../vendor/ucp/js-sdk/src/` (`@ucp-js/sdk`, Zod-generated).
 | Preview | `pnpm release:dry` | clean build → pack one tarball → `npm publish --dry-run` + `clawhub … --dry-run`; uploads nothing |
 | Publish | `pnpm release` | same pipeline, real upload — the **same** tarball to npm + ClawHub (`code-plugin` family, `--owner $CLAWHUB_OWNER` defaulting to `blackbak`, with source-repo/commit attribution) |
 
-`scripts/release.mjs` packs once and uploads those exact bytes to both registries (no cross-registry drift). For a real publish it fails closed unless the tree is clean, HEAD carries the `v<version>` tag, `npm whoami` succeeds, and `clawhub` is on PATH — so the flow is always `pnpm version …` then `pnpm release`. First-time setup: `npm login`, then `npm i -g clawhub && clawhub login`. CI (tag-triggered OIDC publish) is a deferred follow-up — local scripts only for now.
+`scripts/release.mjs` packs once and uploads those exact bytes to both registries (no cross-registry drift). For a real publish it fails closed unless the tree is clean, HEAD carries the `v<version>` tag, `npm whoami` succeeds, and `clawhub` is on PATH — so the flow is always `pnpm version …` then `pnpm release`. Keep `CHANGELOG.md`'s `## [Unreleased]` current as you work — the `version` lifecycle cuts it to a dated section (`scripts/changelog.mjs`) and `release.mjs` passes those notes to `clawhub … --changelog`; after a real publish, `clawhub package readiness @4gpts/sil` reports readiness blockers. First-time setup: `npm login`, then `npm i -g clawhub && clawhub login`. CI (tag-triggered OIDC trusted publishing + npm provenance) is a deferred follow-up — local scripts only for now.
 
 ## How to add a tool
 

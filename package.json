@@ -7,6 +7,9 @@
     "type": "git",
     "url": "git+https://github.com/Context4GPTs/sil-openclaw.git"
   },
+  "bugs": {
+    "url": "https://github.com/Context4GPTs/sil-openclaw/issues"
+  },
   "homepage": "https://4gpts.com",
   "keywords": [
     "openclaw",
@@ -28,6 +31,8 @@
     "skill",
     "openclaw.plugin.json",
     "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE",
     "NOTICE"
   ],
@@ -76,7 +81,7 @@
     "test:watch": "vitest",
     "sync-version": "node scripts/sync-version.mjs",
     "preversion": "pnpm typecheck && pnpm test",
-    "version": "pnpm sync-version && git add openclaw.plugin.json",
+    "version": "pnpm sync-version && node scripts/changelog.mjs cut && git add openclaw.plugin.json CHANGELOG.md",
     "postversion": "git push --follow-tags",
     "prepack": "pnpm build",
     "release": "node scripts/release.mjs",
