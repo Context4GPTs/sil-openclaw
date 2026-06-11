@@ -144,3 +144,21 @@ describe("openclaw.plugin.json — manifest shape", () => {
     }
   });
 });
+
+describe("version parity — package.json ↔ openclaw.plugin.json", () => {
+  // The plugin carries its version in TWO files: package.json#version — the
+  // single source of truth that `pnpm version` bumps — and the manifest's
+  // version. `scripts/sync-version.mjs` mirrors the former into the latter on
+  // every bump (wired into the `version` lifecycle); this is the guard that
+  // FAILS if a hand-edit ever lets the two drift apart.
+  const pkg = readJson<{ version?: string }>("package.json");
+  const manifest = readJson<Manifest>("openclaw.plugin.json");
+
+  it("openclaw.plugin.json#version equals package.json#version", () => {
+    expect(manifest.version).toBe(pkg.version);
+  });
+
+  it("package.json#version is plain semver", () => {
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(?:-[\w.]+)?$/);
+  });
+});
