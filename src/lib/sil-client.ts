@@ -198,10 +198,14 @@ export type IdentityOutcome =
 
 /** A deliver-to destination for serviceability + localization filtering. `country`
  * is the ISO 3166-1 alpha-2 code (required when the object is present); `region`
- * and `postal_code` refine it. Passed through OPAQUE — forwarded verbatim, never
- * reshaped. Mirrors the Shopify Global-Catalog `ships_to` wire shape
- * (`global-catalog-extension.md:32`); the agent-arg name `ship_to` is renamed to
- * the wire key `ships_to` in `buildSearchBody`. */
+ * (ISO 3166-2 subdivision code) and `postal_code` refine it. FORMAT is enforced at
+ * the read site (`readSearchParams` in catalog.ts rejects a present-but-malformed
+ * value client-side) — by the time a value reaches this layer it is already
+ * format-valid. The ONLY wire normalization here is country-case: `country` is
+ * uppercased on emit (`us` → `US`, the alpha-2 contract `@sil/schemas` mirrors);
+ * `region`/`postal_code` are forwarded VERBATIM. The agent-arg name `ship_to` is
+ * renamed to the wire key `ships_to` in `buildSearchBody`. Mirrors the Shopify
+ * Global-Catalog `ships_to` wire shape (`global-catalog-extension.md:32`). */
 export interface ShipTo {
   country: string;
   region?: string;
@@ -209,7 +213,8 @@ export interface ShipTo {
 }
 
 /** A merchant-origin constraint. `country` is the ISO 3166-1 alpha-2 code
- * (required when present). Mirrors the Shopify `ships_from` wire shape
+ * (required when present), uppercased on the wire (same country-case normalization
+ * as `ShipTo`). Mirrors the Shopify `ships_from` wire shape
  * (`global-catalog-extension.md:33`); same name on both sides. */
 export interface ShipsFrom {
   country: string;
@@ -892,6 +897,14 @@ function extractForbiddenReason(body: unknown): string {
  * client-injected default (the server applies `available: true`). A supplied
  * `available: false` is narrowed with `typeof === "boolean"`, never `if (v)`, so the
  * meaningful `false` (include unavailable items) survives.
+ *
+ * COUNTRY-CASE NORMALIZATION is the wire layer's job (the read site owns FORMAT
+ * rejection): `ships_to.country` and `ships_from.country` are emitted UPPERCASE
+ * (`us` → `US`), the alpha-2 contract `@sil/schemas` `ShipTo`/`ShipFrom` mirrors
+ * byte-for-byte. A lowercase code on the wire would diverge from the sibling and
+ * (depending on the server's case-sensitivity) silently mis-filter. `region` and
+ * `postal_code` are forwarded VERBATIM — they passed their pattern at the read site,
+ * and the wire normalizes only country case.
  */
 function buildSearchBody(params: SearchParams): Record<string, unknown> {
   const body: Record<string, unknown> = {};
@@ -907,9 +920,12 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   if (Object.keys(price).length > 0) filters["price"] = price;
 
   // The four serviceability/localization filters — the `ship_to` → `ships_to`
-  // rename happens here; the other three keep their name.
-  if (params.ship_to !== undefined) filters["ships_to"] = params.ship_to;
-  if (params.ships_from !== undefined) filters["ships_from"] = params.ships_from;
+  // rename happens here; the other three keep their name. Country is uppercased
+  // on emit (region/postal forwarded verbatim); the other three pass through as-is.
+  if (params.ship_to !== undefined) filters["ships_to"] = withUppercaseCountry(params.ship_to);
+  if (params.ships_from !== undefined) {
+    filters["ships_from"] = withUppercaseCountry(params.ships_from);
+  }
   if (params.condition !== undefined) filters["condition"] = params.condition;
   if (typeof params.available === "boolean") filters["available"] = params.available;
 
@@ -921,6 +937,14 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   if (Object.keys(pagination).length > 0) body["pagination"] = pagination;
 
   return body;
+}
+
+/** Emit a ship-to/ships-from object with its alpha-2 `country` UPPERCASED on the
+ * wire (`us` → `US`); every other field (`region`/`postal_code` on `ShipTo`) is
+ * preserved verbatim. The spread-then-overwrite keeps the shape generic over both
+ * {@link ShipTo} and {@link ShipsFrom} without reshaping or dropping a field. */
+function withUppercaseCountry<T extends { country: string }>(value: T): T {
+  return { ...value, country: value.country.toUpperCase() };
 }
 
 /**

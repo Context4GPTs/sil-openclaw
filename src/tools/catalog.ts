@@ -65,6 +65,27 @@ import {
 } from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
 
+/**
+ * The TIGHTENED ship-to/ships-from format contract (founder re-spec 2026-06-11),
+ * pinned as a `pattern` BOTH the local schema and sil-api's `@sil/schemas`
+ * `ShipTo`/`ShipFrom` enforce IDENTICALLY (byte-for-byte) — so the plugin rejects a
+ * malformed value client-side instead of forwarding free text and eating an opaque,
+ * fail-late sil-api 400. These same patterns are the schema `pattern` (so the host
+ * validates) AND the read-site format gate (so a drifted on-disk call is rejected),
+ * defined once here to keep the two in lockstep. The sil-services sibling
+ * (`attach-buyer-ship-to-context-server-side-in-sil-ap`) MUST mirror these exactly;
+ * the sil-stage eval verifies it end-to-end.
+ *   - country (ships_to + ships_from): ISO 3166-1 alpha-2, a 2-letter code.
+ *   - region: ISO 3166-2 subdivision code (CA/NY/BY/97), bounded — NOT a place name.
+ *   - postal_code: a single self-contained pattern (a length-cap lookahead 2–12
+ *     chars, separators counted, + a structural body of alnum runs joined by single
+ *     internal space/hyphen, no leading/trailing/doubled separator) — accepts real
+ *     national formats (94107 / EC1A 1BB / K1A 0B1), rejects prose/injection/overlong.
+ */
+const COUNTRY_PATTERN = "^[A-Za-z]{2}$";
+const REGION_PATTERN = "^[A-Za-z0-9]{1,3}$";
+const POSTAL_PATTERN = "^(?=[A-Za-z0-9 -]{2,12}$)[A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*$";
+
 export function registerCatalogTools(api: PluginAPI): void {
   registerSearch(api);
   registerProductGet(api);
@@ -83,20 +104,28 @@ function registerSearch(api: PluginAPI): void {
       + " Use the returned `cursor` to fetch the next page (its absence means no"
       + " more results — never infer end-of-results from the page size). An empty"
       + " result list means nothing matched (a normal outcome, not an error)."
+      + " For the location filters, ALWAYS send standard ISO CODES, NOT free text or"
+      + " natural-language place names — send the 2-letter country code \"US\", never"
+      + " the name \"United States\"; send the subdivision code \"CA\", never the place"
+      + " name \"California\". A free-text name is rejected; the code is not."
       + " Delivery destination: LEAVE `ship_to` EMPTY for \"ship to me\" — when it is"
       + " absent, sil-api resolves the user's REGISTERED DEFAULT ADDRESS server-side"
       + " and localizes results to it. Do NOT call sil_whoami (or any identity read)"
       + " to fetch the user's address and put it in `ship_to` — that round-trip is"
       + " wasted work and yields the same result as omitting it. Set `ship_to` ONLY"
       + " to OVERRIDE the default — to ship to a DIFFERENT destination than the"
-      + " user's registered address (e.g. \"ship it to my office in Berlin\"); pass"
-      + " `{ country (ISO 3166-1 alpha-2), region?, postal_code? }`. The other"
-      + " optional filters need no prior tool call: `ships_from`"
-      + " (`{ country }`) restricts to a merchant ORIGIN country; `condition` (array,"
-      + " e.g. [\"new\"] or [\"secondhand\"]) filters by product condition; `available`"
-      + " (boolean) controls availability — the server returns only sale-ready items"
-      + " by default, so set `available: false` to INCLUDE out-of-stock/unavailable"
-      + " items. Requires registration (run sil_register first).",
+      + " user's registered address (e.g. \"ship it to my office in Berlin\"). Its"
+      + " fields: `country` = the 2-letter ISO 3166-1 alpha-2 code (US, GB, DE — a"
+      + " code, NOT a country name); `region` (optional) = the ISO 3166-2 subdivision"
+      + " code (CA, NY, BY — a code, NOT a place name); `postal_code` (optional) ="
+      + " the destination postal/ZIP code. The other optional filters need no prior"
+      + " tool call: `ships_from` (`{ country }`, the same 2-letter ISO 3166-1"
+      + " alpha-2 code — US/GB/DE) restricts to a merchant ORIGIN country; `condition`"
+      + " (array; the values are exactly \"new\" or \"secondhand\", lowercase) filters"
+      + " by product condition; `available` (boolean) controls availability — the"
+      + " server returns only sale-ready items by default, so set `available: false`"
+      + " to INCLUDE out-of-stock/unavailable items. Requires registration (run"
+      + " sil_register first).",
     parameters: Type.Object({
       query: Type.Optional(
         Type.String({
@@ -137,16 +166,25 @@ function registerSearch(api: PluginAPI): void {
         Type.Object(
           {
             country: Type.String({
-              description: "Destination country, ISO 3166-1 alpha-2 (e.g. \"US\", \"DE\").",
+              pattern: COUNTRY_PATTERN,
+              description:
+                "Destination country as a 2-letter ISO 3166-1 alpha-2 CODE (US, GB,"
+                + " DE) — a code, NOT a country name (\"United States\" is rejected).",
             }),
             region: Type.Optional(
               Type.String({
-                description: "Destination region/state/province (optional refinement).",
+                pattern: REGION_PATTERN,
+                description:
+                  "Destination region as an ISO 3166-2 subdivision CODE (CA, NY, BY)"
+                  + " — a code, NOT a place name (\"California\" is rejected). Optional.",
               }),
             ),
             postal_code: Type.Optional(
               Type.String({
-                description: "Destination postal/ZIP code (optional refinement).",
+                pattern: POSTAL_PATTERN,
+                description:
+                  "Destination postal/ZIP code (e.g. 94107, EC1A 1BB, K1A 0B1)."
+                  + " Optional refinement.",
               }),
             ),
           },
@@ -156,7 +194,8 @@ function registerSearch(api: PluginAPI): void {
               + " for \"ship to me\": when absent/omitted, sil-api uses the user's"
               + " REGISTERED DEFAULT ADDRESS (resolved server-side) — do NOT call"
               + " sil_whoami to fetch and resubmit it. Set this ONLY to OVERRIDE the"
-              + " default with a DIFFERENT destination than the registered address.",
+              + " default with a DIFFERENT destination than the registered address."
+              + " Send ISO CODES, never free-text place names.",
           },
         ),
       ),
@@ -164,21 +203,25 @@ function registerSearch(api: PluginAPI): void {
         Type.Object(
           {
             country: Type.String({
-              description: "Merchant origin country, ISO 3166-1 alpha-2 (e.g. \"US\").",
+              pattern: COUNTRY_PATTERN,
+              description:
+                "Merchant origin country as a 2-letter ISO 3166-1 alpha-2 CODE (US,"
+                + " GB, DE) — a code, NOT a country name.",
             }),
           },
           {
             description:
               "Restrict results to products that ship FROM a given merchant origin"
-              + " country. Omit for no origin constraint.",
+              + " country (alpha-2 ISO code). Omit for no origin constraint.",
           },
         ),
       ),
       condition: Type.Optional(
         Type.Array(Type.String(), {
           description:
-            "Filter by product condition. Known values: \"new\", \"secondhand\""
-            + " (multiple values are OR'd). Omit for no condition filter.",
+            "Filter by product condition. The values are exactly \"new\" or"
+            + " \"secondhand\" (lowercase; multiple are OR'd). Omit for no condition"
+            + " filter.",
         }),
       ),
       available: Type.Optional(
@@ -200,10 +243,20 @@ function registerSearch(api: PluginAPI): void {
       // Narrow the untrusted params (the SDK types `params` as
       // Record<string, unknown>; the host validates against the schema, but the
       // read site still guards — mirrors the defensive narrowing in sil-client).
-      const search = readSearchParams(params);
+      // A present-but-malformed location filter (bad FORMAT, not wrong type) is
+      // rejected client-side BEFORE the input guard or any network call — a clear
+      // `invalid_filter` beats an opaque, fail-late sil-api 400 (re-spec).
+      const read = readSearchParams(params);
+      if (read.kind === "invalid") {
+        api.logger.info("sil_search_invalid_filter", { field: read.field });
+        return invalidFilter(read.field);
+      }
+      const search = read.params;
 
       // 2 — client-side input guard: reject the obviously-empty request before
       // any network call. A filter-only request is a valid browse, not rejected.
+      // (The new location filters are REFINEMENTS, not inputs — `hasUsableInput` is
+      // unchanged, so a request of only-new-args is rejected as empty input.)
       if (!hasUsableInput(search)) {
         return invalidInput();
       }
@@ -432,18 +485,48 @@ function invalidIds() {
   });
 }
 
-/** Narrow the untrusted `params` to the simplified {@link SearchParams}. A field
- * of the wrong type is dropped (treated as absent), not coerced — the host has
- * already validated against the schema, but a drifted on-disk call must not slip
- * a non-string into the query mapping. No `any`, no unchecked `as`.
+/** The outcome of narrowing ONE untrusted filter field. The three arms encode the
+ * re-spec's behavioral split (founder directive 2026-06-11):
+ *   - `ok`      — a valid, format-checked value to forward.
+ *   - `absent`  — the field is absent OR the WRONG TYPE → DROP it (treat as unset),
+ *                 never coerce. This is the established `readIds` discipline.
+ *   - `invalid` — the field is the RIGHT type but a provided string fails its
+ *                 FORMAT pattern (`country="United States"`, `region="California"`)
+ *                 → REJECT the whole request client-side. `field` names the offender. */
+type FilterRead<T> =
+  | { kind: "ok"; value: T }
+  | { kind: "absent" }
+  | { kind: "invalid"; field: string };
+
+/** The outcome of narrowing the whole param object: either the typed
+ * {@link SearchParams} to forward, or the FIRST bad-format field that rejects the
+ * request client-side (the read site owns FORMAT rejection; the wire owns
+ * country-case normalization). */
+type SearchParamsRead =
+  | { kind: "ok"; params: SearchParams }
+  | { kind: "invalid"; field: string };
+
+/** Narrow the untrusted `params` to the simplified {@link SearchParams}, or report
+ * the first bad-FORMAT filter field. A field of the wrong type is dropped (treated
+ * as absent), not coerced — the host has already validated against the schema, but
+ * a drifted on-disk call must not slip a non-string into the query mapping. No
+ * `any`, no unchecked `as`.
  *
  * The four serviceability/localization filters narrow by their own type: `ship_to`/
  * `ships_from` to an object with a string `country` (a primitive/number is
  * DROPPED), `condition` to a string[] (a bare string is dropped), `available` to a
  * boolean (a string is dropped). The drop is TYPE-driven, never value-driven, so a
  * valid `available: false` survives — it is a boolean, the meaningful "include
- * unavailable items" signal, not a falsy value to discard. */
-function readSearchParams(params: Record<string, unknown>): SearchParams {
+ * unavailable items" signal, not a falsy value to discard.
+ *
+ * Beyond TYPE narrowing, `ship_to`/`ships_from` also FORMAT-validate every provided
+ * string field (country alpha-2, region 3166-2, postal bounded) against the shared
+ * patterns: a present-but-malformed value returns an `invalid` read so the tool
+ * rejects the request client-side with a clear `invalid_filter` error (better agent
+ * UX than an opaque, fail-late sil-api 400). `condition` is NOT format-validated —
+ * its wire stays OPEN (an unrecognized value still forwards; steering to
+ * new/secondhand lives in the description only). The first bad field wins. */
+function readSearchParams(params: Record<string, unknown>): SearchParamsRead {
   const result: SearchParams = {};
   const query = params["query"];
   if (typeof query === "string") result.query = query;
@@ -459,15 +542,19 @@ function readSearchParams(params: Record<string, unknown>): SearchParams {
   if (typeof limit === "number") result.limit = limit;
 
   const shipTo = readShipTo(params["ship_to"]);
-  if (shipTo !== null) result.ship_to = shipTo;
+  if (shipTo.kind === "invalid") return { kind: "invalid", field: shipTo.field };
+  if (shipTo.kind === "ok") result.ship_to = shipTo.value;
+
   const shipsFrom = readShipsFrom(params["ships_from"]);
-  if (shipsFrom !== null) result.ships_from = shipsFrom;
+  if (shipsFrom.kind === "invalid") return { kind: "invalid", field: shipsFrom.field };
+  if (shipsFrom.kind === "ok") result.ships_from = shipsFrom.value;
+
   const condition = readCondition(params["condition"]);
   if (condition !== null) result.condition = condition;
   const available = params["available"];
   if (typeof available === "boolean") result.available = available;
 
-  return result;
+  return { kind: "ok", params: result };
 }
 
 /** A non-null plain object, or null for anything else (arrays/primitives). */
@@ -477,36 +564,67 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/** Narrow a `ship_to` arg to {@link ShipTo}, or null if unusable. Requires a plain
- * object with a non-empty string `country` (a primitive — `"US"` — is DROPPED, not
- * coerced); `region`/`postal_code` are carried through only when string. */
-function readShipTo(raw: unknown): ShipTo | null {
+/** Narrow a `ship_to` arg to {@link ShipTo}. A non-object (a primitive `"US"`, a
+ * number) or a missing/non-string `country` is `absent` (DROPPED — the wrong-TYPE
+ * discipline). A provided string that fails its FORMAT pattern (`country`,
+ * `region`, or `postal_code`) is `invalid` (REJECT the request). `country` is
+ * uppercased on the WIRE (`buildSearchBody`), not here — the read site validates
+ * FORMAT, the wire normalizes case; region/postal are carried verbatim. */
+function readShipTo(raw: unknown): FilterRead<ShipTo> {
   const obj = asRecord(raw);
-  if (obj === null) return null;
+  if (obj === null) return { kind: "absent" };
   const country = obj["country"];
-  if (typeof country !== "string" || country.length === 0) return null;
+  if (typeof country !== "string" || country.length === 0) return { kind: "absent" };
+  if (!matchesPattern(country, COUNTRY_PATTERN)) {
+    return { kind: "invalid", field: "ship_to.country" };
+  }
   const result: ShipTo = { country };
   const region = obj["region"];
-  if (typeof region === "string") result.region = region;
+  if (typeof region === "string") {
+    if (!matchesPattern(region, REGION_PATTERN)) {
+      return { kind: "invalid", field: "ship_to.region" };
+    }
+    result.region = region;
+  }
   const postalCode = obj["postal_code"];
-  if (typeof postalCode === "string") result.postal_code = postalCode;
-  return result;
+  if (typeof postalCode === "string") {
+    if (!matchesPattern(postalCode, POSTAL_PATTERN)) {
+      return { kind: "invalid", field: "ship_to.postal_code" };
+    }
+    result.postal_code = postalCode;
+  }
+  return { kind: "ok", value: result };
 }
 
-/** Narrow a `ships_from` arg to {@link ShipsFrom}, or null if unusable. Requires a
- * plain object with a non-empty string `country` (a primitive/number is DROPPED). */
-function readShipsFrom(raw: unknown): ShipsFrom | null {
+/** Narrow a `ships_from` arg to {@link ShipsFrom}. A non-object/missing-country is
+ * `absent` (DROPPED, wrong-TYPE discipline); a provided `country` string that fails
+ * the alpha-2 pattern is `invalid` (REJECT). Country is uppercased on the wire, not
+ * here. */
+function readShipsFrom(raw: unknown): FilterRead<ShipsFrom> {
   const obj = asRecord(raw);
-  if (obj === null) return null;
+  if (obj === null) return { kind: "absent" };
   const country = obj["country"];
-  if (typeof country !== "string" || country.length === 0) return null;
-  return { country };
+  if (typeof country !== "string" || country.length === 0) return { kind: "absent" };
+  if (!matchesPattern(country, COUNTRY_PATTERN)) {
+    return { kind: "invalid", field: "ships_from.country" };
+  }
+  return { kind: "ok", value: { country } };
+}
+
+/** Test a value against one of the shared schema patterns, anchored exactly as the
+ * schema's `pattern` is (the constants carry their own `^…$`). A fresh `RegExp` per
+ * call keeps the patterns as plain shared strings (the schema needs the string form;
+ * the read site needs to execute it) with no stateful `lastIndex` to reset. */
+function matchesPattern(value: string, pattern: string): boolean {
+  return new RegExp(pattern).test(value);
 }
 
 /** Narrow a `condition` arg to string[], or null if unusable. Requires an array (a
  * bare string is DROPPED, not wrapped); non-string entries are dropped. Returns
  * null for an empty/all-dropped array so the key is omitted rather than emitted
- * empty. */
+ * empty. The wire stays OPEN — values are NOT format-validated against a known set
+ * (an unrecognized value like "refurbished" still forwards; steering to
+ * new/secondhand is the description's job, not validation's). */
 function readCondition(raw: unknown): string[] | null {
   if (!Array.isArray(raw)) return null;
   const values = raw.filter((c): c is string => typeof c === "string");
@@ -559,6 +677,24 @@ function invalidInput() {
     message:
       "Provide a search query or at least one filter (category, price_min, or"
       + " price_max).",
+  });
+}
+
+/** Client-side validation: a location filter carried a malformed value (bad FORMAT,
+ * not wrong type) — rejected BEFORE any network call (re-spec). Distinct from the
+ * empty-input case (`empty_search_input`) and from a sil-api 400; the pinned machine
+ * code is `invalid_filter`. No `recovery: sil_register` — auth is fine; the value
+ * FORMAT is the problem. The message names the offending field and the required ISO
+ * code form so the agent re-sends a code, not free text. */
+function invalidFilter(field: string) {
+  return jsonResult({
+    status: "invalid_request",
+    error: "invalid_filter",
+    message:
+      `The \`${field}\` filter is malformed. Send standard ISO codes, not`
+      + " free-text names: country as a 2-letter ISO 3166-1 alpha-2 code (e.g."
+      + " \"US\"), region as an ISO 3166-2 subdivision code (e.g. \"CA\"), and"
+      + " postal_code as a destination postal/ZIP code.",
   });
 }
 
