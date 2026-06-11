@@ -338,6 +338,80 @@ describe("searchCatalog — ship-to + serviceability filters map into filters.* 
   });
 });
 
+/**
+ * RE-SPEC (founder directive 2026-06-11): the tightened, Shopify-grounded contract
+ * — `ships_to.country`/`ships_from.country` are ISO 3166-1 alpha-2 codes that the
+ * WIRE NORMALIZES to UPPERCASE (`us` → `US`). The directive: "NORMALIZED UPPERCASE
+ * on the wire (`us` → `US`)" — so it is the wire-build layer (`buildSearchBody` /
+ * `searchCatalog`), not just the read site, that emits the uppercase code. This is
+ * the byte-for-byte mirror of `@sil/schemas` `ShipTo`/`ShipFrom` the sil-services
+ * sibling enforces identically; a lowercase code on the wire would diverge from the
+ * sibling and (depending on the server's case-sensitivity) silently mis-filter.
+ *
+ * These assert NORMALIZATION at the wire seam directly (input is a `SearchParams`
+ * carrying a lowercase/mixed-case country — the value the read site, after format
+ * validation, hands down). Region/postal are forwarded verbatim once they pass
+ * format (the read site owns format; the wire owns the country-case normalization).
+ */
+describe("searchCatalog — country is NORMALIZED UPPERCASE on the wire (alpha-2 contract)", () => {
+  let cap: Captured[];
+  beforeEach(() => {
+    cap = [];
+    spyFetch(cap);
+  });
+
+  it("uppercases a lowercase ship_to.country on the wire (`us` → `US`)", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", ship_to: { country: "us" } });
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_to: { country: "US" } } });
+  });
+
+  it("uppercases a mixed-case ship_to.country on the wire (`De` → `DE`)", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", ship_to: { country: "De" } });
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_to: { country: "DE" } } });
+  });
+
+  it("leaves an already-uppercase ship_to.country unchanged (`US` → `US`)", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", ship_to: { country: "US" } });
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_to: { country: "US" } } });
+  });
+
+  it("uppercases ships_from.country on the wire too (`gb` → `GB`)", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", ships_from: { country: "gb" } });
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_from: { country: "GB" } } });
+  });
+
+  it("normalizes country case but forwards region + postal_code VERBATIM (they are already format-valid here)", async () => {
+    // The wire normalizes ONLY country case; region/postal are passed through as
+    // received (format is the read site's gate — by the time a value reaches the
+    // wire it has already passed its pattern). region stays uppercase as supplied;
+    // postal stays exactly as supplied.
+    await searchCatalog(SIL_API, "tok", {
+      query: "chair",
+      ship_to: { country: "us", region: "CA", postal_code: "94107" },
+    });
+    expect(cap[0]!.body).toEqual({
+      query: "chair",
+      filters: { ships_to: { country: "US", region: "CA", postal_code: "94107" } },
+    });
+  });
+
+  it("normalizes country in the all-filters body (the merged shape keeps US/US uppercase, available:false preserved)", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "office chair",
+      ship_to: { country: "us", region: "NY", postal_code: "10001" },
+      ships_from: { country: "us" },
+      condition: ["new"],
+      available: false,
+    });
+    expect((cap[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      ships_to: { country: "US", region: "NY", postal_code: "10001" },
+      ships_from: { country: "US" },
+      condition: ["new"],
+      available: false,
+    });
+  });
+});
+
 describe("searchCatalog — transport failure maps to retryable without leaking the token", () => {
   it("a thrown fetch (network/timeout) → retryable", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("simulated network failure"));

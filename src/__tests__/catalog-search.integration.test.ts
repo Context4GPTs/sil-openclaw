@@ -494,6 +494,244 @@ describe("sil_search — the four new filter args forward end-to-end (agent arg 
 });
 
 /**
+ * RE-SPEC (founder directive 2026-06-11) — THE KEY BEHAVIORAL CHANGE. The tightened
+ * contract distinguishes two failure modes for the new location fields:
+ *
+ *   - Wrong TYPE (a number country, a primitive ship_to, a non-array condition)
+ *     → DROP the field as before (the existing narrowing discipline — those tests
+ *     live in `tools/search.test.ts` and stay).
+ *   - Wrong FORMAT (a STRING that fails its pattern — `country="United States"`,
+ *     `region="California"`) → REJECT the WHOLE request CLIENT-SIDE with a
+ *     structured validation error and make NO network call. This is the better
+ *     agent UX the directive demands over an opaque, fail-late sil-api 400 (the
+ *     thin contract forwarded the bad value and let sil-api's closed schema 400 it).
+ *
+ * The structured validation envelope mirrors the repo's existing client-side
+ * rejection shape (`invalidInput`/`invalidIds` in catalog.ts, `notRegistered` in
+ * identity.ts): `{ status: "invalid_request", error: <machine code>, message }`,
+ * with NO `recovery: sil_register` — auth is fine; the input FORMAT is the problem.
+ * The pinned machine error code for a bad filter format is `invalid_filter`
+ * (distinct from `empty_search_input`, which is the no-usable-input case).
+ *
+ * These run the REAL wired tool with a router that 200s any search — so a request
+ * that reaches the network would resolve `ok`; the assertion `rec.all.length === 0`
+ * is what proves the rejection happened CLIENT-SIDE, before any fetch.
+ */
+describe("sil_search — bad FORMAT is rejected client-side with a structured error, NO network call (re-spec)", () => {
+  it("ship_to.country = 'United States' (a name, not an alpha-2 code) + a real query → invalid_request, ZERO network", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "office chair",
+        ship_to: { country: "United States" },
+      }),
+    );
+
+    // Rejected BEFORE any fetch — the format guard runs client-side.
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+    // It is a validation problem, NOT an auth problem — no re-register hint.
+    expect(payload["recovery"]).not.toBe("sil_register");
+    // The message names the offending field/format so the agent can fix it.
+    expect(typeof payload["message"]).toBe("string");
+    expect(String(payload["message"]).toLowerCase()).toMatch(/country|ship_to|code|format|alpha-2|iso/);
+  });
+
+  it("ship_to.region = 'California' (a place name, not a 3166-2 code) + a real query → invalid_request, ZERO network", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "office chair",
+        ship_to: { country: "US", region: "California" },
+      }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+    expect(payload["recovery"]).not.toBe("sil_register");
+  });
+
+  it("ship_to.postal_code = 'San Francisco, CA, 94107' (prose) + a real query → invalid_request, ZERO network", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "chair",
+        ship_to: { country: "US", postal_code: "San Francisco, CA, 94107" },
+      }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+  });
+
+  it("ships_from.country = 'Germany' (a name, not alpha-2) + a real query → invalid_request, ZERO network", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "chair",
+        ships_from: { country: "Germany" },
+      }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+  });
+
+  it("a bad postal injection value ('94107; DROP TABLE') is rejected client-side, never reaching the network", async () => {
+    // The format guard is also an injection backstop: a postal token carrying SQL /
+    // punctuation fails the pattern and is rejected before any wire call.
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "chair",
+        ship_to: { country: "US", postal_code: "94107; DROP TABLE" },
+      }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+  });
+});
+
+/**
+ * RE-SPEC: the accept-and-normalize counterpart to the reject path above. A valid
+ * lowercase alpha-2 country is ACCEPTED, REACHES the network, and lands on the wire
+ * UPPERCASED (`us` → `US`) — the full agent-arg → wire round-trip through the REAL
+ * tool, confirming the read site (format-valid) hands a value the wire normalizes.
+ */
+describe("sil_search — a valid lowercase country is accepted, normalized UPPERCASE, and reaches the network (re-spec)", () => {
+  it("ship_to.country = 'us' (valid alpha-2, lowercase) + a query → ok, reaches network, captured body carries ships_to.country = 'US'", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "office chair",
+        ship_to: { country: "us" },
+      }),
+    );
+
+    // Accepted → reached the network exactly once → succeeded.
+    expect(rec.search.length).toBe(1);
+    expect(payload["status"]).toBe("ok");
+    // The captured wire body carries the NORMALIZED uppercase code under the plural
+    // wire key (the rename + the uppercase normalization both applied).
+    expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      ships_to: { country: "US" },
+    });
+  });
+
+  it("a full valid lowercase ship_to (country/region/postal) round-trips with country uppercased, region+postal verbatim", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", {
+      query: "chair",
+      ship_to: { country: "us", region: "CA", postal_code: "94107" },
+      ships_from: { country: "gb" },
+    });
+
+    expect(rec.search.length).toBe(1);
+    expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      ships_to: { country: "US", region: "CA", postal_code: "94107" },
+      ships_from: { country: "GB" },
+    });
+  });
+});
+
+/**
+ * RE-SPEC: `condition` keeps an OPEN WIRE. The DESCRIPTION steers the agent to the
+ * set new/secondhand, but an UNRECOGNIZED value (e.g. `["refurbished"]`) must STILL
+ * be forwarded — never rejected or dropped for being unrecognized (Shopify: an
+ * unrecognized condition value passes through). This is distinct from the location
+ * fields, which are CLOSED (format-rejected). `condition` is steered-but-open.
+ */
+describe("sil_search — condition wire stays OPEN: an unrecognized value still forwards (re-spec)", () => {
+  it("condition = ['refurbished'] (not in the steered set) + a query → forwarded under filters.condition, reaches network, NOT rejected", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "chair",
+        condition: ["refurbished"],
+      }),
+    );
+
+    // Accepted and forwarded — an unrecognized condition is NOT a format error.
+    expect(rec.search.length).toBe(1);
+    expect(payload["status"]).toBe("ok");
+    expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      condition: ["refurbished"],
+    });
+  });
+
+  it("a mix of recognized + unrecognized condition values forwards ALL of them verbatim (no value dropped)", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", {
+      query: "chair",
+      condition: ["new", "refurbished", "secondhand"],
+    });
+
+    expect(rec.search.length).toBe(1);
+    expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      condition: ["new", "refurbished", "secondhand"],
+    });
+  });
+});
+
+/**
  * Input-guard interaction (card AC[integration]): the new args are REFINEMENTS,
  * not usable inputs — `hasUsableInput` is UNCHANGED. A request whose ONLY content
  * is the new filters (no query/category/price) is rejected client-side with NO
