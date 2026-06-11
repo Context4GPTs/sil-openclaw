@@ -198,6 +198,146 @@ describe("searchCatalog — param → CatalogSearchRequest body mapping (no enve
   });
 });
 
+/**
+ * The card `add-ship-to-filter-args-to-the-sil-search-tool` (epic
+ * `location-aware-search-2026-06`) adds four optional serviceability/localization
+ * filters to `SearchParams`: `ship_to`, `ships_from`, `condition`, `available`.
+ * `buildSearchBody` maps each into `filters.*`, with ONE load-bearing rename:
+ * the agent arg `ship_to` (singular) becomes the wire key `filters.ships_to`
+ * (plural). The other three keep their name under `filters.*`.
+ *
+ * Wire-shape source of truth: the Shopify Global-Catalog extension
+ * (`vendor/shopify/docs/agents/catalog/global-catalog-extension.md:26-33`) and
+ * sil-services `packages/schemas/src/catalog.ts` `SearchFilters` (OPEN —
+ * `additionalProperties: true`, so a wrong key is silently ACCEPTED and ignored;
+ * the exact emitted key name + nesting is the only thing that catches a bad
+ * rename, hence the highest-value assertion in this file).
+ *
+ * The discipline is identical to `category`/`price`/`pagination` above: an absent
+ * filter is an OMITTED key (never `available: undefined`, never an empty
+ * `filters: {}` or `ships_to: {}`), no client-injected defaults (the server
+ * applies `available: true` — the plugin must NOT), and a supplied `available:
+ * false` SURVIVES (it is meaningful, not falsy-dropped).
+ */
+describe("searchCatalog — ship-to + serviceability filters map into filters.* (omit-when-absent, no defaults)", () => {
+  let cap: Captured[];
+  beforeEach(() => {
+    cap = [];
+    spyFetch(cap);
+  });
+
+  it("renames the agent arg `ship_to` → wire key `filters.ships_to` (THE load-bearing rename — the open SearchFilters silently ignores a wrong key)", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "chair",
+      ship_to: { country: "US", region: "CA", postal_code: "94107" },
+    });
+    const body = cap[0]!.body as Record<string, unknown>;
+    // The plural wire key carries the supplied value, forwarded verbatim — and the
+    // singular AGENT-arg name `ship_to` must NOT appear anywhere on the wire (the
+    // whole-body equality pins both the rename AND the absence of the old name).
+    expect(body).toEqual({
+      query: "chair",
+      filters: { ships_to: { country: "US", region: "CA", postal_code: "94107" } },
+    });
+  });
+
+  it("forwards a minimal `ship_to` (country only) as `filters.ships_to`, not reshaped", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", ship_to: { country: "DE" } });
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_to: { country: "DE" } } });
+  });
+
+  it("maps `ships_from` → `filters.ships_from` (same name on both sides), value forwarded as given", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", ships_from: { country: "US" } });
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_from: { country: "US" } } });
+  });
+
+  it("maps `condition` (array) → `filters.condition`, forwarded as the supplied array", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", condition: ["new", "secondhand"] });
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { condition: ["new", "secondhand"] } });
+  });
+
+  it("maps `available` (boolean true) → `filters.available: true`", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", available: true });
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { available: true } });
+  });
+
+  it("a supplied `available: false` SURVIVES — forwarded as `filters.available: false`, never dropped as falsy", async () => {
+    // The whole point of exposing `available`: set false to INCLUDE unavailable
+    // items. A truthiness guard (`if (params.available)`) would silently drop it,
+    // collapsing the false case back to the server default. It must be narrowed
+    // with `typeof v === "boolean"` so false is preserved.
+    await searchCatalog(SIL_API, "tok", { query: "chair", available: false });
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { available: false } });
+  });
+
+  it("maps ALL FOUR new filters at once alongside the existing ones (full body, exact)", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "office chair",
+      category: "Furniture",
+      price_min: 10000,
+      price_max: 200000,
+      cursor: "cur-1",
+      limit: 25,
+      ship_to: { country: "US", region: "NY", postal_code: "10001" },
+      ships_from: { country: "US" },
+      condition: ["new"],
+      available: false,
+    });
+    // The exact merged body — the new filters sit beside categories/price under
+    // `filters`, the rename applied, `available:false` preserved, no extra keys.
+    expect(cap[0]!.body).toEqual({
+      query: "office chair",
+      filters: {
+        categories: ["Furniture"],
+        price: { min: 10000, max: 200000 },
+        ships_to: { country: "US", region: "NY", postal_code: "10001" },
+        ships_from: { country: "US" },
+        condition: ["new"],
+        available: false,
+      },
+      pagination: { cursor: "cur-1", limit: 25 },
+    });
+  });
+
+  it("omits EACH new filter when absent — a bare query carries no ships_to/ships_from/condition/available and no `filters` skeleton", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "lamp" });
+    const body = cap[0]!.body as Record<string, unknown>;
+    // No filters object at all (nothing to put in it) — the omit-when-absent rule
+    // the existing `category`/`price` mapping already follows extends to all four.
+    expect(body).toEqual({ query: "lamp" });
+    expect(body["filters"]).toBeUndefined();
+  });
+
+  it("does NOT inject a default `available` (the server applies available:true; the plugin omits the key)", async () => {
+    // Anti-regression on Risk: the extension documents a SERVER-SIDE default of
+    // available:true. The plugin must NOT echo that default — when the agent omits
+    // `available`, the key is simply absent from the body.
+    await searchCatalog(SIL_API, "tok", { query: "chair", category: "Furniture" });
+    const filters = (cap[0]!.body as Record<string, unknown>)["filters"] as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("available");
+    expect(filters).not.toHaveProperty("ships_to");
+    expect(filters).not.toHaveProperty("ships_from");
+    expect(filters).not.toHaveProperty("condition");
+  });
+
+  it("emits NO empty `ships_to` object — an absent ship_to leaves no `filters.ships_to: {}` stub", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", available: false });
+    // available:false is the ONLY filter set → filters carries ONLY `available`,
+    // with no empty `ships_to: {}` (or ships_from/condition) skeleton injected.
+    expect(cap[0]!.body).toEqual({ query: "chair", filters: { available: false } });
+  });
+
+  it("a filter-only request of ONLY a new filter carries `filters` and NO `query` key", async () => {
+    // `buildSearchBody` is mapping-only (the ≥1-input guard lives in the tool, not
+    // here). Given only `ships_from`, the body must carry it under `filters` and
+    // omit `query` entirely — the same shape the `category`-only case produces.
+    await searchCatalog(SIL_API, "tok", { ships_from: { country: "US" } });
+    const body = cap[0]!.body as Record<string, unknown>;
+    expect(body["filters"]).toEqual({ ships_from: { country: "US" } });
+    expect(body["query"]).toBeUndefined();
+  });
+});
+
 describe("searchCatalog — transport failure maps to retryable without leaking the token", () => {
   it("a thrown fetch (network/timeout) → retryable", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("simulated network failure"));
