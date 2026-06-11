@@ -18,7 +18,7 @@
  */
 
 declare module "openclaw/plugin-sdk" {
-  import type { TObject } from "typebox";
+  import type { TObject, TSchema } from "typebox";
 
   export interface PluginAPI {
     registerTool(tool: ToolDefinition): void;
@@ -47,7 +47,19 @@ declare module "openclaw/plugin-sdk" {
     name: string;
     label: string;
     description: string;
-    parameters: TObject;
+    /**
+     * The tool's input JSON-Schema. Registration sites build this with
+     * `Type.Object({...})` (a `TObject`, which is the expected runtime shape —
+     * `{ type: "object", properties, required }`). The static type is the broader
+     * `TObject | TSchema` so callers can still pass a `Type.Object(...)` while
+     * tests may introspect the schema's `properties`/`items`/`required` JSON-Schema
+     * fields via a cast — TypeBox's `TObject.properties` is `Record<string,
+     * TSchema>` (TSchema = `{}`), which a single-step `as` to a `Record<string,
+     * Record<string, unknown>>` cannot reach, so the field is typed `TSchema` (the
+     * base TypeBox schema) to keep that introspection cast legal without a
+     * double-`as`. The host validates real inputs against this schema at call time.
+     */
+    parameters: TObject | TSchema;
     execute(
       callId: string,
       params: Record<string, unknown>,

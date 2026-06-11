@@ -196,10 +196,36 @@ export type IdentityOutcome =
   | { kind: "forbidden"; reason: string }
   | { kind: "retryable" };
 
+/** A deliver-to destination for serviceability + localization filtering. `country`
+ * is the ISO 3166-1 alpha-2 code (required when the object is present); `region`
+ * and `postal_code` refine it. Passed through OPAQUE — forwarded verbatim, never
+ * reshaped. Mirrors the Shopify Global-Catalog `ships_to` wire shape
+ * (`global-catalog-extension.md:32`); the agent-arg name `ship_to` is renamed to
+ * the wire key `ships_to` in `buildSearchBody`. */
+export interface ShipTo {
+  country: string;
+  region?: string;
+  postal_code?: string;
+}
+
+/** A merchant-origin constraint. `country` is the ISO 3166-1 alpha-2 code
+ * (required when present). Mirrors the Shopify `ships_from` wire shape
+ * (`global-catalog-extension.md:33`); same name on both sides. */
+export interface ShipsFrom {
+  country: string;
+}
+
 /** The simplified search query an agent sends — a free-text `query` plus
  * optional filters and pagination. Maps 1:1 into the sil-api `CatalogSearchRequest`
  * body (`searchCatalog` builds the nested shape). All fields optional at this
- * layer; the at-least-one-input rule is enforced by the tool, not here. */
+ * layer; the at-least-one-input rule is enforced by the tool, not here.
+ *
+ * The four serviceability/localization filters (`ship_to`, `ships_from`,
+ * `condition`, `available`) ride sil-api's OPEN `SearchFilters`
+ * (`additionalProperties: true`). They are forwarded ONLY when supplied — an
+ * absent filter is an omitted key, never a client-injected default (the server
+ * applies `available: true` itself). `available: false` is meaningful (include
+ * unavailable items) and is forwarded, never dropped as falsy. */
 export interface SearchParams {
   query?: string;
   category?: string;
@@ -207,6 +233,10 @@ export interface SearchParams {
   price_max?: number;
   cursor?: string;
   limit?: number;
+  ship_to?: ShipTo;
+  ships_from?: ShipsFrom;
+  condition?: string[];
+  available?: boolean;
 }
 
 /** A currency-tagged price, passed through OPAQUE from sil-api's UCP `Price`
@@ -851,6 +881,17 @@ function extractForbiddenReason(body: unknown): string {
  * `filters.categories` ARRAY (sil-api's filter is multi-taxonomy; the simplified
  * contract takes one). `price_min`/`price_max` map into `filters.price.{min,max}`.
  * The tool clamps nothing and validates no cursor opacity — sil-api owns those.
+ *
+ * THE load-bearing rename: the agent arg `ship_to` (singular) becomes the wire key
+ * `filters.ships_to` (plural). `ships_from`/`condition`/`available` keep their name
+ * under `filters.*`. These four ride sil-api's OPEN `SearchFilters`
+ * (`additionalProperties: true`), which SILENTLY accepts an unknown key — so the
+ * exact emitted key name is the only thing standing between a working serviceability
+ * filter and a no-op (a wrong rename fails GREEN). Each is forwarded ONLY when
+ * supplied (omit-when-absent, identical to `category`/`price`/`pagination`); NO
+ * client-injected default (the server applies `available: true`). A supplied
+ * `available: false` is narrowed with `typeof === "boolean"`, never `if (v)`, so the
+ * meaningful `false` (include unavailable items) survives.
  */
 function buildSearchBody(params: SearchParams): Record<string, unknown> {
   const body: Record<string, unknown> = {};
@@ -864,6 +905,14 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   if (typeof params.price_min === "number") price["min"] = params.price_min;
   if (typeof params.price_max === "number") price["max"] = params.price_max;
   if (Object.keys(price).length > 0) filters["price"] = price;
+
+  // The four serviceability/localization filters — the `ship_to` → `ships_to`
+  // rename happens here; the other three keep their name.
+  if (params.ship_to !== undefined) filters["ships_to"] = params.ship_to;
+  if (params.ships_from !== undefined) filters["ships_from"] = params.ships_from;
+  if (params.condition !== undefined) filters["condition"] = params.condition;
+  if (typeof params.available === "boolean") filters["available"] = params.available;
+
   if (Object.keys(filters).length > 0) body["filters"] = filters;
 
   const pagination: Record<string, unknown> = {};

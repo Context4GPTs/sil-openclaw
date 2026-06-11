@@ -60,6 +60,8 @@ import {
   type LookupOutcome,
   type SearchOutcome,
   type SearchParams,
+  type ShipsFrom,
+  type ShipTo,
 } from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
 
@@ -81,7 +83,20 @@ function registerSearch(api: PluginAPI): void {
       + " Use the returned `cursor` to fetch the next page (its absence means no"
       + " more results — never infer end-of-results from the page size). An empty"
       + " result list means nothing matched (a normal outcome, not an error)."
-      + " Requires registration (run sil_register first).",
+      + " Delivery destination: LEAVE `ship_to` EMPTY for \"ship to me\" — when it is"
+      + " absent, sil-api resolves the user's REGISTERED DEFAULT ADDRESS server-side"
+      + " and localizes results to it. Do NOT call sil_whoami (or any identity read)"
+      + " to fetch the user's address and put it in `ship_to` — that round-trip is"
+      + " wasted work and yields the same result as omitting it. Set `ship_to` ONLY"
+      + " to OVERRIDE the default — to ship to a DIFFERENT destination than the"
+      + " user's registered address (e.g. \"ship it to my office in Berlin\"); pass"
+      + " `{ country (ISO 3166-1 alpha-2), region?, postal_code? }`. The other"
+      + " optional filters need no prior tool call: `ships_from`"
+      + " (`{ country }`) restricts to a merchant ORIGIN country; `condition` (array,"
+      + " e.g. [\"new\"] or [\"secondhand\"]) filters by product condition; `available`"
+      + " (boolean) controls availability — the server returns only sale-ready items"
+      + " by default, so set `available: false` to INCLUDE out-of-stock/unavailable"
+      + " items. Requires registration (run sil_register first).",
     parameters: Type.Object({
       query: Type.Optional(
         Type.String({
@@ -116,6 +131,62 @@ function registerSearch(api: PluginAPI): void {
           minimum: 1,
           description:
             "Requested maximum number of results. The server may return fewer.",
+        }),
+      ),
+      ship_to: Type.Optional(
+        Type.Object(
+          {
+            country: Type.String({
+              description: "Destination country, ISO 3166-1 alpha-2 (e.g. \"US\", \"DE\").",
+            }),
+            region: Type.Optional(
+              Type.String({
+                description: "Destination region/state/province (optional refinement).",
+              }),
+            ),
+            postal_code: Type.Optional(
+              Type.String({
+                description: "Destination postal/ZIP code (optional refinement).",
+              }),
+            ),
+          },
+          {
+            description:
+              "Deliver-to destination for serviceability + localization. LEAVE EMPTY"
+              + " for \"ship to me\": when absent/omitted, sil-api uses the user's"
+              + " REGISTERED DEFAULT ADDRESS (resolved server-side) — do NOT call"
+              + " sil_whoami to fetch and resubmit it. Set this ONLY to OVERRIDE the"
+              + " default with a DIFFERENT destination than the registered address.",
+          },
+        ),
+      ),
+      ships_from: Type.Optional(
+        Type.Object(
+          {
+            country: Type.String({
+              description: "Merchant origin country, ISO 3166-1 alpha-2 (e.g. \"US\").",
+            }),
+          },
+          {
+            description:
+              "Restrict results to products that ship FROM a given merchant origin"
+              + " country. Omit for no origin constraint.",
+          },
+        ),
+      ),
+      condition: Type.Optional(
+        Type.Array(Type.String(), {
+          description:
+            "Filter by product condition. Known values: \"new\", \"secondhand\""
+            + " (multiple values are OR'd). Omit for no condition filter.",
+        }),
+      ),
+      available: Type.Optional(
+        Type.Boolean({
+          description:
+            "Availability filter. The server returns only sale-ready items by"
+            + " default; set false to INCLUDE unavailable/out-of-stock items. Omit"
+            + " to keep the default (available only).",
         }),
       ),
     }),
@@ -364,7 +435,14 @@ function invalidIds() {
 /** Narrow the untrusted `params` to the simplified {@link SearchParams}. A field
  * of the wrong type is dropped (treated as absent), not coerced — the host has
  * already validated against the schema, but a drifted on-disk call must not slip
- * a non-string into the query mapping. No `any`, no unchecked `as`. */
+ * a non-string into the query mapping. No `any`, no unchecked `as`.
+ *
+ * The four serviceability/localization filters narrow by their own type: `ship_to`/
+ * `ships_from` to an object with a string `country` (a primitive/number is
+ * DROPPED), `condition` to a string[] (a bare string is dropped), `available` to a
+ * boolean (a string is dropped). The drop is TYPE-driven, never value-driven, so a
+ * valid `available: false` survives — it is a boolean, the meaningful "include
+ * unavailable items" signal, not a falsy value to discard. */
 function readSearchParams(params: Record<string, unknown>): SearchParams {
   const result: SearchParams = {};
   const query = params["query"];
@@ -379,7 +457,60 @@ function readSearchParams(params: Record<string, unknown>): SearchParams {
   if (typeof cursor === "string") result.cursor = cursor;
   const limit = params["limit"];
   if (typeof limit === "number") result.limit = limit;
+
+  const shipTo = readShipTo(params["ship_to"]);
+  if (shipTo !== null) result.ship_to = shipTo;
+  const shipsFrom = readShipsFrom(params["ships_from"]);
+  if (shipsFrom !== null) result.ships_from = shipsFrom;
+  const condition = readCondition(params["condition"]);
+  if (condition !== null) result.condition = condition;
+  const available = params["available"];
+  if (typeof available === "boolean") result.available = available;
+
   return result;
+}
+
+/** A non-null plain object, or null for anything else (arrays/primitives). */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/** Narrow a `ship_to` arg to {@link ShipTo}, or null if unusable. Requires a plain
+ * object with a non-empty string `country` (a primitive — `"US"` — is DROPPED, not
+ * coerced); `region`/`postal_code` are carried through only when string. */
+function readShipTo(raw: unknown): ShipTo | null {
+  const obj = asRecord(raw);
+  if (obj === null) return null;
+  const country = obj["country"];
+  if (typeof country !== "string" || country.length === 0) return null;
+  const result: ShipTo = { country };
+  const region = obj["region"];
+  if (typeof region === "string") result.region = region;
+  const postalCode = obj["postal_code"];
+  if (typeof postalCode === "string") result.postal_code = postalCode;
+  return result;
+}
+
+/** Narrow a `ships_from` arg to {@link ShipsFrom}, or null if unusable. Requires a
+ * plain object with a non-empty string `country` (a primitive/number is DROPPED). */
+function readShipsFrom(raw: unknown): ShipsFrom | null {
+  const obj = asRecord(raw);
+  if (obj === null) return null;
+  const country = obj["country"];
+  if (typeof country !== "string" || country.length === 0) return null;
+  return { country };
+}
+
+/** Narrow a `condition` arg to string[], or null if unusable. Requires an array (a
+ * bare string is DROPPED, not wrapped); non-string entries are dropped. Returns
+ * null for an empty/all-dropped array so the key is omitted rather than emitted
+ * empty. */
+function readCondition(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const values = raw.filter((c): c is string => typeof c === "string");
+  return values.length === 0 ? null : values;
 }
 
 /** The one client-side invariant the tool owns: at least one recognized input.
