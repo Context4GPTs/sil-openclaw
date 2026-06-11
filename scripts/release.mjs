@@ -29,7 +29,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DRY_RUN = process.argv.includes("--dry-run");
-const DEFAULT_CLAWHUB_OWNER = "blackbak";
+// The 4gpts ClawHub org we publish under (mirrors the @4gpts npm scope). You
+// authenticate as an org member via `clawhub login`; override with CLAWHUB_OWNER.
+const DEFAULT_CLAWHUB_OWNER = "4gpts";
 const CLAWHUB_FAMILY = "code-plugin";
 
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));

@@ -69,7 +69,7 @@ npm login                            # npm auth (publishConfig already sets acce
 npm i -g clawhub && clawhub login    # ClawHub CLI + auth
 ```
 
-Override the ClawHub publisher handle with the `CLAWHUB_OWNER` env var (defaults to `blackbak`).
+Releases publish under the **`4gpts`** ClawHub org — the `CLAWHUB_OWNER` default, mirroring the `@4gpts` npm scope. You authenticate as an org member with `clawhub login` (and `npm login`); override the org with `CLAWHUB_OWNER` if needed.
 
 ## License
 
