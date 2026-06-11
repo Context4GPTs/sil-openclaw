@@ -410,6 +410,573 @@ describe("sil_search — param → request mapping (bare path, sil-api origin, B
   });
 });
 
+/**
+ * Card `add-ship-to-filter-args-to-the-sil-search-tool` (epic
+ * `location-aware-search-2026-06`): the wired tool forwards four new optional
+ * serviceability/localization args end-to-end — agent arg → wire key — with the
+ * `ship_to` → `filters.ships_to` rename, omit-when-absent, and no client-injected
+ * defaults. These assert the full round-trip through the REAL tool + sil-client,
+ * capturing the request body the tool sends to sil-api (the only mock is fetch).
+ */
+describe("sil_search — the four new filter args forward end-to-end (agent arg → wire key)", () => {
+  it("all four supplied (with query) → captured body carries filters.ships_to / ships_from / condition / available, the rename applied", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", {
+      query: "office chair",
+      ship_to: { country: "US", region: "NY", postal_code: "10001" },
+      ships_from: { country: "US" },
+      condition: ["new"],
+      available: false,
+    });
+
+    expect(rec.search.length).toBe(1);
+    const body = rec.search[0]!.body as Record<string, unknown>;
+    // The whole filters block, exact — proves the agent arg `ship_to` lands on the
+    // wire as the plural `ships_to` (rename), the other three keep their name, and
+    // available:false survives the full pipeline (read-site narrow → buildSearchBody).
+    expect(body["filters"]).toEqual({
+      ships_to: { country: "US", region: "NY", postal_code: "10001" },
+      ships_from: { country: "US" },
+      condition: ["new"],
+      available: false,
+    });
+    // The query still rides at the top level.
+    expect(body["query"]).toBe("office chair");
+  });
+
+  it("a bare { query } sends EXACTLY { query } — no filters skeleton, no defaulted ships_to/available (the no-defaults invariant extends to the new args)", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "lamp" });
+
+    const body = rec.search[0]!.body as Record<string, unknown>;
+    // Unchanged from today: the new args inject nothing when the agent omits them.
+    expect(body).toEqual({ query: "lamp" });
+    expect(body["filters"]).toBeUndefined();
+  });
+
+  it("ship_to alongside an existing category coexist under one filters object (no clobber)", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", {
+      query: "chair",
+      category: "Furniture",
+      ship_to: { country: "DE" },
+    });
+
+    expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      categories: ["Furniture"],
+      ships_to: { country: "DE" },
+    });
+  });
+});
+
+/**
+ * RE-SPEC (founder directive 2026-06-11) — THE KEY BEHAVIORAL CHANGE. The tightened
+ * contract distinguishes two failure modes for the new location fields:
+ *
+ *   - Wrong TYPE (a number country, a primitive ship_to, a non-array condition)
+ *     → DROP the field as before (the existing narrowing discipline — those tests
+ *     live in `tools/search.test.ts` and stay).
+ *   - Wrong FORMAT (a STRING that fails its pattern — `country="United States"`,
+ *     `region="California"`) → REJECT the WHOLE request CLIENT-SIDE with a
+ *     structured validation error and make NO network call. This is the better
+ *     agent UX the directive demands over an opaque, fail-late sil-api 400 (the
+ *     thin contract forwarded the bad value and let sil-api's closed schema 400 it).
+ *
+ * The structured validation envelope mirrors the repo's existing client-side
+ * rejection shape (`invalidInput`/`invalidIds` in catalog.ts, `notRegistered` in
+ * identity.ts): `{ status: "invalid_request", error: <machine code>, message }`,
+ * with NO `recovery: sil_register` — auth is fine; the input FORMAT is the problem.
+ * The pinned machine error code for a bad filter format is `invalid_filter`
+ * (distinct from `empty_search_input`, which is the no-usable-input case).
+ *
+ * These run the REAL wired tool with a router that 200s any search — so a request
+ * that reaches the network would resolve `ok`; the assertion `rec.all.length === 0`
+ * is what proves the rejection happened CLIENT-SIDE, before any fetch.
+ */
+describe("sil_search — bad FORMAT is rejected client-side with a structured error, NO network call (re-spec)", () => {
+  it("ship_to.country = 'United States' (a name, not an alpha-2 code) + a real query → invalid_request, ZERO network", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "office chair",
+        ship_to: { country: "United States" },
+      }),
+    );
+
+    // Rejected BEFORE any fetch — the format guard runs client-side.
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+    // It is a validation problem, NOT an auth problem — no re-register hint.
+    expect(payload["recovery"]).not.toBe("sil_register");
+    // The message names the offending field/format so the agent can fix it.
+    expect(typeof payload["message"]).toBe("string");
+    expect(String(payload["message"]).toLowerCase()).toMatch(/country|ship_to|code|format|alpha-2|iso/);
+  });
+
+  it("ship_to.region = 'California' (a place name, not a 3166-2 code) + a real query → invalid_request, ZERO network", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "office chair",
+        ship_to: { country: "US", region: "California" },
+      }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+    expect(payload["recovery"]).not.toBe("sil_register");
+  });
+
+  it("ship_to.postal_code = 'San Francisco, CA, 94107' (prose) + a real query → invalid_request, ZERO network", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "chair",
+        ship_to: { country: "US", postal_code: "San Francisco, CA, 94107" },
+      }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+  });
+
+  it("ships_from.country = 'Germany' (a name, not alpha-2) + a real query → invalid_request, ZERO network", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "chair",
+        ships_from: { country: "Germany" },
+      }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+  });
+
+  it("a bad postal injection value ('94107; DROP TABLE') is rejected client-side, never reaching the network", async () => {
+    // The format guard is also an injection backstop: a postal token carrying SQL /
+    // punctuation fails the pattern and is rejected before any wire call.
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "chair",
+        ship_to: { country: "US", postal_code: "94107; DROP TABLE" },
+      }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_filter");
+  });
+});
+
+/**
+ * RE-SPEC: the accept-and-normalize counterpart to the reject path above. A valid
+ * lowercase alpha-2 country is ACCEPTED, REACHES the network, and lands on the wire
+ * UPPERCASED (`us` → `US`) — the full agent-arg → wire round-trip through the REAL
+ * tool, confirming the read site (format-valid) hands a value the wire normalizes.
+ */
+describe("sil_search — a valid lowercase country is accepted, normalized UPPERCASE, and reaches the network (re-spec)", () => {
+  it("ship_to.country = 'us' (valid alpha-2, lowercase) + a query → ok, reaches network, captured body carries ships_to.country = 'US'", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "office chair",
+        ship_to: { country: "us" },
+      }),
+    );
+
+    // Accepted → reached the network exactly once → succeeded.
+    expect(rec.search.length).toBe(1);
+    expect(payload["status"]).toBe("ok");
+    // The captured wire body carries the NORMALIZED uppercase code under the plural
+    // wire key (the rename + the uppercase normalization both applied).
+    expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      ships_to: { country: "US" },
+    });
+  });
+
+  it("a full valid lowercase ship_to (country/region/postal) round-trips with country uppercased, region+postal verbatim", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", {
+      query: "chair",
+      ship_to: { country: "us", region: "CA", postal_code: "94107" },
+      ships_from: { country: "gb" },
+    });
+
+    expect(rec.search.length).toBe(1);
+    expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      ships_to: { country: "US", region: "CA", postal_code: "94107" },
+      ships_from: { country: "GB" },
+    });
+  });
+});
+
+/**
+ * RE-SPEC: `condition` keeps an OPEN WIRE. The DESCRIPTION steers the agent to the
+ * set new/secondhand, but an UNRECOGNIZED value (e.g. `["refurbished"]`) must STILL
+ * be forwarded — never rejected or dropped for being unrecognized (Shopify: an
+ * unrecognized condition value passes through). This is distinct from the location
+ * fields, which are CLOSED (format-rejected). `condition` is steered-but-open.
+ */
+describe("sil_search — condition wire stays OPEN: an unrecognized value still forwards (re-spec)", () => {
+  it("condition = ['refurbished'] (not in the steered set) + a query → forwarded under filters.condition, reaches network, NOT rejected", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "chair",
+        condition: ["refurbished"],
+      }),
+    );
+
+    // Accepted and forwarded — an unrecognized condition is NOT a format error.
+    expect(rec.search.length).toBe(1);
+    expect(payload["status"]).toBe("ok");
+    expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      condition: ["refurbished"],
+    });
+  });
+
+  it("a mix of recognized + unrecognized condition values forwards ALL of them verbatim (no value dropped)", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", {
+      query: "chair",
+      condition: ["new", "refurbished", "secondhand"],
+    });
+
+    expect(rec.search.length).toBe(1);
+    expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
+      condition: ["new", "refurbished", "secondhand"],
+    });
+  });
+});
+
+/**
+ * Input-guard interaction (card AC[integration]): the new args are REFINEMENTS,
+ * not usable inputs — `hasUsableInput` is UNCHANGED. A request whose ONLY content
+ * is the new filters (no query/category/price) is rejected client-side with NO
+ * network call, exactly like `cursor`/`limit` today. A request with a real input
+ * PLUS the new args reaches the network.
+ */
+describe("sil_search — new args do NOT relax the ≥1-input guard (refinements, not inputs)", () => {
+  it("ship_to ALONE (no query/category/price) → invalid_request / empty_search_input, ZERO network calls", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ship_to: { country: "US" } }),
+    );
+
+    // The refinement does not constitute a search — rejected before any fetch.
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("empty_search_input");
+  });
+
+  it("available:false ALONE (no query/category/price) → invalid_request, ZERO network calls (a falsy filter is still not an input)", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { available: false }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+  });
+
+  it("condition + ships_from together but NO query/category/price → invalid_request, ZERO network calls", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        condition: ["secondhand"],
+        ships_from: { country: "US" },
+      }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+  });
+
+  it("a real `query` PLUS the new args passes the guard and REACHES the network", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "chair",
+        ship_to: { country: "US" },
+        available: false,
+      }),
+    );
+
+    expect(rec.search.length).toBe(1); // the new args ride alongside a valid search
+    expect(payload["status"]).toBe("ok");
+  });
+
+  it("a `category` filter PLUS the new args passes the guard and REACHES the network (category is a real input; the new args ride along)", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", {
+      category: "Furniture",
+      condition: ["new"],
+    });
+
+    expect(rec.search.length).toBe(1);
+  });
+});
+
+/**
+ * Outcome regression (card AC[integration]): the new args change ONLY the request
+ * body — never the outcome taxonomy or the agent-facing envelope. Each existing
+ * sil-api outcome (200 result / 200 empty / 400 / 401-refresh-retry / 5xx), run
+ * WITH the new args set, must produce the SAME agent-facing `status` and recovery
+ * shape it produces without them.
+ */
+describe("sil_search — the new args are request-shaping only; the outcome taxonomy is unchanged", () => {
+  /** The args bundle attached to every outcome below — proving none of them
+   * perturb the classification. */
+  const NEW_ARGS = {
+    ship_to: { country: "US", region: "CA", postal_code: "94107" },
+    ships_from: { country: "US" },
+    condition: ["new"],
+    available: false,
+  } as const;
+
+  it("200 result WITH the new args → status ok with ranked products (unchanged)", async () => {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A, PRODUCT_B]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "chair", ...NEW_ARGS }),
+    );
+
+    expect(payload["status"]).toBe("ok");
+    expect((payload["products"] as unknown[]).length).toBe(2);
+  });
+
+  it("200 empty-match WITH the new args → status ok, products [] (still a SUCCESS, not an error)", async () => {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "nope-xyzzy", ...NEW_ARGS }),
+    );
+
+    expect(payload["status"]).toBe("ok");
+    expect(payload["products"]).toEqual([]);
+    expect(payload["recovery"]).toBeUndefined();
+  });
+
+  it("400 empty_search_input WITH the new args → invalid_request carrying {error, message} (unchanged)", async () => {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 400, body: { error: "empty_search_input", message: "Provide a query or filter." } }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "chair", ...NEW_ARGS }),
+    );
+
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["recovery"]).not.toBe("sil_register");
+  });
+
+  it("401 → refresh-and-retry-once WITH the new args → ok, and the RETRY re-sends the same new args under the rotated token (unchanged choreography)", async () => {
+    seedTokens("expired-at", "valid-rt");
+    const rec = installRouter((kind, nth) => {
+      if (kind === "search") {
+        return nth === 0
+          ? { status: 401, body: { error: "unauthorized" } }
+          : { status: 200, body: searchEnvelope([PRODUCT_A]) };
+      }
+      if (kind === "refresh") {
+        return { status: 200, body: { access_token: "rotated-at", refresh_token: "rotated-rt" } };
+      }
+      return { status: 500, body: {} };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "chair", ...NEW_ARGS }),
+    );
+
+    // Same recovered-401 outcome as today.
+    expect(payload["status"]).toBe("ok");
+    expect(rec.search.length).toBe(2);
+    expect(rec.refresh.length).toBe(1);
+    expect(bearerToken(rec.search[1]!)).toBe("rotated-at");
+    // The retry carried the SAME mapped filters as the first attempt (the new args
+    // survive the retry, renamed, under the rotated token).
+    expect((rec.search[1]!.body as Record<string, unknown>)["filters"]).toEqual({
+      ships_to: { country: "US", region: "CA", postal_code: "94107" },
+      ships_from: { country: "US" },
+      condition: ["new"],
+      available: false,
+    });
+  });
+
+  it("5xx WITH the new args → retryable, NO recovery:sil_register (unchanged)", async () => {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 500, body: { error: "source_unavailable", message: "x" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "chair", ...NEW_ARGS }),
+    );
+
+    expect(payload["status"]).toBe("retryable");
+    expect(payload["recovery"]).not.toBe("sil_register");
+  });
+
+  it("the five outcomes map to the SAME status strings WITH the new args as without (taxonomy invariant)", async () => {
+    async function statusWithNewArgs(reply: Reply): Promise<unknown> {
+      seedTokens("at", "rt");
+      installRouter((kind) => (kind === "search" ? reply : { status: 200, body: {} }));
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const payload = payloadOf(
+        await getTool(api, TOOL).execute("c1", { query: "x", ...NEW_ARGS }),
+      );
+      vi.restoreAllMocks();
+      return payload["status"];
+    }
+
+    const okStatus = await statusWithNewArgs({ status: 200, body: searchEnvelope([PRODUCT_A]) });
+    const emptyStatus = await statusWithNewArgs({ status: 200, body: searchEnvelope([]) });
+    const invalidStatus = await statusWithNewArgs({ status: 400, body: { error: "empty_search_input", message: "x" } });
+    const sourceFailStatus = await statusWithNewArgs({ status: 500, body: { error: "source_unavailable", message: "x" } });
+
+    expect(okStatus).toBe("ok");
+    expect(emptyStatus).toBe("ok");
+    expect(invalidStatus).toBe("invalid_request");
+    expect(sourceFailStatus).toBe("retryable");
+  });
+});
+
 describe("sil_search — happy path normalizes the REAL envelope (anti-false-green)", () => {
   it("returns status ok with ranked products, each carrying ONE projected variant + source", async () => {
     seedTokens("at", "rt");

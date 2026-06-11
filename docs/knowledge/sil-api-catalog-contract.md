@@ -1,11 +1,11 @@
 ---
 id: sil-api-catalog-contract
-title: sil-api catalog reads — FLAT { ucp, products, … } envelope (no result wrapper), bare POST /catalog/{search,lookup}, @sil/schemas is the wire truth (NOT @ucp-js/sdk)
-tags: [sil-api, catalog, search, lookup, contract, wire-types, envelope, cross-sibling, gotcha]
+title: sil-api catalog reads — FLAT { ucp, products, … } envelope (no result wrapper), bare POST /catalog/{search,lookup}, OPEN SearchFilters (wrong key fails GREEN), serviceability ships_to/ships_from FORMAT regexes mirror @sil/schemas byte-for-byte, @sil/schemas is the wire truth (NOT @ucp-js/sdk)
+tags: [sil-api, catalog, search, lookup, contract, wire-types, envelope, filters, serviceability, ship-to, format, cross-sibling, gotcha]
 card: sil-search-plugin-tool
-commit: d2b6393
-updated_at: 2026-06-10
-updated_by_card: catalog-plugin-tools-read-sil-api-flat-envelope
+commit: bcbab28
+updated_at: 2026-06-11
+updated_by_card: add-ship-to-filter-args-to-the-sil-search-tool
 ---
 
 sil-api serves **two** catalog read endpoints, both against a **live, merged** contract (PR #18), both on the **bare** path / `getSilApiUrl()` origin, both returning a **FLAT** UCP envelope `{ ucp, products, … }` whose top-level `products` is `SilCatalogProduct[]` (each product a **required `source`**, each variant a **required, non-empty `checkout_url`**): `POST /catalog/search` (LEAN, ranked, paginated — `sil_search`/SC1) and `POST /catalog/lookup` (RICH, batch-resolve-by-id — `sil_product_get`/SC2). Three facts about the contract are non-obvious — two bit BOTH cards on arrival (the wrong path + wrong wire-type source, propagated from the goal's card-fanout template), and the third (the envelope is FLAT, not nested under `result`) silently broke the live read until card `catalog-plugin-tools-read-sil-api-flat-envelope` fixed it (PR #13). See "The envelope is FLAT" below — this is the contract the extractors actually read.
@@ -23,9 +23,15 @@ sil-api's `withUcpMeta(body) → { ucp, ...body }` (`sil-services/services/sil-a
 ```
 POST <sil_api_base>/catalog/search      (BARE path — NOT /api/v1/catalog/search)
 Authorization: Bearer <stored access_token>
-body: { query?, filters?: { categories?: string[], price?: { min?, max? } }, pagination?: { cursor?, limit? } }
+body: { query?,
+        filters?: { categories?: string[], price?: { min?, max? },
+                    ships_to?: { country, region?, postal_code? }, ships_from?: { country },
+                    condition?: string[], available?: boolean },
+        pagination?: { cursor?, limit? } }
        — only the keys the agent supplied are emitted; an absent filter is an OMITTED key, never an empty {}
 ```
+
+The serviceability/localization filters (`ships_to`/`ships_from`/`condition`/`available`) are detailed in "The serviceability filters ride an OPEN SearchFilters" below — that section names the one wire seam on this contract that can fail *green*.
 
 Expected responses (classified by [[sil-response-classification]]'s `classifySearchResponse`):
 
@@ -38,6 +44,31 @@ Expected responses (classified by [[sil-response-classification]]'s `classifySea
 | `5xx` / network / abort | source/transport failure | `retryable` — try again, NO `recovery: sil_register` |
 
 A **genuine empty match** (200 with top-level `products: []`) is a SUCCESS (`ok` + empty list), NOT an error — distinct from the no-array guard above. (UCP: "empty search returns an empty array … this is not an error.")
+
+## The serviceability filters ride an OPEN `SearchFilters` — a wrong wire key fails GREEN
+
+`SearchFilters` (sil-services `packages/schemas/src/catalog.ts`) is **open** — `additionalProperties: true`. A search-filter key that sil-api does not recognise is **silently accepted and ignored**: no `400`, no error, the filter just no-ops. So the *exact emitted key string* is the only thing standing between a working serviceability filter and a silent no-op — this seam **fails green**, which is why the `buildSearchBody` mapping is pinned by whole-body equality in `search-client.test.ts`, not just "a filter was sent".
+
+Two consequences a future catalog card (and the sil-services sibling) must hold exactly:
+
+1. **The agent arg `ship_to` (singular) is renamed to the wire key `filters.ships_to` (plural).** The agent-facing param is `ship_to` — the founder's word, and what the sil-services default-resolution sibling's "agent omitted `ship_to`" trigger reads — but the wire/`SearchFilters` key is `ships_to`, matching the Shopify Global-Catalog extension (`../../vendor/shopify/docs/agents/catalog/global-catalog-extension.md:32`). The rename lives in `buildSearchBody` (`src/lib/sil-client.ts`). `ships_from`/`condition`/`available` keep one name on both sides. Emitting the singular `ship_to` on the wire, or landing any of these under request-level `context` instead of `filters`, no-ops silently against the open schema. (Cross-sibling contract: `filters.ships_to{country,region?,postal_code?}` must be byte-identical to what sil-services resolves server-side — see [[location-aware-search-flow]].)
+2. **No client-injected defaults; `available: false` survives.** Each of the four is emitted ONLY when the agent supplied it (omit-when-absent, identical to `categories`/`price`/`pagination`) — the plugin never injects `available: true` (the server applies that default). `available: false` is the meaningful "include unavailable items" signal and must be narrowed by `typeof === "boolean"`, never a truthiness guard, or it is dropped as falsy.
+
+These keys are accepted on the wire **today** even though the sil-services `SearchFilters` does not yet name them — `additionalProperties: true` is what lets the plugin ship ahead of the sibling. Until the sibling card (`attach-buyer-ship-to-context-server-side-in-sil-ap`) lands, an omitted `ship_to` resolves to *nothing* server-side (un-localized search), not the registered default — the agent-facing promise is only end-to-end true once that sibling ships. (See [[location-aware-search-flow]].)
+
+## The `ships_to`/`ships_from` FORMAT contract is a byte-for-byte cross-repo mirror (no shared package)
+
+The country/region/postal formats are **enforced**, and the three regexes are a **lockstep mirror** of sil-services `@sil/schemas` `ShipTo`/`ShipFrom` — they MUST stay byte-identical across the two repos, with **no shared package to hold them in sync** ([[sil-shared-catalog-client]]: the plugin re-declares the read-subset locally, it does not import `@sil/schemas`). The plugin pins them once as module constants in `src/tools/catalog.ts` (used BOTH as the schema `pattern` and as the read-site gate):
+
+| Field | Regex | Meaning |
+|---|---|---|
+| `country` (ships_to + ships_from) | `^[A-Za-z]{2}$` | ISO 3166-1 alpha-2 — a 2-letter code, never a country name |
+| `region` | `^[A-Za-z0-9]{1,3}$` | ISO 3166-2 subdivision code (CA/NY/BY/97), bounded — never a place name |
+| `postal_code` | `^(?=[A-Za-z0-9 -]{2,12}$)[A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*$` | a single self-contained pattern — a length-cap lookahead (2–12 chars, separators counted) + a structural body (alnum runs joined by single internal space/hyphen, no leading/trailing/doubled separator). Accepts `94107`/`EC1A 1BB`/`K1A 0B1`; rejects prose/injection/overlong/non-ASCII |
+
+The postal pattern is deliberately **one regex** (length-cap lookahead + body, not `pattern` + `minLength`/`maxLength`) so the sibling can mirror it from a single directive string with nothing extra to keep in lockstep. The **failure mode is silent divergence**: an edit to one side's pattern (here OR in `@sil/schemas`) that the other doesn't match makes the two repos disagree on what's valid — the sil-stage `live-catalog-serviceability-localization-eval` is the end-to-end check that catches it. A future change to any of these three patterns must land in **both** repos in the same change.
+
+**Enforcement is client-side, fail-fast — replacing a fail-late sil-api 400.** A present-but-malformed string (`country: "United States"`, `region: "California"`) is **rejected whole-request client-side** before any network call, with a structured `{ status: "invalid_request", error: "invalid_filter", message }` envelope (no `recovery` — auth is fine, the format is the problem). This is the deliberate replacement for the prior thin contract, which forwarded free text and ate an opaque, unrecoverable sil-api 400. The `country` value is then **uppercased on the wire** (`us`→`US`, in `buildSearchBody` — the read site owns FORMAT, the wire owns case); `region`/`postal_code` go verbatim. So the alpha-2 a sibling stores must compare against the **uppercased** wire value. (`condition` is the exception: its wire stays OPEN — an unrecognized value like `"refurbished"` still forwards, never rejected; the known set new/secondhand is steered in the description only, never validated.)
 
 ## The lookup endpoint — `POST /catalog/lookup` (the batch-resolve sibling)
 

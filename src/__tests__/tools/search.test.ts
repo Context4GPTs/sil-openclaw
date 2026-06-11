@@ -105,6 +105,34 @@ function logBlob(api: MockPluginAPI): string {
     .join("\n");
 }
 
+/** Spy `fetch`, reply 200 empty-match, and capture the parsed request body of the
+ * single outbound call into `captured[0]`. Used by the `readSearchParams`
+ * narrowing tests, which assert a wrong-typed param is DROPPED before it reaches
+ * the wire body (the read-site guard, exercised through the real tool execute). */
+function captureBodyFetch(captured: unknown[]): ReturnType<typeof vi.spyOn> {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((_input: unknown, init?: RequestInit) => {
+    if (typeof init?.body === "string") {
+      try {
+        captured.push(JSON.parse(init.body));
+      } catch {
+        captured.push(init.body);
+      }
+    } else {
+      captured.push(null);
+    }
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          ucp: { version: "0.1", status: "success" },
+          products: [],
+          pagination: { has_next_page: false },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+  });
+}
+
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-search-unit-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
@@ -141,6 +169,332 @@ describe("sil_search — tool registration shape", () => {
     for (const expected of ["query", "category", "price_min", "price_max", "cursor", "limit"]) {
       expect(keys).toContain(expected);
     }
+  });
+});
+
+/**
+ * Card `add-ship-to-filter-args-to-the-sil-search-tool`: the schema gains four
+ * optional serviceability/localization params, each with a self-describing
+ * per-field `description` (agents read field descriptions independently of the
+ * tool description, so each must stand alone). Shapes pinned to the architect's
+ * immutable contract + the Shopify Global-Catalog extension
+ * (`vendor/shopify/docs/agents/catalog/global-catalog-extension.md:26-33`):
+ *   - `ship_to`     : object { country (required), region?, postal_code? }
+ *   - `ships_from`  : object { country (required) }
+ *   - `condition`   : array of strings
+ *   - `available`   : boolean
+ * All four are `Type.Optional` — the whole param is omittable; `country` is
+ * required only WITHIN the ship_to/ships_from objects.
+ */
+describe("sil_search — schema exposes the four new optional filter params (shapes + per-field descriptions)", () => {
+  function searchProps(): Record<string, Record<string, unknown>> {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const params = getTool(api, TOOL).parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+    };
+    return params.properties ?? {};
+  }
+
+  it("declares ship_to / ships_from / condition / available as properties", () => {
+    const keys = Object.keys(searchProps());
+    for (const expected of ["ship_to", "ships_from", "condition", "available"]) {
+      expect(keys).toContain(expected);
+    }
+  });
+
+  it("ship_to is an object whose `country` is required, with optional region + postal_code", () => {
+    const shipTo = searchProps()["ship_to"];
+    expect(shipTo).toBeDefined();
+    expect(shipTo!["type"]).toBe("object");
+    const sub = (shipTo!["properties"] ?? {}) as Record<string, unknown>;
+    for (const k of ["country", "region", "postal_code"]) {
+      expect(Object.keys(sub)).toContain(k);
+    }
+    // `country` is required WITHIN the object (the override needs a destination);
+    // region/postal_code are optional refinements.
+    expect(shipTo!["required"]).toEqual(["country"]);
+  });
+
+  it("ships_from is an object whose `country` is required", () => {
+    const shipsFrom = searchProps()["ships_from"];
+    expect(shipsFrom).toBeDefined();
+    expect(shipsFrom!["type"]).toBe("object");
+    const sub = (shipsFrom!["properties"] ?? {}) as Record<string, unknown>;
+    expect(Object.keys(sub)).toContain("country");
+    expect(shipsFrom!["required"]).toEqual(["country"]);
+  });
+
+  it("condition is an array of strings", () => {
+    const condition = searchProps()["condition"];
+    expect(condition).toBeDefined();
+    expect(condition!["type"]).toBe("array");
+    const items = (condition!["items"] ?? {}) as Record<string, unknown>;
+    expect(items["type"]).toBe("string");
+  });
+
+  it("available is a boolean", () => {
+    const available = searchProps()["available"];
+    expect(available).toBeDefined();
+    expect(available!["type"]).toBe("boolean");
+  });
+
+  it("each new param carries a non-empty, self-describing `description`", () => {
+    const props = searchProps();
+    for (const k of ["ship_to", "ships_from", "condition", "available"]) {
+      expect(props[k]).toBeDefined();
+      const desc = props[k]!["description"];
+      expect(typeof desc).toBe("string");
+      expect((desc as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("the ship_to field description repeats the empty=registered-default / override framing (agents read field descriptions in isolation)", () => {
+    // The architect's contract: the per-field description must stand alone, since
+    // an agent may read it without the tool description. It must convey BOTH that
+    // omitting it uses the registered/default address AND that it is an override.
+    const shipTo = searchProps()["ship_to"];
+    expect(shipTo).toBeDefined();
+    const desc = String(shipTo!["description"] ?? "").toLowerCase();
+    expect(desc).toMatch(/default|registered|omit|leave.*empty|absent/);
+    expect(desc).toMatch(/override|different|else|another/);
+  });
+});
+
+/**
+ * RE-SPEC (founder directive 2026-06-11) — the TIGHTENED, Shopify-grounded contract
+ * both the plugin and sil-api's `@sil/schemas` (`ShipTo`/`ShipFrom`) enforce
+ * IDENTICALLY. The prior cycle shipped a THIN contract: `ship_to.country` was a bare
+ * `Type.String()` with no `pattern`, so the plugin forwarded free text like
+ * `"United States"` or `region: "Bavaria"` and sil-api's closed schema 400'd it — a
+ * fail-late mismatch the agent could not recover from. The fix pins the format into
+ * the SCHEMA (a `pattern` both sides validate), so the plugin rejects bad FORMAT
+ * client-side instead of fail-late at sil-api.
+ *
+ * These read the `pattern` straight off the registered tool's `parameters`
+ * JSON-schema (the same introspection the shape tests above use; TypeBox
+ * `Type.String({ pattern })` puts `pattern` on the property node, and nested object
+ * props are reachable via `props.ship_to.properties.country.pattern` — probe-verified
+ * for this repo's typebox build). The patterns mirror `@sil/schemas` byte-for-byte:
+ *   - country (ships_to + ships_from) : ^[A-Za-z]{2}$        (ISO 3166-1 alpha-2)
+ *   - region                          : ^[A-Za-z0-9]{1,3}$   (ISO 3166-2 subdivision)
+ *   - postal_code (single self-contained pattern: length-cap lookahead + structural,
+ *     so the sibling can mirror it from the same directive text — no separate
+ *     minLength/maxLength keyword to keep in lockstep):
+ *       ^(?=[A-Za-z0-9 -]{2,12}$)[A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*$
+ */
+describe("sil_search — schema pins the tightened format patterns (both sides enforce identically)", () => {
+  const COUNTRY_PATTERN = "^[A-Za-z]{2}$";
+  const REGION_PATTERN = "^[A-Za-z0-9]{1,3}$";
+  const POSTAL_PATTERN = "^(?=[A-Za-z0-9 -]{2,12}$)[A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*$";
+
+  function searchProps(): Record<string, Record<string, unknown>> {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const params = getTool(api, TOOL).parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+    };
+    return params.properties ?? {};
+  }
+
+  function shipToSub(): Record<string, Record<string, unknown>> {
+    const shipTo = searchProps()["ship_to"];
+    expect(shipTo).toBeDefined();
+    return (shipTo!["properties"] ?? {}) as Record<string, Record<string, unknown>>;
+  }
+
+  it("ship_to.country carries the ISO 3166-1 alpha-2 pattern `^[A-Za-z]{2}$`", () => {
+    expect(shipToSub()["country"]!["pattern"]).toBe(COUNTRY_PATTERN);
+  });
+
+  it("ship_to.region carries the ISO 3166-2 subdivision pattern `^[A-Za-z0-9]{1,3}$`", () => {
+    expect(shipToSub()["region"]!["pattern"]).toBe(REGION_PATTERN);
+  });
+
+  it("ship_to.postal_code carries the bounded postal pattern (length-cap + structural)", () => {
+    expect(shipToSub()["postal_code"]!["pattern"]).toBe(POSTAL_PATTERN);
+  });
+
+  it("ships_from.country carries the SAME alpha-2 pattern as ship_to.country", () => {
+    const shipsFrom = searchProps()["ships_from"];
+    expect(shipsFrom).toBeDefined();
+    const sub = (shipsFrom!["properties"] ?? {}) as Record<string, Record<string, unknown>>;
+    expect(sub["country"]!["pattern"]).toBe(COUNTRY_PATTERN);
+  });
+
+  it("the alpha-2 country pattern actually ACCEPTS 2-letter codes and REJECTS country names (the pattern is enforceable, not decorative)", () => {
+    // Compile the schema's own pattern and exercise it — a pattern that is present
+    // but wrong (e.g. too loose) would pass the string-equality checks above yet
+    // fail to reject `"United States"`. This proves the pinned pattern is the right
+    // one, not just a present one.
+    const re = new RegExp(shipToSub()["country"]!["pattern"] as string);
+    for (const ok of ["US", "us", "DE", "gb"]) expect(re.test(ok), `accept ${ok}`).toBe(true);
+    for (const bad of ["United States", "USA", "U", "germany", ""]) expect(re.test(bad), `reject ${bad}`).toBe(false);
+  });
+
+  it("the region pattern ACCEPTS subdivision codes and REJECTS place names (`California`, `Βαυαρία`)", () => {
+    const re = new RegExp(shipToSub()["region"]!["pattern"] as string);
+    for (const ok of ["CA", "NY", "BY", "97"]) expect(re.test(ok), `accept ${ok}`).toBe(true);
+    for (const bad of ["California", "Βαυαρία", "NYC1", "ny "]) expect(re.test(bad), `reject ${bad}`).toBe(false);
+  });
+
+  it("the postal pattern ACCEPTS real national formats and REJECTS prose / injection / overlong", () => {
+    const re = new RegExp(shipToSub()["postal_code"]!["pattern"] as string);
+    for (const ok of ["94107", "EC1A 1BB", "K1A 0B1", "10001"]) expect(re.test(ok), `accept ${ok}`).toBe(true);
+    for (const bad of ["San Francisco, CA, 94107", "94107; DROP TABLE", "1234567890123", "EC1A  1BB", " 94107", "Βαυαρία"]) {
+      expect(re.test(bad), `reject ${bad}`).toBe(false);
+    }
+  });
+});
+
+/**
+ * THE LOAD-BEARING DELIVERABLE (card Intent + handoff contract #6): the tool
+ * `description` is the only lever that steers the agent off the redundant
+ * `sil_whoami` round-trip. These assertions pin the two required steering phrases
+ * so a future edit cannot silently delete the round-trip-avoidance contract.
+ * Asserted against the registered `description` string — the same surface the
+ * agent reads and the same pattern the suite already uses for tool strings.
+ */
+describe("sil_search — description encodes the empty=registered-default steering contract (load-bearing)", () => {
+  function description(): string {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    return getTool(api, TOOL).description;
+  }
+
+  it("states that leaving ship_to empty/absent uses the user's REGISTERED DEFAULT address, resolved server-side by sil-api", () => {
+    const d = description().toLowerCase();
+    // The empty=registered-default contract: it must name the registered/default
+    // address as what an omitted ship_to resolves to, server-side.
+    expect(d).toMatch(/registered|default/);
+    expect(d).toMatch(/address/);
+    // And tie that resolution to the server / sil-api (not the plugin/agent).
+    expect(d).toMatch(/server|sil-api|sil api/);
+  });
+
+  it("explicitly steers the agent AWAY from calling sil_whoami merely to populate ship_to (names the anti-pattern)", () => {
+    // The headline: the description must name `sil_whoami` and tell the agent NOT
+    // to call it just to fetch an address to resubmit. This is the exact waste the
+    // card exists to kill; a vague description leaves the agent reflexively
+    // round-tripping. The negative framing ("do not"/"don't"/"never"/"no need")
+    // must co-occur with the sil_whoami reference.
+    const d = description();
+    expect(d).toMatch(/sil_whoami/);
+    expect(d.toLowerCase()).toMatch(/do not|don't|never|no need|avoid|without/);
+  });
+
+  it("frames ship_to as an OVERRIDE — supplied only to ship to a DIFFERENT destination, not as a required input", () => {
+    const d = description().toLowerCase();
+    expect(d).toMatch(/ship_to/);
+    expect(d).toMatch(/override|different|else|another destination|elsewhere/);
+  });
+
+  it("documents ships_from, condition, and available each as optional filters by what they constrain (no implied prior tool call)", () => {
+    const d = description().toLowerCase();
+    // origin country / product condition / availability — each named.
+    expect(d).toMatch(/ships_from/);
+    expect(d).toMatch(/origin|seller|merchant|ships from/);
+    expect(d).toMatch(/condition/);
+    expect(d).toMatch(/new|used|secondhand|condition/);
+    expect(d).toMatch(/available|availability|unavailable|in stock|out of stock/);
+  });
+});
+
+/**
+ * RE-SPEC (founder directive 2026-06-11) — the tool description is the LOAD-BEARING
+ * control surface that makes the agent send STANDARD CODES, never free text. The
+ * prior thin description told the agent the alpha-2 shape only in passing; the
+ * re-spec demands an explicit "send standard ISO codes, not natural-language place
+ * names" steer plus per-field FORMAT instructions, so the agent never sends
+ * `country: "United States"` or `region: "California"` (which the tightened schema
+ * now rejects client-side — a worse, opaque UX than just sending the code).
+ *
+ * These ADD to the two steering-phrase assertions above (which stay verbatim — empty
+ * ship_to ⇒ registered default server-side; do NOT call sil_whoami). They do NOT
+ * re-assert those; they pin the NEW format-language the re-spec introduces.
+ */
+describe("sil_search — description steers the agent to ISO CODES, not free text (re-spec)", () => {
+  function description(): string {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    return getTool(api, TOOL).description;
+  }
+
+  it("contains an explicit 'send standard ISO codes, not free text / natural-language place names' steer", () => {
+    const d = description().toLowerCase();
+    // It must name ISO/standard CODES as the required form AND name the anti-form
+    // (free text / place names / country names) the agent must NOT send.
+    expect(d).toMatch(/iso|standard code|2-letter|two-letter|alpha-2|alpha 2/);
+    expect(d).toMatch(/not.*(free text|name|place|natural)|never.*(name|free text)|code.*not.*name/);
+  });
+
+  it("states the country format: a 2-letter ISO 3166-1 alpha-2 code, with example codes (US/GB/DE)", () => {
+    const d = description();
+    // The country format instruction must name the alpha-2 standard AND show codes
+    // (not country names) as the example, so the agent copies the right shape.
+    expect(d.toLowerCase()).toMatch(/alpha-2|alpha 2|3166-1|two-letter|2-letter/);
+    expect(d).toMatch(/\bUS\b|\bGB\b|\bDE\b/); // example CODES, not "United States"
+  });
+
+  it("states the region format: an ISO 3166-2 subdivision CODE (e.g. CA/NY/BY), not a place name", () => {
+    const d = description();
+    expect(d.toLowerCase()).toMatch(/3166-2|subdivision|region code/);
+    // Names the code form and example codes — and that it is NOT a place name.
+    expect(d).toMatch(/\bCA\b|\bNY\b|\bBY\b/);
+    expect(d.toLowerCase()).toMatch(/not.*(place|name|free text)|code.*not.*name/);
+  });
+
+  it("states the condition values are exactly new / secondhand (lowercase)", () => {
+    const d = description().toLowerCase();
+    expect(d).toMatch(/new/);
+    expect(d).toMatch(/secondhand/);
+  });
+});
+
+/**
+ * RE-SPEC: per-field `description` self-describes its FORMAT (agents read field
+ * descriptions independently of the tool description). The thin contract's per-field
+ * descriptions named the alpha-2 shape loosely; the re-spec requires each field's
+ * own description to carry the exact format language so an agent reading only the
+ * field still sends a code, not a name.
+ */
+describe("sil_search — each location field's per-field description self-describes its format (re-spec)", () => {
+  function searchProps(): Record<string, Record<string, unknown>> {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const params = getTool(api, TOOL).parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+    };
+    return params.properties ?? {};
+  }
+  function shipToSub(): Record<string, Record<string, unknown>> {
+    return (searchProps()["ship_to"]!["properties"] ?? {}) as Record<string, Record<string, unknown>>;
+  }
+
+  it("ship_to.country field description names the 2-letter ISO 3166-1 alpha-2 code form (a code, not a country name)", () => {
+    const desc = String(shipToSub()["country"]!["description"] ?? "");
+    expect(desc.toLowerCase()).toMatch(/alpha-2|alpha 2|3166-1|2-letter|two-letter/);
+    expect(desc).toMatch(/\bUS\b|\bGB\b|\bDE\b/);
+  });
+
+  it("ship_to.region field description names the ISO 3166-2 subdivision code form (a code, not a place name)", () => {
+    const desc = String(shipToSub()["region"]!["description"] ?? "");
+    expect(desc.toLowerCase()).toMatch(/3166-2|subdivision|region code|code/);
+    expect(desc).toMatch(/\bCA\b|\bNY\b|\bBY\b/);
+    expect(desc.toLowerCase()).toMatch(/not.*(place|name)|code.*not.*name/);
+  });
+
+  it("ships_from.country field description names the 2-letter ISO 3166-1 alpha-2 code form", () => {
+    const sub = (searchProps()["ships_from"]!["properties"] ?? {}) as Record<string, Record<string, unknown>>;
+    const desc = String(sub["country"]!["description"] ?? "");
+    expect(desc.toLowerCase()).toMatch(/alpha-2|alpha 2|3166-1|2-letter|two-letter/);
+    expect(desc).toMatch(/\bUS\b|\bGB\b|\bDE\b/);
+  });
+
+  it("condition field description names exactly the new / secondhand value set", () => {
+    const desc = String(searchProps()["condition"]!["description"] ?? "").toLowerCase();
+    expect(desc).toMatch(/new/);
+    expect(desc).toMatch(/secondhand/);
   });
 });
 
@@ -206,6 +560,92 @@ describe("sil_search — the guard does NOT over-reject a valid filter-only brow
     await getTool(api, TOOL).execute("c1", { price_min: 5000 });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * `readSearchParams` (catalog.ts) narrows the untrusted, host-provided params.
+ * Card AC[unit]: a field of the WRONG type at the read site (a drifted on-disk
+ * call) is DROPPED — treated as absent — never coerced, mirroring the existing
+ * `readIds` discipline (no `any`, no unchecked cast). A dropped field must not
+ * reach the wire body. Exercised through the real tool execute with a
+ * body-capturing fetch spy (tool-boundary unit: mock api + temp dir + spied
+ * fetch). A real `query` rides alongside so the request clears the input guard
+ * and the malformed filter's ABSENCE in the body is observable.
+ */
+describe("sil_search — readSearchParams drops wrong-typed new filter args (narrowing, no coercion)", () => {
+  it("`available` as a string is dropped (not coerced to a boolean) — no filters.available on the wire", async () => {
+    seedTokens();
+    const bodies: unknown[] = [];
+    captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    // `available: "true"` is the wrong type. It must NOT become filters.available.
+    await getTool(api, TOOL).execute("c1", { query: "chair", available: "true" });
+
+    const body = bodies[0] as Record<string, unknown>;
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("available");
+  });
+
+  it("`condition` as a non-array (bare string) is dropped — no filters.condition on the wire", async () => {
+    seedTokens();
+    const bodies: unknown[] = [];
+    captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair", condition: "new" });
+
+    const body = bodies[0] as Record<string, unknown>;
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("condition");
+  });
+
+  it("`ship_to` as a primitive (string) is dropped — no filters.ships_to on the wire", async () => {
+    seedTokens();
+    const bodies: unknown[] = [];
+    captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair", ship_to: "US" });
+
+    const body = bodies[0] as Record<string, unknown>;
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("ships_to");
+    expect(filters).not.toHaveProperty("ship_to");
+  });
+
+  it("`ships_from` as a primitive (number) is dropped — no filters.ships_from on the wire", async () => {
+    seedTokens();
+    const bodies: unknown[] = [];
+    captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair", ships_from: 42 });
+
+    const body = bodies[0] as Record<string, unknown>;
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("ships_from");
+  });
+
+  it("a valid `available: false` STILL survives the read site (the drop is type-driven, not value-driven)", async () => {
+    // Guards against an over-eager narrowing that drops false along with the
+    // wrong-typed cases. false is a VALID boolean and must reach the wire.
+    seedTokens();
+    const bodies: unknown[] = [];
+    captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair", available: false });
+
+    const body = bodies[0] as Record<string, unknown>;
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).toHaveProperty("available", false);
   });
 });
 

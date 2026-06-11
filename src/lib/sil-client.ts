@@ -196,10 +196,41 @@ export type IdentityOutcome =
   | { kind: "forbidden"; reason: string }
   | { kind: "retryable" };
 
+/** A deliver-to destination for serviceability + localization filtering. `country`
+ * is the ISO 3166-1 alpha-2 code (required when the object is present); `region`
+ * (ISO 3166-2 subdivision code) and `postal_code` refine it. FORMAT is enforced at
+ * the read site (`readSearchParams` in catalog.ts rejects a present-but-malformed
+ * value client-side) — by the time a value reaches this layer it is already
+ * format-valid. The ONLY wire normalization here is country-case: `country` is
+ * uppercased on emit (`us` → `US`, the alpha-2 contract `@sil/schemas` mirrors);
+ * `region`/`postal_code` are forwarded VERBATIM. The agent-arg name `ship_to` is
+ * renamed to the wire key `ships_to` in `buildSearchBody`. Mirrors the Shopify
+ * Global-Catalog `ships_to` wire shape (`global-catalog-extension.md:32`). */
+export interface ShipTo {
+  country: string;
+  region?: string;
+  postal_code?: string;
+}
+
+/** A merchant-origin constraint. `country` is the ISO 3166-1 alpha-2 code
+ * (required when present), uppercased on the wire (same country-case normalization
+ * as `ShipTo`). Mirrors the Shopify `ships_from` wire shape
+ * (`global-catalog-extension.md:33`); same name on both sides. */
+export interface ShipsFrom {
+  country: string;
+}
+
 /** The simplified search query an agent sends — a free-text `query` plus
  * optional filters and pagination. Maps 1:1 into the sil-api `CatalogSearchRequest`
  * body (`searchCatalog` builds the nested shape). All fields optional at this
- * layer; the at-least-one-input rule is enforced by the tool, not here. */
+ * layer; the at-least-one-input rule is enforced by the tool, not here.
+ *
+ * The four serviceability/localization filters (`ship_to`, `ships_from`,
+ * `condition`, `available`) ride sil-api's OPEN `SearchFilters`
+ * (`additionalProperties: true`). They are forwarded ONLY when supplied — an
+ * absent filter is an omitted key, never a client-injected default (the server
+ * applies `available: true` itself). `available: false` is meaningful (include
+ * unavailable items) and is forwarded, never dropped as falsy. */
 export interface SearchParams {
   query?: string;
   category?: string;
@@ -207,6 +238,10 @@ export interface SearchParams {
   price_max?: number;
   cursor?: string;
   limit?: number;
+  ship_to?: ShipTo;
+  ships_from?: ShipsFrom;
+  condition?: string[];
+  available?: boolean;
 }
 
 /** A currency-tagged price, passed through OPAQUE from sil-api's UCP `Price`
@@ -851,6 +886,25 @@ function extractForbiddenReason(body: unknown): string {
  * `filters.categories` ARRAY (sil-api's filter is multi-taxonomy; the simplified
  * contract takes one). `price_min`/`price_max` map into `filters.price.{min,max}`.
  * The tool clamps nothing and validates no cursor opacity — sil-api owns those.
+ *
+ * THE load-bearing rename: the agent arg `ship_to` (singular) becomes the wire key
+ * `filters.ships_to` (plural). `ships_from`/`condition`/`available` keep their name
+ * under `filters.*`. These four ride sil-api's OPEN `SearchFilters`
+ * (`additionalProperties: true`), which SILENTLY accepts an unknown key — so the
+ * exact emitted key name is the only thing standing between a working serviceability
+ * filter and a no-op (a wrong rename fails GREEN). Each is forwarded ONLY when
+ * supplied (omit-when-absent, identical to `category`/`price`/`pagination`); NO
+ * client-injected default (the server applies `available: true`). A supplied
+ * `available: false` is narrowed with `typeof === "boolean"`, never `if (v)`, so the
+ * meaningful `false` (include unavailable items) survives.
+ *
+ * COUNTRY-CASE NORMALIZATION is the wire layer's job (the read site owns FORMAT
+ * rejection): `ships_to.country` and `ships_from.country` are emitted UPPERCASE
+ * (`us` → `US`), the alpha-2 contract `@sil/schemas` `ShipTo`/`ShipFrom` mirrors
+ * byte-for-byte. A lowercase code on the wire would diverge from the sibling and
+ * (depending on the server's case-sensitivity) silently mis-filter. `region` and
+ * `postal_code` are forwarded VERBATIM — they passed their pattern at the read site,
+ * and the wire normalizes only country case.
  */
 function buildSearchBody(params: SearchParams): Record<string, unknown> {
   const body: Record<string, unknown> = {};
@@ -864,6 +918,17 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   if (typeof params.price_min === "number") price["min"] = params.price_min;
   if (typeof params.price_max === "number") price["max"] = params.price_max;
   if (Object.keys(price).length > 0) filters["price"] = price;
+
+  // The four serviceability/localization filters — the `ship_to` → `ships_to`
+  // rename happens here; the other three keep their name. Country is uppercased
+  // on emit (region/postal forwarded verbatim); the other three pass through as-is.
+  if (params.ship_to !== undefined) filters["ships_to"] = withUppercaseCountry(params.ship_to);
+  if (params.ships_from !== undefined) {
+    filters["ships_from"] = withUppercaseCountry(params.ships_from);
+  }
+  if (params.condition !== undefined) filters["condition"] = params.condition;
+  if (typeof params.available === "boolean") filters["available"] = params.available;
+
   if (Object.keys(filters).length > 0) body["filters"] = filters;
 
   const pagination: Record<string, unknown> = {};
@@ -872,6 +937,14 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   if (Object.keys(pagination).length > 0) body["pagination"] = pagination;
 
   return body;
+}
+
+/** Emit a ship-to/ships-from object with its alpha-2 `country` UPPERCASED on the
+ * wire (`us` → `US`); every other field (`region`/`postal_code` on `ShipTo`) is
+ * preserved verbatim. The spread-then-overwrite keeps the shape generic over both
+ * {@link ShipTo} and {@link ShipsFrom} without reshaping or dropping a field. */
+function withUppercaseCountry<T extends { country: string }>(value: T): T {
+  return { ...value, country: value.country.toUpperCase() };
 }
 
 /**
