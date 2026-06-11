@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@4gpts/sil` are documented here. The format follows
+All notable changes to the `sil-openclaw` plugin (npm `sil-openclaw`, ClawHub `sil`) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -9,6 +9,25 @@ dated release section, and `pnpm release` attaches that section to the ClawHub
 release (`clawhub package publish --changelog`). See [README](./README.md#releasing).
 
 ## [Unreleased]
+
+## [0.2.1] - 2026-06-11
+
+### Changed
+
+- README restructured to be usage-first. Dropped the internal "How it works",
+  "Configuration", and "Files on disk" sections and reduced "Security" to a
+  pointer to [SECURITY.md](./SECURITY.md). Expanded the tool surface into a
+  **Tools** section (Identity + Catalog, including the `sil_search` ship-to /
+  serviceability filters), and added an **Identity & authentication** section
+  (sil gives the agent an identity and the capability to transact with UCP
+  merchants) and a **Skills** section documenting the bundled `sil` skill.
+  Implementation and security internals now live solely in `SECURITY.md` and
+  `openclaw.plugin.json#security`.
+- Fixed `pnpm release`’s ClawHub upload: it now re-packs the built tarball under
+  the scoped name `@4gpts/sil` (the bare plugin id `sil` is unclaimable — already
+  owned by that package) instead of the failing `--name sil`, so npm
+  (`sil-openclaw`) and ClawHub (`@4gpts/sil`) publish the same contents from one
+  build.
 
 ## [0.2.0] - 2026-06-11
 

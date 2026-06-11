@@ -1,11 +1,19 @@
 #!/usr/bin/env node
 /**
- * Build, pack ONCE, and publish the identical tarball to npm and ClawHub.
+ * Build, pack, and publish to npm and ClawHub.
  *
- * The two registries receive the SAME bytes: this builds a clean `dist/`,
- * `npm pack` produces one tarball, and both `npm publish <tarball>` and
- * `clawhub package publish <tarball>` upload that exact artifact. One build,
- * one artifact, two registries — no drift between what npm and ClawHub serve.
+ * The two registries publish under DIFFERENT names, by hard constraint:
+ *   - npm:     `sil-openclaw`  (unscoped — the bare `sil` is taken upstream)
+ *   - ClawHub: `@4gpts/sil`    (the plugin id `sil` cannot be claimed on its own;
+ *              it is already owned by the @4gpts/sil package, so ClawHub publishes
+ *              under the scoped @<owner>/<plugin-id> name. The runtime plugin id
+ *              stays `sil`, so `openclaw plugins install clawhub:sil` still resolves.)
+ *
+ * One clean build, then the SAME file content to both registries: npm gets the
+ * packed `sil-openclaw` tarball as-is; ClawHub gets those identical files
+ * re-packed with only package.json#name rewritten to `@4gpts/sil` (ClawHub
+ * requires --name to equal the tarball's package.json#name). Same content, the
+ * name field is the only difference — no drift in what the two registries serve.
  *
  * Usage:
  *   pnpm release        publish for real (npm + ClawHub)
@@ -23,7 +31,8 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,19 +41,22 @@ const DRY_RUN = process.argv.includes("--dry-run");
 // The 4gpts ClawHub org we publish under (mirrors the @4gpts npm scope). You
 // authenticate as an org member via `clawhub login`; override with CLAWHUB_OWNER.
 const DEFAULT_CLAWHUB_OWNER = "4gpts";
+const CLAWHUB_OWNER = process.env.CLAWHUB_OWNER || DEFAULT_CLAWHUB_OWNER;
 const CLAWHUB_FAMILY = "code-plugin";
 
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
 const version = pkg.version;
 const tag = `v${version}`;
 
-// ClawHub publishes under the plugin's OpenClaw id (e.g. `sil`) — the registry
-// is inherently OpenClaw, so it omits the `-openclaw` suffix the npm name
-// (`@4gpts/sil-openclaw`) carries. npm gets the scoped, suffixed distribution
-// name; ClawHub gets the bare plugin identity.
-const CLAWHUB_NAME = JSON.parse(
+// ClawHub package name: the SCOPED @<owner>/<plugin-id> identity (e.g. @4gpts/sil).
+// The bare plugin id (`sil`, openclaw.plugin.json#id) cannot be a package name on
+// its own — it is already claimed by the @4gpts/sil package — so the scoped name is
+// the ClawHub identity, while the runtime plugin id stays `sil`. Derived from owner
+// + id so it never drifts from the manifest.
+const CLAWHUB_PLUGIN_ID = JSON.parse(
   readFileSync(resolve(ROOT, "openclaw.plugin.json"), "utf8"),
 ).id;
+const CLAWHUB_NAME = `@${CLAWHUB_OWNER}/${CLAWHUB_PLUGIN_ID}`;
 
 const log = (msg) => console.log(`[release] ${msg}`);
 function fail(msg) {
@@ -129,38 +141,75 @@ function publishNpm(tarball) {
   runInherit("npm", args);
 }
 
-function publishClawhub(tarball) {
-  const owner = process.env.CLAWHUB_OWNER || DEFAULT_CLAWHUB_OWNER;
-  const sha = capture("git", ["rev-parse", "HEAD"]);
-  // The release notes for this version, straight from CHANGELOG.md (empty if
-  // the version has no section yet — then we just omit --changelog).
-  const changelog = (tryCapture("node", ["scripts/changelog.mjs", "show", version]) ?? "").trim();
-  const args = [
-    "package",
-    "publish",
-    tarball,
-    "--family",
-    CLAWHUB_FAMILY,
-    "--name",
-    CLAWHUB_NAME,
-    "--owner",
-    owner,
-    "--source-repo",
-    sourceRepo(),
-    "--source-commit",
-    sha,
-  ];
-  if (changelog) args.push("--changelog", changelog);
-  if (DRY_RUN) args.push("--dry-run");
-  else args.push("--tags", "latest");
-  log(
-    `clawhub package publish${DRY_RUN ? " --dry-run" : ""} (name=${CLAWHUB_NAME}, owner=${owner}, ` +
-      `repo=${sourceRepo()}, changelog=${changelog ? "yes" : "none"})`,
-  );
-  runInherit("clawhub", args);
+/**
+ * Re-pack the just-built npm tarball under the ClawHub name. ClawHub requires
+ * --name to EQUAL the tarball's package.json#name, and the npm tarball carries
+ * `sil-openclaw` — so extract it, rewrite ONLY package.json#name to CLAWHUB_NAME
+ * (@4gpts/sil), and `npm pack` the renamed package. The content is identical to
+ * npm's (same extracted files); only the name field changes. Returns the staged
+ * tarball path — its parent temp dir is the caller's to remove.
+ */
+function packClawhubTarball(npmTarball) {
+  const stage = mkdtempSync(resolve(tmpdir(), "sil-clawhub-"));
+  // Extract the already-built npm tarball (→ <stage>/package/...) so the ClawHub
+  // artifact ships the exact same files, not a separate build.
+  runInherit("tar", ["-xzf", npmTarball, "-C", stage]);
+  const pkgPath = resolve(stage, "package", "package.json");
+  const staged = JSON.parse(readFileSync(pkgPath, "utf8"));
+  staged.name = CLAWHUB_NAME;
+  writeFileSync(pkgPath, `${JSON.stringify(staged, null, 2)}\n`, "utf8");
+  // Re-pack the renamed package dir into the same temp dir. --ignore-scripts: no
+  // prepack rebuild (the dist is already inside the extracted package).
+  const out = capture("npm", [
+    "pack",
+    resolve(stage, "package"),
+    "--json",
+    "--ignore-scripts",
+    "--pack-destination",
+    stage,
+  ]);
+  const filename = JSON.parse(out)?.[0]?.filename;
+  if (!filename) fail("clawhub stage: `npm pack --json` did not report a tarball filename.");
+  return resolve(stage, filename);
 }
 
-log(`${DRY_RUN ? "DRY-RUN " : ""}release ${pkg.name}@${version}`);
+function publishClawhub(npmTarball) {
+  const sha = capture("git", ["rev-parse", "HEAD"]);
+  // The release notes for this version, straight from CHANGELOG.md (empty if the
+  // version has no section yet — then we just omit --changelog).
+  const changelog = (tryCapture("node", ["scripts/changelog.mjs", "show", version]) ?? "").trim();
+  // Stage the @4gpts/sil-named tarball (ClawHub requires --name == package name).
+  const tarball = packClawhubTarball(npmTarball);
+  try {
+    const args = [
+      "package",
+      "publish",
+      tarball,
+      "--family",
+      CLAWHUB_FAMILY,
+      "--name",
+      CLAWHUB_NAME,
+      "--owner",
+      CLAWHUB_OWNER,
+      "--source-repo",
+      sourceRepo(),
+      "--source-commit",
+      sha,
+    ];
+    if (changelog) args.push("--changelog", changelog);
+    if (DRY_RUN) args.push("--dry-run");
+    else args.push("--tags", "latest");
+    log(
+      `clawhub package publish${DRY_RUN ? " --dry-run" : ""} (name=${CLAWHUB_NAME}, owner=${CLAWHUB_OWNER}, ` +
+        `repo=${sourceRepo()}, changelog=${changelog ? "yes" : "none"})`,
+    );
+    runInherit("clawhub", args);
+  } finally {
+    rmSync(dirname(tarball), { recursive: true, force: true });
+  }
+}
+
+log(`${DRY_RUN ? "DRY-RUN " : ""}release ${pkg.name}@${version} (npm) + ${CLAWHUB_NAME}@${version} (ClawHub)`);
 preflight();
 const tarball = buildAndPack();
 try {

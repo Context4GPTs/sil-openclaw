@@ -56,9 +56,9 @@ The agent loads the bundled skill on first commerce intent and takes it from the
 
 **A commerce catalog built for agents, not browsers.** That's sil.
 
-sil is a [UCP](https://github.com/universal-commerce-protocol/ucp) (Universal Commerce Protocol) commerce service. `sil-openclaw` wires it into your OpenClaw agent so it can hold a sil identity and shop the catalog for you — find products, compare prices and availability, pull up full detail, and surface a checkout link the moment you say *buy*. Powered by [4GPTs](https://4gpts.com).
+sil is a [UCP](https://github.com/universal-commerce-protocol/ucp) (Universal Commerce Protocol) commerce service, and `sil-openclaw` wires it into your OpenClaw agent — so it can find products, compare prices and availability, pull up full detail, and surface a checkout link the moment you say *buy*. Powered by [4GPTs](https://4gpts.com).
 
-Today it covers **identity and catalog** — registration plus search and product lookup. The rest of the UCP journey (cart, checkout, order, fulfillment) lands as those domains ship, and the same plugin grows with them.
+Today the plugin covers **identity and catalog** — registration plus search and product lookup. The rest of the UCP journey (cart, checkout, order, fulfillment) lands as those domains ship, and the same plugin grows with them.
 
 ---
 
@@ -94,82 +94,49 @@ agent  done — here's your checkout link, ready to pay:
 
 ---
 
-## How it works
+## Identity & authentication
 
-sil lives at **two origins**, and the plugin talks to each for one job: **sil-web** is the auth authority (registration + token refresh); **sil-api** is the domain service (your identity and the catalog).
+**sil gives your agent an identity — and the capability to use it.** One browser sign-in links your OpenClaw agent to a sil identity it holds on your behalf — your name, your saved addresses. That identity is what lets the agent *transact*: it can search, compare, and surface checkout links with any merchant that speaks [UCP](https://github.com/universal-commerce-protocol/ucp) (the Universal Commerce Protocol), all under your account, without you ever touching a store login.
 
-```
-   you                    your agent (OpenClaw)               sil
-  ─────                   ─────────────────────              ─────
-  "register me     ──▶    sil_register          ──▶   sil-web   PKCE sign-in +
-   on sil"                                                      token refresh
-                                │  tokens.json (0600, on your disk)
-                                ▼
-  "find me a       ──▶    sil_search            ──▶   sil-api   catalog
-   keyboard"              sil_product_get                       search + lookup
-                                │
-   ◀── ranked products · prices · availability · checkout links ──┘
-```
+Registering is the only manual step. After that the agent carries your identity for you — ask *"who am I on sil?"* anytime to see exactly what it's holding.
 
-Every tool returns the **same JSON envelope** — a `status` (`ok`, `not_registered`, `must_reregister`, `forbidden`, `invalid_request`, `retryable`) plus, on success, its payload — so your agent always knows whether to act, re-register, or retry. An expired access token is refreshed transparently against sil-web (one refresh, one retry); a confirmed-dead session clears your tokens and asks you to register again.
+---
 
-And **`register()` opens nothing** — no sockets, no timers, no background service. Every network and disk operation happens inside a tool call, so the plugin adds zero idle footprint to your host.
+## Tools
 
-### Tool surface
+Namespaced `sil_*` so they never collide with other plugins. Your agent calls them for you — you just say what you want.
 
-Namespaced `sil_*` so they never collide with other plugins:
+**Identity**
 
 | Tool | What it does |
 |---|---|
-| `sil_register` | Start browser sign-in; returns an `auth_url`, polls in the background, stores credentials once you're done. |
-| `sil_whoami` | Your identity (name, addresses), refreshing an expired token transparently. |
-| `sil_search` | Ranked purchasable variants for a `query` / `category` / price range — each with `id`, `title`, `price`, `availability`, `checkout_url` — plus a pagination `cursor`. |
-| `sil_product_get` | Resolve `ids: string[]` to full products in UCP shape (description, options, featured variant); misses come back in `not_found`. |
+| `sil_register` | Start a browser sign-in and link your agent to your sil identity. Returns an `auth_url` to open; once you've signed in, the agent is registered and can transact. Takes no arguments. |
+| `sil_whoami` | Read your sil identity — name and saved addresses — as the agent sees it. Takes no arguments. |
+
+**Catalog**
+
+| Tool | What it does |
+|---|---|
+| `sil_search` | Search for purchasable products. A free-text `query` plus optional filters: `category`, `price_min`/`price_max`, `ship_to` (delivery destination — leave empty to ship to your registered address), `ships_from` (merchant origin country), `condition` (`new` / `secondhand`), and `available`. Returns a ranked list of variants — each with `id`, `title`, `price`, `availability`, `checkout_url`, `source` — and a pagination `cursor`. Location filters take ISO codes (`US`, `CA`), not place names. |
+| `sil_product_get` | Resolve `ids` you already hold to full products in UCP shape — description, options, and the featured purchasable variant with fresh `price`, `availability`, and `checkout_url`. Re-fetch right before buying; those values are point-in-time, not guarantees. Ids that no longer resolve come back in `not_found`. |
 
 ---
 
-## Configuration
+## Skills
 
-Optional, under `plugins.entries.sil.config` in `~/.openclaw/openclaw.json`. Resolution is **override → env → default**.
+The plugin ships one bundled skill — **`sil`** 🛒 — that your agent loads automatically the first time you express a shopping intent. You don't invoke it; it's the playbook that makes the four tools work well together:
 
-| Key | Env | Default | Origin |
-|---|---|---|---|
-| `sil_web_url` | `SIL_WEB_URL` | `https://sil.4gpts.com` | sil-web — auth (registration, refresh) |
-| `sil_api_url` | `SIL_API_URL` | `https://sil-api.4gpts.com` | sil-api — identity + catalog |
+- **Routes intent to the right tool.** *"find me a keyboard"* → `sil_search`, *"look these up"* → `sil_product_get`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`.
+- **Recovers the right way.** Every tool reports a status; the skill follows that tool's own recovery hint — re-register, fix the query, or retry — instead of guessing a fix that won't work.
+- **Keeps prices honest.** It treats price, availability, and checkout links as point-in-time and re-checks an item right before you buy, so the link you get is the link you pay.
 
-If your host runs a restrictive tool profile (`coding`, `messaging`, `minimal`), let sil through and restart the gateway:
-
-```json
-{ "tools": { "profile": "coding", "alsoAllow": ["sil"] } }
-```
-
-Use `alsoAllow`, not `allow` — `allow` runs *after* the profile filter and can't rescue a tool the profile already removed. The default `full` profile needs no patch.
-
----
-
-## Files on disk
-
-```
-$SIL_DATA_DIR/                 # default: $XDG_DATA_HOME/sil, else ~/.local/share/sil
-├── tokens.json                # access + refresh token   (mode 0600)
-└── config.json                # the registered user's identity
-```
-
-The PKCE verifier never touches disk — it lives only in memory for the length of a sign-in. Uninstalling the plugin never touches this directory; your data stays where you can see and delete it.
+Because the skill ships inside the plugin, installing the plugin installs the skill — there's nothing extra to set up.
 
 ---
 
 ## Security
 
-The plugin holds your tokens and talks to sil on your behalf — you shouldn't have to take that on faith.
-
-- **`register()` opens nothing.** No sockets, no timers, no daemon. All I/O is inside a tool call — zero idle footprint.
-- **PKCE, verifier in memory only.** Sign-in uses PKCE; the verifier is never written to disk. Tokens and identity PII are never logged.
-- **Credentials at `$SIL_DATA_DIR`, mode 0600.** The registration poll timer is bounded — it stops on the first terminal outcome or the session deadline.
-- **Two origins, nothing else.** sil-web (auth) and sil-api (identity + catalog). No inbound webhook, no public URL, no third-party beacons.
-- **No `child_process`, no native modules, no install scripts.** A minimal, auditable surface.
-
-> **Full policy:** [SECURITY.md](./SECURITY.md) · machine-readable disclosure in [`openclaw.plugin.json#security`](./openclaw.plugin.json). **Found an issue?** DM [@4gpts on X](https://x.com/4gpts).
+The plugin holds your sil credentials and transacts on your behalf. The full disclosure — what it touches, what it stores, and how to report an issue — is in **[SECURITY.md](./SECURITY.md)**.
 
 ---
 
@@ -182,7 +149,7 @@ pnpm test        # vitest (unit + integration)
 pnpm typecheck   # tsc --noEmit
 ```
 
-Releasing is two steps: `pnpm version <patch|minor|major>` (bump → sync manifest → cut changelog → test → tag → push), then `pnpm release` (build → pack once → npm `sil-openclaw` + ClawHub `sil`, the **same** tarball to both). Full guide in [`CLAUDE.md`](./CLAUDE.md#releasing); release notes in [`CHANGELOG.md`](./CHANGELOG.md). Adding a tool is three steps, enforced by a drift-guard test — see [`CLAUDE.md`](./CLAUDE.md#how-to-add-a-tool).
+Releasing is two steps: `pnpm version <patch|minor|major>` (bump → sync manifest → cut changelog → test → tag → push), then `pnpm release` (build → pack → npm `sil-openclaw` + ClawHub `@4gpts/sil` — the same contents, re-packed under each registry's name). Full guide in [`CLAUDE.md`](./CLAUDE.md#releasing); release notes in [`CHANGELOG.md`](./CHANGELOG.md). Adding a tool is three steps, enforced by a drift-guard test — see [`CLAUDE.md`](./CLAUDE.md#how-to-add-a-tool).
 
 ---
 
