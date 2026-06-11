@@ -2,14 +2,14 @@
 
 ## Reporting a vulnerability
 
-Report suspected vulnerabilities in `@4gpts/sil` **privately — do not open a
+Report suspected vulnerabilities in `sil-openclaw` **privately — do not open a
 public issue**. Contact [@4gpts on X](https://x.com/4gpts) (this mirrors
 `openclaw.plugin.json#security.reportVulnerabilitiesTo`). We aim to acknowledge
 within a few business days and will coordinate a fix and disclosure timeline.
 
 ## Supported versions
 
-Only the latest `@4gpts/sil` published to npm / ClawHub is supported. We do not
+Only the latest `sil-openclaw` published to npm / ClawHub is supported. We do not
 backport fixes or maintain old release lines — upgrade to the latest version.
 
 ## What this plugin touches
