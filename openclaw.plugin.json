@@ -28,6 +28,11 @@
         "type": "string",
         "format": "uri",
         "description": "Override for the sil-api origin (the domain service — sil_whoami's identity read). Distinct from sil_web_url (sil-web). Falls back to the SIL_API_URL env var, then https://sil-api.4gpts.com. Set this at deploy to pin the sil-api host (or to the same origin as sil_web_url if a single gateway fronts both)."
+      },
+      "sil_web_public_url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Browser-facing sil-web origin for the registration auth URL. Defaults to sil_web_url. Set ONLY when the user's browser reaches sil-web at a different origin than the plugin does — e.g. local docker staging, where the plugin uses an internal service name (sil-web:3000) but the browser must use the host-published origin (localhost:13000). sil_register builds its auth_url from this; the claim poll still uses sil_web_url."
       }
     }
   },
@@ -42,6 +47,12 @@
       "label": "sil-api URL (identity)",
       "help": "The sil-api origin — sil_whoami reads the user's identity here. Distinct from the sil-web URL. Override for staging or self-hosted deployments.",
       "placeholder": "https://sil-api.4gpts.com",
+      "advanced": true
+    },
+    "sil_web_public_url": {
+      "label": "sil-web public URL (browser)",
+      "help": "The browser-facing sil-web origin used to build the registration link. Defaults to the sil-web URL; override only when the user's browser reaches sil-web at a different origin than the plugin does (e.g. local docker staging).",
+      "placeholder": "https://sil.4gpts.com",
       "advanced": true
     }
   },

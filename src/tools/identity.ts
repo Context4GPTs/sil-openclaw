@@ -13,9 +13,11 @@
  *   2. Mint PKCE in-process. session_id (UUID), verifier (base64url 32 bytes),
  *      challenge = S256(verifier). The verifier is held ONLY in the poll step
  *      closure below — it never touches disk.
- *   3. Build the auth URL `<apiUrl>/authorize?session=<id>&code_challenge=<chal>`.
- *      The plugin does NOT pre-POST to sil-web: the pending session row is
- *      INSERTed server-side when the USER's browser opens this URL.
+ *   3. Build the auth URL `<webPublicUrl>/authorize?session=<id>&code_challenge=<chal>`
+ *      from the PUBLIC (browser-facing) origin — distinct from the internal origin
+ *      the claim poll uses when a split topology sets it. The plugin does NOT
+ *      pre-POST to sil-web: the pending session row is INSERTed server-side when
+ *      the USER's browser opens this URL.
  *   4. Start a fire-and-forget bounded poll of the claim endpoint, then return
  *      promptly with `{ status: "awaiting_browser", auth_url, session_id }`.
  *   5. On the poll's terminal success, persist tokens.json + config.json
@@ -31,7 +33,7 @@
 import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
-import { getWebUrl, getApiUrl } from "../lib/config.js";
+import { getApiUrl, getWebPublicUrl, getWebUrl } from "../lib/config.js";
 import {
   clearTokens,
   hasTokens,
@@ -87,23 +89,29 @@ function registerRegister(api: PluginAPI): void {
       const sessionId = newSessionId();
       const verifier = newVerifier();
       const challenge = deriveChallenge(verifier);
-      const apiUrl = getWebUrl();
 
-      // 3 — build the auth URL. Opening it (by the user's browser) is what
-      // creates the pending session server-side; the plugin does not pre-POST.
+      // The plugin's own server-side call (the claim poll) uses the INTERNAL
+      // sil-web origin; the auth_url the USER's browser opens uses the PUBLIC
+      // origin. Same value unless a split-network topology (e.g. local docker
+      // staging) sets sil_web_public_url / SIL_WEB_PUBLIC_URL.
+      const claimOrigin = getWebUrl();
+      const browserOrigin = getWebPublicUrl();
+
+      // 3 — build the auth URL (PUBLIC origin). Opening it (by the user's
+      // browser) is what creates the pending session server-side; no pre-POST.
       const authUrl =
-        `${stripTrailingSlash(apiUrl)}/authorize`
+        `${stripTrailingSlash(browserOrigin)}/authorize`
         + `?session=${sessionId}&code_challenge=${challenge}`;
 
-      // 4 — fire-and-forget bounded poll. Not awaited: execute() returns now.
-      // The poll step maps each claim outcome to the loop's done/continue
-      // signal AND performs persistence on success (so the atomic write
-      // completes inside the awaited tick, before onDone fires); the verifier
-      // is captured here and never leaves memory.
+      // 4 — fire-and-forget bounded poll (INTERNAL origin). Not awaited:
+      // execute() returns now. The poll step maps each claim outcome to the
+      // loop's done/continue signal AND performs persistence on success (so the
+      // atomic write completes inside the awaited tick, before onDone fires);
+      // the verifier is captured here and never leaves memory.
       startPoll({
         intervalMs: POLL_INTERVAL_MS,
         deadlineMs: POLL_DEADLINE_MS,
-        poll: () => claimStep(apiUrl, sessionId, verifier),
+        poll: () => claimStep(claimOrigin, sessionId, verifier),
         onDone: (result) => handleDone(api, sessionId, result),
       });
 

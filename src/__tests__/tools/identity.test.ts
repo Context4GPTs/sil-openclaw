@@ -40,7 +40,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerIdentityTools } from "../../tools/identity.js";
-import { setWebUrl } from "../../lib/config.js";
+import { setWebUrl, setWebPublicUrl } from "../../lib/config.js";
 import { getDataDir } from "../../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -84,20 +84,30 @@ function walkFiles(dir: string): string[] {
   return out;
 }
 
+let priorSilWebPublicUrl: string | undefined;
+
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-register-test-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
-  // Reset config singleton + env so each test starts at the default host.
+  priorSilWebPublicUrl = process.env["SIL_WEB_PUBLIC_URL"];
+  // Reset config singletons + env so each test starts at the default host —
+  // BOTH the internal sil-web origin AND the browser-facing public origin
+  // (a leaked public override would silently move the auth_url across tests).
   setWebUrl("");
+  setWebPublicUrl("");
   delete process.env["SIL_WEB_URL"];
+  delete process.env["SIL_WEB_PUBLIC_URL"];
 });
 
 afterEach(() => {
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   setWebUrl("");
+  setWebPublicUrl("");
   delete process.env["SIL_WEB_URL"];
+  if (priorSilWebPublicUrl === undefined) delete process.env["SIL_WEB_PUBLIC_URL"];
+  else process.env["SIL_WEB_PUBLIC_URL"] = priorSilWebPublicUrl;
   rmSync(dataDir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
@@ -231,6 +241,131 @@ describe("sil_register — host override resolution (pluginConfig → env → de
     expect(origin).not.toBe("https://config.example.com");
     expect(origin).not.toBe("https://env.example.com");
     expect(origin.startsWith("https://")).toBe(true);
+  });
+});
+
+describe("sil_register — public/internal origin split (auth_url vs claim poll)", () => {
+  // THE falsifiable test for this seam. The browser-facing auth_url must use the
+  // PUBLIC origin (getWebPublicUrl), while the background claim poll keeps hitting
+  // the INTERNAL origin (getWebUrl). They diverge ONLY when sil_web_public_url /
+  // SIL_WEB_PUBLIC_URL is set; that divergence is the whole point of the seam, so
+  // we assert BOTH sides off a single registration call.
+  //
+  // The claim-poll origin is observed structurally: claimSession builds
+  //   `${internalOrigin}/api/v1/sessions/${sessionId}/claim`
+  // so we capture the URL fetch is called with on the first poll tick. fetch is
+  // stubbed to never settle (so nothing reaches the network and no tokens are
+  // written); one fake-timer advance is enough to build + dispatch the claim
+  // request and capture its URL.
+
+  const INTERNAL = "https://internal.example.com";
+  const PUBLIC = "https://public.example.com";
+
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let claimUrls: string[];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    claimUrls = [];
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((input: unknown) => {
+        // Capture every URL the poll dispatches so we can assert the claim origin.
+        claimUrls.push(typeof input === "string" ? input : String(input));
+        return new Promise<Response>(() => {});
+      });
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it("auth_url uses the PUBLIC origin while the claim poll uses the INTERNAL origin", async () => {
+    process.env["SIL_WEB_URL"] = INTERNAL;
+    process.env["SIL_WEB_PUBLIC_URL"] = PUBLIC;
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+
+    // --- Browser side: auth_url origin is the PUBLIC one ---
+    const authUrl = new URL(payload["auth_url"] as string);
+    expect(authUrl.origin).toBe(PUBLIC);
+    // The path + the load-bearing query params survive the public-origin swap.
+    expect(authUrl.pathname).toBe("/authorize");
+    expect(authUrl.searchParams.get("session")).toBe(payload["session_id"]);
+    expect(authUrl.searchParams.get("session")).toMatch(UUID_RE);
+    expect(authUrl.searchParams.get("code_challenge")).toMatch(CHALLENGE_RE);
+    expect([...authUrl.searchParams.keys()].sort()).toEqual([
+      "code_challenge",
+      "session",
+    ]);
+
+    // --- Server side: the claim poll hits the INTERNAL origin ---
+    // Advance one poll tick so claimSession builds + dispatches the claim request.
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(claimUrls.length).toBeGreaterThan(0);
+    const claimUrl = new URL(claimUrls[0]!);
+    expect(claimUrl.origin).toBe(INTERNAL);
+    // It is the claim endpoint for THIS session, and it is NOT the public origin.
+    expect(claimUrl.pathname).toBe(
+      `/api/v1/sessions/${payload["session_id"] as string}/claim`,
+    );
+    expect(claimUrl.origin).not.toBe(PUBLIC);
+  });
+
+  it("a setWebPublicUrl config override (not env) still splits auth_url from the poll", async () => {
+    // Drive the split through the config layer the way applyPluginConfigOverrides
+    // would, proving the split is a property of getWebPublicUrl resolution, not of
+    // the env var specifically.
+    setWebUrl(INTERNAL);
+    setWebPublicUrl(PUBLIC);
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+    expect(new URL(payload["auth_url"] as string).origin).toBe(PUBLIC);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(claimUrls.length).toBeGreaterThan(0);
+    expect(new URL(claimUrls[0]!).origin).toBe(INTERNAL);
+  });
+
+  it("BACKWARD-COMPAT: with SIL_WEB_PUBLIC_URL unset, auth_url uses SIL_WEB_URL exactly as before", async () => {
+    // No public override anywhere → the public origin falls back to getWebUrl, so
+    // a single-origin deployment is byte-for-byte unchanged: auth_url AND the poll
+    // both sit on SIL_WEB_URL.
+    process.env["SIL_WEB_URL"] = INTERNAL;
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+    const authUrl = new URL(payload["auth_url"] as string);
+    expect(authUrl.origin).toBe(INTERNAL);
+    expect(authUrl.pathname).toBe("/authorize");
+    expect(authUrl.searchParams.get("session")).toBe(payload["session_id"]);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(claimUrls.length).toBeGreaterThan(0);
+    // Both sides on the SAME origin when nothing public is set (no divergence).
+    expect(new URL(claimUrls[0]!).origin).toBe(INTERNAL);
+    expect(new URL(claimUrls[0]!).origin).toBe(authUrl.origin);
+  });
+
+  it("BACKWARD-COMPAT: with nothing set, the default-host auth_url is unchanged by the new seam", async () => {
+    // The pre-seam default-host behaviour: no SIL_WEB_URL, no SIL_WEB_PUBLIC_URL.
+    // auth_url and the poll share the default origin — the seam adds no divergence.
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+    const authOrigin = new URL(payload["auth_url"] as string).origin;
+    expect(authOrigin.startsWith("https://")).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(claimUrls.length).toBeGreaterThan(0);
+    expect(new URL(claimUrls[0]!).origin).toBe(authOrigin);
   });
 });
 

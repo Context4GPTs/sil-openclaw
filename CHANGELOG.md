@@ -10,6 +10,16 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- `sil_web_public_url` plugin config (env `SIL_WEB_PUBLIC_URL`) — the
+  browser-facing sil-web origin for the `sil_register` `auth_url`, distinct from
+  the internal `sil_web_url` the plugin calls server-side. Defaults to
+  `sil_web_url`, so single-origin deployments are unchanged; set it only in
+  split-network topologies (e.g. local docker staging, where the plugin reaches
+  sil-web by an internal name but the user's browser needs the host-published
+  origin). The claim poll continues to use `sil_web_url`.
+
 ## [0.2.1] - 2026-06-11
 
 ### Changed

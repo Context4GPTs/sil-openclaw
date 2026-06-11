@@ -30,29 +30,38 @@ import {
   setApiUrl,
   getWebUrl,
   setWebUrl,
+  getWebPublicUrl,
+  setWebPublicUrl,
   applyPluginConfigOverrides,
 } from "../../lib/config.js";
 
 let priorSilApiBase: string | undefined;
 let priorSilApiUrl: string | undefined;
+let priorSilWebPublicUrl: string | undefined;
 
 beforeEach(() => {
   priorSilApiBase = process.env["SIL_API_URL"];
   priorSilApiUrl = process.env["SIL_WEB_URL"];
-  // Start each test from the pristine default for BOTH resolvers.
+  priorSilWebPublicUrl = process.env["SIL_WEB_PUBLIC_URL"];
+  // Start each test from the pristine default for ALL THREE resolvers.
   setApiUrl("");
   setWebUrl("");
+  setWebPublicUrl("");
   delete process.env["SIL_API_URL"];
   delete process.env["SIL_WEB_URL"];
+  delete process.env["SIL_WEB_PUBLIC_URL"];
 });
 
 afterEach(() => {
   setApiUrl("");
   setWebUrl("");
+  setWebPublicUrl("");
   if (priorSilApiBase === undefined) delete process.env["SIL_API_URL"];
   else process.env["SIL_API_URL"] = priorSilApiBase;
   if (priorSilApiUrl === undefined) delete process.env["SIL_WEB_URL"];
   else process.env["SIL_WEB_URL"] = priorSilApiUrl;
+  if (priorSilWebPublicUrl === undefined) delete process.env["SIL_WEB_PUBLIC_URL"];
+  else process.env["SIL_WEB_PUBLIC_URL"] = priorSilWebPublicUrl;
 });
 
 describe("getApiUrl — resolution order (pluginConfig → env → default)", () => {
@@ -122,5 +131,129 @@ describe("applyPluginConfigOverrides — wires sil_api_url independently", () =>
     applyPluginConfigOverrides({ sil_web_url: "https://web.example.com" });
     // sil_api_url absent from pluginConfig → env layer still wins.
     expect(new URL(getApiUrl()).origin).toBe("https://env.example.com");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sil-web PUBLIC origin (the browser-facing auth_url origin for sil_register).
+//
+// A THIRD origin seam, distinct from getWebUrl()/getApiUrl(). Its defining
+// trait is NOT a hardcoded default like the other two — it FALLS BACK TO
+// getWebUrl(): a single-origin deployment sets nothing and the browser origin
+// IS the internal origin. It diverges only when a split-network topology
+// (local docker staging) sets sil_web_public_url / SIL_WEB_PUBLIC_URL.
+//
+// Contract this block pins for the implementation (src/lib/config.ts):
+//   - getWebPublicUrl(): string   resolves sil_web_public_url → SIL_WEB_PUBLIC_URL
+//                                  → getWebUrl()  (the FALLBACK, not a constant)
+//   - setWebPublicUrl(url): void  test/override hook (empty string ⇒ unset)
+//   - applyPluginConfigOverrides reads `sil_web_public_url` off SilPluginConfig
+//     (string, non-empty) and feeds setWebPublicUrl, independently of the others.
+// ---------------------------------------------------------------------------
+
+describe("getWebPublicUrl — falls back to getWebUrl() (NOT a hardcoded default)", () => {
+  it("with nothing set, equals getWebUrl()'s own default (the fallback)", () => {
+    // No public override, no public env, no web override, no web env: the public
+    // origin must be EXACTLY getWebUrl()'s resolved value, not a separate constant.
+    expect(getWebPublicUrl()).toBe(getWebUrl());
+  });
+
+  it("tracks getWebUrl across getWebUrl's OWN env resolution (SIL_WEB_URL set, no public)", () => {
+    // The fallback is live, not a snapshot: move getWebUrl via its env layer and
+    // the public origin must follow it (since nothing public is set).
+    process.env["SIL_WEB_URL"] = "https://internal.example.com";
+    expect(new URL(getWebUrl()).origin).toBe("https://internal.example.com");
+    expect(getWebPublicUrl()).toBe(getWebUrl());
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://internal.example.com");
+  });
+
+  it("tracks getWebUrl across getWebUrl's OWN config override (setWebUrl, no public)", () => {
+    // Same fallback, driven by the config layer of getWebUrl this time.
+    setWebUrl("https://web-config.example.com");
+    expect(getWebPublicUrl()).toBe(getWebUrl());
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://web-config.example.com");
+  });
+});
+
+describe("getWebPublicUrl — resolution order (config → env → getWebUrl fallback)", () => {
+  it("uses the SIL_WEB_PUBLIC_URL env override when set, INDEPENDENTLY of getWebUrl", () => {
+    // Public env set + a DIFFERENT web origin: the public resolver returns its
+    // own env value and does NOT inherit the web origin (the whole point of the
+    // split — browser origin ≠ internal origin).
+    process.env["SIL_WEB_URL"] = "https://internal.example.com";
+    process.env["SIL_WEB_PUBLIC_URL"] = "https://public.example.com";
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://public.example.com");
+    // And it is genuinely independent: getWebUrl stays on its own value.
+    expect(new URL(getWebUrl()).origin).toBe("https://internal.example.com");
+    expect(getWebPublicUrl()).not.toBe(getWebUrl());
+  });
+
+  it("a setWebPublicUrl override beats the env (config wins)", () => {
+    process.env["SIL_WEB_PUBLIC_URL"] = "https://env-public.example.com";
+    setWebPublicUrl("https://config-public.example.com");
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://config-public.example.com");
+  });
+
+  it("applyPluginConfigOverrides({ sil_web_public_url }) beats the env (config > env)", () => {
+    // Mirror the web/api precedence tests: the pluginConfig override route wins
+    // over the env var, exactly as it does for sil_web_url / sil_api_url.
+    process.env["SIL_WEB_PUBLIC_URL"] = "https://env-public.example.com";
+    applyPluginConfigOverrides({
+      sil_web_public_url: "https://config-public.example.com",
+    });
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://config-public.example.com");
+  });
+
+  it("full precedence chain: config > env > getWebUrl fallback, peeled one layer at a time", () => {
+    // Establish a getWebUrl baseline so the fallback is a recognizable value.
+    setWebUrl("https://web-fallback.example.com");
+    process.env["SIL_WEB_PUBLIC_URL"] = "https://env-public.example.com";
+    setWebPublicUrl("https://config-public.example.com");
+
+    // 1) config present → config wins.
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://config-public.example.com");
+    // 2) peel config → env wins.
+    setWebPublicUrl("");
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://env-public.example.com");
+    // 3) peel env → getWebUrl fallback wins (NOT a hardcoded public default).
+    delete process.env["SIL_WEB_PUBLIC_URL"];
+    expect(getWebPublicUrl()).toBe(getWebUrl());
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://web-fallback.example.com");
+  });
+});
+
+describe("getWebPublicUrl — empty-string tolerance (same invariant as the other keys)", () => {
+  it("setWebPublicUrl('') unsets the config layer, falling through to env", () => {
+    process.env["SIL_WEB_PUBLIC_URL"] = "https://env-public.example.com";
+    setWebPublicUrl("https://config-public.example.com");
+    setWebPublicUrl(""); // empty ⇒ unset the config layer
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://env-public.example.com");
+  });
+
+  it("applyPluginConfigOverrides({ sil_web_public_url: '' }) does NOT clobber a prior value", () => {
+    // The empty-string-tolerant invariant the web/api keys have: an empty value
+    // in pluginConfig leaves the prior source in place rather than blanking it.
+    setWebPublicUrl("https://config-public.example.com");
+    applyPluginConfigOverrides({ sil_web_public_url: "" });
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://config-public.example.com");
+  });
+
+  it("ignores a missing sil_web_public_url (leaves the prior source in place)", () => {
+    process.env["SIL_WEB_PUBLIC_URL"] = "https://env-public.example.com";
+    // sil_web_public_url absent from pluginConfig → env layer still wins; the
+    // other keys in the same call do not perturb the public resolver.
+    applyPluginConfigOverrides({ sil_web_url: "https://web.example.com" });
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://env-public.example.com");
+  });
+});
+
+describe("getWebPublicUrl — independent of getApiUrl (three distinct seams)", () => {
+  it("does not inherit, and is not inherited by, the sil-api override", () => {
+    // The three seams are mutually independent: setting the api origin must not
+    // move the public origin, and setting the public origin must not move api.
+    setApiUrl("https://sil-api-only.example.com");
+    setWebPublicUrl("https://public-only.example.com");
+    expect(new URL(getApiUrl()).origin).toBe("https://sil-api-only.example.com");
+    expect(new URL(getWebPublicUrl()).origin).toBe("https://public-only.example.com");
   });
 });

@@ -8,6 +8,8 @@
  *     1. `api.pluginConfig.sil_web_url`  2. `SIL_WEB_URL`  3. `DEFAULT_WEB_URL`
  *   sil-API (commerce/identity reads — `sil_whoami`):
  *     1. `api.pluginConfig.sil_api_url`  2. `SIL_API_URL`  3. `DEFAULT_API_URL`
+ *   sil-WEB PUBLIC (the browser-facing `auth_url` origin — `sil_register` only):
+ *     1. `api.pluginConfig.sil_web_public_url`  2. `SIL_WEB_PUBLIC_URL`  3. `getWebUrl()`
  *
  * The two-origin reality is load-bearing (see the sil-whoami card): refresh
  * is on sil-web (the only holder of the Auth0 client secret), the identity
@@ -51,6 +53,7 @@ export type ConfigSource = "config" | "env" | "default";
 export interface SilPluginConfig {
   sil_web_url?: string;
   sil_api_url?: string;
+  sil_web_public_url?: string;
 }
 
 export function setWebUrl(url: string): void {
@@ -65,6 +68,22 @@ export function getWebUrlSource(): ConfigSource {
   if (_webUrl !== null) return "config";
   if (process.env["SIL_WEB_URL"]) return "env";
   return "default";
+}
+
+// Browser-facing sil-web origin for the registration `auth_url` (sil_register).
+// DISTINCT from getWebUrl() only when the URL the USER's browser opens differs
+// from the origin the plugin itself calls server-side — e.g. local docker
+// staging, where the plugin reaches sil-web by an internal name (sil-web:3000)
+// but the browser must use the host-published origin (localhost:13000). Falls
+// back to getWebUrl(), so a single-origin deployment (production) sets nothing.
+let _webPublicUrl: string | null = null;
+
+export function setWebPublicUrl(url: string): void {
+  _webPublicUrl = url === "" ? null : url;
+}
+
+export function getWebPublicUrl(): string {
+  return _webPublicUrl ?? process.env["SIL_WEB_PUBLIC_URL"] ?? getWebUrl();
 }
 
 export function setApiUrl(url: string): void {
@@ -104,11 +123,14 @@ export function applyPluginConfigOverrides(
   // PluginAPI.pluginConfig is `Record<string, unknown>` because the SDK
   // cannot know each plugin's schema, so callers cast to SilPluginConfig
   // at the boundary. The cast trusts a JSON file on disk — keep the guard.
-  const { sil_web_url, sil_api_url } = pluginConfig;
+  const { sil_web_url, sil_api_url, sil_web_public_url } = pluginConfig;
   if (typeof sil_web_url === "string" && sil_web_url.length > 0) {
     setWebUrl(sil_web_url);
   }
   if (typeof sil_api_url === "string" && sil_api_url.length > 0) {
     setApiUrl(sil_api_url);
+  }
+  if (typeof sil_web_public_url === "string" && sil_web_public_url.length > 0) {
+    setWebPublicUrl(sil_web_public_url);
   }
 }
