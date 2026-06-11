@@ -7,7 +7,7 @@ updated_at: 2026-06-11
 updated_by_card: publish-to-npm-clawhub
 ---
 
-`@4gpts/sil` publishes to **two registries** — npm (`@4gpts/sil`) and ClawHub (the `code-plugin` family). The release machinery is the minimal production-grade equivalent of the klodi OpenClaw adapter's, stripped of the monorepo's staging dir and vendoring (this repo is one flat package with one real runtime dep). Four decisions constrain all future release work.
+This plugin publishes to **two registries under two different names by design**: npm as **`sil-openclaw`** (unscoped — npm has no implicit OpenClaw context, so the distribution name carries the suffix and matches the repo) and ClawHub as **`sil`** (the registry *is* OpenClaw, so the `-openclaw` suffix is redundant; the name is the `openclaw.plugin.json#id`, passed via `--name`, published under the `4gpts` org). The release machinery is the minimal production-grade equivalent of the klodi OpenClaw adapter's, stripped of the monorepo's staging dir and vendoring (this repo is one flat package with one real runtime dep). Five decisions constrain all future release work.
 
 ## 1. `package.json#version` is the single source of truth; the manifest is mirrored
 
@@ -28,7 +28,7 @@ We lean on npm's `preversion`/`version`/`postversion` hooks rather than scriptin
 
 ## 3. Pack once, publish the identical tarball to both registries
 
-`scripts/release.mjs` builds a clean `dist/`, runs `npm pack` **once**, then hands that one tarball to both `npm publish <tarball>` and `clawhub package publish <tarball>`. Both registries serve **the same bytes** — there is no separate per-registry build, so they cannot drift. Real publishes fail closed: the preflight requires a clean tree, HEAD tagged `v<version>`, a logged-in npm (`npm whoami`), and `clawhub` on PATH. `--dry-run` skips those gates (it is a pure preview) and uploads nothing. ClawHub attribution (`--owner`, `--source-repo`, `--source-commit`) is derived from `package.json#repository` + `git`. The owner defaults to the **`4gpts`** org (mirroring the `@4gpts` npm scope) and is overridable via `CLAWHUB_OWNER`; the publisher authenticates as an org member (`clawhub login` resolved `whoami` → `blackbak`), and `--owner 4gpts` is the publish-on-behalf-of-org form the `--owner` flag exists for.
+`scripts/release.mjs` builds a clean `dist/`, runs `npm pack` **once**, then hands that one tarball to both `npm publish <tarball>` and `clawhub package publish <tarball>`. Both registries serve **the same bytes** — there is no separate per-registry build, so they cannot drift. Real publishes fail closed: the preflight requires a clean tree, HEAD tagged `v<version>`, a logged-in npm (`npm whoami`), and `clawhub` on PATH. `--dry-run` skips those gates (it is a pure preview) and uploads nothing. ClawHub attribution (`--owner`, `--source-repo`, `--source-commit`) is derived from `package.json#repository` + `git`. The owner defaults to the **`4gpts`** org and is overridable via `CLAWHUB_OWNER`; the publisher authenticates as an org member (`clawhub login` resolved `whoami` → `blackbak`), and `--owner 4gpts` is the publish-on-behalf-of-org form the `--owner` flag exists for.
 
 ## 5. Release notes flow through `CHANGELOG.md`
 

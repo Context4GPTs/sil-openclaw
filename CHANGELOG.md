@@ -10,6 +10,17 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Changed
+
+- **Renamed the published package.** npm: `@4gpts/sil` → **`sil-openclaw`** (unscoped —
+  npm has no implicit OpenClaw context, so the distribution name carries the suffix and
+  matches the repo). ClawHub: `@4gpts/sil` → **`sil`** (the registry is inherently
+  OpenClaw, so the `-openclaw` suffix is redundant; published under the `4gpts` org, from
+  `openclaw.plugin.json#id`). `release.mjs` now passes `--name` so the two names diverge by
+  design. The mistaken `@4gpts/sil` 0.1.0 is retired on both registries.
+- README rewritten in the install-first style of the klodi OpenClaw adapter (Install,
+  Host prerequisites, Config keys, Files on disk, Tool surface, Bundled skill, Security).
+
 ## [0.1.0] - 2026-06-11
 
 ### Added

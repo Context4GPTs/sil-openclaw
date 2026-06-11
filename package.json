@@ -1,5 +1,5 @@
 {
-  "name": "@4gpts/sil",
+  "name": "sil-openclaw",
   "version": "0.1.0",
   "description": "OpenClaw plugin for sil — register an identity and search and look up products in the sil commerce catalog from an agent.",
   "license": "Apache-2.0",
@@ -37,7 +37,6 @@
     "NOTICE"
   ],
   "publishConfig": {
-    "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
   "openclaw": {
@@ -66,7 +65,7 @@
       ]
     },
     "install": {
-      "npmSpec": "@4gpts/sil",
+      "npmSpec": "sil-openclaw",
       "localPath": "./",
       "defaultChoice": "npm",
       "minHostVersion": ">=2026.4.15"
