@@ -10,10 +10,17 @@
  *   POST /api/v1/sessions/{id}/claim   body { code_verifier }
  *     200 { access_token, refresh_token, user:{id} }  → success    (EXACTLY once)
  *     200 { status: "pending" }                       → pending
- *     409                                             → already_claimed
- *     410                                             → expired
+ *     409                                             → already_claimed (terminal)
+ *     410                                             → expired (terminal)
  *     404                                             → not_found (wrong verifier
- *                                                       ≡ unknown session, uniform)
+ *                                                       ≡ unknown session, uniform);
+ *                                                       the NORMAL pre-session early
+ *                                                       state — KEEP POLLING at the
+ *                                                       loop (non-terminal); only the
+ *                                                       deadline ends it (as timeout)
+ *     400 / other unexpected non-2xx                  → invalid_request (non-polling
+ *                                                       terminal — fail fast; a bad
+ *                                                       request can't be re-polled)
  *     5xx / network / abort                           → retryable
  *
  *   POST /api/v1/auth/refresh          body { refresh_token }
@@ -151,6 +158,7 @@ export type ClaimOutcome =
   | { kind: "already_claimed" }
   | { kind: "expired" }
   | { kind: "not_found" }
+  | { kind: "invalid_request" }
   | { kind: "retryable" };
 
 /** Outcome of a single refresh attempt. */
@@ -401,7 +409,16 @@ export type LookupOutcome =
  * Classify a claim response from its HTTP status AND body. The discriminant for
  * the two-200s split is the PRESENCE OF BOTH TOKENS in the body — never the
  * status code. A 200 that is not a complete token pair is `pending` (the safe
- * non-terminal landing); 409/410/404 are distinct terminals; 5xx is retryable.
+ * non-terminal landing). 409/410 are distinct terminals; 5xx is retryable.
+ *
+ * 404 is `not_found` ON THE WIRE — but it is the NORMAL pre-session early state
+ * (the session row is INSERTed server-side only when the user opens the auth
+ * URL), so its terminality lives at the LOOP, not here: `claimStep` keeps polling
+ * on `not_found` and only the 30-min deadline ends a never-appearing session (as
+ * `timeout`). A 400 / any other unexpected non-{200,409,410,404,5xx} status is a
+ * structurally-malformed request that re-polling can never fix, so it is its OWN
+ * non-polling terminal `invalid_request` (fail fast) rather than riding the
+ * keep-polling `not_found` path and spinning for the full deadline.
  *
  * Pure and exported — this is the highest-risk subtle branch, unit-tested in
  * isolation (sil-client.test.ts).
@@ -412,9 +429,11 @@ export function classifyClaimResponse(status: number, body: unknown): ClaimOutco
   if (status === 404) return { kind: "not_found" };
   if (status >= 500) return { kind: "retryable" };
   if (status !== 200) {
-    // 400 (malformed request) or any other unexpected 4xx: terminal not_found
-    // (re-polling can't fix a bad request); surface a re-run hint, not a spin.
-    return { kind: "not_found" };
+    // 400 (malformed request) or any other unexpected non-2xx: a NON-polling
+    // terminal — re-polling can't fix a structurally-bad request, so fail fast
+    // and loud rather than spinning to the deadline. Distinct from the early
+    // 404 `not_found`, which DOES keep polling.
+    return { kind: "invalid_request" };
   }
 
   // 200 — classify by body shape. Both tokens required for a clean success;

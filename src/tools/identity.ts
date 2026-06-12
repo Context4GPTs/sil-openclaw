@@ -19,9 +19,11 @@
  *   4. Start a fire-and-forget bounded poll of the claim endpoint, then return
  *      promptly with `{ status: "awaiting_browser", auth_url, session_id }`.
  *   5. On the poll's terminal success, persist tokens.json + config.json
- *      atomically. Other terminals (expired / already_claimed / not_found /
+ *      atomically. Other terminals (expired / already_claimed / invalid_request /
  *      timeout) persist nothing; the agent learns the outcome by re-calling
- *      sil_register (→ already_registered) or sil_whoami.
+ *      sil_register (→ already_registered) or sil_whoami. A claim 404 (`not_found`)
+ *      is NOT a terminal — it is the normal pre-session early state and keeps the
+ *      poll ticking; a session that never appears ends as `timeout` at the deadline.
  *
  * register() must stay synchronous and side-effect-free beyond registering the
  * tool — no fetch, no timer, no unawaited promise here. The poll timer is armed
@@ -286,11 +288,15 @@ interface ClaimStep extends Record<string, unknown> {
 
 /**
  * One poll step: claim, then map the outcome to the loop's done/continue signal.
- * `pending`/`retryable` keep the loop alive (`done:false`). A successful claim
- * is persisted HERE — tokens.json + config.json written atomically inside this
- * awaited tick — so the files are on disk before the loop settles; the step then
- * carries only the user_id forward (the tokens never travel past this closure).
- * Other terminals (expired / already_claimed / not_found) persist nothing.
+ * `pending`/`retryable`/`not_found` keep the loop alive (`done:false`). The 404
+ * `not_found` is the NORMAL pre-session early state (the session row is INSERTed
+ * server-side only when the user opens the auth URL), so it keeps polling exactly
+ * like `pending`, bounded by the 30-min deadline — a session that never appears
+ * settles as `timeout`, never as `not_found`. A successful claim is persisted
+ * HERE — tokens.json + config.json written atomically inside this awaited tick —
+ * so the files are on disk before the loop settles; the step then carries only
+ * the user_id forward (the tokens never travel past this closure). The terminals
+ * (expired / already_claimed / invalid_request) persist nothing.
  */
 async function claimStep(
   apiUrl: string,
@@ -301,6 +307,7 @@ async function claimStep(
   switch (outcome.kind) {
     case "pending":
     case "retryable":
+    case "not_found":
       return { done: false };
     case "success":
       await writeTokens({
@@ -311,7 +318,7 @@ async function claimStep(
       return { done: true, outcome: "success", user_id: outcome.user.id };
     case "expired":
     case "already_claimed":
-    case "not_found":
+    case "invalid_request":
       return { done: true, outcome: outcome.kind };
   }
 }
@@ -341,11 +348,14 @@ function handleDone(
     return;
   }
 
-  // expired / already_claimed / not_found — log the terminal so the outcome is
-  // never silent; the agent learns it on its next sil_register / sil_whoami.
+  // expired / already_claimed / invalid_request — log the terminal so the outcome
+  // is never silent; the agent learns it on its next sil_register / sil_whoami.
+  // `invalid_request` logs at WARN: a malformed claim request is unreachable from
+  // this client today, so it signals a contract-drift bug, not a user outcome —
+  // make it loud (the genuine `expired`/`already_claimed` are routine, at info).
   const outcome = typeof step.outcome === "string" ? step.outcome : "unknown";
   const marker = `sil_register_${outcome}`;
-  if (outcome === "not_found") {
+  if (outcome === "invalid_request") {
     api.logger.warn(marker, { session_id: sessionId });
   } else {
     api.logger.info(marker, { session_id: sessionId });
