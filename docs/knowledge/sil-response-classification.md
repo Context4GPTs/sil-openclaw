@@ -1,11 +1,11 @@
 ---
 id: sil-response-classification
-title: Classify sil responses on body shape, not HTTP status — anti-false-green guard is Array.isArray(products), NOT a result wrapper (search/lookup read flat, identity dual-reads); never res.ok
-tags: [sil-api, sil-web, http, classification, gotcha, false-green, envelope]
+title: Classify sil responses on body shape, not HTTP status — anti-false-green guard is Array.isArray(products), NOT a result wrapper (search/lookup read flat, identity dual-reads); never res.ok. Classifier is wire-pure; poll TERMINALITY lives at the loop (claim 404=keep-polling, deadline=timeout, 400=invalid_request fail-fast)
+tags: [sil-api, sil-web, http, classification, gotcha, false-green, envelope, poll, terminality, claim]
 card: sil-whoami-tool
-commit: d2b6393
-updated_at: 2026-06-10
-updated_by_card: catalog-plugin-tools-read-sil-api-flat-envelope
+commit: 82a1bca
+updated_at: 2026-06-12
+updated_by_card: sil-register-stops-polling-on-premature-not-found
 ---
 
 Every sil HTTP response is classified by a **pure, exported, unit-tested classifier** that branches on HTTP status **and, for `200`, the response body shape** — never on `res.ok`. This exists because sil returns semantically-distinct outcomes under the *same* HTTP status, so the status code alone is not enough to decide what happened.
@@ -15,6 +15,8 @@ The classifiers all live in `src/lib/sil-client.ts`: `classifyClaimResponse`, `c
 ## The 200-is-ambiguous traps (why body shape, not status)
 
 1. **Claim: `200`-pending vs `200`-success.** `POST /api/v1/sessions/{id}/claim` returns HTTP `200` both while the browser leg is still in progress (`{status:"pending"}`) and when the tokens are ready (`{access_token, refresh_token, user}`). The discriminant is **the presence of both tokens in the body** (`classifyClaimResponse`, `sil-client.ts:136`) — *not* the status. A malformed/partial `200` falls to the **safe non-terminal** `pending`, never to a false `success` that would persist a non-credential as tokens.
+
+   **`classifyClaimResponse` is wire-pure — terminality is NOT its job (see "Terminality lives at the loop" below).** The classifier emits `success` / `pending` / `already_claimed` (409) / `expired` (410) / `not_found` (404) / `invalid_request` (400 + any other unexpected non-`{200,409,410,404,5xx}`) / `retryable` (5xx, network) — these are *wire meanings*, not poll verdicts. **`not_found` is NOT a terminal** even though it names a 4xx: a claim `404` is the *normal pre-session early state* (the session row is `INSERT`ed server-side only when the user opens the auth URL, so the first poll always 404s before the human acts — `wrong-verifier ≡ unknown-session`, a uniform 404 with no existence oracle), so `claimStep` keeps polling on it exactly like `pending`. The one branch that *is* a hard terminal in the classifier is `invalid_request`: a structurally-malformed request re-polling can never fix, so it fails fast rather than spinning to the deadline (it is unreachable from this client today — the plugin always sends a valid 43-char verifier — so it is contract-drift insurance, logged at WARN). See [[sil-api-identity-contract]] for the claim wire contract.
 
 2. **Identity: anti-false-green `200`.** The authenticated self-read is **`GET /identity`** (a bodyless GET — `fetchIdentity`, `sil-client.ts:584`), which returns HTTP `200` with the real `{name, addresses}` payload. The discriminant is the **non-empty `name`**: `extractIdentity` (`sil-client.ts:818`) requires a non-empty `name` string AND that `addresses` is an **array** (which **may be empty** — `addresses: []` is a real, authenticated identity for a user who onboarded a name but no address; see below). Any `200` that yields no usable `name` — sil-api's *enrich-stub* shape `{kind, verified, subject, attributes, note}` that `POST /identity` still returns (no name), or a partial/garbage `200` — classifies as `retryable`, **never `ok`**. This is the load-bearing guard: **the test suite cannot go green while `sil_whoami` reads the stub shape** — i.e. it cannot false-green while the product promise (real PII over the wire) is unmet. The verb is itself load-bearing: POST hits the enrich-stub (no name), GET hits the real self-read. See [[sil-api-identity-contract]].
 
@@ -29,6 +31,14 @@ The classifiers all live in `src/lib/sil-client.ts`: `classifyClaimResponse`, `c
 ## When you add a new sil call
 
 Write a pure `classifyXResponse(status, body)` returning a discriminated union, export it, unit-test it in isolation (especially every `200` sub-case), and have the `fetchX` wrapper delegate to it. Map network errors / timeouts / aborts to the union's `retryable` variant — never let them throw past the wrapper.
+
+## Terminality lives at the loop, not in the classifier (for any polled outcome)
+
+A `classifyXResponse` reports **what the wire said**; whether that outcome **ends a poll** is decided one layer up, in the loop's step mapper (e.g. `claimStep`, `identity.ts:307`) — not in the classifier. Keep the classifier wire-pure: a 404 IS `not_found` on the wire, and the classifier says so; it is `claimStep` that decides `not_found` keeps polling. Collapsing the two layers is the exact bug card `sil-register-stops-polling-on-premature-not-found` fixed — `claimStep` had grouped the wire-truth `not_found` with the genuine terminals, so the first premature 404 (always fired ~3s in, before the human opened the browser) killed registration. The rule that follows:
+
+- **The only terminals of a registration poll are a successful claim and the deadline.** Everything else — `pending`, `not_found`, `retryable` — keeps polling (`claimStep` → `{ done: false }`). A session that never appears is **not** surfaced as `not_found`; it ends as `timeout` when the 30-min `POLL_DEADLINE_MS` elapses (`poller.ts` checks the deadline at the head of every `tick`, so perpetual `{ done: false }` is bounded, never an infinite loop). Surfacing a transient early state as a permanent verdict is a category error.
+- **A keep-polling outcome and a fail-fast terminal must be DISTINCT union variants** — never folded. `not_found` (re-pollable: the session may yet appear) and `invalid_request` (a 400 / unexpected non-2xx that re-polling can never fix) are different kinds precisely so the malformed request fails fast instead of riding the keep-polling path and spinning to a misleading `timeout`. When you add a polled outcome, decide its terminality at the step mapper, and give "keep polling" and "fail fast" separate kinds.
+- **The step mapper's `switch (outcome.kind)` has no `default`** (`claimStep`) — `tsc` exhaustiveness forces every new variant to be classified as keep-polling vs. terminal at compile time. Preserve that: don't add a `default` arm, or a new wire variant could silently fall through to the wrong terminality.
 
 ## Empty-addresses: a valid identity, gated by `name` (resolved)
 
