@@ -56,7 +56,7 @@ import { join } from "node:path";
 
 import { registerIdentityTools } from "../tools/identity.js";
 import { refreshStoredTokens } from "../lib/sil-client.js";
-import { setWebUrl, getWebUrl } from "../lib/config.js";
+import { setWebUrl, getWebUrl, setApiUrl } from "../lib/config.js";
 import { getDataDir, readTokens } from "../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -173,6 +173,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   setWebUrl("");
+  setApiUrl(""); // tests that pin the sil-api origin (the early-404→whoami leg) reset it here
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   rmSync(dataDir, { recursive: true, force: true });
@@ -266,10 +267,16 @@ describe("claim lifecycle — 200 pending keeps polling (NOT terminal)", () => {
 });
 
 describe("claim lifecycle — terminal status codes stop the loop", () => {
+  // NOTE (`sil-register-stops-polling-on-premature-not-found`): 404 was REMOVED
+  // from this terminal table. A claim 404 is the normal pre-session early state
+  // (the row is INSERTed server-side only when the user opens the auth URL), so
+  // it now KEEPS POLLING — its keep-polling/timeout behaviour is asserted in the
+  // dedicated "premature 404 keeps polling" + "perpetual 404 → timeout" blocks
+  // below, NOT here. Only the genuine terminals (410 expired / 409 already_claimed)
+  // remain in this table.
   for (const { code, body } of [
     { code: 410, body: { error: "session_expired", message: "Ask your agent to start again." } },
     { code: 409, body: { error: "already_claimed", message: "This session was already claimed." } },
-    { code: 404, body: { error: "not_found", message: "Session not found." } },
   ]) {
     it(`HTTP ${code} → stops polling, persists NO tokens, no timer remains`, async () => {
       const fx = installFetch(() => ({ status: code, body }));
@@ -289,6 +296,234 @@ describe("claim lifecycle — terminal status codes stop the loop", () => {
       expect(vi.getTimerCount()).toBe(0);
     });
   }
+});
+
+describe("claim lifecycle — a premature 404 KEEPS POLLING (the headline regression)", () => {
+  // `sil-register-stops-polling-on-premature-not-found`: the bug is that the
+  // FIRST poll tick fires (~3s) before the human has opened the auth URL, so the
+  // session row does not exist yet and the claim 404s — and the loop wrongly
+  // treats that 404 as terminal (`claimStep` → `done:true`, `handleDone` logs
+  // `sil_register_not_found`) and dies ~3s in, before the user could plausibly
+  // have acted. A 404 is the NORMAL early state; it must keep polling exactly
+  // like `pending`, bounded by the deadline.
+  //
+  // EXPECT RED against the current code (`identity.ts:312-315` groups `not_found`
+  // with the terminals): on the first 404 tick the loop SETTLES — the timer is
+  // gone, `sil_register_not_found` is logged, and the later success is never
+  // claimed, so `tokens.json` never appears and `sil_whoami` cannot resolve.
+
+  const SIL_API = "https://sil-api.test.example.com";
+  /** The agreed real identity-read body, in sil-api's UCP envelope `result`. */
+  const IDENTITY_ENVELOPE = {
+    protocol: "ucp",
+    version: "0.1",
+    domain: "identity",
+    result: {
+      name: "Polled User",
+      addresses: [{ line1: "1 Late Click Lane", city: "London", country: "GB" }],
+    },
+  };
+
+  it("does NOT settle on the FIRST 404 — the loop is still alive, nothing persisted, no terminal logged", async () => {
+    // Every tick 404s (the user has not acted). After the first tick, the loop
+    // must STILL be polling (a live timer remains) — the 404 is non-terminal.
+    const fx = installFetch(() => ({
+      status: 404,
+      body: { error: "not_found", message: "Session not found." },
+    }));
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    await getTool(api, TOOL).execute("c1", {});
+    // Drive a couple of ticks (interval is 3s) — well short of the 30-min deadline.
+    await vi.advanceTimersByTimeAsync(8_000);
+
+    // The 404 ticks fired …
+    expect(fx.callCount()).toBeGreaterThanOrEqual(2);
+    // … but the loop did NOT settle: a live timer remains for the next tick.
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    // Nothing persisted (no success yet) …
+    expect(readTokens()).toBeNull();
+    // … and crucially NO terminal `sil_register_not_found` was logged — a 404 is
+    // not a terminal anymore, so neither handleDone branch for it may fire.
+    const warnMarkers = (api.logger.warn as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    const infoMarkers = (api.logger.info as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    expect(warnMarkers).not.toContain("sil_register_not_found");
+    expect(infoMarkers).not.toContain("sil_register_not_found");
+  });
+
+  it("polls through early 404s, then a later 200 success persists credentials exactly once and sil_whoami resolves", async () => {
+    setApiUrl(SIL_API); // pin the identity-read origin for the whoami leg
+    let claimTicks = 0;
+    const fx = installFetch((url) => {
+      // The sil_whoami leg (real timers, after the claim settles) reads sil-api.
+      if (url.includes("/identity")) {
+        return { status: 200, body: IDENTITY_ENVELOPE };
+      }
+      // The claim leg: first two ticks 404 (user not acted), third tick succeeds.
+      claimTicks += 1;
+      if (claimTicks < 3) {
+        return { status: 404, body: { error: "not_found", message: "Session not found." } };
+      }
+      return { status: 200, body: SUCCESS_BODY };
+    });
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    await getTool(api, TOOL).execute("c1", {});
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    // It kept polling through every early 404 (≥3 claim calls) and ultimately
+    // claimed the success — 404 behaves exactly like `pending`.
+    expect(claimTicks).toBeGreaterThanOrEqual(3);
+
+    // Exactly-once + no-leak on the fake clock, immediately after the claim tick.
+    const claimsAfterSuccess = claimTicks;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(claimTicks).toBe(claimsAfterSuccess); // no further claim poll
+    expect(vi.getTimerCount()).toBe(0); // no leaked timer
+
+    // The un-awaited credential write lands on the real clock — drain it first.
+    await settleAsyncIo();
+    const tokens = await waitForTokens();
+    expect(tokens).not.toBeNull();
+    expect(tokens!.access_token).toBe("fresh-at");
+    expect(tokens!.refresh_token).toBe("fresh-rt");
+
+    // config.json was written exactly once with the claimed user.
+    const config = readJsonInDataDir<Record<string, unknown>>("config.json");
+    expect(JSON.stringify(config)).toContain("user-42");
+
+    // A subsequent sil_whoami resolves the identity (registration truly completed).
+    const whoamiPayload = payloadOf(await getTool(api, "sil_whoami").execute("w1", {}));
+    expect(whoamiPayload["status"]).toBe("ok");
+    const identity = whoamiPayload["identity"] as { name?: string } | undefined;
+    expect(identity?.name).toBe("Polled User");
+
+    // And the terminal `sil_register_not_found` was NEVER logged on the way there.
+    const infoMarkers = (api.logger.info as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    const warnMarkers = (api.logger.warn as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    expect(infoMarkers).not.toContain("sil_register_not_found");
+    expect(warnMarkers).not.toContain("sil_register_not_found");
+    // The success terminal IS logged (proves the loop reached success, not a stall).
+    expect(infoMarkers).toContain("sil_register_claimed");
+  });
+
+  it("treats 404 and pending as equivalently non-terminal — interleaved 404s and a pending still reach success", async () => {
+    // A mix proves the two early states are interchangeable: 404 (session not
+    // created yet) and pending (created, user mid-onboarding) both keep polling.
+    let n = 0;
+    const fx = installFetch(() => {
+      n += 1;
+      // tick1: 404, tick2: pending, tick3: 404, tick4: success.
+      if (n === 1) return { status: 404, body: { error: "not_found" } };
+      if (n === 2) return { status: 200, body: { status: "pending" } };
+      if (n === 3) return { status: 404, body: { error: "not_found" } };
+      return { status: 200, body: SUCCESS_BODY };
+    });
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    await getTool(api, TOOL).execute("c1", {});
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    // Polled through all four pre-success ticks and persisted the credentials.
+    expect(fx.callCount()).toBeGreaterThanOrEqual(4);
+    await settleAsyncIo();
+    expect((await waitForTokens())!.access_token).toBe("fresh-at");
+  });
+});
+
+describe("claim lifecycle — claimStep maps a 404 not_found outcome to keep-polling (done:false)", () => {
+  // The single-tick mapping the card's `[unit]` criterion pins: claimStep against
+  // a `not_found` claim outcome returns `{ done: false }` (grouped with
+  // `pending`/`retryable`), NOT a `done:true` terminal. `claimStep` is module-
+  // private and must stay so (no production export added just for a test), so the
+  // mapping is exercised through its only real caller — the sil_register poll
+  // loop — by isolating a SINGLE 404 tick and asserting the loop kept going
+  // (the observable footprint of `done:false`).
+  //
+  // EXPECT RED: today `claimStep` returns `{ done:true, outcome:"not_found" }`,
+  // so a single 404 tick settles the loop (timer cleared, terminal logged).
+  it("a single 404 tick does not end the loop — done:false keeps the timer armed and logs no terminal", async () => {
+    let firstTickDone = false;
+    const fx = installFetch(() => {
+      // 404 on the first tick; if the loop (wrongly) keeps calling we keep 404ing,
+      // but we assert state right after the first tick has settled-or-not.
+      firstTickDone = true;
+      return { status: 404, body: { error: "not_found" } };
+    });
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    await getTool(api, TOOL).execute("c1", {});
+    // Advance just past one interval so exactly the first tick has run.
+    await vi.advanceTimersByTimeAsync(3_500);
+
+    expect(firstTickDone).toBe(true);
+    expect(fx.callCount()).toBeGreaterThanOrEqual(1);
+    // done:false → the loop is still scheduled (a terminal would have cleared it).
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    // No terminal was reported for the 404 (no persisted tokens, no terminal log).
+    expect(readTokens()).toBeNull();
+    const allMarkers = [
+      ...(api.logger.info as ReturnType<typeof vi.fn>).mock.calls,
+      ...(api.logger.warn as ReturnType<typeof vi.fn>).mock.calls,
+    ].map((c) => c[0]);
+    expect(allMarkers).not.toContain("sil_register_not_found");
+  });
+});
+
+describe("claim lifecycle — a session that NEVER appears (perpetual 404) ends as timeout", () => {
+  // The bound the card requires: keep-polling-on-404 must still terminate. If the
+  // user never opens the URL, every tick 404s and the loop settles as `timeout`
+  // at the 30-min deadline — logging `sil_register_timeout`, NEVER
+  // `sil_register_not_found` — persisting nothing and leaving no live timer.
+  // Mirrors the perpetual-`pending` → timeout test above.
+  //
+  // EXPECT RED: today the FIRST 404 settles the loop as a `not_found` terminal
+  // (logs `sil_register_not_found`), so the deadline/timeout path is never
+  // reached and `sil_register_timeout` is never logged.
+  it("404 on every tick → settles timeout at the deadline (logs sil_register_timeout, NOT sil_register_not_found), no tokens, no leaked timer", async () => {
+    const fx = installFetch(() => ({
+      status: 404,
+      body: { error: "not_found", message: "Session not found." },
+    }));
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    await getTool(api, TOOL).execute("c1", {});
+    // Advance past the 30-min deadline (the session TTL the budget must not outlive).
+    await vi.advanceTimersByTimeAsync(45 * 60 * 1000);
+
+    const callsAtDeadline = fx.callCount();
+    // The clock keeps running; no further poll may fire — the loop is bounded.
+    await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+    expect(fx.callCount()).toBe(callsAtDeadline);
+
+    // No leftover timer after timeout, and nothing persisted (user never finished).
+    expect(vi.getTimerCount()).toBe(0);
+    expect(readTokens()).toBeNull();
+
+    // The terminal is TIMEOUT, not not_found.
+    const infoMarkers = (api.logger.info as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    const warnMarkers = (api.logger.warn as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    expect(infoMarkers).toContain("sil_register_timeout");
+    expect(infoMarkers).not.toContain("sil_register_not_found");
+    expect(warnMarkers).not.toContain("sil_register_not_found");
+  });
 });
 
 describe("claim lifecycle — transient failures retry within budget", () => {

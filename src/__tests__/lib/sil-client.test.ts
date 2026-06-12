@@ -23,7 +23,10 @@
  *   claim   200 {status:"pending"}                → pending (keep polling)
  *   claim   409 {error:"already_claimed"}         → already_claimed (terminal)
  *   claim   410 {error:"session_expired"}         → expired (terminal)
- *   claim   404 {error:"not_found"}               → not_found (terminal)
+ *   claim   404 {error:"not_found"}               → not_found (the early pre-session
+ *                                                   state; classifier-pure here,
+ *                                                   keep-polling at the loop)
+ *   claim   400 / other unexpected non-2xx        → invalid_request (non-polling terminal)
  *   claim   5xx / network throw                   → retryable
  *   refresh 200 {access_token,refresh_token}      → success
  *   refresh 401 {error:"invalid_grant"}           → invalid_grant (terminal)
@@ -37,10 +40,22 @@
  *       | { kind: "already_claimed" }
  *       | { kind: "expired" }
  *       | { kind: "not_found" }
+ *       | { kind: "invalid_request" }   // 400 / unexpected non-{200,409,410,404,5xx}
  *       | { kind: "retryable" }
  * (If the dev folds this into identity.ts instead of a sil-client.ts
  * module, re-export `classifyClaimResponse` so this isolation test still
  * binds — the classifier itself is the immutable spec, not its file.)
+ *
+ * THE behavioural split this card pins (`sil-register-stops-polling-on-
+ * premature-not-found`): the 404 stays `not_found` ON THE WIRE (unchanged
+ * here) — its terminality moves to the loop (`claimStep` now keeps polling
+ * on `not_found`, an integration concern). What changes IN the classifier is
+ * the 400/unexpected-4xx fallthrough: it was folded into `not_found`, and now
+ * becomes its OWN non-polling terminal `invalid_request` — so a genuinely
+ * malformed claim request can never ride the keep-polling `not_found` path
+ * and spin for the full 30-min deadline. `not_found` (the early pre-session
+ * state) keeps polling; `invalid_request` (a structurally-bad request that
+ * re-polling can never fix) fails fast. They MUST be distinct kinds.
  */
 
 import { describe, it, expect } from "vitest";
@@ -126,6 +141,59 @@ describe("classifyClaimResponse — terminal status codes", () => {
       classifyClaimResponse(404, {}).kind,
     ]);
     expect(kinds.size).toBe(3);
+  });
+});
+
+describe("classifyClaimResponse — a malformed 400 is its OWN non-polling terminal (NOT not_found)", () => {
+  // The card's split (`sil-register-stops-polling-on-premature-not-found`,
+  // resolved open question): when 404 becomes keep-polling at the loop, a 400
+  // MUST NOT ride along. A 400 means "this request is malformed" — re-polling
+  // can never fix it (the same bad body 400s every tick), so folding it into
+  // the now-keep-polling `not_found` would spin a known-bug for the full 30-min
+  // deadline before a misleading `timeout`. The classifier therefore splits
+  // 400 (and any other unexpected non-{200,409,410,404,5xx} status) out of the
+  // `not_found` branch into its OWN non-polling terminal `invalid_request`.
+  //
+  // EXPECT RED against the current classifier: `sil-client.ts:414-417` folds
+  // 400/unexpected-4xx into `return { kind: "not_found" }`, so today
+  // `classifyClaimResponse(400, …).kind` is `"not_found"`, not `"invalid_request"`.
+
+  it("400 → invalid_request (a distinct terminal, NOT not_found)", () => {
+    const out = classifyClaimResponse(400, { error: "bad_request" });
+    expect(out.kind).toBe("invalid_request");
+    // The load-bearing half: it must NOT be folded into the keep-polling 404 path.
+    expect(out.kind).not.toBe("not_found");
+  });
+
+  it("400 invalid_request is NOT a 200-class outcome (not pending, not success)", () => {
+    // Keep-polling (`pending`/`not_found`/`retryable`) and success are all
+    // reserved for other statuses — a 400 is a hard, immediate terminal.
+    const kind = classifyClaimResponse(400, {}).kind;
+    expect(kind).not.toBe("pending");
+    expect(kind).not.toBe("success");
+  });
+
+  it("any other unexpected non-{200,409,410,404,5xx} status → invalid_request, never not_found", () => {
+    // The catch-all fallthrough (`status !== 200` after the known codes are
+    // handled): 401/403/418/451 and friends are not part of the claim wire
+    // contract — they are a contract drift, and like 400 must fail fast as
+    // `invalid_request`, never re-polled as `not_found`.
+    for (const status of [401, 403, 418, 422, 451]) {
+      const out = classifyClaimResponse(status, { error: "unexpected" });
+      expect(out.kind).toBe("invalid_request");
+      expect(out.kind).not.toBe("not_found");
+    }
+  });
+
+  it("404 stays not_found while 400 becomes invalid_request — the two are DISTINCT kinds", () => {
+    // The whole point of the split: the early pre-session 404 (keep-polling at
+    // the loop) and the malformed-request 400 (fail-fast terminal) must never
+    // collapse to one kind. Today they DO (both `not_found`) — this is the RED.
+    const notFound = classifyClaimResponse(404, { error: "not_found" }).kind;
+    const invalid = classifyClaimResponse(400, { error: "bad_request" }).kind;
+    expect(notFound).toBe("not_found");
+    expect(invalid).toBe("invalid_request");
+    expect(notFound).not.toBe(invalid);
   });
 });
 
