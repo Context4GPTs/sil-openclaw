@@ -592,10 +592,20 @@ describe("sil_whoami — 403 forbidden is terminal (NEVER refreshed)", () => {
     expect(blob).not.toMatch(/temporar|transient|unavailable|try.again.later/);
   });
 
-  it("does NOT clear tokens.json on a 403 (the token is valid, just unprovisioned)", async () => {
-    // Only a CONFIRMED invalid_grant clears tokens. A 403 token is still a valid
-    // credential (the human just isn't onboarded) — clearing it would force a
-    // pointless re-register. The dead-session clear must be scoped to 401/refresh.
+  // CARD `surface-user-not-provisioned-and-fix-recovery` — NARROWED (was: "does NOT
+  // clear tokens.json on a 403"). The card makes the token-clear UNIFORM across all
+  // three sil-api tools (Decision B): the recovery loop is the same loop no matter
+  // which tool first reveals the 403, and sil_whoami is the tool that is legible
+  // TODAY — an agent that diagnoses via sil_whoami, follows recovery:"sil_register",
+  // and hits already_registered is stranded identically. So sil_whoami now ALSO
+  // clears on `user_not_provisioned` (AC9). The clear stays scoped to that EXACT
+  // reason: `principal_mismatch` (and any other/unknown reason) must NOT clear (AC10)
+  // — the credential is still valid and must stay recoverable.
+  it("DOES clear tokens.json on a 403 user_not_provisioned (the dead token is gone, so sil_register re-onboards) (AC9)", async () => {
+    // AC9: the headline uniform-clear. The held token maps to no account on this
+    // backend; a refresh cannot help (structurally dead, exactly like the
+    // invalid_grant case). Clearing it breaks the recovery loop on the
+    // whoami-diagnosed path too — the next sil_register no longer short-circuits.
     seedTokens("valid-but-unprovisioned-at", "valid-rt");
     installRouter((kind) =>
       kind === "identity"
@@ -605,11 +615,43 @@ describe("sil_whoami — 403 forbidden is terminal (NEVER refreshed)", () => {
     const api = createMockPluginApi();
     registerIdentityTools(api);
 
-    await getTool(api, TOOL).execute("c1", {});
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
 
-    // The valid token survives — not cleared on a 403.
+    // Still the legible forbidden envelope (the legibility behavior is unchanged).
+    expect(payload["status"]).toBe("forbidden");
+    expect(payload["reason"]).toBe("user_not_provisioned");
+    expect(payload["recovery"]).toBe("sil_register");
+    // The dead token is cleared — file gone + null read (the two-pronged check the
+    // invalid_grant clear above uses).
+    expect(existsSync(getTokensPath())).toBe(false);
+    expect(readTokens()).toBeNull();
+  });
+
+  it("does NOT clear tokens.json on a 403 principal_mismatch (the credential is valid and must stay recoverable) (AC10)", async () => {
+    // AC10: the scoping boundary — the clear is gated on EXACT equality
+    // reason === "user_not_provisioned". principal_mismatch can be transient (an
+    // in-flight principal/agent-context resolution); the SAME valid credential must
+    // survive so the user stays recoverable without a destructive re-onboard. (Per
+    // the architect's reachability note, sil_whoami's bodyless GET self-read should
+    // not itself emit principal_mismatch in practice — this arm is the defensive
+    // guarantee that the clear does NOT fire even if it did.)
+    seedTokens("valid-but-mismatched-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "identity"
+        ? { status: 403, body: { error: "principal_mismatch" } }
+        : { status: 200, body: { access_token: "x", refresh_token: "y" } },
+    );
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+
+    // Forbidden + legible, but the token SURVIVES.
+    expect(payload["status"]).toBe("forbidden");
+    expect(payload["reason"]).toBe("principal_mismatch");
+    expect(existsSync(getTokensPath())).toBe(true);
     expect(readTokens()).not.toBeNull();
-    expect(readTokens()!.access_token).toBe("valid-but-unprovisioned-at");
+    expect(readTokens()!.access_token).toBe("valid-but-mismatched-at");
   });
 });
 

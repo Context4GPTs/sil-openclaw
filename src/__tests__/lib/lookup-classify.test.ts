@@ -249,9 +249,76 @@ describe("classifyLookupResponse — the four distinct outcomes stay distinct", 
     expect(classifyLookupResponse(500, { error: "source_unavailable" }).kind).not.toBe("ok");
   });
 
-  it("4xx other than 400/401 → retryable, never a silent ok (defensive)", () => {
-    for (const code of [403, 404, 409, 429]) {
+  it("4xx other than 400/401/403 → retryable, never a silent ok (defensive)", () => {
+    // 403 is NO LONGER in this loop — it has its own positive `forbidden` arm
+    // below (this card); 404/409/429 stay `retryable`.
+    for (const code of [404, 409, 429]) {
+      expect(classifyLookupResponse(code, {}).kind).toBe("retryable");
       expect(classifyLookupResponse(code, {}).kind).not.toBe("ok");
+    }
+  });
+});
+
+/**
+ * CARD `surface-user-not-provisioned-and-fix-recovery` — the RED unit floor for
+ * the catalog 403 → `forbidden` arm, SYMMETRIC with `search-classify.test.ts`. The
+ * two catalog tools share ONE agent-facing error vocabulary, so the 403 →
+ * `forbidden{reason}` mapping MUST hold identically on `classifyLookupResponse` /
+ * `LookupOutcome` — or `sil_product_get` stays false-transient while `sil_search`
+ * is fixed (a fix that lands in only one classifier leaves the other lying).
+ *
+ * Same bug, same fix as search: `classifyLookupResponse` has no 403 arm (403 →
+ * `retryable` today); the fix adds `{ kind: "forbidden"; reason: string }` to
+ * `LookupOutcome` and the 403 arm reusing `extractForbiddenReason`. EXPECT RED
+ * today (the classifier returns `retryable` on a 403).
+ */
+describe("classifyLookupResponse — a 403 is FORBIDDEN carrying its reason, NEVER retryable (AC3, AC4)", () => {
+  it("403 user_not_provisioned → forbidden carrying reason:'user_not_provisioned' (NEVER retryable)", () => {
+    const out = classifyLookupResponse(403, { error: "user_not_provisioned" });
+    expect(out.kind).toBe("forbidden");
+    expect(out.kind).not.toBe("retryable");
+    if (out.kind === "forbidden") {
+      expect(out.reason).toBe("user_not_provisioned");
+    }
+  });
+
+  it("403 principal_mismatch → forbidden carrying reason:'principal_mismatch' (the reason passes through; NEVER retryable)", () => {
+    const out = classifyLookupResponse(403, { error: "principal_mismatch" });
+    expect(out.kind).toBe("forbidden");
+    expect(out.kind).not.toBe("retryable");
+    if (out.kind === "forbidden") {
+      expect(out.reason).toBe("principal_mismatch");
+    }
+  });
+
+  it("403 with an unknown / absent reason → forbidden with the default 'forbidden' marker, NEVER retryable", () => {
+    for (const body of [{}, { error: "" }, { error: 42 }, null, "boom", []]) {
+      const out = classifyLookupResponse(403, body);
+      expect(out.kind).toBe("forbidden");
+      expect(out.kind).not.toBe("retryable");
+      if (out.kind === "forbidden") {
+        expect(out.reason).toBe("forbidden");
+        expect(out.reason).not.toBe("user_not_provisioned");
+      }
+    }
+  });
+
+  it("a 403 is DISTINCT from both unauthorized (401, refreshable) and retryable (5xx, transient)", () => {
+    const forbidden403 = classifyLookupResponse(403, { error: "user_not_provisioned" }).kind;
+    const unauthorized401 = classifyLookupResponse(401, {}).kind;
+    const retryable5xx = classifyLookupResponse(500, {}).kind;
+    expect(forbidden403).toBe("forbidden");
+    expect(unauthorized401).toBe("unauthorized");
+    expect(retryable5xx).toBe("retryable");
+    expect(new Set([forbidden403, unauthorized401, retryable5xx]).size).toBe(3);
+  });
+
+  it("a 5xx is STILL retryable, never forbidden — the fix re-routes ONLY the 403 (AC11)", () => {
+    for (const code of [500, 502, 503, 504]) {
+      expect(classifyLookupResponse(code, { error: "source_unavailable" }).kind).toBe("retryable");
+      expect(classifyLookupResponse(code, { error: "source_unavailable" }).kind).not.toBe(
+        "forbidden",
+      );
     }
   });
 });

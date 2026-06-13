@@ -216,12 +216,107 @@ describe("classifySearchResponse — the three distinct sil-api outcomes stay di
     expect(classifySearchResponse(500, { error: "source_unavailable" }).kind).not.toBe("ok");
   });
 
-  it("4xx other than 400/401 → retryable, never a silent ok (defensive)", () => {
-    // Unmapped 4xx (e.g. 403/404/429) is not a clean empty match. It must not
+  it("4xx other than 400/401/403 → retryable, never a silent ok (defensive)", () => {
+    // Unmapped 4xx (e.g. 404/409/429) is not a clean empty match. It must not
     // read as ok; a non-ok terminal/transient is correct (retryable is the safe
-    // non-ok landing — re-running can't make a 200-empty out of a 4xx).
-    for (const code of [403, 404, 409, 429]) {
+    // non-ok landing — re-running can't make a 200-empty out of a 4xx). 403 is
+    // NO LONGER in this loop — it has its own positive `forbidden` arm below
+    // (the whole point of this card); 404/409/429 stay `retryable`.
+    for (const code of [404, 409, 429]) {
+      expect(classifySearchResponse(code, {}).kind).toBe("retryable");
       expect(classifySearchResponse(code, {}).kind).not.toBe("ok");
+    }
+  });
+});
+
+/**
+ * CARD `surface-user-not-provisioned-and-fix-recovery` (epic
+ * `…`) — the RED unit floor for the catalog 403 → `forbidden` arm.
+ *
+ * THE BUG this pins: `classifySearchResponse` has NO 403 arm — it goes straight
+ * from the 401 check to `if (status !== 200) return retryable`, so a sil-api 403
+ * `user_not_provisioned` lands in `retryable` (a false-transient: the agent is
+ * told "temporarily unavailable, try again" forever, and retrying a
+ * valid-but-unprovisioned token can NEVER succeed). `classifyIdentityResponse`
+ * ALREADY classifies 403 → `forbidden` (sil-client.ts:501) — that one line is the
+ * entire reason `sil_whoami` is legible and the catalog tools are not.
+ *
+ * The fix ADDS a `{ kind: "forbidden"; reason: string }` variant to `SearchOutcome`
+ * (byte-identical to `IdentityOutcome`'s, sil-client.ts:204) and the 403 arm to the
+ * classifier — `if (status === 403) return { kind: "forbidden", reason:
+ * extractForbiddenReason(body) }` — reusing the SAME `extractForbiddenReason`
+ * helper. This block is the immutable spec for that arm: the `reason` passthrough
+ * (`user_not_provisioned` / `principal_mismatch`) and the unknown-body default
+ * (`"forbidden"`), classifier-level (AC3, AC4). The wired forbidden envelope +
+ * token-clear live at the integration tier (catalog-search.integration.test.ts).
+ *
+ * EXPECT RED today: every assertion below fails because the classifier returns
+ * `retryable` on a 403 (no forbidden arm exists yet).
+ */
+describe("classifySearchResponse — a 403 is FORBIDDEN carrying its reason, NEVER retryable (AC3, AC4)", () => {
+  it("403 user_not_provisioned → forbidden carrying reason:'user_not_provisioned' (NEVER retryable)", () => {
+    // AC3: the catalog classifier reaches parity with classifyIdentityResponse —
+    // a 403 is `forbidden`, not the false-transient `retryable`. The provisioning
+    // reason rides through so the tool can drive the token-clear (Bug 2's fix).
+    const out = classifySearchResponse(403, { error: "user_not_provisioned" });
+    expect(out.kind).toBe("forbidden");
+    expect(out.kind).not.toBe("retryable");
+    if (out.kind === "forbidden") {
+      expect(out.reason).toBe("user_not_provisioned");
+    }
+  });
+
+  it("403 principal_mismatch → forbidden carrying reason:'principal_mismatch' (the reason passes through; NEVER retryable)", () => {
+    // AC4: every 403 is legible, not just the provisioning one. principal_mismatch
+    // passes through as the reason — the tool uses it to decide NOT to clear
+    // (AC10: principal_mismatch is recoverable, must survive). Still `forbidden`.
+    const out = classifySearchResponse(403, { error: "principal_mismatch" });
+    expect(out.kind).toBe("forbidden");
+    expect(out.kind).not.toBe("retryable");
+    if (out.kind === "forbidden") {
+      expect(out.reason).toBe("principal_mismatch");
+    }
+  });
+
+  it("403 with an unknown / absent reason → forbidden with the default 'forbidden' marker (extractForbiddenReason's default), NEVER retryable", () => {
+    // AC4: an unexpected 403 body is STILL forbidden (legible), defaulting to the
+    // generic `"forbidden"` marker — which (correctly) does NOT equal
+    // "user_not_provisioned", so the tool will NOT clear on it (AC10's "unknown
+    // reason does not clear" boundary, proven at the classifier seam).
+    for (const body of [{}, { error: "" }, { error: 42 }, null, "boom", []]) {
+      const out = classifySearchResponse(403, body);
+      expect(out.kind).toBe("forbidden");
+      expect(out.kind).not.toBe("retryable");
+      if (out.kind === "forbidden") {
+        expect(out.reason).toBe("forbidden");
+        // Never the provisioning reason on a garbage body — the exact-equality
+        // gate downstream therefore cannot mis-fire a destructive clear.
+        expect(out.reason).not.toBe("user_not_provisioned");
+      }
+    }
+  });
+
+  it("a 403 is DISTINCT from both unauthorized (401, refreshable) and retryable (5xx, transient) — five kinds now", () => {
+    // The taxonomy assertion extended for the forbidden arm: 401 (refreshable),
+    // 403 (forbidden, terminal-but-recoverable), and 5xx (transient) are three
+    // distinct landings. A 403 collapsing into either neighbor is the bug.
+    const forbidden403 = classifySearchResponse(403, { error: "user_not_provisioned" }).kind;
+    const unauthorized401 = classifySearchResponse(401, {}).kind;
+    const retryable5xx = classifySearchResponse(500, {}).kind;
+    expect(forbidden403).toBe("forbidden");
+    expect(unauthorized401).toBe("unauthorized");
+    expect(retryable5xx).toBe("retryable");
+    expect(new Set([forbidden403, unauthorized401, retryable5xx]).size).toBe(3);
+  });
+
+  it("a 5xx is STILL retryable, never forbidden — the fix re-routes ONLY the 403 (AC11)", () => {
+    // AC11 (classifier half): the 403 arm must NOT bleed into the transient path.
+    // A genuine 5xx stays `retryable`; a 403 is `forbidden`; the two never cross.
+    for (const code of [500, 502, 503, 504]) {
+      expect(classifySearchResponse(code, { error: "source_unavailable" }).kind).toBe("retryable");
+      expect(classifySearchResponse(code, { error: "source_unavailable" }).kind).not.toBe(
+        "forbidden",
+      );
     }
   });
 });
