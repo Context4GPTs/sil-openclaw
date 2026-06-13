@@ -200,11 +200,17 @@ describe("searchCatalog — param → CatalogSearchRequest body mapping (no enve
 
 /**
  * The card `add-ship-to-filter-args-to-the-sil-search-tool` (epic
- * `location-aware-search-2026-06`) adds four optional serviceability/localization
- * filters to `SearchParams`: `ship_to`, `ships_from`, `condition`, `available`.
+ * `location-aware-search-2026-06`) adds optional serviceability/localization
+ * filters to `SearchParams`: `ship_to`, `condition`, `available`.
  * `buildSearchBody` maps each into `filters.*`, with ONE load-bearing rename:
  * the agent arg `ship_to` (singular) becomes the wire key `filters.ships_to`
- * (plural). The other three keep their name under `filters.*`.
+ * (plural). The other two keep their name under `filters.*`.
+ *
+ * Card `replace-ships-from-with-local-merchants` (epic `local-merchants-2026-06`)
+ * DELETED `ships_from` — so it is no longer mapped into `filters.*` here. Its
+ * absence from the whole forwarded body (even when a stray arg is passed) is pinned
+ * in the dedicated "ships_from is GONE" block below; the `local_merchants` boolean
+ * that replaces it rides at the TOP LEVEL (its own block), never under `filters`.
  *
  * Wire-shape source of truth: the Shopify Global-Catalog extension
  * (`vendor/shopify/docs/agents/catalog/global-catalog-extension.md:26-33`) and
@@ -246,11 +252,6 @@ describe("searchCatalog — ship-to + serviceability filters map into filters.* 
     expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_to: { country: "DE" } } });
   });
 
-  it("maps `ships_from` → `filters.ships_from` (same name on both sides), value forwarded as given", async () => {
-    await searchCatalog(SIL_API, "tok", { query: "chair", ships_from: { country: "US" } });
-    expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_from: { country: "US" } } });
-  });
-
   it("maps `condition` (array) → `filters.condition`, forwarded as the supplied array", async () => {
     await searchCatalog(SIL_API, "tok", { query: "chair", condition: ["new", "secondhand"] });
     expect(cap[0]!.body).toEqual({ query: "chair", filters: { condition: ["new", "secondhand"] } });
@@ -270,7 +271,7 @@ describe("searchCatalog — ship-to + serviceability filters map into filters.* 
     expect(cap[0]!.body).toEqual({ query: "chair", filters: { available: false } });
   });
 
-  it("maps ALL FOUR new filters at once alongside the existing ones (full body, exact)", async () => {
+  it("maps ALL new filters at once alongside the existing ones (full body, exact)", async () => {
     await searchCatalog(SIL_API, "tok", {
       query: "office chair",
       category: "Furniture",
@@ -279,19 +280,18 @@ describe("searchCatalog — ship-to + serviceability filters map into filters.* 
       cursor: "cur-1",
       limit: 25,
       ship_to: { country: "US", region: "NY", postal_code: "10001" },
-      ships_from: { country: "US" },
       condition: ["new"],
       available: false,
     });
     // The exact merged body — the new filters sit beside categories/price under
     // `filters`, the rename applied, `available:false` preserved, no extra keys.
+    // (No `ships_from` — it was deleted; its absence here is part of the deletion.)
     expect(cap[0]!.body).toEqual({
       query: "office chair",
       filters: {
         categories: ["Furniture"],
         price: { min: 10000, max: 200000 },
         ships_to: { country: "US", region: "NY", postal_code: "10001" },
-        ships_from: { country: "US" },
         condition: ["new"],
         available: false,
       },
@@ -299,11 +299,11 @@ describe("searchCatalog — ship-to + serviceability filters map into filters.* 
     });
   });
 
-  it("omits EACH new filter when absent — a bare query carries no ships_to/ships_from/condition/available and no `filters` skeleton", async () => {
+  it("omits EACH new filter when absent — a bare query carries no ships_to/condition/available and no `filters` skeleton", async () => {
     await searchCatalog(SIL_API, "tok", { query: "lamp" });
     const body = cap[0]!.body as Record<string, unknown>;
     // No filters object at all (nothing to put in it) — the omit-when-absent rule
-    // the existing `category`/`price` mapping already follows extends to all four.
+    // the existing `category`/`price` mapping already follows extends to each.
     expect(body).toEqual({ query: "lamp" });
     expect(body["filters"]).toBeUndefined();
   });
@@ -316,7 +316,6 @@ describe("searchCatalog — ship-to + serviceability filters map into filters.* 
     const filters = (cap[0]!.body as Record<string, unknown>)["filters"] as Record<string, unknown>;
     expect(filters).not.toHaveProperty("available");
     expect(filters).not.toHaveProperty("ships_to");
-    expect(filters).not.toHaveProperty("ships_from");
     expect(filters).not.toHaveProperty("condition");
   });
 
@@ -329,11 +328,11 @@ describe("searchCatalog — ship-to + serviceability filters map into filters.* 
 
   it("a filter-only request of ONLY a new filter carries `filters` and NO `query` key", async () => {
     // `buildSearchBody` is mapping-only (the ≥1-input guard lives in the tool, not
-    // here). Given only `ships_from`, the body must carry it under `filters` and
+    // here). Given only `ship_to`, the body must carry it under `filters` and
     // omit `query` entirely — the same shape the `category`-only case produces.
-    await searchCatalog(SIL_API, "tok", { ships_from: { country: "US" } });
+    await searchCatalog(SIL_API, "tok", { ship_to: { country: "US" } });
     const body = cap[0]!.body as Record<string, unknown>;
-    expect(body["filters"]).toEqual({ ships_from: { country: "US" } });
+    expect(body["filters"]).toEqual({ ships_to: { country: "US" } });
     expect(body["query"]).toBeUndefined();
   });
 });
@@ -375,11 +374,6 @@ describe("searchCatalog — country is NORMALIZED UPPERCASE on the wire (alpha-2
     expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_to: { country: "US" } } });
   });
 
-  it("uppercases ships_from.country on the wire too (`gb` → `GB`)", async () => {
-    await searchCatalog(SIL_API, "tok", { query: "chair", ships_from: { country: "gb" } });
-    expect(cap[0]!.body).toEqual({ query: "chair", filters: { ships_from: { country: "GB" } } });
-  });
-
   it("normalizes country case but forwards region + postal_code VERBATIM (they are already format-valid here)", async () => {
     // The wire normalizes ONLY country case; region/postal are passed through as
     // received (format is the read site's gate — by the time a value reaches the
@@ -395,20 +389,169 @@ describe("searchCatalog — country is NORMALIZED UPPERCASE on the wire (alpha-2
     });
   });
 
-  it("normalizes country in the all-filters body (the merged shape keeps US/US uppercase, available:false preserved)", async () => {
+  it("normalizes country in the all-filters body (the merged shape keeps US uppercase, available:false preserved)", async () => {
     await searchCatalog(SIL_API, "tok", {
       query: "office chair",
       ship_to: { country: "us", region: "NY", postal_code: "10001" },
-      ships_from: { country: "us" },
       condition: ["new"],
       available: false,
     });
     expect((cap[0]!.body as Record<string, unknown>)["filters"]).toEqual({
       ships_to: { country: "US", region: "NY", postal_code: "10001" },
-      ships_from: { country: "US" },
       condition: ["new"],
       available: false,
     });
+  });
+});
+
+/**
+ * Card `replace-ships-from-with-local-merchants` (epic `local-merchants-2026-06`):
+ * `buildSearchBody` emits `local_merchants: true` at the TOP LEVEL of the request
+ * body — a SIBLING of `query`/`filters`/`pagination`, NEVER under `filters`.
+ *
+ * THE load-bearing wire invariant (Discovery "Chosen approach" + Risk "Wrong wire
+ * placement"): `local_merchants` is a sil-PRIVATE ranking signal, NOT a UCP /
+ * Global-Catalog filter. `filters` is forwarded to the cross-shop Global Catalog,
+ * whose OPEN `SearchFilters` (`additionalProperties: true`) would SILENTLY accept an
+ * unknown `local_merchants` key and ignore it → the flag becomes a no-op, and a
+ * presence-only test against the wrong placement would LOOK correct. So every
+ * assertion here pins top-level presence AND `filters`-absence TOGETHER — that pair
+ * is the only thing that catches the wrong-placement false-green.
+ *
+ * Emit ONLY when true: `local_merchants:false` == the server's unbiased default ==
+ * today's behavior, so it is OMITTED (omit-when-falsy — the OPPOSITE of
+ * `available:false`, which is a meaningful include-unavailable signal that survives;
+ * Discovery "Open questions"). Absent → omitted. A wrong TYPE → dropped, not coerced.
+ */
+describe("searchCatalog — local_merchants rides TOP-LEVEL, never under filters (the load-bearing wire invariant)", () => {
+  let cap: Captured[];
+  beforeEach(() => {
+    cap = [];
+    spyFetch(cap);
+  });
+
+  it("local_merchants:true → body.local_merchants === true AT THE TOP LEVEL, and filters has NO local_merchants (asserted TOGETHER — the anti-false-green pair)", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", local_merchants: true });
+    const body = cap[0]!.body as Record<string, unknown>;
+    // (1) present at the top level, beside `query`, as a literal `true`.
+    expect(body["local_merchants"]).toBe(true);
+    // (2) and CRUCIALLY not under `filters` — a wrong placement here would be a
+    // silent no-op the Global Catalog swallows. Asserting (1) ALONE would pass even
+    // if the key were ALSO/ONLY under filters; the pair is what makes this honest.
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("local_merchants");
+  });
+
+  it("local_merchants:true with NO other filters → body is exactly { query, local_merchants: true } — no `filters` skeleton conjured to hold it", async () => {
+    // The strongest placement assertion: a byte-exact whole-body equality. If the
+    // impl routed the flag through `filters`, this body would carry a `filters` key
+    // and FAIL — the equality pins both the top-level home AND the absence of filters.
+    await searchCatalog(SIL_API, "tok", { query: "chair", local_merchants: true });
+    expect(cap[0]!.body).toEqual({ query: "chair", local_merchants: true });
+  });
+
+  it("local_merchants:true coexists with real filters — flag at top level, filters untouched (no leak into filters)", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "chair",
+      category: "Furniture",
+      ship_to: { country: "us" },
+      local_merchants: true,
+    });
+    const body = cap[0]!.body as Record<string, unknown>;
+    // Whole-body exact: local_merchants sits beside query/filters; filters carries
+    // ONLY the real filters, with no local_merchants smuggled in.
+    expect(body).toEqual({
+      query: "chair",
+      local_merchants: true,
+      filters: { categories: ["Furniture"], ships_to: { country: "US" } },
+    });
+  });
+
+  it("local_merchants:false → the key is OMITTED entirely (omit-when-falsy; false == the server's unbiased default)", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair", local_merchants: false });
+    const body = cap[0]!.body as Record<string, unknown>;
+    // Unlike available:false, a false bias carries NO signal — it must NOT be echoed
+    // anywhere: not at the top level, not under filters.
+    expect(body).not.toHaveProperty("local_merchants");
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("local_merchants");
+    // A bare query with a false flag is byte-exactly today's body — no trace of the flag.
+    expect(body).toEqual({ query: "chair" });
+  });
+
+  it("local_merchants OMITTED → the key is absent (no client-injected default; today's unbiased body)", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "chair" });
+    const body = cap[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("local_merchants");
+    expect(body).toEqual({ query: "chair" });
+  });
+
+  it("a wrong-TYPE local_merchants (string) is DROPPED — not coerced, not forwarded, anywhere", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "chair",
+      // @ts-expect-error — a drifted on-disk call passes the wrong type; the wire
+      // build must narrow it out (typeof === "boolean"), never truthiness-coerce it.
+      local_merchants: "true",
+    });
+    const body = cap[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("local_merchants");
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("local_merchants");
+    expect(body).toEqual({ query: "chair" });
+  });
+
+  it("a wrong-TYPE local_merchants (number 1) is DROPPED — a truthy non-boolean must not slip through", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "chair",
+      // @ts-expect-error — number is not boolean; must be dropped, not treated as true.
+      local_merchants: 1,
+    });
+    const body = cap[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("local_merchants");
+    expect(body).toEqual({ query: "chair" });
+  });
+
+  it("a wrong-TYPE local_merchants (object) is DROPPED — proves it's a bare boolean, not a { country }-style object", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "chair",
+      // @ts-expect-error — an object (e.g. a mistaken { country }) is not a boolean.
+      local_merchants: { country: "GR" },
+    });
+    const body = cap[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("local_merchants");
+    expect(body).toEqual({ query: "chair" });
+  });
+});
+
+/**
+ * Card `replace-ships-from-with-local-merchants`: `ships_from` is GONE end-to-end.
+ * A drifted on-disk call that still passes a `ships_from` argument must NOT have it
+ * forwarded ANYWHERE in the request body — `SearchParams` no longer carries the
+ * field and `buildSearchBody` no longer maps it, so it is dropped before the wire
+ * (AC[integration]: "ships_from is NOT present anywhere in the forwarded body").
+ */
+describe("searchCatalog — a stray ships_from argument is absent from the entire forwarded body", () => {
+  let cap: Captured[];
+  beforeEach(() => {
+    cap = [];
+    spyFetch(cap);
+  });
+
+  it("a stray `ships_from` arg alongside a real query → it appears NOWHERE in the body (not top-level, not under filters)", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "chair",
+      // @ts-expect-error — `ships_from` was deleted from SearchParams; a drifted call
+      // may still pass it, but the wire build must not forward it.
+      ships_from: { country: "US" },
+    });
+    const body = cap[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("ships_from");
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("ships_from");
+    // The deleted lever leaves no byte in the wire body at all.
+    expect(JSON.stringify(body)).not.toContain("ships_from");
+    // The body is byte-exactly today's bare-query body — the stray arg changed nothing.
+    expect(body).toEqual({ query: "chair" });
   });
 });
 

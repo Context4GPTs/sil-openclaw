@@ -117,7 +117,7 @@ Namespaced `sil_*` so they never collide with other plugins. Your agent calls th
 
 | Tool | What it does |
 |---|---|
-| `sil_search` | Search for purchasable products. A free-text `query` plus optional filters: `category`, `price_min`/`price_max`, `ship_to` (delivery destination — leave empty to ship to your registered address), `ships_from` (merchant origin country), `condition` (`new` / `secondhand`), and `available`. Returns a ranked list of variants — each with `id`, `title`, `price`, `availability`, `checkout_url`, `source` — and a pagination `cursor`. Location filters take ISO codes (`US`, `CA`), not place names. |
+| `sil_search` | Search for purchasable products. A free-text `query` plus optional filters: `category`, `price_min`/`price_max`, `ship_to` (delivery destination — leave empty to ship to your registered address), `condition` (`new` / `secondhand`), `available`, and `local_merchants` (best-effort bias toward shops in the user's own country — pair with a same-language query). Returns a ranked list of variants — each with `id`, `title`, `price`, `availability`, `checkout_url`, `source` — and a pagination `cursor`. Location filters take ISO codes (`US`, `CA`), not place names. |
 | `sil_product_get` | Resolve `ids` you already hold to full products in UCP shape — description, options, and the featured purchasable variant with fresh `price`, `availability`, and `checkout_url`. Re-fetch right before buying; those values are point-in-time, not guarantees. Ids that no longer resolve come back in `not_found`. |
 
 ---
