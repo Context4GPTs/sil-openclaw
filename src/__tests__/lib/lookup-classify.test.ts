@@ -256,6 +256,123 @@ describe("classifyLookupResponse — the four distinct outcomes stay distinct", 
   });
 });
 
+/**
+ * CARD `name-the-source-in-catalog-error-surfacing` (epic
+ * `catalog-source-error-taxonomy-2026-06`) — the RED unit floor, SYMMETRIC with
+ * `search-classify.test.ts`. The two catalog tools share ONE agent-facing error
+ * vocabulary, so the `retryable`-carries-source contract MUST hold identically on
+ * `classifyLookupResponse` / `LookupOutcome` — or the agent learns two error
+ * languages for the same failure.
+ *
+ * THE BUG (same as search): `classifyLookupResponse` collapses every 5xx /
+ * non-{200,400,401} into a bodyless `{ kind: "retryable" }`, discarding the
+ * `source` a `source_unavailable` 5xx body carries. The fix WIDENS the variant to
+ * `{ kind: "retryable"; source?: string; detail?: string }` (NOT replaced — every
+ * existing `.kind === "retryable"` assertion above stays valid) and populates it
+ * ONLY when the body carries a real `source`. Same no-fabrication guard.
+ *
+ * SCOPE NOTE — pure over `(status, body)`; the network-throw "no source" half lives
+ * at the integration tier (`catalog-lookup.integration.test.ts`), since
+ * `lookupCatalog`'s `catch` returns a bare sourceless `{ kind: "retryable" }`.
+ */
+describe("classifyLookupResponse — a source-attributed 5xx SURFACES its source on the retryable outcome (outcome b)", () => {
+  it("500 source_unavailable WITH a `source` → retryable carrying that source (and a detail)", () => {
+    const out = classifyLookupResponse(500, {
+      error: "source_unavailable",
+      message: "Catalog source 'shopify' is temporarily unavailable.",
+      source: "shopify",
+    });
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBe("shopify");
+      expect(typeof out.detail).toBe("string");
+      expect((out.detail as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("a 502/503/504 source_unavailable WITH a `source` ALSO surfaces it (not just 500)", () => {
+    for (const code of [502, 503, 504]) {
+      const out = classifyLookupResponse(code, {
+        error: "source_unavailable",
+        message: "Catalog source 'etsy' is temporarily unavailable.",
+        source: "etsy",
+      });
+      expect(out.kind).toBe("retryable");
+      if (out.kind === "retryable") {
+        expect(out.source).toBe("etsy");
+      }
+    }
+  });
+
+  it("the upstream 429-as-source_unavailable (a rate-limited source, surfaced as 5xx) ALSO carries its source (outcome b/429)", () => {
+    const out = classifyLookupResponse(503, {
+      error: "source_unavailable",
+      message: "Catalog source 'global-catalog' is rate-limited; retry shortly.",
+      source: "global-catalog",
+    });
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBe("global-catalog");
+    }
+  });
+});
+
+describe("classifyLookupResponse — the no-fabrication guard: a sourceless retryable NEVER invents a source (outcome a)", () => {
+  it("500 WITH NO `source` field → bare retryable, NO source (a sil-internal failure is outcome a, not b)", () => {
+    const out = classifyLookupResponse(500, {
+      error: "internal_error",
+      message: "Something went wrong inside sil.",
+    });
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBeUndefined();
+    }
+  });
+
+  it("500 with a garbage / non-object body → bare retryable, NO source", () => {
+    for (const body of [null, "boom", 42, [], {}]) {
+      const out = classifyLookupResponse(500, body);
+      expect(out.kind).toBe("retryable");
+      if (out.kind === "retryable") {
+        expect(out.source).toBeUndefined();
+      }
+    }
+  });
+
+  it("500 whose `source` is present but NOT a non-empty string → NO source (never coerce a bad field)", () => {
+    for (const source of [null, 123, "", {}, []]) {
+      const out = classifyLookupResponse(500, {
+        error: "source_unavailable",
+        message: "A catalog source is unavailable.",
+        source,
+      });
+      expect(out.kind).toBe("retryable");
+      if (out.kind === "retryable") {
+        expect(out.source).toBeUndefined();
+      }
+    }
+  });
+
+  it("an unmapped non-200 (e.g. 502 with an empty body) → bare retryable, NO source", () => {
+    const out = classifyLookupResponse(502, {});
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBeUndefined();
+    }
+  });
+
+  it("NEVER scrapes a source out of the human `message` string — a source named only in prose stays unsurfaced", () => {
+    const out = classifyLookupResponse(500, {
+      error: "source_unavailable",
+      message: "Catalog source 'shopify' is temporarily unavailable.",
+    });
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBeUndefined();
+    }
+  });
+});
+
 describe("classifyLookupResponse — unfound ids are a SUCCESS surfaced as not_found, never an error", () => {
   it("a mix of found + unfound → ok with the found products AND not_found:[the unfound ids]", () => {
     // UCP §Identifiers Not Found: return success with the found products plus info
