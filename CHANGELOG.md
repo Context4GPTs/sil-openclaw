@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-13
+
 ### Fixed
 
 - **`sil_register` no longer aborts registration on the first premature claim
