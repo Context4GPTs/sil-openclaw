@@ -311,12 +311,22 @@ export interface SearchResult {
  * refresh trigger — the caller routes it through {@link refreshAndRetryOnce}
  * (transparent refresh-and-retry-once), the SAME choreography `sil_whoami` uses;
  * it is no longer terminal for the catalog tools.
+ *
+ * The `retryable` variant optionally carries `source`/`detail`: a 5xx whose body
+ * is a `source_unavailable` SourceError names which catalog source failed, so the
+ * consumer (`transient()` in catalog.ts) can distinguish a *source* outage (name
+ * it — outcome b) from sil/network itself being down (generic copy — outcome a).
+ * Both are retryable — the only difference is attribution; this is a *message*
+ * split within one status, not a new outcome kind. `source` is attached ONLY when
+ * the body carries a real non-empty `source` field (never fabricated, never
+ * scraped from `message`); a sil-internal 5xx, a bodyless/garbage non-200, and a
+ * network-error throw all stay bare `{ kind: "retryable" }` (outcome a).
  */
 export type SearchOutcome =
   | { kind: "ok"; products: SearchProduct[]; cursor?: string }
   | { kind: "unauthorized" }
   | { kind: "invalid_request"; error: string; message: string }
-  | { kind: "retryable" };
+  | { kind: "retryable"; source?: string; detail?: string };
 
 /** Which request id resolved to a looked-up variant, and how. Lookup's defining
  * feature over search: the response does NOT preserve request order and one id
@@ -403,7 +413,7 @@ export type LookupOutcome =
   | { kind: "ok"; products: LookupProduct[]; not_found?: string[] }
   | { kind: "unauthorized" }
   | { kind: "invalid_request"; error: string; message: string }
-  | { kind: "retryable" };
+  | { kind: "retryable"; source?: string; detail?: string };
 
 /**
  * Classify a claim response from its HTTP status AND body. The discriminant for
@@ -527,7 +537,7 @@ export function classifySearchResponse(status: number, body: unknown): SearchOut
     return { kind: "invalid_request", error, message };
   }
   if (status === 401) return { kind: "unauthorized" };
-  if (status !== 200) return { kind: "retryable" };
+  if (status !== 200) return retryableFromBody(body);
 
   const result = extractSearchResult(body);
   if (result === null) return { kind: "retryable" };
@@ -571,7 +581,7 @@ export function classifyLookupResponse(status: number, body: unknown): LookupOut
     return { kind: "invalid_request", error, message };
   }
   if (status === 401) return { kind: "unauthorized" };
-  if (status !== 200) return { kind: "retryable" };
+  if (status !== 200) return retryableFromBody(body);
 
   const result = extractLookupResult(body);
   if (result === null) return { kind: "retryable" };
@@ -1280,6 +1290,42 @@ function extractCursor(raw: unknown): string | null {
   if (obj["has_next_page"] !== true) return null;
   const cursor = obj["cursor"];
   return typeof cursor === "string" && cursor.length > 0 ? cursor : null;
+}
+
+/**
+ * Build the `retryable` outcome for a non-200, non-{400,401} response, attaching
+ * the failed catalog `source` (+ a `detail` carrying the upstream cause) ONLY when
+ * the 5xx body is a real `source_unavailable` SourceError that names a source.
+ *
+ * This is the seam where outcome (a) (sil/network down → bare retryable, generic
+ * copy) and outcome (b) (a named source down → source-named retryable) become
+ * distinguishable — see {@link SearchOutcome}. The gate is the PRESENCE of a real
+ * non-empty-string `source` field on the body, NEVER the `message` prose: a
+ * sil-internal 5xx (no `source`), a bodyless/garbage non-200, or a `source` that is
+ * null/number/empty/object/array all fall back to the bare sourceless retryable.
+ * Attaching a source to a non-source 5xx would re-introduce wrong attribution in
+ * the opposite direction (a sil-down event falsely named as a source outage), so
+ * the populate must never fabricate or coerce.
+ *
+ * `detail` is the upstream cause the consumer can relay — the body's `message`
+ * when present, else its `error` code. It is only set alongside a real `source`
+ * (an outcome-a retryable carries neither field).
+ */
+function retryableFromBody(body: unknown): { kind: "retryable"; source?: string; detail?: string } {
+  const obj = asRecord(body);
+  const source = obj?.["source"];
+  if (typeof source !== "string" || source.length === 0) {
+    return { kind: "retryable" };
+  }
+  const message = obj?.["message"];
+  const error = obj?.["error"];
+  const detail =
+    typeof message === "string" && message.length > 0
+      ? message
+      : typeof error === "string" && error.length > 0
+        ? error
+        : source;
+  return { kind: "retryable", source, detail };
 }
 
 /** Pull sil-api's structured `{ error, message }` out of a 400 body, defaulting

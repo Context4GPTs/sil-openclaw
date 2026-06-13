@@ -310,8 +310,11 @@ function mapSearchOutcome(api: PluginAPI, outcome: SearchOutcome) {
       api.logger.info("sil_search_invalid_request", { error: outcome.error });
       return invalidRequest(outcome.error, outcome.message);
     case "retryable":
-      api.logger.info("sil_search_retryable", {});
-      return transient("sil_search");
+      // A source-attributed 5xx names the failed source (outcome b); a sil/network
+      // blip carries no source and stays the generic copy (outcome a). The log marker
+      // records the source when present so a flaky source is visible to operators.
+      api.logger.info("sil_search_retryable", outcome.source ? { source: outcome.source } : {});
+      return transient("sil_search", outcome.source, outcome.detail);
     case "unauthorized":
       return mustReregister("sil_search");
   }
@@ -446,8 +449,13 @@ function mapLookupOutcome(api: PluginAPI, outcome: LookupOutcome) {
       api.logger.info("sil_product_get_invalid_request", { error: outcome.error });
       return invalidRequest(outcome.error, outcome.message);
     case "retryable":
-      api.logger.info("sil_product_get_retryable", {});
-      return transient("sil_product_get");
+      // Symmetric with sil_search: a source-attributed 5xx names the source (outcome
+      // b); a sil/network blip is the generic copy (outcome a). One error vocabulary.
+      api.logger.info(
+        "sil_product_get_retryable",
+        outcome.source ? { source: outcome.source } : {},
+      );
+      return transient("sil_product_get", outcome.source, outcome.detail);
     case "unauthorized":
       return mustReregister("sil_product_get");
   }
@@ -719,12 +727,40 @@ function mustReregister(tool: string) {
   });
 }
 
-/** Transient: a network/5xx blip — try again, NOT a re-register (a false terminal
- * on a transient would send the agent down a recovery path that can't fix it).
- * The `tool` name keeps the retry guidance actionable; the taxonomy is shared. */
-function transient(tool: string) {
+/** Transient: a retryable blip — try again, NOT a re-register (a false terminal on
+ * a transient would send the agent down a recovery path that can't fix it). The two
+ * causally-distinct transient failures share `status: "retryable"` (both succeed on
+ * backoff) but split on ATTRIBUTION, which is the whole point of this card:
+ *
+ *   - `source` ABSENT (outcome a) — sil itself / the network / transport is down,
+ *     OR a refresh-leg blip. The agent retries the same call; the copy stays the
+ *     GENERIC "sil is temporarily unavailable" and names no source it cannot
+ *     identify (attribution honesty).
+ *   - `source` PRESENT (outcome b) — a specific catalog source is down or
+ *     rate-limited. The copy NAMES that source and must NEVER say "sil is …
+ *     unavailable" / "sil is down": sil is healthy, one source is degraded, often
+ *     for seconds, and mis-attributing it to sil makes the agent abandon a working
+ *     platform. `detail` (the upstream cause) is relayed when present.
+ *
+ * The source is named ONLY when the wire actually carried it (the classifier gates
+ * on a real `source` field — see `retryableFromBody` in sil-client). The named-source
+ * copy is SELF-AUTHORED around the source token rather than echoing the raw upstream
+ * `detail` prose verbatim — the upstream wording is sil-api's to change and could
+ * itself contain "sil is …" phrasing that would muddy the attribution; `detail` is
+ * surfaced as a separate, clearly-delimited field instead. The `tool` name keeps the
+ * retry guidance actionable; the status taxonomy is shared. */
+function transient(tool: string, source?: string, detail?: string) {
+  if (source === undefined) {
+    return jsonResult({
+      status: "retryable",
+      message: `sil is temporarily unavailable. Please try ${tool} again.`,
+    });
+  }
   return jsonResult({
     status: "retryable",
-    message: `sil is temporarily unavailable. Please try ${tool} again.`,
+    message:
+      `The catalog source "${source}" is temporarily unavailable.`
+      + ` sil itself is fine — retry ${tool} shortly.`,
+    ...(detail !== undefined ? { detail } : {}),
   });
 }
