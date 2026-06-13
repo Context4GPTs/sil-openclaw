@@ -226,6 +226,156 @@ describe("classifySearchResponse — the three distinct sil-api outcomes stay di
   });
 });
 
+/**
+ * CARD `name-the-source-in-catalog-error-surfacing` (epic
+ * `catalog-source-error-taxonomy-2026-06`) — the RED unit floor.
+ *
+ * THE BUG this pins: `classifySearchResponse` collapses every 5xx / non-{200,400,401}
+ * into a BODYLESS `{ kind: "retryable" }`, discarding the `{ error, message, source }`
+ * a `source_unavailable` 5xx body carries. So `transient()` downstream
+ * (catalog.ts:725) can never name the failed source — three causally-distinct
+ * failures read as one generic "sil is temporarily unavailable" envelope.
+ *
+ * The fix WIDENS the `retryable` variant (it is NOT replaced — every existing
+ * `.kind === "retryable"` assertion above stays valid) to:
+ *     { kind: "retryable"; source?: string; detail?: string }
+ * and populates `source`/`detail` in the classifier ONLY when the 5xx body carries
+ * a real `source` field. This block is the immutable spec for that shape and for
+ * the no-fabrication guard (architect Risk "regenerating the masking in reverse").
+ *
+ * SCOPE NOTE — this classifier is pure over `(status, body)`; it NEVER sees a raw
+ * network throw (that is `searchCatalog`'s `catch`, which returns a bare
+ * `{ kind: "retryable" }` literal — structurally sourceless). So the "network throw
+ * → no source" half of the card's no-fabrication guard is asserted at the
+ * integration tier (the network-throw case in catalog-search.integration.test.ts);
+ * here we pin the bodyless / garbage / no-`source` 5xx cases the classifier owns.
+ */
+describe("classifySearchResponse — a source-attributed 5xx SURFACES its source on the retryable outcome (outcome b)", () => {
+  it("500 source_unavailable WITH a `source` → retryable carrying that source (and a detail)", () => {
+    // The structured contract outcome (b) consumes: sil-api's source-down 5xx body
+    // (`source_unavailable`) carries which catalog/product source failed. The
+    // classifier MUST surface it so `transient()` can NAME the source instead of
+    // emitting the generic "sil is down". RED today: the classifier returns a bare
+    // `{ kind: "retryable" }` and throws the `source` away.
+    const out = classifySearchResponse(500, {
+      error: "source_unavailable",
+      message: "Catalog source 'shopify' is temporarily unavailable.",
+      source: "shopify",
+    });
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBe("shopify");
+      // `detail` carries the upstream cause (error/message) so the consumer has
+      // something concrete to relay; its exact composition is the dev's to shape,
+      // but it MUST be a non-empty string that surfaces the failure.
+      expect(typeof out.detail).toBe("string");
+      expect((out.detail as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("a 502/503/504 source_unavailable WITH a `source` ALSO surfaces it (not just 500)", () => {
+    // sil-api may surface an upstream outage as any 5xx; the source-carry must not
+    // be hardcoded to 500. Each of these, when the body names a source, surfaces it.
+    for (const code of [502, 503, 504]) {
+      const out = classifySearchResponse(code, {
+        error: "source_unavailable",
+        message: "Catalog source 'etsy' is temporarily unavailable.",
+        source: "etsy",
+      });
+      expect(out.kind).toBe("retryable");
+      if (out.kind === "retryable") {
+        expect(out.source).toBe("etsy");
+      }
+    }
+  });
+
+  it("the upstream 429-as-source_unavailable (a rate-limited source, surfaced as 5xx) ALSO carries its source (outcome b/429)", () => {
+    // The sibling classifies an upstream HTTP 429 as `source_unavailable` (a 5xx) so
+    // a throttle stays RETRYABLE (a 429 reaching the plugin AS a 4xx would route to
+    // the non-retryable invalid_request arm — wrong for a transient throttle). When
+    // it carries a source, the classifier surfaces it exactly like any source outage.
+    const out = classifySearchResponse(503, {
+      error: "source_unavailable",
+      message: "Catalog source 'global-catalog' is rate-limited; retry shortly.",
+      source: "global-catalog",
+    });
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBe("global-catalog");
+    }
+  });
+});
+
+describe("classifySearchResponse — the no-fabrication guard: a sourceless retryable NEVER invents a source (outcome a)", () => {
+  it("500 WITH NO `source` field → bare retryable, NO source (a sil-internal failure is outcome a, not b)", () => {
+    // A sil-internal 5xx (the source-failure body is NOT present) must stay the
+    // GENERIC retryable — attaching a source here would mis-name a source on a
+    // sil-down event, re-introducing wrong attribution in the OPPOSITE direction
+    // (architect Risk). The populate gates on the PRESENCE of a real `source`.
+    const out = classifySearchResponse(500, {
+      error: "internal_error",
+      message: "Something went wrong inside sil.",
+    });
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBeUndefined();
+    }
+  });
+
+  it("500 with a garbage / non-object body → bare retryable, NO source", () => {
+    // A malformed 5xx body (no parseable `source`) can never name a source. Each of
+    // these falls back to outcome a — generic retryable, source undefined.
+    for (const body of [null, "boom", 42, [], {}]) {
+      const out = classifySearchResponse(500, body);
+      expect(out.kind).toBe("retryable");
+      if (out.kind === "retryable") {
+        expect(out.source).toBeUndefined();
+      }
+    }
+  });
+
+  it("500 whose `source` is present but NOT a non-empty string → NO source (never coerce a bad field)", () => {
+    // The source field must be a real, non-empty string. A null/number/empty/object
+    // `source` is not a usable identifier — the classifier must NOT surface it (and
+    // must not stringify a non-string). Degrade to outcome a, not a fabricated name.
+    for (const source of [null, 123, "", {}, []]) {
+      const out = classifySearchResponse(500, {
+        error: "source_unavailable",
+        message: "A catalog source is unavailable.",
+        source,
+      });
+      expect(out.kind).toBe("retryable");
+      if (out.kind === "retryable") {
+        expect(out.source).toBeUndefined();
+      }
+    }
+  });
+
+  it("an unmapped non-200 (e.g. 502 with an empty body) → bare retryable, NO source", () => {
+    // The generic transport-failure landing: a 5xx with no body at all is outcome a.
+    const out = classifySearchResponse(502, {});
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBeUndefined();
+    }
+  });
+
+  it("NEVER scrapes a source out of the human `message` string — a source named only in prose stays unsurfaced", () => {
+    // The architect ruled out string-scraping the message ("catalog source 'X' is
+    // unavailable"): it is brittle and couples the plugin to sil-api's wording. The
+    // source MUST arrive as the structured `source` field. A body that names a
+    // source ONLY inside `message` (no `source` key) is outcome a — no source.
+    const out = classifySearchResponse(500, {
+      error: "source_unavailable",
+      message: "Catalog source 'shopify' is temporarily unavailable.",
+    });
+    expect(out.kind).toBe("retryable");
+    if (out.kind === "retryable") {
+      expect(out.source).toBeUndefined();
+    }
+  });
+});
+
 describe("classifySearchResponse — empty match is SUCCESS, not error", () => {
   it("200 { ucp, products: [] } → ok with an EMPTY products list and NO cursor", () => {
     // UCP: an empty search returns an empty array — "this is not an error". The

@@ -1171,6 +1171,369 @@ describe("sil_search — the three distinct sil-api outcomes surface as three di
   });
 });
 
+/**
+ * CARD `name-the-source-in-catalog-error-surfacing` (epic
+ * `catalog-source-error-taxonomy-2026-06`) — the RED integration ceiling.
+ *
+ * The product promise: THREE causally-distinct failures become THREE
+ * distinguishable agent envelopes (the legibility contract — card "Behavioral
+ * framing"). Today all three collapse into the single generic retryable
+ * "sil is temporarily unavailable" copy because the source-failure body is
+ * discarded at the wire classifier (`classifySearchResponse` sil-client.ts:530),
+ * one step before `transient()` (catalog.ts:725) runs.
+ *
+ *   (a) sil / network / transport down → status retryable, GENERIC "sil is
+ *       temporarily unavailable", NO source name, NO sil_register hint.
+ *   (b) a specific catalog SOURCE down or rate-limited (429-as-source_unavailable)
+ *       → status retryable, the message NAMES the source, NEVER "sil is …
+ *       unavailable", NO sil_register.
+ *   (c) upstream REJECTED the request (a deterministic 4xx, e.g. source_rejected)
+ *       → NON-retryable invalid_request carrying the REAL upstream { error, message }
+ *       (not extractApiError's search-specific default), NO retry hint, NO sil_register.
+ *
+ * These assert on the agent-observable ENVELOPE (status + message CONTENT), which
+ * is where the distinguishability lives and which `tsc` cannot verify (architect
+ * Risk "message-content regression is invisible to type-checking"). The ONLY mock
+ * is `fetch` (`installRouter`) — the full real tool + sil-client pipeline runs; per
+ * `complete-work-is-stub-free`, nothing asserts a stub response.
+ *
+ * EXPECT RED today: outcome (b)'s message is the generic copy (source discarded),
+ * and outcome (c) arrives as a 5xx-shaped retryable until the classifier carries
+ * the source and the sibling ships the 4xx. The (a) assertions and the regression
+ * guards already pass — they pin the invariants the a/b/c rework must NOT break.
+ */
+describe("sil_search — outcome a: sil/network down → GENERIC retryable, names NO source, no sil_register", () => {
+  it("5xx with NO source on the body → generic 'sil is temporarily unavailable', NO source name, NO sil_register", async () => {
+    // A sil-INTERNAL 5xx (no source on the failure body) is outcome a — the agent
+    // retries the same call; the copy must stay generic and must NOT fabricate a
+    // source name it was never handed (attribution honesty).
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 500, body: { error: "internal_error", message: "Something went wrong inside sil." } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("retryable");
+    const message = String(payload["message"]);
+    // The GENERIC sil-unavailable copy (this is what outcome a SHOULD say).
+    expect(message.toLowerCase()).toMatch(/sil is (temporarily )?unavailable|try .*again/);
+    // No re-register hint — re-registering fixes neither a 5xx nor anything else here.
+    expect(payload["recovery"]).not.toBe("sil_register");
+    expect(JSON.stringify(payload).toLowerCase()).not.toMatch(/sil_register/);
+  });
+
+  it("network throw → generic retryable, NO source name, no sil_register, EXACTLY one round-trip (no retry storm)", async () => {
+    // A thrown fetch (timeout / abort / DNS hang / connection refused) is outcome a.
+    // The no-source half of the no-fabrication guard at the wire boundary: the
+    // catch returns a bare sourceless retryable, so the agent gets the generic copy.
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) => (kind === "search" ? "network-error" : { status: 200, body: {} }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    // Exactly ONE round-trip — a thrown fetch must not spin an internal retry storm.
+    expect(rec.search.length).toBe(1);
+    expect(rec.refresh.length).toBe(0); // a first-call network blip is not a 401
+    expect(payload["status"]).toBe("retryable");
+    expect(payload["recovery"]).not.toBe("sil_register");
+    // The generic copy — and it must NOT name any of the canary sources.
+    const message = String(payload["message"]).toLowerCase();
+    expect(message).toMatch(/sil is (temporarily )?unavailable|try .*again/);
+    for (const src of ["shopify", "etsy", "global-catalog"]) {
+      expect(message).not.toContain(src);
+    }
+  });
+});
+
+describe("sil_search — outcome b: a named source down/rate-limited → source-named retryable, NEVER 'sil is unavailable'", () => {
+  it("5xx source_unavailable WITH a `source` → retryable whose message NAMES the source and NEVER says 'sil is unavailable'", async () => {
+    // The headline product behavior: a SOURCE outage is reported as THAT source
+    // being degraded, not as sil being down. The agent (and the user reading its
+    // words) must not conclude the whole platform is unavailable when one source is.
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? {
+            status: 500,
+            body: {
+              error: "source_unavailable",
+              message: "Catalog source 'shopify' is temporarily unavailable.",
+              source: "shopify",
+            },
+          }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("retryable");
+    const message = String(payload["message"]);
+    // NAMES the source.
+    expect(message).toContain("shopify");
+    // NEVER the generic "sil is (temporarily) unavailable" / "sil is down" copy —
+    // this is the masking the card exists to remove.
+    expect(message.toLowerCase()).not.toMatch(/sil is (temporarily )?unavailable/);
+    expect(message.toLowerCase()).not.toMatch(/sil is down/);
+    // Still retryable, still NOT a re-register (the source is transiently degraded;
+    // auth is fine).
+    expect(payload["recovery"]).not.toBe("sil_register");
+    expect(JSON.stringify(payload).toLowerCase()).not.toMatch(/sil_register/);
+  });
+
+  it("rate-limited source (upstream 429 → source_unavailable 5xx) WITH a `source` → outcome b: retryable, names the source, never 'sil is down', never non-retryable", async () => {
+    // 429 is the canonical trap: it is transient pressure, NOT a malformed request,
+    // so it MUST stay retryable (outcome b) and name the source — never get swept
+    // into the non-retryable c arm with the other 4xx, never read as "sil is down".
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? {
+            status: 503,
+            body: {
+              error: "source_unavailable",
+              message: "Catalog source 'global-catalog' is rate-limited; retry shortly.",
+              source: "global-catalog",
+            },
+          }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("retryable"); // transient, never invalid_request
+    expect(payload["status"]).not.toBe("invalid_request");
+    const message = String(payload["message"]);
+    expect(message).toContain("global-catalog");
+    expect(message.toLowerCase()).not.toMatch(/sil is (temporarily )?unavailable|sil is down/);
+    expect(payload["recovery"]).not.toBe("sil_register");
+  });
+
+  it("outcome b carries NO recovery:sil_register hint (a degraded source is not an auth problem)", async () => {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? {
+            status: 500,
+            body: { error: "source_unavailable", message: "Source 'etsy' is unavailable.", source: "etsy" },
+          }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("retryable");
+    expect(payload["recovery"]).not.toBe("sil_register");
+    expect(JSON.stringify(payload).toLowerCase()).not.toMatch(/sil_register/);
+  });
+});
+
+describe("sil_search — outcome c: upstream rejected the request → NON-retryable invalid_request carrying the real cause", () => {
+  it("4xx source_rejected → invalid_request carrying the upstream { error, message }, NO retry hint, NO sil_register", async () => {
+    // A deterministic upstream rejection (a malformed filter the source refuses) is
+    // outcome c — the agent must STOP and fix the request, never loop it. It is the
+    // hard pivot: non-retryable, carrying the server's real cause so the agent can
+    // act on it. The upstream message must be CARRIED THROUGH, not replaced by
+    // extractApiError's search-specific default ("Provide a search query …").
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? {
+            status: 400,
+            body: {
+              error: "source_rejected",
+              message: "Source 'shopify' rejected the request: filter `ships_from` is not supported.",
+            },
+          }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    // NON-retryable — the agent must not retry a deterministic rejection.
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["status"]).not.toBe("retryable");
+    // Carries the REAL upstream cause (error code + the server's message verbatim),
+    // NOT the search-specific generic default from extractApiError.
+    expect(payload["error"]).toBe("source_rejected");
+    const message = String(payload["message"]);
+    expect(message).toContain("ships_from");
+    expect(message).not.toMatch(/Provide a search query or at least one filter/i);
+    // No retry hint, no re-register — stop and fix the request.
+    expect(payload["recovery"]).not.toBe("sil_register");
+    expect(JSON.stringify(payload).toLowerCase()).not.toMatch(/sil_register/);
+  });
+
+  it("outcome c is NON-retryable AND carries no sil_register — distinct from both retryable arms (a/b)", async () => {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 400, body: { error: "source_rejected", message: "Deterministic rejection from the source." } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["status"]).not.toBe("retryable");
+    expect(payload["recovery"]).not.toBe("sil_register");
+  });
+});
+
+describe("sil_search — DISTINGUISHABILITY: six failure/success cases are pairwise distinct agent envelopes (highest-value)", () => {
+  it("{a-5xx, a-network, b-source, b-429, c-reject, empty-200} produce pairwise-distinguishable envelopes", async () => {
+    // The single highest-value assertion (extends the existing 'three distinct
+    // status strings' test at :1137 into the full a/b split + 429 + c). Drives all
+    // six through the real wiring and proves no two collapse into the same
+    // agent-observable signal:
+    //   - a and b SHARE status "retryable" but DIFFER on whether `message` names a source;
+    //   - c is the only "invalid_request";
+    //   - the empty match is the only "ok" (with products []).
+    async function envelopeFor(reply: Reply): Promise<Record<string, unknown>> {
+      seedTokens("at", "rt");
+      installRouter((kind) => (kind === "search" ? reply : { status: 200, body: {} }));
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const p = payloadOf(await getTool(api, TOOL).execute("c1", { query: "x" }));
+      vi.restoreAllMocks();
+      return p;
+    }
+
+    const aGeneric = await envelopeFor({ status: 500, body: { error: "internal_error", message: "internal" } });
+    const aNetwork = await (async () => {
+      seedTokens("at", "rt");
+      installRouter((kind) => (kind === "search" ? "network-error" : { status: 200, body: {} }));
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const p = payloadOf(await getTool(api, TOOL).execute("c1", { query: "x" }));
+      vi.restoreAllMocks();
+      return p;
+    })();
+    const bSource = await envelopeFor({
+      status: 500,
+      body: { error: "source_unavailable", message: "Source 'shopify' is unavailable.", source: "shopify" },
+    });
+    const b429 = await envelopeFor({
+      status: 503,
+      body: { error: "source_unavailable", message: "Source 'global-catalog' rate-limited.", source: "global-catalog" },
+    });
+    const cReject = await envelopeFor({
+      status: 400,
+      body: { error: "source_rejected", message: "The request was rejected: filter `ships_from` is not supported." },
+    });
+    const emptyMatch = await envelopeFor({ status: 200, body: searchEnvelope([]) });
+
+    // c is the lone non-retryable error; the empty match is the lone success.
+    expect(cReject["status"]).toBe("invalid_request");
+    expect(emptyMatch["status"]).toBe("ok");
+    expect(emptyMatch["products"]).toEqual([]);
+
+    // a and b are BOTH retryable …
+    expect(aGeneric["status"]).toBe("retryable");
+    expect(aNetwork["status"]).toBe("retryable");
+    expect(bSource["status"]).toBe("retryable");
+    expect(b429["status"]).toBe("retryable");
+
+    // … but distinguishable by message attribution: a is generic-sourceless, b names
+    // a source. A reducible "fingerprint" per envelope: status + whether it names a
+    // source. The set of fingerprints across the six must be the full {a,b,c,ok}.
+    function namesSource(p: Record<string, unknown>): boolean {
+      const m = String(p["message"] ?? "").toLowerCase();
+      return ["shopify", "etsy", "global-catalog"].some((s) => m.includes(s));
+    }
+    expect(namesSource(aGeneric)).toBe(false);
+    expect(namesSource(aNetwork)).toBe(false);
+    expect(namesSource(bSource)).toBe(true);
+    expect(namesSource(b429)).toBe(true);
+
+    const fingerprint = (p: Record<string, unknown>): string =>
+      `${String(p["status"])}::${namesSource(p) ? "named" : "generic"}`;
+    // a → retryable::generic ; b → retryable::named ; c → invalid_request::generic ;
+    // ok → ok::generic. Four distinct fingerprints — no two of a/b/c/ok collapse.
+    expect(
+      new Set([
+        fingerprint(aGeneric),
+        fingerprint(bSource),
+        fingerprint(cReject),
+        fingerprint(emptyMatch),
+      ]).size,
+    ).toBe(4);
+    // And the two a-variants share a fingerprint with each other (both generic
+    // retryable) — they are the SAME signal, correctly.
+    expect(fingerprint(aGeneric)).toBe(fingerprint(aNetwork));
+    expect(fingerprint(bSource)).toBe(fingerprint(b429));
+  });
+});
+
+describe("sil_search — regression guards: the a/b/c rework must NOT move the empty-match or the recovered-401 path", () => {
+  it("empty match (200, products []) stays status ok — never a/b/c", async () => {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search" ? { status: 200, body: searchEnvelope([]) } : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "nope-xyzzy" }));
+
+    expect(payload["status"]).toBe("ok");
+    expect(payload["products"]).toEqual([]);
+    // Not any error arm.
+    for (const bad of ["retryable", "invalid_request", "must_reregister", "not_registered"]) {
+      expect(payload["status"]).not.toBe(bad);
+    }
+    expect(payload["recovery"]).toBeUndefined();
+  });
+
+  it("recovered 401 (refresh-and-retry-once succeeds) stays invisible — normal ok, NO refreshed/recovery field, NO a/b/c", async () => {
+    // The orthogonal 401 path must not move. A recovered 401 is a normal success
+    // with no a/b/c envelope and no refreshed/recovery field leaking to the agent.
+    seedTokens("expired-at", "valid-rt");
+    const rec = installRouter((kind, nth) => {
+      if (kind === "search") {
+        return nth === 0
+          ? { status: 401, body: { error: "unauthorized" } }
+          : { status: 200, body: searchEnvelope([PRODUCT_A]) };
+      }
+      if (kind === "refresh") {
+        return { status: 200, body: { access_token: "rotated-at", refresh_token: "rotated-rt" } };
+      }
+      return { status: 500, body: {} };
+    });
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("ok");
+    expect((payload["products"] as unknown[]).length).toBe(1);
+    // No a/b/c error envelope leaked, no payload refreshed/recovery field.
+    expect(payload["refreshed"]).toBeUndefined();
+    expect(payload["recovery"]).toBeUndefined();
+    expect(payload["source"]).toBeUndefined();
+    expect(payload["detail"]).toBeUndefined();
+    // The choreography is unchanged: one refresh + one retry.
+    expect(rec.search.length).toBe(2);
+    expect(rec.refresh.length).toBe(1);
+  });
+});
+
 describe("sil_search — 401 → transparent refresh-and-retry-once (outcome 1: the agent never sees the 401)", () => {
   it("401 → refresh once via sil-web → rotate tokens.json → retry the search once with the NEW token → normal ranked result", async () => {
     // AC[integration]: outcome 1 — a registered agent whose access token is
