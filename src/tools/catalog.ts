@@ -60,22 +60,21 @@ import {
   type LookupOutcome,
   type SearchOutcome,
   type SearchParams,
-  type ShipsFrom,
   type ShipTo,
 } from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
 
 /**
- * The TIGHTENED ship-to/ships-from format contract (founder re-spec 2026-06-11),
- * pinned as a `pattern` BOTH the local schema and sil-api's `@sil/schemas`
- * `ShipTo`/`ShipFrom` enforce IDENTICALLY (byte-for-byte) — so the plugin rejects a
- * malformed value client-side instead of forwarding free text and eating an opaque,
- * fail-late sil-api 400. These same patterns are the schema `pattern` (so the host
- * validates) AND the read-site format gate (so a drifted on-disk call is rejected),
- * defined once here to keep the two in lockstep. The sil-services sibling
+ * The TIGHTENED ship-to format contract (founder re-spec 2026-06-11), pinned as a
+ * `pattern` BOTH the local schema and sil-api's `@sil/schemas` `ShipTo` enforce
+ * IDENTICALLY (byte-for-byte) — so the plugin rejects a malformed value client-side
+ * instead of forwarding free text and eating an opaque, fail-late sil-api 400. These
+ * same patterns are the schema `pattern` (so the host validates) AND the read-site
+ * format gate (so a drifted on-disk call is rejected), defined once here to keep the
+ * two in lockstep. The sil-services sibling
  * (`attach-buyer-ship-to-context-server-side-in-sil-ap`) MUST mirror these exactly;
  * the sil-stage eval verifies it end-to-end.
- *   - country (ships_to + ships_from): ISO 3166-1 alpha-2, a 2-letter code.
+ *   - country (ships_to): ISO 3166-1 alpha-2, a 2-letter code.
  *   - region: ISO 3166-2 subdivision code (CA/NY/BY/97), bounded — NOT a place name.
  *   - postal_code: a single self-contained pattern (a length-cap lookahead 2–12
  *     chars, separators counted, + a structural body of alnum runs joined by single
@@ -119,12 +118,17 @@ function registerSearch(api: PluginAPI): void {
       + " code, NOT a country name); `region` (optional) = the ISO 3166-2 subdivision"
       + " code (CA, NY, BY — a code, NOT a place name); `postal_code` (optional) ="
       + " the destination postal/ZIP code. The other optional filters need no prior"
-      + " tool call: `ships_from` (`{ country }`, the same 2-letter ISO 3166-1"
-      + " alpha-2 code — US/GB/DE) restricts to a merchant ORIGIN country; `condition`"
-      + " (array; the values are exactly \"new\" or \"secondhand\", lowercase) filters"
-      + " by product condition; `available` (boolean) controls availability — the"
-      + " server returns only sale-ready items by default, so set `available: false`"
-      + " to INCLUDE out-of-stock/unavailable items. Requires registration (run"
+      + " tool call: `condition` (array; the values are exactly \"new\" or"
+      + " \"secondhand\", lowercase) filters by product condition; `available`"
+      + " (boolean) controls availability — the server returns only sale-ready items"
+      + " by default, so set `available: false` to INCLUDE out-of-stock/unavailable"
+      + " items. `local_merchants` (boolean) is a BEST-EFFORT BIAS toward shops based"
+      + " in the user's OWN country (home-country / domestic / local sellers) — set it"
+      + " ONLY when the shopper asks for local/domestic shops; it nudges local shops up"
+      + " the ranking but does NOT restrict results to them, so never tell the user the"
+      + " results are all local. To actually surface local shops, ALSO issue the"
+      + " `query` in the USER'S LANGUAGE (a Greek-language query surfaces Greek shops);"
+      + " pass NO country — sil resolves it server-side. Requires registration (run"
       + " sil_register first).",
     parameters: Type.Object({
       query: Type.Optional(
@@ -199,22 +203,23 @@ function registerSearch(api: PluginAPI): void {
           },
         ),
       ),
-      ships_from: Type.Optional(
-        Type.Object(
-          {
-            country: Type.String({
-              pattern: COUNTRY_PATTERN,
-              description:
-                "Merchant origin country as a 2-letter ISO 3166-1 alpha-2 CODE (US,"
-                + " GB, DE) — a code, NOT a country name.",
-            }),
-          },
-          {
-            description:
-              "Restrict results to products that ship FROM a given merchant origin"
-              + " country (alpha-2 ISO code). Omit for no origin constraint.",
-          },
-        ),
+      local_merchants: Type.Optional(
+        Type.Boolean({
+          description:
+            "Bias results toward shops based in the USER'S OWN country (home-country"
+            + " / domestic / local sellers) — set true ONLY when the shopper asks for"
+            + " local or domestic shops (e.g. \"buy from a Greek shop\", \"support"
+            + " local businesses\"). This is a BEST-EFFORT BIAS, NOT a filter: it"
+            + " nudges local shops up the ranking but does NOT restrict results to them"
+            + " and does NOT guarantee every result is local — some local shops won't"
+            + " be detected and some non-local shops may still appear, so never tell"
+            + " the user the results are all local sellers. To actually surface local"
+            + " shops, also issue the `query` in the USER'S LANGUAGE (a Greek-language"
+            + " query surfaces Greek shops; an English query will not). You pass NO"
+            + " country — sil resolves the user's country server-side from their"
+            + " registered address, so do NOT call sil_whoami or pass a country. Omit"
+            + " (or false) for the normal unbiased ranking.",
+        }),
       ),
       condition: Type.Optional(
         Type.Array(Type.String(), {
@@ -520,20 +525,21 @@ type SearchParamsRead =
  * a drifted on-disk call must not slip a non-string into the query mapping. No
  * `any`, no unchecked `as`.
  *
- * The four serviceability/localization filters narrow by their own type: `ship_to`/
- * `ships_from` to an object with a string `country` (a primitive/number is
- * DROPPED), `condition` to a string[] (a bare string is dropped), `available` to a
- * boolean (a string is dropped). The drop is TYPE-driven, never value-driven, so a
- * valid `available: false` survives — it is a boolean, the meaningful "include
- * unavailable items" signal, not a falsy value to discard.
+ * The serviceability/localization filters narrow by their own type: `ship_to` to an
+ * object with a string `country` (a primitive/number is DROPPED), `condition` to a
+ * string[] (a bare string is dropped), `available` and `local_merchants` to a boolean
+ * (a string is dropped). The drop is TYPE-driven, never value-driven, so a valid
+ * `available: false` survives — it is a boolean, the meaningful "include unavailable
+ * items" signal, not a falsy value to discard.
  *
- * Beyond TYPE narrowing, `ship_to`/`ships_from` also FORMAT-validate every provided
- * string field (country alpha-2, region 3166-2, postal bounded) against the shared
- * patterns: a present-but-malformed value returns an `invalid` read so the tool
- * rejects the request client-side with a clear `invalid_filter` error (better agent
- * UX than an opaque, fail-late sil-api 400). `condition` is NOT format-validated —
- * its wire stays OPEN (an unrecognized value still forwards; steering to
- * new/secondhand lives in the description only). The first bad field wins. */
+ * Beyond TYPE narrowing, `ship_to` also FORMAT-validates every provided string field
+ * (country alpha-2, region 3166-2, postal bounded) against the shared patterns: a
+ * present-but-malformed value returns an `invalid` read so the tool rejects the
+ * request client-side with a clear `invalid_filter` error (better agent UX than an
+ * opaque, fail-late sil-api 400). `condition` is NOT format-validated — its wire
+ * stays OPEN (an unrecognized value still forwards; steering to new/secondhand lives
+ * in the description only). `local_merchants` is a plain boolean bias (no format, no
+ * country) — its whole steer lives in the description. The first bad field wins. */
 function readSearchParams(params: Record<string, unknown>): SearchParamsRead {
   const result: SearchParams = {};
   const query = params["query"];
@@ -553,14 +559,17 @@ function readSearchParams(params: Record<string, unknown>): SearchParamsRead {
   if (shipTo.kind === "invalid") return { kind: "invalid", field: shipTo.field };
   if (shipTo.kind === "ok") result.ship_to = shipTo.value;
 
-  const shipsFrom = readShipsFrom(params["ships_from"]);
-  if (shipsFrom.kind === "invalid") return { kind: "invalid", field: shipsFrom.field };
-  if (shipsFrom.kind === "ok") result.ships_from = shipsFrom.value;
-
   const condition = readCondition(params["condition"]);
   if (condition !== null) result.condition = condition;
   const available = params["available"];
   if (typeof available === "boolean") result.available = available;
+  // `local_merchants` is a plain boolean bias narrowed exactly like `available`:
+  // a wrong type is DROPPED (treated as absent), never coerced. A valid `false`
+  // survives the read site (type-driven, not value-driven); the omit-when-falsy
+  // discipline for the BIAS itself lives at the wire (`buildSearchBody`), since
+  // unlike `available:false`, a false bias carries no ranking signal.
+  const localMerchants = params["local_merchants"];
+  if (typeof localMerchants === "boolean") result.local_merchants = localMerchants;
 
   return { kind: "ok", params: result };
 }
@@ -602,21 +611,6 @@ function readShipTo(raw: unknown): FilterRead<ShipTo> {
     result.postal_code = postalCode;
   }
   return { kind: "ok", value: result };
-}
-
-/** Narrow a `ships_from` arg to {@link ShipsFrom}. A non-object/missing-country is
- * `absent` (DROPPED, wrong-TYPE discipline); a provided `country` string that fails
- * the alpha-2 pattern is `invalid` (REJECT). Country is uppercased on the wire, not
- * here. */
-function readShipsFrom(raw: unknown): FilterRead<ShipsFrom> {
-  const obj = asRecord(raw);
-  if (obj === null) return { kind: "absent" };
-  const country = obj["country"];
-  if (typeof country !== "string" || country.length === 0) return { kind: "absent" };
-  if (!matchesPattern(country, COUNTRY_PATTERN)) {
-    return { kind: "invalid", field: "ships_from.country" };
-  }
-  return { kind: "ok", value: { country } };
 }
 
 /** Test a value against one of the shared schema patterns, anchored exactly as the

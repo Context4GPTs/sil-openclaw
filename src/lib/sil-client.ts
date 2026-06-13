@@ -220,25 +220,25 @@ export interface ShipTo {
   postal_code?: string;
 }
 
-/** A merchant-origin constraint. `country` is the ISO 3166-1 alpha-2 code
- * (required when present), uppercased on the wire (same country-case normalization
- * as `ShipTo`). Mirrors the Shopify `ships_from` wire shape
- * (`global-catalog-extension.md:33`); same name on both sides. */
-export interface ShipsFrom {
-  country: string;
-}
-
 /** The simplified search query an agent sends — a free-text `query` plus
  * optional filters and pagination. Maps 1:1 into the sil-api `CatalogSearchRequest`
  * body (`searchCatalog` builds the nested shape). All fields optional at this
  * layer; the at-least-one-input rule is enforced by the tool, not here.
  *
- * The four serviceability/localization filters (`ship_to`, `ships_from`,
- * `condition`, `available`) ride sil-api's OPEN `SearchFilters`
- * (`additionalProperties: true`). They are forwarded ONLY when supplied — an
- * absent filter is an omitted key, never a client-injected default (the server
- * applies `available: true` itself). `available: false` is meaningful (include
- * unavailable items) and is forwarded, never dropped as falsy. */
+ * The three serviceability/localization filters (`ship_to`, `condition`,
+ * `available`) ride sil-api's OPEN `SearchFilters` (`additionalProperties: true`).
+ * They are forwarded ONLY when supplied — an absent filter is an omitted key, never
+ * a client-injected default (the server applies `available: true` itself).
+ * `available: false` is meaningful (include unavailable items) and is forwarded,
+ * never dropped as falsy.
+ *
+ * `local_merchants` is NOT one of those filters — it is a sil-PRIVATE ranking-bias
+ * signal that rides at the TOP LEVEL of the request body (beside `query`/`filters`/
+ * `pagination`), NEVER under `filters` (filters are forwarded to the cross-shop
+ * Global Catalog, which does not understand the field → a silent no-op). It is
+ * emitted ONLY when exactly `true`: unlike `available: false`, a `false` bias
+ * carries no signal (== the server's unbiased default), so `false`/absent both omit
+ * the key. See `buildSearchBody`. */
 export interface SearchParams {
   query?: string;
   category?: string;
@@ -247,9 +247,9 @@ export interface SearchParams {
   cursor?: string;
   limit?: number;
   ship_to?: ShipTo;
-  ships_from?: ShipsFrom;
   condition?: string[];
   available?: boolean;
+  local_merchants?: boolean;
 }
 
 /** A currency-tagged price, passed through OPAQUE from sil-api's UCP `Price`
@@ -917,8 +917,8 @@ function extractForbiddenReason(body: unknown): string {
  * The tool clamps nothing and validates no cursor opacity — sil-api owns those.
  *
  * THE load-bearing rename: the agent arg `ship_to` (singular) becomes the wire key
- * `filters.ships_to` (plural). `ships_from`/`condition`/`available` keep their name
- * under `filters.*`. These four ride sil-api's OPEN `SearchFilters`
+ * `filters.ships_to` (plural). `condition`/`available` keep their name under
+ * `filters.*`. These three ride sil-api's OPEN `SearchFilters`
  * (`additionalProperties: true`), which SILENTLY accepts an unknown key — so the
  * exact emitted key name is the only thing standing between a working serviceability
  * filter and a no-op (a wrong rename fails GREEN). Each is forwarded ONLY when
@@ -927,13 +927,23 @@ function extractForbiddenReason(body: unknown): string {
  * `available: false` is narrowed with `typeof === "boolean"`, never `if (v)`, so the
  * meaningful `false` (include unavailable items) survives.
  *
+ * `local_merchants` is the ONE field that does NOT ride `filters`. It is a
+ * sil-PRIVATE ranking-bias signal, not a UCP/Global-Catalog filter — `filters` is
+ * forwarded to the cross-shop Global Catalog, whose OPEN schema would silently
+ * accept and ignore an unknown `local_merchants` key (the exact wrong-placement
+ * no-op the rename hazard above warns of). So it is emitted at the TOP LEVEL of the
+ * body (beside `query`/`filters`/`pagination`), and ONLY when exactly `true`: unlike
+ * `available: false` (a meaningful include-unavailable signal that survives), a
+ * `false` bias carries NO signal (== the server's unbiased default), so `false` and
+ * absent both omit the key (narrow on the VALUE, not just the type — emit iff true).
+ *
  * COUNTRY-CASE NORMALIZATION is the wire layer's job (the read site owns FORMAT
- * rejection): `ships_to.country` and `ships_from.country` are emitted UPPERCASE
- * (`us` → `US`), the alpha-2 contract `@sil/schemas` `ShipTo`/`ShipFrom` mirrors
- * byte-for-byte. A lowercase code on the wire would diverge from the sibling and
- * (depending on the server's case-sensitivity) silently mis-filter. `region` and
- * `postal_code` are forwarded VERBATIM — they passed their pattern at the read site,
- * and the wire normalizes only country case.
+ * rejection): `ships_to.country` is emitted UPPERCASE (`us` → `US`), the alpha-2
+ * contract `@sil/schemas` `ShipTo` mirrors byte-for-byte. A lowercase code on the
+ * wire would diverge from the sibling and (depending on the server's
+ * case-sensitivity) silently mis-filter. `region` and `postal_code` are forwarded
+ * VERBATIM — they passed their pattern at the read site, and the wire normalizes
+ * only country case.
  */
 function buildSearchBody(params: SearchParams): Record<string, unknown> {
   const body: Record<string, unknown> = {};
@@ -948,17 +958,22 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   if (typeof params.price_max === "number") price["max"] = params.price_max;
   if (Object.keys(price).length > 0) filters["price"] = price;
 
-  // The four serviceability/localization filters — the `ship_to` → `ships_to`
-  // rename happens here; the other three keep their name. Country is uppercased
-  // on emit (region/postal forwarded verbatim); the other three pass through as-is.
+  // The three serviceability/localization filters — the `ship_to` → `ships_to`
+  // rename happens here; the other two keep their name. Country is uppercased on
+  // emit (region/postal forwarded verbatim); the other two pass through as-is.
   if (params.ship_to !== undefined) filters["ships_to"] = withUppercaseCountry(params.ship_to);
-  if (params.ships_from !== undefined) {
-    filters["ships_from"] = withUppercaseCountry(params.ships_from);
-  }
   if (params.condition !== undefined) filters["condition"] = params.condition;
   if (typeof params.available === "boolean") filters["available"] = params.available;
 
   if (Object.keys(filters).length > 0) body["filters"] = filters;
+
+  // `local_merchants` is a sil-PRIVATE ranking bias — it rides at the TOP LEVEL of
+  // the body (a sibling of `query`/`filters`/`pagination`), NEVER under `filters`
+  // (those are forwarded to the Global Catalog, which would silently swallow it).
+  // Emitted ONLY when exactly `true`: a `false`/absent bias carries no signal (it is
+  // the server's unbiased default), so — unlike `available:false` — it is omitted.
+  // Narrow on the VALUE, not just the type: `=== true`, never a truthiness coerce.
+  if (params.local_merchants === true) body["local_merchants"] = true;
 
   const pagination: Record<string, unknown> = {};
   if (typeof params.cursor === "string") pagination["cursor"] = params.cursor;
@@ -968,10 +983,10 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   return body;
 }
 
-/** Emit a ship-to/ships-from object with its alpha-2 `country` UPPERCASED on the
- * wire (`us` → `US`); every other field (`region`/`postal_code` on `ShipTo`) is
- * preserved verbatim. The spread-then-overwrite keeps the shape generic over both
- * {@link ShipTo} and {@link ShipsFrom} without reshaping or dropping a field. */
+/** Emit a ship-to object with its alpha-2 `country` UPPERCASED on the wire
+ * (`us` → `US`); every other field (`region`/`postal_code` on {@link ShipTo}) is
+ * preserved verbatim. The spread-then-overwrite keeps the shape generic over any
+ * `{ country }`-bearing value without reshaping or dropping a field. */
 function withUppercaseCountry<T extends { country: string }>(value: T): T {
   return { ...value, country: value.country.toUpperCase() };
 }
