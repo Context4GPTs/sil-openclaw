@@ -1,16 +1,18 @@
-# cc-setup harness — local-only in this PUBLIC repo. The entire .claude/ tree
-# (skills, agents, hooks, commands, settings, worktrees, agent-memory, runtime
-# logs) is gitignored so the orchestration harness never ships in the public
-# plugin repo. The files live on-disk locally; the board runs from there.
-# To untrack any committed before this rule: git rm -r --cached .claude/
+# cc-setup harness — local-only in this PUBLIC repo. The whole orchestration
+# harness is gitignored so none of it ships in the public plugin repo: the
+# .claude/ tree (skills, agents, hooks, commands, settings, worktrees,
+# agent-memory, logs), the kanban board + cards, the Obsidian vault, the
+# distilled docs, the contributor/agent instructions, and the MCP config.
+# The files live on-disk locally; the board runs from there.
+# To untrack anything committed before this rule: git rm -r --cached <path>
 .claude/
 *.worktree
-
-# Cards are local-only in the public repo (gitignored mode): living card files
-# never land on a public branch; only the templates are tracked.
-cards/*.md
-!cards/_TEMPLATE.md
-!cards/README.md
+.mcp.json
+cards/
+BOARD.md
+.obsidian/
+docs/
+CLAUDE.md
 
 # Editor directories and files
 
@@ -21,14 +23,6 @@ cards/*.md
 *.swo
 *~
 .DS_Store
-
-# Obsidian — track shared vault config (app.json, core-plugins.json,
-# community-plugins.json, plugin manifests + js). Ignore per-machine state.
-.obsidian/workspace
-.obsidian/workspace.json
-.obsidian/workspace-mobile.json
-.obsidian/cache
-.obsidian/plugins/*/data.json
 
 # Dependencies
 node_modules/
