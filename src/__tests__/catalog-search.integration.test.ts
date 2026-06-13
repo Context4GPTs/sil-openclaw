@@ -412,14 +412,18 @@ describe("sil_search — param → request mapping (bare path, sil-api origin, B
 
 /**
  * Card `add-ship-to-filter-args-to-the-sil-search-tool` (epic
- * `location-aware-search-2026-06`): the wired tool forwards four new optional
+ * `location-aware-search-2026-06`): the wired tool forwards the new optional
  * serviceability/localization args end-to-end — agent arg → wire key — with the
  * `ship_to` → `filters.ships_to` rename, omit-when-absent, and no client-injected
  * defaults. These assert the full round-trip through the REAL tool + sil-client,
  * capturing the request body the tool sends to sil-api (the only mock is fetch).
+ *
+ * Card `replace-ships-from-with-local-merchants` deleted `ships_from`, so it is no
+ * longer among the forwarded filters here; its end-to-end absence (even for a stray
+ * arg) and the `local_merchants` top-level forward are in their own blocks below.
  */
-describe("sil_search — the four new filter args forward end-to-end (agent arg → wire key)", () => {
-  it("all four supplied (with query) → captured body carries filters.ships_to / ships_from / condition / available, the rename applied", async () => {
+describe("sil_search — the new filter args forward end-to-end (agent arg → wire key)", () => {
+  it("all supplied (with query) → captured body carries filters.ships_to / condition / available, the rename applied", async () => {
     seedTokens("at", "rt");
     const rec = installRouter((kind) =>
       kind === "search"
@@ -432,7 +436,6 @@ describe("sil_search — the four new filter args forward end-to-end (agent arg 
     await getTool(api, TOOL).execute("c1", {
       query: "office chair",
       ship_to: { country: "US", region: "NY", postal_code: "10001" },
-      ships_from: { country: "US" },
       condition: ["new"],
       available: false,
     });
@@ -440,11 +443,11 @@ describe("sil_search — the four new filter args forward end-to-end (agent arg 
     expect(rec.search.length).toBe(1);
     const body = rec.search[0]!.body as Record<string, unknown>;
     // The whole filters block, exact — proves the agent arg `ship_to` lands on the
-    // wire as the plural `ships_to` (rename), the other three keep their name, and
+    // wire as the plural `ships_to` (rename), the others keep their name, and
     // available:false survives the full pipeline (read-site narrow → buildSearchBody).
+    // No `ships_from` — it was deleted end-to-end.
     expect(body["filters"]).toEqual({
       ships_to: { country: "US", region: "NY", postal_code: "10001" },
-      ships_from: { country: "US" },
       condition: ["new"],
       available: false,
     });
@@ -490,6 +493,198 @@ describe("sil_search — the four new filter args forward end-to-end (agent arg 
       categories: ["Furniture"],
       ships_to: { country: "DE" },
     });
+  });
+});
+
+/**
+ * Card `replace-ships-from-with-local-merchants` (epic `local-merchants-2026-06`):
+ * `local_merchants: true` forwards END-TO-END through the real wired tool + sil-client
+ * as a TOP-LEVEL request field (sibling of `query`/`filters`/`pagination`), never
+ * under `filters`, and the plugin attaches NO country and performs NO identity read
+ * to do it (AC[integration]). The only mock is `fetch` (installRouter) — the full
+ * pipeline runs.
+ */
+describe("sil_search — local_merchants forwards end-to-end TOP-LEVEL, with no country and no identity round-trip", () => {
+  it("local_merchants:true (with query) → captured body carries top-level local_merchants:true; filters has none", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "καρέκλα", local_merchants: true }),
+    );
+
+    expect(rec.search.length).toBe(1);
+    const body = rec.search[0]!.body as Record<string, unknown>;
+    // Top-level home AND filters-absence asserted together (the anti-false-green pair).
+    expect(body["local_merchants"]).toBe(true);
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("local_merchants");
+    expect(payload["status"]).toBe("ok");
+  });
+
+  it("local_merchants:true attaches NO country anywhere on the request and triggers NO identity / sil_whoami round-trip", async () => {
+    // The whole point of a server-resolved boolean (Discovery fact c): the plugin
+    // must NOT fetch or pass a country to honor the flag. Proof: the ONLY outbound
+    // call is the single /catalog/search; there is no identity read, and the request
+    // body/URL carry no country field attributable to the flag.
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "shoes", local_merchants: true });
+
+    // Exactly ONE outbound request — the search. No second (identity) round-trip.
+    expect(rec.all.length).toBe(1);
+    expect(rec.search.length).toBe(1);
+    // No identity endpoint was hit on account of the flag.
+    const hitWhoami = rec.all.some((r) => /whoami|\/identity|\/me\b|\/auth\/me/i.test(r.url));
+    expect(hitWhoami).toBe(false);
+    // The flag injected NO country anywhere — not as a top-level key, not in filters.
+    const body = rec.search[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("country");
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("country");
+    // The only flag-attributable addition is the boolean itself.
+    expect(body["local_merchants"]).toBe(true);
+  });
+
+  it("local_merchants:false (with query) → NO local_merchants key on the wire end-to-end (omit-when-falsy)", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair", local_merchants: false });
+
+    const body = rec.search[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("local_merchants");
+    expect(body).toEqual({ query: "chair" });
+  });
+
+  it("a wrong-TYPE local_merchants (string) is DROPPED end-to-end — narrowed out before the wire, never coerced to true", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair", local_merchants: "true" });
+
+    const body = rec.search[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("local_merchants");
+    expect(body).toEqual({ query: "chair" });
+  });
+});
+
+/**
+ * Card `replace-ships-from-with-local-merchants`: a stray `ships_from` argument is
+ * NOT forwarded anywhere in the body end-to-end (the deleted lever is closed against
+ * at the schema/narrowing, so it never reaches sil-api or the Global Catalog).
+ */
+describe("sil_search — a stray ships_from argument never reaches the wire end-to-end", () => {
+  it("a `ships_from` arg alongside a real query → absent from the forwarded body (not top-level, not filters)", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair", ships_from: { country: "US" } });
+
+    const body = rec.search[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("ships_from");
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("ships_from");
+    expect(JSON.stringify(body)).not.toContain("ships_from");
+    // The stray arg changed nothing — byte-exactly today's bare-query body.
+    expect(body).toEqual({ query: "chair" });
+  });
+});
+
+/**
+ * Card `replace-ships-from-with-local-merchants` (AC[integration], best-effort
+ * semantics): the bias is ENTIRELY sil-api's. When `local_merchants: true` is
+ * forwarded and sil-api returns a ranked list, the plugin shapes the result WITHOUT
+ * adding any client-side "is local" tag/flag and WITHOUT re-ranking or dropping any
+ * result to enforce locality (LEAN search contract — present the server's order).
+ * A false "all local" guarantee at the surface is exactly the failure that killed
+ * ships_from; the plugin must not manufacture one.
+ */
+describe("sil_search — result-shaping adds NO client-side locality tag and does NOT re-rank/drop for locality", () => {
+  it("with local_merchants:true, the shaped products are the server's order verbatim — no locality tag, none dropped, none reordered", async () => {
+    seedTokens("at", "rt");
+    // The server returns A then B (its ranking). The plugin must present A then B —
+    // it must not reorder to "promote locals", nor drop B for being non-local.
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([PRODUCT_A, PRODUCT_B]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "chair", local_merchants: true }),
+    );
+
+    expect(payload["status"]).toBe("ok");
+    const products = payload["products"] as Array<Record<string, unknown>>;
+    // Nothing dropped for locality; server order preserved.
+    expect(products).toHaveLength(2);
+    expect(products[0]!["id"]).toBe("gid://product/a");
+    expect(products[1]!["id"]).toBe("gid://product/b");
+    // No client-side "is local" tag/flag injected onto any product or its variant.
+    const blob = JSON.stringify(payload).toLowerCase();
+    for (const forbidden of ["is_local", "islocal", '"local":', "is_domestic", "local_match", "locality"]) {
+      expect(blob).not.toContain(forbidden);
+    }
+    // The shaped product carries only the contract fields — no extra locality key.
+    expect(Object.keys(products[0]!).sort()).toEqual(["id", "source", "title", "variant"]);
+  });
+
+  it("the shaped result is IDENTICAL whether local_merchants is true or omitted — the plugin's shaping is locality-agnostic (server owns the bias)", async () => {
+    async function shaped(localMerchants: boolean | undefined): Promise<Record<string, unknown>> {
+      seedTokens("at", "rt");
+      installRouter((kind) =>
+        kind === "search"
+          ? { status: 200, body: searchEnvelope([PRODUCT_A, PRODUCT_B]) }
+          : { status: 500, body: {} },
+      );
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const args: Record<string, unknown> = { query: "chair" };
+      if (localMerchants !== undefined) args["local_merchants"] = localMerchants;
+      const p = payloadOf(await getTool(api, TOOL).execute("c1", args));
+      vi.restoreAllMocks();
+      return p;
+    }
+
+    const withFlag = await shaped(true);
+    const withoutFlag = await shaped(undefined);
+    // The plugin does no locality post-processing, so the SHAPED payload (products +
+    // their projection + order) is byte-identical — only the request body differs.
+    expect(withFlag).toEqual(withoutFlag);
   });
 });
 
@@ -579,24 +774,6 @@ describe("sil_search — bad FORMAT is rejected client-side with a structured er
     expect(payload["error"]).toBe("invalid_filter");
   });
 
-  it("ships_from.country = 'Germany' (a name, not alpha-2) + a real query → invalid_request, ZERO network", async () => {
-    seedTokens("at", "rt");
-    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
-    const api = createMockPluginApi();
-    registerCatalogTools(api);
-
-    const payload = payloadOf(
-      await getTool(api, TOOL).execute("c1", {
-        query: "chair",
-        ships_from: { country: "Germany" },
-      }),
-    );
-
-    expect(rec.all.length).toBe(0);
-    expect(payload["status"]).toBe("invalid_request");
-    expect(payload["error"]).toBe("invalid_filter");
-  });
-
   it("a bad postal injection value ('94107; DROP TABLE') is rejected client-side, never reaching the network", async () => {
     // The format guard is also an injection backstop: a postal token carrying SQL /
     // punctuation fails the pattern and is rejected before any wire call.
@@ -665,13 +842,11 @@ describe("sil_search — a valid lowercase country is accepted, normalized UPPER
     await getTool(api, TOOL).execute("c1", {
       query: "chair",
       ship_to: { country: "us", region: "CA", postal_code: "94107" },
-      ships_from: { country: "gb" },
     });
 
     expect(rec.search.length).toBe(1);
     expect((rec.search[0]!.body as Record<string, unknown>)["filters"]).toEqual({
       ships_to: { country: "US", region: "CA", postal_code: "94107" },
-      ships_from: { country: "GB" },
     });
   });
 });
@@ -769,7 +944,7 @@ describe("sil_search — new args do NOT relax the ≥1-input guard (refinements
     expect(payload["status"]).toBe("invalid_request");
   });
 
-  it("condition + ships_from together but NO query/category/price → invalid_request, ZERO network calls", async () => {
+  it("condition + ship_to together but NO query/category/price → invalid_request, ZERO network calls", async () => {
     seedTokens("at", "rt");
     const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
     const api = createMockPluginApi();
@@ -778,12 +953,32 @@ describe("sil_search — new args do NOT relax the ≥1-input guard (refinements
     const payload = payloadOf(
       await getTool(api, TOOL).execute("c1", {
         condition: ["secondhand"],
-        ships_from: { country: "US" },
+        ship_to: { country: "US" },
       }),
     );
 
     expect(rec.all.length).toBe(0);
     expect(payload["status"]).toBe("invalid_request");
+  });
+
+  it("local_merchants:true ALONE (no query/category/price) → invalid_request / empty_search_input, ZERO network (the bias is a refinement, not an input)", async () => {
+    // Card AC[integration]: a bare `{ local_merchants: true }` must STILL reject
+    // empty_search_input client-side — `hasUsableInput` is unchanged, so the flag
+    // does not constitute a search any more than `cursor`/`ship_to` do. End-to-end
+    // proof through the real wired tool (a router that 200s any search, so reaching
+    // the network would resolve `ok` — `rec.all.length === 0` is the proof it didn't).
+    seedTokens("at", "rt");
+    const rec = installRouter(() => ({ status: 200, body: searchEnvelope([PRODUCT_A]) }));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { local_merchants: true }),
+    );
+
+    expect(rec.all.length).toBe(0);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("empty_search_input");
   });
 
   it("a real `query` PLUS the new args passes the guard and REACHES the network", async () => {
@@ -836,12 +1031,13 @@ describe("sil_search — new args do NOT relax the ≥1-input guard (refinements
  */
 describe("sil_search — the new args are request-shaping only; the outcome taxonomy is unchanged", () => {
   /** The args bundle attached to every outcome below — proving none of them
-   * perturb the classification. */
+   * perturb the classification. Includes `local_merchants: true` (the new top-level
+   * flag) and the surviving filters; `ships_from` is gone (deleted end-to-end). */
   const NEW_ARGS = {
     ship_to: { country: "US", region: "CA", postal_code: "94107" },
-    ships_from: { country: "US" },
     condition: ["new"],
     available: false,
+    local_merchants: true,
   } as const;
 
   it("200 result WITH the new args → status ok with ranked products (unchanged)", async () => {
@@ -925,13 +1121,17 @@ describe("sil_search — the new args are request-shaping only; the outcome taxo
     expect(rec.refresh.length).toBe(1);
     expect(bearerToken(rec.search[1]!)).toBe("rotated-at");
     // The retry carried the SAME mapped filters as the first attempt (the new args
-    // survive the retry, renamed, under the rotated token).
-    expect((rec.search[1]!.body as Record<string, unknown>)["filters"]).toEqual({
+    // survive the retry, renamed, under the rotated token). No `ships_from` (deleted).
+    const retryBody = rec.search[1]!.body as Record<string, unknown>;
+    expect(retryBody["filters"]).toEqual({
       ships_to: { country: "US", region: "CA", postal_code: "94107" },
-      ships_from: { country: "US" },
       condition: ["new"],
       available: false,
     });
+    // …and the top-level `local_merchants` flag survives the retry too — at the TOP
+    // LEVEL, never folded into the retried `filters`.
+    expect(retryBody["local_merchants"]).toBe(true);
+    expect((retryBody["filters"] as Record<string, unknown>)).not.toHaveProperty("local_merchants");
   });
 
   it("5xx WITH the new args → retryable, NO recovery:sil_register (unchanged)", async () => {
@@ -1354,7 +1554,7 @@ describe("sil_search — outcome c: upstream rejected the request → NON-retrya
             status: 400,
             body: {
               error: "source_rejected",
-              message: "Source 'shopify' rejected the request: filter `ships_from` is not supported.",
+              message: "Source 'shopify' rejected the request: filter `gift_wrap` is not supported.",
             },
           }
         : { status: 200, body: {} },
@@ -1371,7 +1571,7 @@ describe("sil_search — outcome c: upstream rejected the request → NON-retrya
     // NOT the search-specific generic default from extractApiError.
     expect(payload["error"]).toBe("source_rejected");
     const message = String(payload["message"]);
-    expect(message).toContain("ships_from");
+    expect(message).toContain("gift_wrap");
     expect(message).not.toMatch(/Provide a search query or at least one filter/i);
     // No retry hint, no re-register — stop and fix the request.
     expect(payload["recovery"]).not.toBe("sil_register");
@@ -1435,7 +1635,7 @@ describe("sil_search — DISTINGUISHABILITY: six failure/success cases are pairw
     });
     const cReject = await envelopeFor({
       status: 400,
-      body: { error: "source_rejected", message: "The request was rejected: filter `ships_from` is not supported." },
+      body: { error: "source_rejected", message: "The request was rejected: filter `gift_wrap` is not supported." },
     });
     const emptyMatch = await envelopeFor({ status: 200, body: searchEnvelope([]) });
 

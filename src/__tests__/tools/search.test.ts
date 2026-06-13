@@ -173,20 +173,25 @@ describe("sil_search — tool registration shape", () => {
 });
 
 /**
- * Card `add-ship-to-filter-args-to-the-sil-search-tool`: the schema gains four
+ * Card `add-ship-to-filter-args-to-the-sil-search-tool`: the schema gains
  * optional serviceability/localization params, each with a self-describing
  * per-field `description` (agents read field descriptions independently of the
  * tool description, so each must stand alone). Shapes pinned to the architect's
  * immutable contract + the Shopify Global-Catalog extension
  * (`vendor/shopify/docs/agents/catalog/global-catalog-extension.md:26-33`):
  *   - `ship_to`     : object { country (required), region?, postal_code? }
- *   - `ships_from`  : object { country (required) }
  *   - `condition`   : array of strings
  *   - `available`   : boolean
- * All four are `Type.Optional` — the whole param is omittable; `country` is
- * required only WITHIN the ship_to/ships_from objects.
+ * All are `Type.Optional` — the whole param is omittable; `country` is
+ * required only WITHIN the ship_to object.
+ *
+ * Card `replace-ships-from-with-local-merchants` DELETED `ships_from` end-to-end
+ * (live correlation tests settled it is the wrong lever) — so this block no longer
+ * declares or shapes a `ships_from` param. Its absence is asserted explicitly in
+ * the "ships_from is GONE" block below; `local_merchants` (the boolean bias that
+ * replaces it) is in its own block further down.
  */
-describe("sil_search — schema exposes the four new optional filter params (shapes + per-field descriptions)", () => {
+describe("sil_search — schema exposes the new optional filter params (shapes + per-field descriptions)", () => {
   function searchProps(): Record<string, Record<string, unknown>> {
     const api = createMockPluginApi();
     registerCatalogTools(api);
@@ -196,9 +201,9 @@ describe("sil_search — schema exposes the four new optional filter params (sha
     return params.properties ?? {};
   }
 
-  it("declares ship_to / ships_from / condition / available as properties", () => {
+  it("declares ship_to / condition / available as properties", () => {
     const keys = Object.keys(searchProps());
-    for (const expected of ["ship_to", "ships_from", "condition", "available"]) {
+    for (const expected of ["ship_to", "condition", "available"]) {
       expect(keys).toContain(expected);
     }
   });
@@ -214,15 +219,6 @@ describe("sil_search — schema exposes the four new optional filter params (sha
     // `country` is required WITHIN the object (the override needs a destination);
     // region/postal_code are optional refinements.
     expect(shipTo!["required"]).toEqual(["country"]);
-  });
-
-  it("ships_from is an object whose `country` is required", () => {
-    const shipsFrom = searchProps()["ships_from"];
-    expect(shipsFrom).toBeDefined();
-    expect(shipsFrom!["type"]).toBe("object");
-    const sub = (shipsFrom!["properties"] ?? {}) as Record<string, unknown>;
-    expect(Object.keys(sub)).toContain("country");
-    expect(shipsFrom!["required"]).toEqual(["country"]);
   });
 
   it("condition is an array of strings", () => {
@@ -241,7 +237,7 @@ describe("sil_search — schema exposes the four new optional filter params (sha
 
   it("each new param carries a non-empty, self-describing `description`", () => {
     const props = searchProps();
-    for (const k of ["ship_to", "ships_from", "condition", "available"]) {
+    for (const k of ["ship_to", "condition", "available"]) {
       expect(props[k]).toBeDefined();
       const desc = props[k]!["description"];
       expect(typeof desc).toBe("string");
@@ -315,13 +311,6 @@ describe("sil_search — schema pins the tightened format patterns (both sides e
     expect(shipToSub()["postal_code"]!["pattern"]).toBe(POSTAL_PATTERN);
   });
 
-  it("ships_from.country carries the SAME alpha-2 pattern as ship_to.country", () => {
-    const shipsFrom = searchProps()["ships_from"];
-    expect(shipsFrom).toBeDefined();
-    const sub = (shipsFrom!["properties"] ?? {}) as Record<string, Record<string, unknown>>;
-    expect(sub["country"]!["pattern"]).toBe(COUNTRY_PATTERN);
-  });
-
   it("the alpha-2 country pattern actually ACCEPTS 2-letter codes and REJECTS country names (the pattern is enforceable, not decorative)", () => {
     // Compile the schema's own pattern and exercise it — a pattern that is present
     // but wrong (e.g. too loose) would pass the string-equality checks above yet
@@ -389,11 +378,10 @@ describe("sil_search — description encodes the empty=registered-default steeri
     expect(d).toMatch(/override|different|else|another destination|elsewhere/);
   });
 
-  it("documents ships_from, condition, and available each as optional filters by what they constrain (no implied prior tool call)", () => {
+  it("documents condition and available each as optional filters by what they constrain (no implied prior tool call)", () => {
     const d = description().toLowerCase();
-    // origin country / product condition / availability — each named.
-    expect(d).toMatch(/ships_from/);
-    expect(d).toMatch(/origin|seller|merchant|ships from/);
+    // product condition / availability — each named. (`ships_from` is GONE — its
+    // absence from the tool description is asserted in the "ships_from is GONE" block.)
     expect(d).toMatch(/condition/);
     expect(d).toMatch(/new|used|secondhand|condition/);
     expect(d).toMatch(/available|availability|unavailable|in stock|out of stock/);
@@ -484,17 +472,203 @@ describe("sil_search — each location field's per-field description self-descri
     expect(desc.toLowerCase()).toMatch(/not.*(place|name)|code.*not.*name/);
   });
 
-  it("ships_from.country field description names the 2-letter ISO 3166-1 alpha-2 code form", () => {
-    const sub = (searchProps()["ships_from"]!["properties"] ?? {}) as Record<string, Record<string, unknown>>;
-    const desc = String(sub["country"]!["description"] ?? "");
-    expect(desc.toLowerCase()).toMatch(/alpha-2|alpha 2|3166-1|2-letter|two-letter/);
-    expect(desc).toMatch(/\bUS\b|\bGB\b|\bDE\b/);
-  });
-
   it("condition field description names exactly the new / secondhand value set", () => {
     const desc = String(searchProps()["condition"]!["description"] ?? "").toLowerCase();
     expect(desc).toMatch(/new/);
     expect(desc).toMatch(/secondhand/);
+  });
+});
+
+/**
+ * Card `replace-ships-from-with-local-merchants` (epic `local-merchants-2026-06`):
+ * `sil_search` gains a `local_merchants` OPTIONAL BOOLEAN that biases results toward
+ * shops based in the user's own country — best-effort, server-ranked. The plugin
+ * owns ONLY the surface: the param shape + the agent-facing per-field description.
+ *
+ * The DESCRIPTION is the entire behavioral deliverable (an LLM is the only consumer;
+ * it reads the field description to decide when to set the flag and what it can
+ * promise). Three load-bearing facts MUST be unmistakable (Discovery "Behavioral
+ * framing", AC[unit]):
+ *   (a) BEST-EFFORT BIAS, never a filter/guarantee that every result is local;
+ *   (b) issue the `query` in the USER'S LANGUAGE to surface local shops;
+ *   (c) the agent passes NO country and must NOT call sil_whoami — sil resolves the
+ *       user's country server-side from their registered address.
+ * Asserted against the registered `parameters` JSON-schema (the same introspection
+ * the shape tests above use; `Type.Optional(Type.Boolean({ description }))` puts the
+ * description on the property node).
+ */
+describe("sil_search — schema exposes `local_merchants` as an optional boolean with a per-field description", () => {
+  function searchProps(): Record<string, Record<string, unknown>> {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const params = getTool(api, TOOL).parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+    };
+    return params.properties ?? {};
+  }
+  /** The `local_merchants` per-field description string (the deliverable). */
+  function localMerchantsDesc(): string {
+    const prop = searchProps()["local_merchants"];
+    expect(prop, "local_merchants must be a registered param").toBeDefined();
+    return String(prop!["description"] ?? "");
+  }
+
+  it("declares `local_merchants` as a property", () => {
+    expect(Object.keys(searchProps())).toContain("local_merchants");
+  });
+
+  it("`local_merchants` is typed as a boolean (a plain bool bias, NOT a { country } object)", () => {
+    const prop = searchProps()["local_merchants"];
+    expect(prop).toBeDefined();
+    expect(prop!["type"]).toBe("boolean");
+    // It must NOT be an object carrying a country — a country arg would re-create the
+    // identity round-trip this epic exists to delete (Discovery "Why a boolean bias").
+    expect(prop!["type"]).not.toBe("object");
+    expect(prop!["properties"]).toBeUndefined();
+  });
+
+  it("`local_merchants` is OPTIONAL — omittable from the call (NOT in the schema's required set)", () => {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const params = getTool(api, TOOL).parameters as { required?: unknown };
+    const required = Array.isArray(params.required) ? (params.required as string[]) : [];
+    expect(required).not.toContain("local_merchants");
+  });
+
+  it("`local_merchants` carries a non-empty, self-describing per-field description", () => {
+    expect(localMerchantsDesc().length).toBeGreaterThan(0);
+  });
+
+  it("fact (a): the description frames it as a BEST-EFFORT BIAS, not a guaranteed filter — and explicitly disclaims exclusivity", () => {
+    const d = localMerchantsDesc().toLowerCase();
+    // It must name the SOFT-bias mechanic …
+    expect(d).toMatch(/bias|nudge|prefer|toward|favou?r/);
+    // … AND carry the explicit disclaimer that it is NOT a filter / NOT a guarantee
+    // and does NOT make every result local (the lesson that killed ships_from — the
+    // surface must be honest so the agent never inherits a false promise).
+    expect(d).toMatch(/not a filter|does not restrict|do not restrict|doesn't restrict|not.*guarantee|no guarantee|not exclusiv|may still appear|won't be detected|will not be detected/);
+  });
+
+  it("fact (b): the description tells the agent to issue the `query` in the USER'S LANGUAGE to surface local shops", () => {
+    const d = localMerchantsDesc().toLowerCase();
+    expect(d).toMatch(/language/);
+    expect(d).toMatch(/query/);
+    // The concrete steer: a same-language query surfaces local shops (the example
+    // makes the instruction unambiguous to the agent).
+    expect(d).toMatch(/user'?s (own )?language|same.language|their (own )?language|in the user'?s language/);
+  });
+
+  it("fact (c): the description says the agent passes NO country and must NOT call sil_whoami (sil resolves it server-side)", () => {
+    const d = localMerchantsDesc();
+    // Names the anti-pattern (sil_whoami) and forbids it …
+    expect(d).toMatch(/sil_whoami/);
+    expect(d.toLowerCase()).toMatch(/do not|don'?t|never|no need|without|no country/);
+    // … and says the country is resolved server-side (so the agent owns no such fact).
+    expect(d.toLowerCase()).toMatch(/server.side|sil resolves|resolved by sil|registered address/);
+  });
+
+  it("the `local_merchants` copy never promises EXCLUSIVITY — the soft-bias framing is unmistakable (forbidden-words check)", () => {
+    // AC[unit]: it must NOT use "only"/"filter"/"restrict to"/"guarantee" in a way
+    // that promises results are exclusively local. The honest disclaimer NEEDS those
+    // words in NEGATED form ("NOT a filter", "does NOT restrict results to them",
+    // "does NOT guarantee every result is local"), so we must NOT flag a promissory
+    // phrase that is part of a NEGATED clause. Strategy: blank out negated spans
+    // first (a negation word through the end of its clause), THEN look for any
+    // remaining BARE promissory claim. This catches "guarantees every result is
+    // local" while allowing "does NOT guarantee every result is local".
+    const raw = localMerchantsDesc().toLowerCase();
+    // Remove negated clauses: a negation token ("not"/"no"/"never"/"n't"/"without")
+    // up to the next clause boundary (— , . ; : or end). This neutralizes the honest
+    // disclaimers so only affirmative (promissory) claims remain to be judged.
+    const affirmativeOnly = raw.replace(
+      /(?:\bnot\b|\bno\b|\bnever\b|n't|\bwithout\b)[^—.,;:]*/g,
+      " ",
+    );
+    const promissory = [
+      /\bonly local\b/,
+      /\ball (the )?results? (are|will be) local/,
+      /\bexclusively local\b/,
+      /\bguarantee(d|s)?\b[^—.,;:]*\blocal\b/,
+      /\brestricts? (results? )?to\b/,
+      /\bfilters? (results? )?to (only )?local\b/,
+      /\ball (of )?(the )?(sellers?|shops?|merchants?) (are|will be) local/,
+    ];
+    for (const p of promissory) {
+      expect(affirmativeOnly, `must not promise exclusivity via ${p}`).not.toMatch(p);
+    }
+    // And the disclaimer is affirmatively present (so an impl can't pass by simply
+    // omitting all framing — the soft-bias caveat MUST be stated). Checked on the
+    // RAW copy (the negation IS the disclaimer we want to see).
+    expect(raw).toMatch(/not a filter|does not restrict|do not restrict|not.*guarantee|no guarantee|may still appear|won'?t be detected|not exclusiv/);
+  });
+});
+
+/**
+ * Card `replace-ships-from-with-local-merchants`: the tool-LEVEL description steers
+ * the agent on `local_merchants` (best-effort local bias + query-in-user's-language)
+ * and contains NO sentence describing `ships_from` (AC[unit]). The tool description is
+ * a distinct surface from the per-field one; both must be clean of the deleted lever.
+ */
+describe("sil_search — tool-level description steers on local_merchants and is free of ships_from", () => {
+  function description(): string {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    return getTool(api, TOOL).description;
+  }
+
+  it("the tool description mentions `local_merchants` and frames it as a (best-effort) local bias", () => {
+    const d = description().toLowerCase();
+    expect(d).toMatch(/local_merchants/);
+    expect(d).toMatch(/local|domestic|home.country/);
+  });
+
+  it("the tool description steers the agent to query in the user's language for local shops", () => {
+    const d = description().toLowerCase();
+    expect(d).toMatch(/language/);
+  });
+
+  it("the tool description contains NO `ships_from` sentence (the deleted lever is gone from the agent-facing prose)", () => {
+    expect(description()).not.toMatch(/ships_from/i);
+  });
+});
+
+/**
+ * Card `replace-ships-from-with-local-merchants`: `ships_from` is GONE end-to-end —
+ * no schema param, and a stray `ships_from` argument is NOT silently accepted (the
+ * closed schema / params narrowing drops it before the wire). AC[unit] +
+ * AC[integration] (the wire-absence half is also pinned in the integration suites).
+ */
+describe("sil_search — ships_from is GONE from the schema (no param, the agent can no longer pass it)", () => {
+  function searchProps(): Record<string, Record<string, unknown>> {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const params = getTool(api, TOOL).parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+    };
+    return params.properties ?? {};
+  }
+
+  it("the schema has NO `ships_from` property (closed against it)", () => {
+    expect(Object.keys(searchProps())).not.toContain("ships_from");
+  });
+
+  it("a stray `ships_from` argument is DROPPED — it never reaches the wire body", async () => {
+    seedTokens();
+    const bodies: unknown[] = [];
+    captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    // A drifted on-disk call still passes `ships_from`; the params narrowing must
+    // drop it (the schema no longer knows the key), so it appears NOWHERE in the body
+    // — not at the top level and not under `filters`.
+    await getTool(api, TOOL).execute("c1", { query: "chair", ships_from: { country: "US" } });
+
+    const body = bodies[0] as Record<string, unknown>;
+    expect(body).not.toHaveProperty("ships_from");
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("ships_from");
+    expect(JSON.stringify(body)).not.toContain("ships_from");
   });
 });
 
@@ -534,6 +708,20 @@ describe("sil_search — client-side ≥1-input guard (reject empty BEFORE any n
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "" }));
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(payload["status"]).not.toBe("ok");
+  });
+
+  it("a bare { local_merchants: true } STILL rejects empty_search_input — the bias is a REFINEMENT, not an input (hasUsableInput untouched)", async () => {
+    // Card AC: `local_merchants` biases an EXISTING search; it does not constitute
+    // one (exactly as `ships_from` was, exactly as `cursor`/`limit` are). A request
+    // whose ONLY content is `local_merchants: true` must be rejected client-side with
+    // `empty_search_input` and make ZERO network calls — proof the implementation did
+    // NOT touch `hasUsableInput` to let the flag through.
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { local_merchants: true }),
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("empty_search_input");
   });
 });
 
@@ -616,20 +804,6 @@ describe("sil_search — readSearchParams drops wrong-typed new filter args (nar
     const filters = (body["filters"] ?? {}) as Record<string, unknown>;
     expect(filters).not.toHaveProperty("ships_to");
     expect(filters).not.toHaveProperty("ship_to");
-  });
-
-  it("`ships_from` as a primitive (number) is dropped — no filters.ships_from on the wire", async () => {
-    seedTokens();
-    const bodies: unknown[] = [];
-    captureBodyFetch(bodies);
-    const api = createMockPluginApi();
-    registerCatalogTools(api);
-
-    await getTool(api, TOOL).execute("c1", { query: "chair", ships_from: 42 });
-
-    const body = bodies[0] as Record<string, unknown>;
-    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
-    expect(filters).not.toHaveProperty("ships_from");
   });
 
   it("a valid `available: false` STILL survives the read site (the drop is type-driven, not value-driven)", async () => {
