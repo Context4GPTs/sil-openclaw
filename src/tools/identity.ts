@@ -219,7 +219,17 @@ function identityOutcomeToResult(api: PluginAPI, outcome: IdentityOutcome) {
     case "ok":
       return identityResult(outcome.identity);
     case "forbidden":
+      // Decision B — the dead-token clear is UNIFORM across all three sil-api tools.
+      // `sil_whoami` is the tool that is legible TODAY; an agent that diagnoses the
+      // 403 via whoami, follows `recovery:"sil_register"`, and hits
+      // `already_registered` is stranded identically to the catalog path. So clear on
+      // `user_not_provisioned` HERE too (the held token maps to no account on this
+      // backend; a refresh cannot help — structurally dead, like the invalid_grant
+      // clear above). Gated on EXACT equality: `principal_mismatch` / unknown reasons
+      // can be transient and must stay recoverable, so they keep the legible forbidden
+      // envelope WITHOUT a destructive clear (AC9 clears, AC10 does not).
       api.logger.warn("sil_whoami_forbidden", { reason: outcome.reason });
+      if (outcome.reason === "user_not_provisioned") clearTokens();
       return forbidden(outcome.reason);
     case "retryable":
       api.logger.info("sil_whoami_retryable", {});

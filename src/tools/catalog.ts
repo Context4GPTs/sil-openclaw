@@ -311,6 +311,20 @@ function mapSearchOutcome(api: PluginAPI, outcome: SearchOutcome) {
   switch (outcome.kind) {
     case "ok":
       return searchResult(outcome);
+    case "forbidden":
+      // A 403 surfaces the SAME forbidden envelope `sil_whoami` emits — never the
+      // false-transient `retryable`. On `user_not_provisioned` (and ONLY that exact
+      // reason) the held token maps to no account on this backend and a refresh
+      // cannot help — structurally dead, like the invalid_grant/second_unauthorized
+      // clears below — so clear it HERE (the tool call site, never the pure
+      // classifier) and the next sil_register re-onboards instead of short-circuiting
+      // to already_registered. A `principal_mismatch` / unknown reason can be
+      // transient and stays recoverable — it MUST NOT clear (the exact-equality gate
+      // is the correctness boundary: a startsWith/truthy check would wrongly wipe a
+      // good session).
+      api.logger.warn("sil_search_forbidden", { reason: outcome.reason });
+      if (outcome.reason === "user_not_provisioned") clearTokens();
+      return forbidden(outcome.reason);
     case "invalid_request":
       api.logger.info("sil_search_invalid_request", { error: outcome.error });
       return invalidRequest(outcome.error, outcome.message);
@@ -450,6 +464,15 @@ function mapLookupOutcome(api: PluginAPI, outcome: LookupOutcome) {
   switch (outcome.kind) {
     case "ok":
       return lookupResult(outcome);
+    case "forbidden":
+      // Symmetric with sil_search (one vocabulary, AC2/AC7/AC10): a 403 is the shared
+      // forbidden envelope, and `user_not_provisioned` — and ONLY that exact reason —
+      // clears the structurally-dead token at this call site so recovery terminates
+      // regardless of which catalog tool revealed the state. `principal_mismatch` /
+      // unknown reasons survive (recoverable; the same exact-equality gate).
+      api.logger.warn("sil_product_get_forbidden", { reason: outcome.reason });
+      if (outcome.reason === "user_not_provisioned") clearTokens();
+      return forbidden(outcome.reason);
     case "invalid_request":
       api.logger.info("sil_product_get_invalid_request", { error: outcome.error });
       return invalidRequest(outcome.error, outcome.message);
@@ -719,6 +742,28 @@ function mustReregister(tool: string) {
       `Your sil session has expired. Run sil_register to sign in again, then call ${tool} again.`,
     recovery: "sil_register",
   });
+}
+
+/** Terminal-but-distinct: a 403 — the token is valid but the user isn't provisioned
+ * (or a principal mismatch / other reason). Refreshing would not help (a 403 is not
+ * a 401). Surfaces the SAME envelope `sil_whoami`'s `forbidden()` (identity.ts) emits
+ * — `{ status:"forbidden", reason, message, recovery:"sil_register" }`, byte-identical
+ * including the reason-driven message branch — so the three sil-api tools speak ONE
+ * error vocabulary (AC5). `user_not_provisioned` reads as an actionable onboarding
+ * prompt; any other reason is the generic forbidden copy carrying the reason. The
+ * recovery hint is always `sil_register` (the message names it, tool-agnostic — the
+ * parity with `sil_whoami`'s envelope is byte-exact, so it carries no per-tool name).
+ * The dead-token CLEAR is NOT here — it is the caller's decision (gated on
+ * `user_not_provisioned`), so a `principal_mismatch` that still wants the legible
+ * envelope does not have its token wiped. */
+function forbidden(reason: string) {
+  const message =
+    reason === "user_not_provisioned"
+      ? "Your sil account is not fully set up. Complete onboarding (run"
+        + " sil_register) and try again."
+      : "sil rejected this request (" + reason + "). Run sil_register to"
+        + " re-establish your session, then try again.";
+  return jsonResult({ status: "forbidden", reason, message, recovery: "sil_register" });
 }
 
 /** Transient: a retryable blip — try again, NOT a re-register (a false terminal on
