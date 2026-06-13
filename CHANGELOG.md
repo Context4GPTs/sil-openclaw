@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the `sil-openclaw` plugin (npm `sil-openclaw`, ClawHub `sil`) are documented here. The format follows
+All notable changes to the `sil-openclaw` plugin (npm `sil-openclaw`, ClawHub `@4gpts/sil`) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -9,6 +9,22 @@ dated release section, and `pnpm release` attaches that section to the ClawHub
 release (`clawhub package publish --changelog`). See [README](./README.md#releasing).
 
 ## [Unreleased]
+
+### Fixed
+
+- **`sil_register` no longer aborts registration on the first premature claim
+  `404`.** The claim poll's first tick fires seconds in, before the user opens
+  the auth URL — but the session row is created server-side only when they do, so
+  the endpoint returns `404` (`not_found`) until then. That first `not_found` was
+  grouped with the genuine terminals, killing registration before the human could
+  act. `not_found` is now a keep-polling state (like `pending`), bounded by the
+  30-min deadline: a session that never appears settles as `timeout`, never as
+  `not_found`. Terminality now lives at the poll loop, not the wire classifier. (#18)
+- **`400` / unexpected non-2xx claim responses now fail fast** via a new distinct
+  `invalid_request` outcome, instead of riding the keep-polling `not_found` path
+  and spinning to a misleading `timeout`. Unreachable from this client today (the
+  plugin always sends a valid verifier), so it logs at WARN as contract-drift
+  insurance.
 
 ## [0.2.1] - 2026-06-11
 
