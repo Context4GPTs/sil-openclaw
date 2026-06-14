@@ -789,11 +789,13 @@ describe("classifySearchResponse — projection (first/featured variant, six fie
     expect(out.kind).toBe("ok");
     if (out.kind === "ok") {
       const p = out.products[0]! as unknown as Record<string, unknown>;
-      // EXACT lean product shape — these three keys and no others.
-      expect(Object.keys(p).sort()).toEqual(["id", "source", "title", "variant"]);
-      // The wide product fields are GONE (not merely undefined-by-coincidence).
+      // EXACT product shape — the lean keys PLUS `description` (WIDE_PRODUCT carries
+      // `description: { plain }`, which the widened projection now surfaces).
+      expect(Object.keys(p).sort()).toEqual(["description", "id", "source", "title", "variant"]);
+      // The wide product fields the projection still DROPS are GONE (not merely
+      // undefined-by-coincidence). `description` is intentionally NOT here — the widened
+      // projection surfaces `description: { plain }`; everything else stays dropped.
       for (const wide of [
-        "description",
         "price_range",
         "categories",
         "tags",

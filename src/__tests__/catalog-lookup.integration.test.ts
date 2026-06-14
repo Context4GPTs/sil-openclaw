@@ -1650,3 +1650,434 @@ describe("sil_product_get — a 403 principal_mismatch is forbidden but does NOT
     expect(readTokens()!.access_token).toBe("valid-at");
   });
 });
+
+/**
+ * CARD `surface-product-url-and-specs-in-catalog-tools` (epic
+ * `catalog-product-contract-2026-06`) — the RED integration ceiling for the WIDENED
+ * `sil_product_get` projection AND the ONE-VOCABULARY property (AC8 + AC9). Lookup
+ * must surface the SAME enriched shape `sil_search` does — product
+ * `url`/`description.plain`/`media`/`options` and per-variant
+ * `url`/`seller`/`media`/`metadata` — with the SAME omit-when-absent rule, AND
+ * WITHOUT regressing the fields lookup already surfaces (`sku`, variant `options`
+ * selections, `categories`, `handle`, the `inputs` correlation, `not_found`).
+ *
+ * THE reconciliation the implementer MUST make (card handoff): lookup TODAY passes
+ * the WHOLE `description` object through opaque (`LookupProduct.description:
+ * Record<string,unknown>`), while this card surfaces `description.plain` on search.
+ * For one vocabulary the same product must yield the SAME `description` shape across
+ * both tools. The architect's recommended choice — lift `.plain` on BOTH (the cleaner
+ * agent key, matching the founder wording). The `description.plain` test below uses a
+ * description carrying html/markdown so the two shapes DIVERGE unless reconciled: a
+ * whole-object pass-through would keep html/markdown, a `.plain` lift would not — they
+ * cannot both be right, so the implementer must pick one for both tools.
+ *
+ * Same opaque-pass-through + omit-when-absent properties as the search block; same
+ * extension-key trap (seller.url/.domain, arbitrary metadata keys). The ONLY mock is
+ * `fetch` (installRouter). EXPECT RED today: the lean lookup projection surfaces none
+ * of url/media/seller/product-options/metadata, and surfaces the WHOLE `description`
+ * object (not `.plain`).
+ */
+
+/** A media item in the REAL UCP `Media` shape — surfaced OPAQUE, forwarded verbatim. */
+const MEDIA_IMAGE = {
+  type: "image",
+  url: "https://img.example.com/aeron-front.jpg",
+  alt_text: "Aeron chair, front view",
+  width: 1200,
+  height: 900,
+};
+
+/** A product-level OPTION DEFINITION (`ProductOption`: `{ name, values: OptionValue[] }`)
+ * — the MENU of choices, distinct from a variant's SelectedOption picks. */
+const PRODUCT_OPTION_SIZE = {
+  name: "Size",
+  values: [
+    { id: "opt-b", label: "Size B" },
+    { id: "opt-c", label: "Size C" },
+  ],
+};
+
+/** A `seller` with the base `{ name, links }` AND Shopify EXTENSION keys
+ * (`url`/`domain`) NOT in the base schema — the opaque-pass-through proof. */
+const SELLER_WITH_EXTENSION_KEYS = {
+  name: "Herman Miller",
+  links: [
+    { type: "refund_policy", url: "https://hermanmiller.example.com/returns", title: "Returns" },
+    { type: "shipping_policy", url: "https://hermanmiller.example.com/shipping" },
+  ],
+  url: "https://hermanmiller.example.com",
+  domain: "hermanmiller.example.com",
+};
+
+/** A `metadata` object with arbitrary source keys beyond any known set. */
+const METADATA_WITH_SOURCE_KEYS = {
+  top_features: ["8Z Pellicle suspension", "PostureFit SL"],
+  tech_specs: { weight_capacity_kg: 159, warranty_years: 12 },
+  unique_selling_points: "Ships assembled.",
+};
+
+/** A FULLY enriched LOOKUP variant — the rich lookup shape (sku/options/inputs) PLUS
+ * the enriched url/seller/media/metadata. Carries the lean+rich fields the projection
+ * already surfaces, so the new fields are proven ADDITIVE. */
+const ENRICHED_LOOKUP_VARIANT = {
+  id: "gid://variant/enriched-1",
+  title: "Aeron Chair — Graphite, Size B",
+  description: { plain: "An ergonomic office chair." },
+  sku: "AER-GR-B",
+  options: [
+    { name: "Color", label: "Graphite" },
+    { name: "Size", label: "B" },
+  ],
+  price: { amount: 159900, currency: "USD" },
+  availability: { available: true, status: "in_stock" },
+  checkout_url: "https://buy.example.com/aeron-enriched-1",
+  inputs: [{ id: "gid://product/enriched", match: "featured" }],
+  // The enriched per-variant surface:
+  url: "https://store.example.com/products/aeron/variants/enriched-1",
+  seller: SELLER_WITH_EXTENSION_KEYS,
+  media: [MEDIA_IMAGE],
+  metadata: METADATA_WITH_SOURCE_KEYS,
+};
+
+/** A FULLY enriched LOOKUP product — rich lookup detail (description/categories/handle)
+ * PLUS the enriched url/media/options/metadata. The `description` carries html AND
+ * markdown beyond `plain` — the one-vocabulary divergence anchor. */
+const ENRICHED_LOOKUP_PRODUCT = {
+  id: "gid://product/enriched",
+  handle: "aeron-chair",
+  title: "Aeron Chair",
+  description: {
+    plain: "The classic ergonomic office chair.",
+    html: "<p>The classic ergonomic office chair.</p>",
+    markdown: "The classic ergonomic office chair.",
+  },
+  categories: [{ value: "Office Furniture", taxonomy: "google" }],
+  price_range: {
+    min: { amount: 159900, currency: "USD" },
+    max: { amount: 169900, currency: "USD" },
+  },
+  variants: [ENRICHED_LOOKUP_VARIANT],
+  source: "herman-miller",
+  // The enriched product surface:
+  url: "https://store.example.com/products/aeron",
+  media: [MEDIA_IMAGE],
+  options: [PRODUCT_OPTION_SIZE],
+  metadata: METADATA_WITH_SOURCE_KEYS,
+};
+
+describe("sil_product_get — WIDENED projection surfaces the same enriched contract as search, without regressing rich fields [card surface-product-url]", () => {
+  /** Resolve a single enriched lookup product and return its shaped result. */
+  async function lookupOne(product: unknown): Promise<Record<string, unknown>> {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "lookup"
+        ? { status: 200, body: lookupEnvelope([product]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["gid://product/enriched"] }));
+    expect(payload["status"]).toBe("ok");
+    const products = payload["products"] as Array<Record<string, unknown>>;
+    expect(products).toHaveLength(1);
+    return products[0]!;
+  }
+
+  it("surfaces product url/media/options + per-variant url/seller/media — alongside the rich fields lookup already carries (sku/options/categories/handle/inputs)", async () => {
+    // AC8: the enriched surface lands on lookup too, and the EXISTING rich fields are
+    // NOT regressed.
+    const product = await lookupOne(ENRICHED_LOOKUP_PRODUCT);
+
+    // Existing rich fields — NOT regressed.
+    expect(product["handle"]).toBe("aeron-chair");
+    expect(product["categories"]).toEqual([{ value: "Office Furniture", taxonomy: "google" }]);
+    const variant = product["variant"] as Record<string, unknown>;
+    expect(variant["sku"]).toBe("AER-GR-B");
+    expect(variant["options"]).toEqual([
+      { name: "Color", label: "Graphite" },
+      { name: "Size", label: "B" },
+    ]);
+    expect(variant["inputs"]).toEqual([{ id: "gid://product/enriched", match: "featured" }]);
+    expect(variant["checkout_url"]).toBe("https://buy.example.com/aeron-enriched-1");
+
+    // NEW product-level enriched surface.
+    expect(product["url"]).toBe("https://store.example.com/products/aeron");
+    expect(product["media"]).toEqual([MEDIA_IMAGE]);
+    expect(product["options"]).toEqual([PRODUCT_OPTION_SIZE]);
+
+    // NEW per-variant enriched surface.
+    expect(variant["url"]).toBe("https://store.example.com/products/aeron/variants/enriched-1");
+    expect(variant["media"]).toEqual([MEDIA_IMAGE]);
+    expect(variant["metadata"]).toEqual(METADATA_WITH_SOURCE_KEYS);
+  });
+
+  it("the product-level `options` (DEFINITIONS) and the variant `options` (SELECTIONS) coexist — they are DIFFERENT fields, not conflated", async () => {
+    // The two `options` must not be conflated: product-level ProductOption[] (the menu)
+    // and the variant SelectedOption[] (the picks) both surface, distinctly.
+    const product = await lookupOne(ENRICHED_LOOKUP_PRODUCT);
+    // Product-level = the DEFINITIONS (Size → [B, C]).
+    expect(product["options"]).toEqual([PRODUCT_OPTION_SIZE]);
+    // Variant-level = the SELECTIONS (Color: Graphite, Size: B) — unchanged.
+    expect((product["variant"] as Record<string, unknown>)["options"]).toEqual([
+      { name: "Color", label: "Graphite" },
+      { name: "Size", label: "B" },
+    ]);
+    // They are NOT the same value.
+    expect(product["options"]).not.toEqual((product["variant"] as Record<string, unknown>)["options"]);
+  });
+
+  it("OPAQUE PASS-THROUGH: a `seller` with Shopify extension keys (url/domain) survives WHOLE on lookup too — never narrowed to {name,links}", async () => {
+    // AC8 + the BIGGEST RISK, lookup side. Same opaque-pass-through proof as search.
+    const product = await lookupOne(ENRICHED_LOOKUP_PRODUCT);
+    const seller = (product["variant"] as Record<string, unknown>)["seller"] as Record<string, unknown>;
+    expect(seller).toEqual(SELLER_WITH_EXTENSION_KEYS);
+    expect(seller["url"]).toBe("https://hermanmiller.example.com");
+    expect(seller["domain"]).toBe("hermanmiller.example.com");
+  });
+
+  it("ONE VOCABULARY — `description.plain`: lookup surfaces description as `{ plain }`, the SAME shape as search (NOT the whole html/markdown object)", async () => {
+    // AC8/AC9 reconciliation. Lookup TODAY passes the WHOLE `description` object opaque,
+    // so a description carrying html+markdown would surface them too — DIVERGING from
+    // search's `description.plain`. For one vocabulary the implementer must lift `.plain`
+    // on BOTH tools. This product's description carries html AND markdown beyond plain;
+    // the surfaced shape must be `{ plain }` only — proving the reconciliation happened.
+    const product = await lookupOne(ENRICHED_LOOKUP_PRODUCT);
+    const description = product["description"] as Record<string, unknown>;
+    expect(description).toBeDefined();
+    expect(description["plain"]).toBe("The classic ergonomic office chair.");
+    // The reconciled shape surfaces ONLY plain — html/markdown are NOT surfaced (else
+    // the same product yields a different description shape on lookup than on search).
+    expect(description).not.toHaveProperty("html");
+    expect(description).not.toHaveProperty("markdown");
+    expect(Object.keys(description)).toEqual(["plain"]);
+  });
+
+  it("omit-when-absent on lookup: a product with NONE of the new enriched fields surfaces the rich-but-unenriched shape and NO new key (null/''/[])", async () => {
+    // AC8 omit-when-absent. The new fields are absent → omitted, while the existing
+    // rich fields (description.plain/categories/handle/sku/options/inputs) still surface.
+    const leanRich = {
+      id: "gid://product/leanrich",
+      handle: "lean-rich",
+      title: "Lean-Rich Product",
+      description: { plain: "Rich detail, no enrichment." },
+      categories: [{ value: "Furniture" }],
+      price_range: { min: { amount: 5000, currency: "USD" }, max: { amount: 5000, currency: "USD" } },
+      variants: [
+        {
+          id: "gid://variant/leanrich-1",
+          title: "Lean-Rich — Black",
+          sku: "LR-BLK",
+          options: [{ name: "Color", label: "Black" }],
+          price: { amount: 5000, currency: "USD" },
+          availability: { available: true, status: "in_stock" },
+          checkout_url: "https://buy.example.com/leanrich-1",
+          inputs: [{ id: "gid://product/leanrich", match: "featured" }],
+        },
+      ],
+      source: "ikea",
+    };
+    const product = await lookupOne(leanRich);
+
+    // Existing rich fields still surface.
+    expect(product["handle"]).toBe("lean-rich");
+    expect((product["description"] as Record<string, unknown>)["plain"]).toBe("Rich detail, no enrichment.");
+    const variant = product["variant"] as Record<string, unknown>;
+    expect(variant["sku"]).toBe("LR-BLK");
+
+    // NONE of the NEW enriched keys appear.
+    for (const key of ["url", "media", "options", "metadata"]) {
+      expect(product).not.toHaveProperty(key);
+    }
+    for (const key of ["url", "seller", "media", "metadata"]) {
+      expect(variant).not.toHaveProperty(key);
+    }
+  });
+
+  it("a `media` array with a garbage entry drops it; an all-garbage array OMITS the key (never [])", async () => {
+    // AC[integration] #7, lookup side.
+    const withGarbage = {
+      id: "gid://product/lkgarbage",
+      title: "Lookup Garbage Media",
+      description: { plain: "Bad media entry." },
+      price_range: { min: { amount: 4000, currency: "USD" }, max: { amount: 4000, currency: "USD" } },
+      media: [MEDIA_IMAGE, "garbage", 9],
+      variants: [
+        {
+          id: "gid://variant/lkgarbage-1",
+          title: "Lookup Garbage — Default",
+          price: { amount: 4000, currency: "USD" },
+          availability: { available: true, status: "in_stock" },
+          checkout_url: "https://buy.example.com/lkgarbage-1",
+          inputs: [{ id: "gid://product/lkgarbage", match: "featured" }],
+        },
+      ],
+      source: "shop",
+    };
+    const product = await lookupOne(withGarbage);
+    expect(product["media"]).toEqual([MEDIA_IMAGE]); // garbage dropped, usable kept
+
+    const allGarbage = { ...withGarbage, id: "gid://product/lkallgarbage", media: [null, "x", 1] };
+    const product2 = await lookupOne(allGarbage);
+    expect(product2).not.toHaveProperty("media"); // omitted, NOT []
+  });
+
+  it("PURCHASABILITY GATE UNCHANGED: a featured variant lacking a non-empty checkout_url is STILL dropped, even with url/media/seller present", async () => {
+    // AC[integration] cross-cutting, lookup side. The enriched fields do not change the
+    // gate — a non-buyable product (no checkout_url) is still dropped to `not_found`-less
+    // absence from the products list.
+    seedTokens("at", "rt");
+    const enrichedButUnbuyable = {
+      id: "gid://product/lkunbuyable",
+      title: "Lookup Enriched Unbuyable",
+      description: { plain: "Cannot be bought." },
+      price_range: { min: { amount: 9900, currency: "USD" }, max: { amount: 9900, currency: "USD" } },
+      url: "https://store.example.com/products/lkunbuyable",
+      media: [MEDIA_IMAGE],
+      options: [PRODUCT_OPTION_SIZE],
+      variants: [
+        {
+          id: "gid://variant/lkunbuyable-1",
+          title: "Lookup Unbuyable — Default",
+          price: { amount: 9900, currency: "USD" },
+          availability: { available: false, status: "out_of_stock" },
+          // checkout_url MISSING.
+          url: "https://store.example.com/products/lkunbuyable/variants/1",
+          seller: SELLER_WITH_EXTENSION_KEYS,
+          media: [MEDIA_IMAGE],
+          inputs: [{ id: "gid://product/lkunbuyable", match: "featured" }],
+        },
+      ],
+      source: "shop",
+    };
+    installRouter((kind) =>
+      kind === "lookup"
+        ? { status: 200, body: lookupEnvelope([enrichedButUnbuyable, ENRICHED_LOOKUP_PRODUCT]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/lkunbuyable", "gid://product/enriched"] }),
+    );
+
+    expect(payload["status"]).toBe("ok");
+    const products = payload["products"] as Array<Record<string, unknown>>;
+    expect(products).toHaveLength(1);
+    expect(products[0]!["id"]).toBe("gid://product/enriched");
+    expect(products.some((p) => p["id"] === "gid://product/lkunbuyable")).toBe(false);
+  });
+});
+
+/**
+ * CARD `surface-product-url-and-specs-in-catalog-tools` — the ONE-VOCABULARY
+ * cross-tool equality (AC9). The SAME wire product, resolved through BOTH tools, must
+ * surface the SAME enriched fields. A field present on one tool's result but dropped
+ * by the other for the same wire object is a defect. This drives both `sil_search` AND
+ * `sil_product_get` over an IDENTICAL enriched product (search uses a product with the
+ * lookup-only fields stripped — `inputs`/`sku` are lookup-only by design — but the
+ * SHARED enriched fields, url/description.plain/media/product-options/seller/metadata,
+ * must match byte-for-byte). EXPECT RED today (search surfaces none; lookup surfaces
+ * the whole description, not `.plain`).
+ */
+describe("sil_product_get vs sil_search — the SAME wire product surfaces the SAME enriched fields on both tools (one vocabulary, AC9)", () => {
+  it("product url/description.plain/media/options and variant url/seller/media match across the two tools for the same wire object", async () => {
+    // The shared enriched surface — what BOTH tools must agree on for the same product.
+    const sharedProductWire = {
+      id: "gid://product/shared",
+      title: "Shared Chair",
+      description: { plain: "A shared chair.", html: "<p>A shared chair.</p>" },
+      price_range: { min: { amount: 12000, currency: "USD" }, max: { amount: 12000, currency: "USD" } },
+      url: "https://store.example.com/products/shared",
+      media: [MEDIA_IMAGE],
+      options: [PRODUCT_OPTION_SIZE],
+      metadata: METADATA_WITH_SOURCE_KEYS,
+      source: "shop",
+    };
+    const sharedVariantWire = {
+      id: "gid://variant/shared-1",
+      title: "Shared Chair — Default",
+      price: { amount: 12000, currency: "USD" },
+      availability: { available: true, status: "in_stock" },
+      checkout_url: "https://buy.example.com/shared-1",
+      url: "https://store.example.com/products/shared/variants/1",
+      seller: SELLER_WITH_EXTENSION_KEYS,
+      media: [MEDIA_IMAGE],
+      metadata: METADATA_WITH_SOURCE_KEYS,
+    };
+
+    // Run it through sil_search (a plain fetch spy returning the FLAT search envelope —
+    // the same `okEnvelopeFetch` pattern the search unit suite uses; the only mock is fetch).
+    const searchShaped = await (async () => {
+      seedTokens("at", "rt");
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ucp: { version: "0.1", status: "success" },
+            products: [{ ...sharedProductWire, variants: [sharedVariantWire] }],
+            pagination: { has_next_page: false },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const p = payloadOf(await getTool(api, "sil_search").execute("c1", { query: "shared chair" }));
+      vi.restoreAllMocks();
+      return (p["products"] as Array<Record<string, unknown>>)[0]!;
+    })();
+
+    // Run the SAME wire object through sil_product_get.
+    const lookupShaped = await (async () => {
+      seedTokens("at", "rt");
+      installRouter((kind) =>
+        kind === "lookup"
+          ? {
+              status: 200,
+              body: lookupEnvelope([
+                {
+                  ...sharedProductWire,
+                  variants: [{ ...sharedVariantWire, inputs: [{ id: "gid://product/shared", match: "featured" }] }],
+                },
+              ]),
+            }
+          : { status: 500, body: {} },
+      );
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const p = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["gid://product/shared"] }));
+      vi.restoreAllMocks();
+      return (p["products"] as Array<Record<string, unknown>>)[0]!;
+    })();
+
+    const searchVariant = searchShaped["variant"] as Record<string, unknown>;
+    const lookupVariant = lookupShaped["variant"] as Record<string, unknown>;
+
+    // The SHARED enriched product fields are identical across the two tools.
+    expect(searchShaped["url"]).toEqual(lookupShaped["url"]);
+    expect(searchShaped["media"]).toEqual(lookupShaped["media"]);
+    expect(searchShaped["options"]).toEqual(lookupShaped["options"]);
+    expect(searchShaped["metadata"]).toEqual(lookupShaped["metadata"]);
+    expect(searchShaped["description"]).toEqual(lookupShaped["description"]); // both `{ plain }`
+
+    // The SHARED enriched variant fields are identical across the two tools.
+    expect(searchVariant["url"]).toEqual(lookupVariant["url"]);
+    expect(searchVariant["seller"]).toEqual(lookupVariant["seller"]);
+    expect(searchVariant["media"]).toEqual(lookupVariant["media"]);
+    expect(searchVariant["metadata"]).toEqual(lookupVariant["metadata"]);
+
+    // Neither tool dropped a field the other kept — for each shared key, presence matches.
+    for (const key of ["url", "media", "options", "metadata", "description"]) {
+      expect(
+        Object.prototype.hasOwnProperty.call(searchShaped, key),
+        `product.${key} presence must match across tools`,
+      ).toBe(Object.prototype.hasOwnProperty.call(lookupShaped, key));
+    }
+    for (const key of ["url", "seller", "media", "metadata"]) {
+      expect(
+        Object.prototype.hasOwnProperty.call(searchVariant, key),
+        `variant.${key} presence must match across tools`,
+      ).toBe(Object.prototype.hasOwnProperty.call(lookupVariant, key));
+    }
+  });
+});

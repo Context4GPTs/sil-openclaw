@@ -633,6 +633,90 @@ describe("sil_search — tool-level description steers on local_merchants and is
 });
 
 /**
+ * CARD `surface-product-url-and-specs-in-catalog-tools` (epic
+ * `catalog-product-contract-2026-06`) — the RED unit ceiling for the `sil_search`
+ * tool DESCRIPTION (AC[unit] ×2). The description is the ONLY control surface that
+ * steers the LLM to the right field for the right intent — the wire already carries
+ * `url` (view the page), `seller.links` (dig into seller policies), and
+ * `checkout_url` (buy), but an LLM only learns WHICH field maps to WHICH intent from
+ * the description string. So the three verbs are pinned here, the same description-
+ * only discipline the `ship_to` steering and the `local_merchants` framing use.
+ *
+ * The product gap these assertions close: today every result is "a buy button with
+ * nothing to evaluate before buying" — the description names only id/title/price/
+ * availability/checkout_url/source. After this card the description must teach the
+ * THREE actions distinctly:
+ *   - VIEW   — product/variant `url` opens the PAGE to learn more (NOT a purchase);
+ *   - DIG IN — `seller.links` follow seller policies/info (refund/shipping policy);
+ *   - BUY    — `checkout_url` is the variant permalink that commits the purchase.
+ *
+ * EXPECT RED today: the current `sil_search` description (catalog.ts ~line 97) carries
+ * none of `url` / `seller.links` / the view-vs-buy distinction — the projection is the
+ * lean six and the description matches it. These assert the agent-facing prose, the
+ * same surface the agent reads; `tsc` cannot verify a description's CONTENT, so the
+ * unit tier owns it (mirrors `tool-schema-contract.unit.test.ts` reading `.description`).
+ */
+describe("sil_search — description teaches the three verbs: view (url) / dig-in (seller.links) / buy (checkout_url) [card surface-product-url]", () => {
+  function description(): string {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    return getTool(api, TOOL).description;
+  }
+
+  it("names product/variant `url` as the VIEW / learn-more action — opening the PAGE, NOT buying", () => {
+    // AC[unit]: `url` = open the PAGE to view / learn more (NOT buy). The agent must
+    // know that handing the user a `url` shows them the page; it is not a purchase.
+    const d = description();
+    // The field is named …
+    expect(d).toMatch(/\burl\b/);
+    const dl = d.toLowerCase();
+    // … and tied to a VIEW / open-the-page / learn-more intent (not a purchase verb).
+    expect(dl).toMatch(/view|open the page|learn more|page to|product page|see (the|more)/);
+  });
+
+  it("names `seller.links` (or seller policy links) as the DIG-IN action — following seller policies / info", () => {
+    // AC[unit]: `seller.links` = follow for seller policies / info (the dig-in verb,
+    // e.g. "what's their return policy?"). The agent must know this is where it
+    // follows a seller's policy/info link, distinct from viewing the product page.
+    const d = description();
+    // The seller-links surface is named (either the dotted key or "seller" + "links").
+    expect(d).toMatch(/seller\.links|seller[^.]*links|links[^.]*seller/i);
+    const dl = d.toLowerCase();
+    // … tied to seller policies / info (refund/shipping/return policy, terms, etc.).
+    expect(dl).toMatch(/polic|seller info|return|refund|shipping|terms/);
+  });
+
+  it("keeps `checkout_url` distinct as the BUY action — the variant permalink that commits a purchase", () => {
+    // AC[unit]: `checkout_url` = buy (the variant permalink). The existing buy verb
+    // must remain unambiguous as the ONE field that commits a purchase, so the agent
+    // never confuses it with the new view/dig-in fields.
+    const d = description();
+    expect(d).toMatch(/checkout_url/);
+    const dl = d.toLowerCase();
+    expect(dl).toMatch(/buy|purchase|acquire|checkout/);
+  });
+
+  it("states that a variant's `url` and its `checkout_url` are DIFFERENT targets (view the page vs commit the purchase)", () => {
+    // AC[unit] #2: the headline distinction. A variant has BOTH a `url` (the page —
+    // view) and a `checkout_url` (the permalink — buy); the description must keep them
+    // DIFFERENT so the agent does not hand back `checkout_url` for a "show me / learn
+    // more" intent, nor stall on `url` when the user said "buy". This is the exact
+    // mis-fire the description exists to prevent (it is the only control surface).
+    const d = description();
+    // Both targets must be named in the prose so the contrast is statable.
+    expect(d).toMatch(/\burl\b/);
+    expect(d).toMatch(/checkout_url/);
+    const dl = d.toLowerCase();
+    // The description must explicitly contrast them — a "url is NOT checkout_url",
+    // "different", "distinct", or "view … vs … buy" framing. A description that names
+    // both but never contrasts them leaves the agent free to conflate the two.
+    expect(dl).toMatch(
+      /url[^.]*not[^.]*checkout_url|checkout_url[^.]*not[^.]*url|differ|distinct|whereas|rather than|view[^.]*(buy|purchase|checkout)|(buy|purchase)[^.]*(view|page|learn)/,
+    );
+  });
+});
+
+/**
  * Card `replace-ships-from-with-local-merchants`: `ships_from` is GONE end-to-end —
  * no schema param, and a stray `ships_from` argument is NOT silently accepted (the
  * closed schema / params narrowing drops it before the wire). AC[unit] +
