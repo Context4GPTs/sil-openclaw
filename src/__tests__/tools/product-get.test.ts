@@ -301,3 +301,62 @@ describe("sil_product_get — token never logged (leak-canary)", () => {
     expect(blob).not.toMatch(/authorization/i);
   });
 });
+
+/**
+ * CARD `surface-product-url-and-specs-in-catalog-tools` (epic
+ * `catalog-product-contract-2026-06`) — the RED unit ceiling for the
+ * `sil_product_get` tool DESCRIPTION (AC[unit] #3, the consistency property). The
+ * two catalog tools must present ONE vocabulary to the agent: `sil_product_get`
+ * carries the SAME view (`url`) / dig-in (`seller.links`) / buy (`checkout_url`)
+ * distinction `sil_search` teaches — so an agent learns one catalog vocabulary and
+ * carries an item from a search result into a lookup without the field meanings
+ * shifting. A divergent description (one tool teaches the verbs, the other does not)
+ * is a defect: the agent would mis-fire on the tool whose description stayed lean.
+ *
+ * EXPECT RED today: the current `sil_product_get` description (catalog.ts ~line 388)
+ * names "description plus its featured purchasable variant (id, title, price,
+ * availability, checkout_url, options)" — it carries no `url` (view) and no
+ * `seller.links` (dig-in), and never contrasts `url` with `checkout_url`. Asserted
+ * against the registered `.description` string, the same surface the agent reads and
+ * the same pattern the existing description tests use.
+ */
+describe("sil_product_get — description carries the SAME view (url) / dig-in (seller.links) / buy (checkout_url) vocabulary as sil_search [card surface-product-url]", () => {
+  function description(): string {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    return getTool(api, TOOL).description;
+  }
+
+  it("names product/variant `url` as the VIEW / learn-more action — opening the PAGE, NOT buying", () => {
+    const d = description();
+    expect(d).toMatch(/\burl\b/);
+    const dl = d.toLowerCase();
+    expect(dl).toMatch(/view|open the page|learn more|page to|product page|see (the|more)/);
+  });
+
+  it("names `seller.links` (or seller policy links) as the DIG-IN action — following seller policies / info", () => {
+    const d = description();
+    expect(d).toMatch(/seller\.links|seller[^.]*links|links[^.]*seller/i);
+    const dl = d.toLowerCase();
+    expect(dl).toMatch(/polic|seller info|return|refund|shipping|terms/);
+  });
+
+  it("keeps `checkout_url` distinct as the BUY action — the variant permalink that commits a purchase", () => {
+    const d = description();
+    expect(d).toMatch(/checkout_url/);
+    const dl = d.toLowerCase();
+    expect(dl).toMatch(/buy|purchase|acquire|checkout/);
+  });
+
+  it("states that a variant's `url` and its `checkout_url` are DIFFERENT targets (view the page vs commit the purchase)", () => {
+    // The same headline distinction sil_search pins — pinned here too so the two
+    // tools do NOT present divergent field vocabularies to the agent.
+    const d = description();
+    expect(d).toMatch(/\burl\b/);
+    expect(d).toMatch(/checkout_url/);
+    const dl = d.toLowerCase();
+    expect(dl).toMatch(
+      /url[^.]*not[^.]*checkout_url|checkout_url[^.]*not[^.]*url|differ|distinct|whereas|rather than|view[^.]*(buy|purchase|checkout)|(buy|purchase)[^.]*(view|page|learn)/,
+    );
+  });
+});

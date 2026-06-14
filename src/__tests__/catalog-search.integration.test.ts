@@ -663,8 +663,28 @@ describe("sil_search — result-shaping adds NO client-side locality tag and doe
     for (const forbidden of ["is_local", "islocal", '"local":', "is_domestic", "local_match", "locality"]) {
       expect(blob).not.toContain(forbidden);
     }
-    // The shaped product carries only the contract fields — no extra locality key.
-    expect(Object.keys(products[0]!).sort()).toEqual(["id", "source", "title", "variant"]);
+    // The shaped product carries the four contract keys — and NO locality key.
+    // RECONCILED for card `surface-product-url-and-specs-in-catalog-tools`: this was an
+    // EXACT-equality lock on `["id","source","title","variant"]`, which froze the LEAN
+    // shape. The enriched projection now ALSO surfaces product `url`/`description.plain`/
+    // `media`/`options`/`metadata` WHEN the wire object carries them — so a forward
+    // exact-equality lock would be a stale red the moment a fixture here gains an
+    // enriched field, NOT a real defect (PRODUCT_A is lean today, so the projection
+    // legitimately surfaces only the four; the lock's REAL intent is "no locality tag
+    // leaks", already covered by the forbidden-words check above). Relaxed to a
+    // required-keys-SUBSET assertion (the contract keys are present) plus an explicit
+    // no-locality-key guard — the enriched-projection shape itself is pinned in the
+    // dedicated `card surface-product-url` blocks below.
+    for (const key of ["id", "source", "title", "variant"]) {
+      expect(Object.keys(products[0]!)).toContain(key);
+    }
+    // PRODUCT_A carries no enriched wire fields, so omit-when-absent means NONE of the
+    // new enriched keys appear on its projection (the lean shape is preserved).
+    for (const absent of ["url", "description", "media", "options", "metadata"]) {
+      expect(products[0]!).not.toHaveProperty(absent);
+    }
+    // The product is never tagged with a locality key by the plugin (server owns the bias).
+    expect(products[0]!).not.toHaveProperty("local");
   });
 
   it("the shaped result is IDENTICAL whether local_merchants is true or omitted — the plugin's shaping is locality-agnostic (server owns the bias)", async () => {
@@ -2366,5 +2386,516 @@ describe("sil_search — the recovery TERMINATES end-to-end: after a user_not_pr
     // The recovery exit is live: NOT already_registered, but a fresh session.
     expect(regPayload["status"]).not.toBe("already_registered");
     expect(regPayload["status"]).toBe("awaiting_browser");
+  });
+});
+
+/**
+ * CARD `surface-product-url-and-specs-in-catalog-tools` (epic
+ * `catalog-product-contract-2026-06`) — the RED integration ceiling for the WIDENED
+ * `sil_search` projection. Today each result is the lean
+ * `{ id, title, price, availability, checkout_url, source }`; this card widens the
+ * projection to ALSO surface, from sil-api's flat envelope, the evaluate-before-buy
+ * surface — product `url`/`description.plain`/`media`/`options` and per-variant
+ * `url`/`seller`/`media`/`metadata` — each ONLY where present.
+ *
+ * THE single most important correctness property (architect's BIGGEST RISK): opaque
+ * pass-through keyed on PRESENCE, NEVER narrowed on a guessed inner field name. Base
+ * UCP `seller` is `{ name?, links? }`, but the sil-services Shopify normalizer attaches
+ * `seller.url`/`seller.domain` as EXTENSION keys; a typed `{ name, links }` narrow
+ * would silently DROP a real `seller.url` and still pass a naive fixture. So the
+ * fixtures below carry a `seller` AND a `metadata` object with EXTENSION keys BEYOND
+ * the spec base, and assert they survive WHOLE — this is the test that catches the
+ * narrow. (Precedent: the documented `categories`/`{name}` near-miss — the real
+ * `@sil/schemas` `Category` is `{ value, taxonomy? }`, so a `{name}` narrow dropped
+ * every real category.)
+ *
+ * The SECOND property: omit-when-absent, per field. An absent field must NOT appear
+ * (never `null`, never `""`, never `[]`) — a hollow value is WORSE than omission (the
+ * agent may render an empty page link). Presence is decided per-field, never
+ * all-or-nothing.
+ *
+ * Anti-false-green (complete-work-is-stub-free): the enriched fixtures carry a REAL
+ * enriched envelope (the field SHAPES are pinned to `@sil/schemas` catalog.ts —
+ * product/variant `url`, `Media[]`, `ProductOption[]`, `Seller`, open `metadata`), so
+ * the assertions cannot go green against the `{ stub: true }` skeleton OR against the
+ * lean projection. EXPECT RED today: the lean projection surfaces none of these keys.
+ * The ONLY mock is `fetch` (installRouter) — the full real tool + sil-client pipeline
+ * runs.
+ */
+
+/** A media item in the REAL UCP `Media` shape (`@sil/schemas` `Media`:
+ * `{ type, url, alt_text?, width?, height? }`). Surfaced OPAQUE — the projection
+ * must forward it verbatim, never read or remap its inner fields. */
+const MEDIA_IMAGE = {
+  type: "image",
+  url: "https://img.example.com/aeron-front.jpg",
+  alt_text: "Aeron chair, front view",
+  width: 1200,
+  height: 900,
+};
+
+/** A product-level OPTION DEFINITION in the REAL UCP `ProductOption` shape
+ * (`{ name, values: OptionValue[] }`, `OptionValue` = `{ id?, label }`) — the MENU
+ * of choices (Size → S/M/L), distinct from a variant's SelectedOption picks. */
+const PRODUCT_OPTION_SIZE = {
+  name: "Size",
+  values: [
+    { id: "opt-b", label: "Size B" },
+    { id: "opt-c", label: "Size C" },
+  ],
+};
+
+/** A `seller` object that carries the base UCP `{ name, links }` AND Shopify
+ * EXTENSION keys (`url`, `domain`) that are NOT in the base `Seller` schema. The
+ * opaque-pass-through proof rides on these extra keys surviving whole — a typed
+ * `{ name, links }` narrow would strip `seller.url`/`seller.domain`. */
+const SELLER_WITH_EXTENSION_KEYS = {
+  name: "Herman Miller",
+  links: [
+    { type: "refund_policy", url: "https://hermanmiller.example.com/returns", title: "Returns" },
+    { type: "shipping_policy", url: "https://hermanmiller.example.com/shipping" },
+  ],
+  // EXTENSION keys beyond the spec base — these MUST survive opaque pass-through.
+  url: "https://hermanmiller.example.com",
+  domain: "hermanmiller.example.com",
+};
+
+/** A `metadata` object carrying arbitrary source keys BEYOND any known set — the
+ * open UCP extension point. Surfaced verbatim; the projection must NOT narrow it to
+ * a known shape. */
+const METADATA_WITH_SOURCE_KEYS = {
+  top_features: ["8Z Pellicle suspension", "PostureFit SL"],
+  tech_specs: { weight_capacity_kg: 159, warranty_years: 12 },
+  unique_selling_points: "Ships assembled.",
+};
+
+/** A FULLY enriched variant — the REAL `SilCatalogVariant` shape PLUS the enriched
+ * `url`/`seller`/`media`/`metadata`. Carries the lean five the projection already
+ * surfaces, so the assertions prove the new fields are ADDITIVE, not a replacement. */
+const ENRICHED_VARIANT = {
+  id: "gid://variant/enriched-1",
+  title: "Aeron Chair — Graphite, Size B",
+  description: { plain: "An ergonomic office chair." },
+  price: { amount: 159900, currency: "USD" },
+  availability: { available: true, status: "in_stock" },
+  checkout_url: "https://buy.example.com/aeron-enriched-1",
+  // The enriched per-variant surface (each where present):
+  url: "https://store.example.com/products/aeron/variants/enriched-1",
+  seller: SELLER_WITH_EXTENSION_KEYS,
+  media: [MEDIA_IMAGE],
+  metadata: METADATA_WITH_SOURCE_KEYS,
+};
+
+/** A FULLY enriched product — REAL `SilCatalogProduct` shape PLUS the enriched
+ * product surface (`url`/`description.plain`/`media`/`options`/`metadata`). */
+const ENRICHED_PRODUCT = {
+  id: "gid://product/enriched",
+  title: "Aeron Chair",
+  description: { plain: "The classic ergonomic office chair.", html: "<p>The classic ergonomic office chair.</p>" },
+  price_range: {
+    min: { amount: 159900, currency: "USD" },
+    max: { amount: 169900, currency: "USD" },
+  },
+  variants: [ENRICHED_VARIANT],
+  source: "herman-miller",
+  // The enriched product surface (each where present):
+  url: "https://store.example.com/products/aeron",
+  media: [MEDIA_IMAGE],
+  options: [PRODUCT_OPTION_SIZE],
+  metadata: METADATA_WITH_SOURCE_KEYS,
+};
+
+describe("sil_search — WIDENED projection surfaces the enriched product contract where present [card surface-product-url]", () => {
+  /** Run a search against a single enriched product and return its shaped result. */
+  async function searchOne(product: unknown): Promise<Record<string, unknown>> {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([product]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "office chair" }));
+    expect(payload["status"]).toBe("ok");
+    const products = payload["products"] as Array<Record<string, unknown>>;
+    expect(products).toHaveLength(1);
+    return products[0]!;
+  }
+
+  it("all enriched fields present → surfaces product url/description.plain/media/options + per-variant url/seller/media, alongside the unchanged lean six", async () => {
+    // AC[integration] #1: the headline. A fully enriched product surfaces the whole
+    // evaluate-before-buy surface, and the existing lean shape is UNCHANGED.
+    const product = await searchOne(ENRICHED_PRODUCT);
+
+    // The existing lean shape is intact (additive, not replacement).
+    expect(product["id"]).toBe("gid://product/enriched");
+    expect(product["title"]).toBe("Aeron Chair");
+    expect(product["source"]).toBe("herman-miller");
+    const variant = product["variant"] as Record<string, unknown>;
+    expect(variant["id"]).toBe("gid://variant/enriched-1");
+    expect(variant["checkout_url"]).toBe("https://buy.example.com/aeron-enriched-1");
+    expect(variant["price"]).toEqual({ amount: 159900, currency: "USD" });
+    expect(variant["availability"]).toEqual({ available: true, status: "in_stock" });
+
+    // The NEW product-level surface.
+    expect(product["url"]).toBe("https://store.example.com/products/aeron");
+    expect(product["media"]).toEqual([MEDIA_IMAGE]);
+    expect(product["options"]).toEqual([PRODUCT_OPTION_SIZE]);
+
+    // The NEW per-variant surface.
+    expect(variant["url"]).toBe("https://store.example.com/products/aeron/variants/enriched-1");
+    expect(variant["media"]).toEqual([MEDIA_IMAGE]);
+    // seller carries the links[] dig-in targets.
+    const seller = variant["seller"] as Record<string, unknown>;
+    expect(seller["name"]).toBe("Herman Miller");
+    expect(seller["links"]).toEqual([
+      { type: "refund_policy", url: "https://hermanmiller.example.com/returns", title: "Returns" },
+      { type: "shipping_policy", url: "https://hermanmiller.example.com/shipping" },
+    ]);
+  });
+
+  it("surfaces `description.plain` as the agent-facing short summary (lifted from the UCP description object's plain format)", async () => {
+    // AC[integration]: the product-owner's agent-facing key. The projection surfaces
+    // the `plain` summary so the agent has a short human description to show.
+    const product = await searchOne(ENRICHED_PRODUCT);
+    const description = product["description"] as Record<string, unknown>;
+    expect(description).toBeDefined();
+    expect(description["plain"]).toBe("The classic ergonomic office chair.");
+  });
+
+  it("OPAQUE PASS-THROUGH: a `seller` carrying Shopify extension keys (url/domain) beyond `{name,links}` survives WHOLE — never narrowed to a guessed subset", async () => {
+    // AC[integration] #6 + the architect's BIGGEST RISK. The projection must pass
+    // `seller` through opaque (filter-to-object, forward verbatim), NOT narrow it to a
+    // typed `{ name, links }`. If it narrows, the real `seller.url`/`seller.domain`
+    // extension keys (which the Shopify source attaches) are silently stripped — this
+    // assertion is the one that catches that defect. A naive `{ name, links }` fixture
+    // would pass a narrow; these extension keys make the narrow observable.
+    const product = await searchOne(ENRICHED_PRODUCT);
+    const seller = (product["variant"] as Record<string, unknown>)["seller"] as Record<string, unknown>;
+    // The WHOLE seller object survives, extension keys included.
+    expect(seller).toEqual(SELLER_WITH_EXTENSION_KEYS);
+    // Pinned explicitly so a key-by-key narrow can't sneak past the deep-equal:
+    expect(seller["url"]).toBe("https://hermanmiller.example.com");
+    expect(seller["domain"]).toBe("hermanmiller.example.com");
+  });
+
+  it("OPAQUE PASS-THROUGH: `metadata` is surfaced verbatim with the source's arbitrary keys — not narrowed to a known set", async () => {
+    // AC[integration] #5. metadata is UCP's open extension point — whatever keys the
+    // source attached (top_features / tech_specs / unique_selling_points) must survive
+    // verbatim, including nested objects.
+    const product = await searchOne(ENRICHED_PRODUCT);
+    expect(product["metadata"]).toEqual(METADATA_WITH_SOURCE_KEYS);
+    // And on the variant too (variant metadata is part of the contract).
+    expect((product["variant"] as Record<string, unknown>)["metadata"]).toEqual(METADATA_WITH_SOURCE_KEYS);
+  });
+
+  it("a product with NONE of the new enriched fields surfaces EXACTLY the lean shape and is still returned (no key is null/''/[])", async () => {
+    // AC[integration] #2: omit-when-absent at the all-absent extreme. A product
+    // without enrichment is still a valid, buyable result — never dropped, never given
+    // a hollow enriched key.
+    const lean = {
+      id: "gid://product/lean",
+      title: "Plain Stool",
+      description: { plain: "A plain stool." },
+      price_range: { min: { amount: 5000, currency: "USD" }, max: { amount: 5000, currency: "USD" } },
+      variants: [
+        {
+          id: "gid://variant/lean-1",
+          title: "Plain Stool — Black",
+          price: { amount: 5000, currency: "USD" },
+          availability: { available: true, status: "in_stock" },
+          checkout_url: "https://buy.example.com/lean-1",
+        },
+      ],
+      source: "ikea",
+    };
+    const product = await searchOne(lean);
+
+    // Still a valid, buyable result.
+    expect(product["id"]).toBe("gid://product/lean");
+    expect((product["variant"] as Record<string, unknown>)["checkout_url"]).toBe("https://buy.example.com/lean-1");
+
+    // NONE of the new product-level keys appear (no null, no "", no []).
+    for (const key of ["url", "media", "options", "metadata"]) {
+      expect(product).not.toHaveProperty(key);
+    }
+    // NONE of the new per-variant keys appear.
+    const variant = product["variant"] as Record<string, unknown>;
+    for (const key of ["url", "seller", "media", "metadata"]) {
+      expect(variant).not.toHaveProperty(key);
+    }
+  });
+
+  it("PARTIAL enrichment: present fields appear, absent fields are OMITTED entirely — presence is decided per-field, never all-or-nothing", async () => {
+    // AC[integration] #3: the per-field rule. url present, media absent; seller.links
+    // present but seller.name absent. Each present field surfaces; each absent field
+    // is omitted (not null/''/[]).
+    const partial = {
+      id: "gid://product/partial",
+      title: "Partial Lamp",
+      description: { plain: "A desk lamp." },
+      price_range: { min: { amount: 3000, currency: "USD" }, max: { amount: 3000, currency: "USD" } },
+      // product `url` present; product `media`/`options`/`metadata` ABSENT.
+      url: "https://store.example.com/products/lamp",
+      variants: [
+        {
+          id: "gid://variant/partial-1",
+          title: "Partial Lamp — White",
+          price: { amount: 3000, currency: "USD" },
+          availability: { available: true, status: "in_stock" },
+          checkout_url: "https://buy.example.com/partial-1",
+          // seller present with links but NO name; variant `url`/`media`/`metadata` ABSENT.
+          seller: {
+            links: [{ type: "faq", url: "https://store.example.com/faq" }],
+          },
+        },
+      ],
+      source: "lampco",
+    };
+    const product = await searchOne(partial);
+
+    // Present product field surfaces …
+    expect(product["url"]).toBe("https://store.example.com/products/lamp");
+    // … absent ones are omitted.
+    for (const key of ["media", "options", "metadata"]) {
+      expect(product).not.toHaveProperty(key);
+    }
+    const variant = product["variant"] as Record<string, unknown>;
+    // seller present (with links, no name) surfaces whole; name simply isn't there.
+    const seller = variant["seller"] as Record<string, unknown>;
+    expect(seller["links"]).toEqual([{ type: "faq", url: "https://store.example.com/faq" }]);
+    expect(seller).not.toHaveProperty("name");
+    // absent per-variant fields are omitted.
+    for (const key of ["url", "media", "metadata"]) {
+      expect(variant).not.toHaveProperty(key);
+    }
+  });
+
+  it("empty / missing `plain`: a description carrying html/markdown but no usable `plain` OMITS description.plain — never substitutes html/markdown", async () => {
+    // AC[integration] #4: the projection surfaces ONLY the `plain` format, and only
+    // when it is a non-empty string. An empty `plain`, or a description with only
+    // html/markdown, must NOT yield a `description.plain` and must NEVER copy
+    // html/markdown into the plain slot.
+    const htmlOnly = {
+      id: "gid://product/htmlonly",
+      title: "HTML-only Desc",
+      // `plain` is EMPTY; html/markdown carry the real text.
+      description: { plain: "", html: "<p>Rich text only.</p>", markdown: "Rich text only." },
+      price_range: { min: { amount: 1000, currency: "USD" }, max: { amount: 1000, currency: "USD" } },
+      variants: [
+        {
+          id: "gid://variant/htmlonly-1",
+          title: "HTML-only — Default",
+          price: { amount: 1000, currency: "USD" },
+          availability: { available: true, status: "in_stock" },
+          checkout_url: "https://buy.example.com/htmlonly-1",
+        },
+      ],
+      source: "shop",
+    };
+    const product = await searchOne(htmlOnly);
+
+    // description.plain is OMITTED (empty plain → no plain key) …
+    const description = product["description"];
+    if (description !== undefined) {
+      const desc = description as Record<string, unknown>;
+      expect(desc["plain"]).toBeUndefined();
+      // … and html/markdown were NOT substituted into plain.
+      expect(desc["plain"]).not.toBe("<p>Rich text only.</p>");
+      expect(desc["plain"]).not.toBe("Rich text only.");
+    }
+    // UNCONDITIONAL: the html text is distinctive (`<p>…</p>`), so it must appear
+    // NOWHERE in the projected product — neither surfaced as `description.html` nor
+    // copied into a `plain` slot. This holds whether or not `description` is present
+    // post-GREEN (an empty-plain description should be omitted entirely), so the guard
+    // is not vacuous if a future impl starts emitting `description`.
+    const productBlob = JSON.stringify(product);
+    expect(productBlob).not.toContain("<p>Rich text only.</p>");
+    // The product is still a valid, buyable result regardless of the description.
+    expect((product["variant"] as Record<string, unknown>)["checkout_url"]).toBe(
+      "https://buy.example.com/htmlonly-1",
+    );
+  });
+
+  it("a no-`metadata` product OMITS the metadata key entirely (never an empty object)", async () => {
+    // AC[integration] #5 (the absent half): no metadata on the wire → no metadata key.
+    const noMeta = {
+      id: "gid://product/nometa",
+      title: "No Metadata",
+      description: { plain: "Nothing extra." },
+      price_range: { min: { amount: 2000, currency: "USD" }, max: { amount: 2000, currency: "USD" } },
+      url: "https://store.example.com/products/nometa",
+      variants: [
+        {
+          id: "gid://variant/nometa-1",
+          title: "No Metadata — Default",
+          price: { amount: 2000, currency: "USD" },
+          availability: { available: true, status: "in_stock" },
+          checkout_url: "https://buy.example.com/nometa-1",
+        },
+      ],
+      source: "shop",
+    };
+    const product = await searchOne(noMeta);
+    expect(product).not.toHaveProperty("metadata");
+    expect(product["url"]).toBe("https://store.example.com/products/nometa"); // a present field still surfaces
+  });
+
+  it("a `media` (or product `options`) array with a GARBAGE entry drops the bad entry and surfaces the usable ones", async () => {
+    // AC[integration] #7: a non-object/garbage array entry is dropped; the usable
+    // plain-object entries still surface. The field is never a broken/partial value.
+    const withGarbage = {
+      id: "gid://product/garbage",
+      title: "Garbage Array Entry",
+      description: { plain: "Has a bad media entry." },
+      price_range: { min: { amount: 4000, currency: "USD" }, max: { amount: 4000, currency: "USD" } },
+      // The first media entry is a usable object; the second is a bare string (garbage).
+      media: [MEDIA_IMAGE, "not-an-object"],
+      options: [PRODUCT_OPTION_SIZE, 42],
+      variants: [
+        {
+          id: "gid://variant/garbage-1",
+          title: "Garbage — Default",
+          price: { amount: 4000, currency: "USD" },
+          availability: { available: true, status: "in_stock" },
+          checkout_url: "https://buy.example.com/garbage-1",
+        },
+      ],
+      source: "shop",
+    };
+    const product = await searchOne(withGarbage);
+
+    // Only the usable object entry survives; the garbage string/number is dropped.
+    expect(product["media"]).toEqual([MEDIA_IMAGE]);
+    expect(product["options"]).toEqual([PRODUCT_OPTION_SIZE]);
+  });
+
+  it("a `media` array that yields ZERO usable entries OMITS the key (never an empty array)", async () => {
+    // AC[integration] #7 (the all-garbage half): if every entry is unusable, the key
+    // is omitted, not surfaced as `[]` (a hollow `media: []` is a false signal — the
+    // agent may render an empty "images:" heading).
+    const allGarbageMedia = {
+      id: "gid://product/allgarbage",
+      title: "All-garbage Media",
+      description: { plain: "All media entries are garbage." },
+      price_range: { min: { amount: 4000, currency: "USD" }, max: { amount: 4000, currency: "USD" } },
+      media: ["nope", 7, null],
+      variants: [
+        {
+          id: "gid://variant/allgarbage-1",
+          title: "All-garbage — Default",
+          price: { amount: 4000, currency: "USD" },
+          availability: { available: true, status: "in_stock" },
+          checkout_url: "https://buy.example.com/allgarbage-1",
+        },
+      ],
+      source: "shop",
+    };
+    const product = await searchOne(allGarbageMedia);
+    expect(product).not.toHaveProperty("media"); // omitted, NOT []
+  });
+
+  it("PURCHASABILITY GATE UNCHANGED: a featured variant lacking a non-empty checkout_url is STILL dropped, even when the product carries url/media/seller", async () => {
+    // AC[integration] (cross-cutting): the enriched fields are additive CONTEXT, not a
+    // new gate. A product whose featured variant has no usable checkout_url is dropped
+    // exactly as today — surfacing a `url`/`media`/`seller` does NOT make a
+    // non-buyable product appear.
+    seedTokens("at", "rt");
+    const enrichedButUnbuyable = {
+      id: "gid://product/unbuyable",
+      title: "Enriched but Unbuyable",
+      description: { plain: "Cannot be bought." },
+      price_range: { min: { amount: 9900, currency: "USD" }, max: { amount: 9900, currency: "USD" } },
+      url: "https://store.example.com/products/unbuyable",
+      media: [MEDIA_IMAGE],
+      options: [PRODUCT_OPTION_SIZE],
+      variants: [
+        {
+          id: "gid://variant/unbuyable-1",
+          title: "Unbuyable — Default",
+          price: { amount: 9900, currency: "USD" },
+          availability: { available: false, status: "out_of_stock" },
+          // checkout_url MISSING — the variant is not purchasable.
+          url: "https://store.example.com/products/unbuyable/variants/1",
+          seller: SELLER_WITH_EXTENSION_KEYS,
+          media: [MEDIA_IMAGE],
+        },
+      ],
+      source: "shop",
+    };
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([enrichedButUnbuyable, ENRICHED_PRODUCT]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("ok");
+    const products = payload["products"] as Array<Record<string, unknown>>;
+    // The unbuyable product is dropped despite its rich fields; only the buyable one remains.
+    expect(products).toHaveLength(1);
+    expect(products[0]!["id"]).toBe("gid://product/enriched");
+    expect(products.some((p) => p["id"] === "gid://product/unbuyable")).toBe(false);
+  });
+});
+
+/**
+ * CARD `surface-product-url-and-specs-in-catalog-tools` — REGRESSION GUARDS. The
+ * widened projection is read-side ONLY: it must NOT perturb the request body
+ * (`buildSearchBody`) or the outcome taxonomy. These run an enriched envelope through
+ * the full wiring and assert the request side + the classification are unchanged.
+ * EXPECT GREEN today (they pin invariants the widening must not break) and STAY green.
+ */
+describe("sil_search — the enriched projection is read-side only: request body + outcome taxonomy unchanged [card surface-product-url]", () => {
+  it("the request body is byte-identical to today's (the projection widening changes nothing the tool SENDS)", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([ENRICHED_PRODUCT]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", {
+      query: "office chair",
+      category: "Furniture",
+      price_min: 10000,
+    });
+
+    const body = rec.search[0]!.body as Record<string, unknown>;
+    // The mapped request is exactly what it was before this card — the new fields are
+    // RESPONSE-side; the request shape is untouched.
+    expect(body).toEqual({
+      query: "office chair",
+      filters: { categories: ["Furniture"], price: { min: 10000 } },
+    });
+  });
+
+  it("the outcome taxonomy is unchanged with enriched envelopes (ok / empty / 400 / 401-refresh / 5xx)", async () => {
+    async function statusFor(reply: Reply, query = "x"): Promise<unknown> {
+      seedTokens("at", "rt");
+      installRouter((kind) => (kind === "search" ? reply : { status: 200, body: {} }));
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query }));
+      vi.restoreAllMocks();
+      return payload["status"];
+    }
+
+    // An enriched 200 is still `ok`; the other arms are unchanged.
+    const okStatus = await statusFor({ status: 200, body: searchEnvelope([ENRICHED_PRODUCT]) });
+    const emptyStatus = await statusFor({ status: 200, body: searchEnvelope([]) });
+    const invalidStatus = await statusFor({ status: 400, body: { error: "empty_search_input", message: "x" } });
+    const sourceFailStatus = await statusFor({ status: 500, body: { error: "source_unavailable", message: "x" } });
+
+    expect(okStatus).toBe("ok");
+    expect(emptyStatus).toBe("ok");
+    expect(invalidStatus).toBe("invalid_request");
+    expect(sourceFailStatus).toBe("retryable");
   });
 });
