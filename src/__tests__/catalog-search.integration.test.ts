@@ -678,9 +678,10 @@ describe("sil_search — result-shaping adds NO client-side locality tag and doe
     for (const key of ["id", "source", "title", "variant"]) {
       expect(Object.keys(products[0]!)).toContain(key);
     }
-    // PRODUCT_A carries no enriched wire fields, so omit-when-absent means NONE of the
-    // new enriched keys appear on its projection (the lean shape is preserved).
-    for (const absent of ["url", "description", "media", "options", "metadata"]) {
+    // PRODUCT_A carries `description: { plain }` (so the projection correctly surfaces it)
+    // but NONE of `url`/`media`/`options`/`metadata` — so omit-when-absent means those four
+    // do NOT appear on its projection.
+    for (const absent of ["url", "media", "options", "metadata"]) {
       expect(products[0]!).not.toHaveProperty(absent);
     }
     // The product is never tagged with a locality key by the plugin (server owns the bias).

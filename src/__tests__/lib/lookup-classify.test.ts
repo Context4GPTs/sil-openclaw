@@ -622,12 +622,9 @@ describe("classifyLookupResponse — rich projection (first/featured variant, ri
       const p = out.products[0]! as unknown as Record<string, unknown>;
       expect(p["id"]).toBe("gid://product/a");
       expect(p["title"]).toBe("Aeron Chair");
-      // description is the full object (not just a title — lookup is for a purchase
-      // decision), passed through.
-      expect(p["description"]).toEqual({
-        plain: "An ergonomic office chair.",
-        html: "<p>An ergonomic office chair.</p>",
-      });
+      // description is the `{ plain }` lift — the same shape search surfaces (one
+      // vocabulary across both tools): only the `plain` format, never `html`/`markdown`.
+      expect(p["description"]).toEqual({ plain: "An ergonomic office chair." });
       expect(p["categories"]).toEqual([{ name: "Office Furniture" }]);
       expect(p["price_range"]).toEqual({
         min: { amount: 159900, currency: "USD" },
