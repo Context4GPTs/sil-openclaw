@@ -1206,6 +1206,134 @@ describe("sil_product_get — outcome c: upstream rejected the request → NON-r
   });
 });
 
+/**
+ * CARD `classify-catalog-422-as-invalid-request` (epic
+ * `catalog-source-error-taxonomy-2026-06`) — the RED integration ceiling for the
+ * 422 → `invalid_request` end-to-end wiring on the LOOKUP twin seam, SYMMETRIC
+ * with the sil_search block in `catalog-search.integration.test.ts`. The two
+ * catalog tools share ONE agent-facing error vocabulary, and the 422
+ * `source_rejected` comes off the SHARED source layer — so `sil_product_get` must
+ * read a source rejection identically to `sil_search` (status invalid_request,
+ * carrying the upstream message), or the agent learns two languages for one
+ * failure.
+ *
+ * WHY 422 SPECIFICALLY: same as search — the existing lookup "outcome c" block
+ * above and the DISTINGUISHABILITY block below drive `source_rejected` with HTTP
+ * **400** (already invalid_request today). The real sil-api emits **422**, which
+ * falls through to retryable (source-named) on the lookup path exactly as on
+ * search. These cases drive the production status and prove the agent payload is
+ * `status: "invalid_request"`, identical in shape to the search path.
+ *
+ * EXPECT RED today: lookup 422 → retryable (source-named) → `status: "retryable"`.
+ * The 5xx-still-retryable guard PASSES today and must stay green.
+ */
+describe("sil_product_get — a 422 source_rejected surfaces invalid_request end-to-end carrying the upstream cause (outcome c, the twin seam)", () => {
+  it("422 source_rejected { error, message, source } → status invalid_request carrying the upstream message, NEVER retryable, NO source name, NO recovery", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "lookup"
+        ? {
+            status: 422,
+            body: {
+              error: "source_rejected",
+              message: "Source 'etsy' rejected the request: identifier scheme not supported.",
+              source: "etsy",
+            },
+          }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }));
+
+    expect(rec.lookup.length).toBe(1);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["status"]).not.toBe("retryable");
+    expect(payload["error"]).toBe("source_rejected");
+    const message = String(payload["message"]);
+    expect(message).toContain("identifier scheme not supported");
+    // NOT the source-named transient copy (outcome b), NOT the extractApiError default.
+    expect(message.toLowerCase()).not.toMatch(/temporarily unavailable|retry .* shortly|sil is /);
+    expect(message).not.toMatch(/Provide a search query or at least one filter/i);
+    expect(payload).not.toHaveProperty("detail");
+    expect(payload["recovery"]).not.toBe("sil_register");
+    expect(JSON.stringify(payload).toLowerCase()).not.toMatch(/sil_register/);
+  });
+
+  it("the lookup 422 invalid_request is shape-IDENTICAL to the search 422 invalid_request (ONE vocabulary across both catalog tools)", async () => {
+    // The twin-seam parity assertion: the agent-facing envelope keys for a 422 source
+    // rejection must be the SAME set on sil_product_get as on sil_search — that is the
+    // whole reason this card closes both seams. We pin the key set + the status/error
+    // here; the search side pins the same in its own file.
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "lookup"
+        ? { status: 422, body: { error: "source_rejected", message: "Deterministic source rejection.", source: "etsy" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }));
+
+    // The invalidRequest() envelope is exactly { status, error, message } — no
+    // recovery, no detail, no source. Same shape sil_search emits for its 422.
+    expect(Object.keys(payload).sort()).toEqual(["error", "message", "status"]);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("source_rejected");
+  });
+
+  it("the 422 invalid_request is DISTINCT from a source-named 5xx retryable (outcome b) — same `source`, opposite agent instruction", async () => {
+    // (b)-vs-(c) distinguishability end-to-end on the lookup path, same source token.
+    async function statusFor(reply: Reply): Promise<Record<string, unknown>> {
+      seedTokens("at", "rt");
+      installRouter((kind) => (kind === "lookup" ? reply : { status: 200, body: {} }));
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const p = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }));
+      vi.restoreAllMocks();
+      return p;
+    }
+
+    const cReject422 = await statusFor({
+      status: 422,
+      body: { error: "source_rejected", message: "Source 'etsy' rejected the request.", source: "etsy" },
+    });
+    const bUnavailable5xx = await statusFor({
+      status: 503,
+      body: { error: "source_unavailable", message: "Source 'etsy' is temporarily unavailable.", source: "etsy" },
+    });
+
+    expect(cReject422["status"]).toBe("invalid_request");
+    expect(bUnavailable5xx["status"]).toBe("retryable");
+    expect(cReject422["status"]).not.toBe(bUnavailable5xx["status"]);
+    expect(String(bUnavailable5xx["message"])).toContain("etsy");
+    expect(bUnavailable5xx).toHaveProperty("detail");
+    expect(cReject422).not.toHaveProperty("detail");
+  });
+
+  it("GUARD — a genuine 5xx source_unavailable STILL surfaces status retryable end-to-end (the fix narrows ONLY 422, not the transient path)", async () => {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "lookup"
+        ? {
+            status: 500,
+            body: { error: "source_unavailable", message: "Source 'shopify' is temporarily unavailable.", source: "shopify" },
+          }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }));
+
+    expect(payload["status"]).toBe("retryable");
+    expect(payload["status"]).not.toBe("invalid_request");
+    expect(String(payload["message"])).toContain("shopify");
+  });
+});
+
 describe("sil_product_get — DISTINGUISHABILITY: six failure/success cases are pairwise distinct agent envelopes (highest-value)", () => {
   it("{a-5xx, a-network, b-source, b-429, c-reject, all-missed-200} produce pairwise-distinguishable envelopes", async () => {
     // The per-tool half of the load-bearing distinguishability property. The lookup

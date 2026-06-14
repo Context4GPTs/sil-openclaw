@@ -72,7 +72,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { classifySearchResponse } from "../../lib/sil-client.js";
+import { classifySearchResponse, type SearchOutcome } from "../../lib/sil-client.js";
 
 /** A real `SilCatalogVariant` (UCP variant + required non-empty `checkout_url`);
  * `availability` is the UCP OBJECT shape `{ available?, status? }`. */
@@ -468,6 +468,154 @@ describe("classifySearchResponse — the no-fabrication guard: a sourceless retr
     if (out.kind === "retryable") {
       expect(out.source).toBeUndefined();
     }
+  });
+});
+
+/**
+ * CARD `classify-catalog-422-as-invalid-request` (epic
+ * `catalog-source-error-taxonomy-2026-06`) — the RED unit floor for the catalog
+ * 422 `source_rejected` → `invalid_request` arm. This is the FINAL seam of the
+ * source-error taxonomy: it closes the (b)≡(c) collapse the held sil-stage eval
+ * `live-eval-source-error-taxonomy` exists to RED on.
+ *
+ * THE BUG this pins: `classifySearchResponse` has NO 422 arm. After the 400 / 401
+ * / 403 arms it falls straight to `if (status !== 200) return
+ * retryableFromBody(body)` — and because a real sil-api 422 `source_rejected`
+ * body carries a non-empty `source` field, `retryableFromBody` returns
+ * `{ kind: "retryable", source, detail }` = outcome (b). So a request the source
+ * looked at and REFUSED (it can NEVER succeed unchanged) reaches the agent as
+ * "the source is temporarily unavailable, retry" — a FALSE instruction. The
+ * agent burns its retry budget on a doomed request and the real upstream cause
+ * (the `message`) is buried as a `detail` on a transient envelope.
+ *
+ * The fix ADDS a `422 → invalid_request` arm immediately after the 403 arm and
+ * before the `retryableFromBody` fallthrough, reusing the EXISTING
+ * `extractApiError(body)` (no new helper, no new outcome `kind`, no type change —
+ * `SearchOutcome` already carries `{ kind: "invalid_request"; error; message }`):
+ *     if (status === 422) {
+ *       const { error, message } = extractApiError(body);
+ *       return { kind: "invalid_request", error, message };
+ *     }
+ *
+ * ⚠ ADVERSARIAL — the new arm must gate on EXACTLY `status === 422`, never a
+ * range. A wrong-direction over-narrow (e.g. `status >= 400 && status !== 401`)
+ * that swept a 5xx `source_unavailable` (outcome b) or a 429 into non-retryable
+ * is the taxonomy lie in REVERSE — telling the agent "give up" on a transient
+ * outage. The 5xx-still-retryable guard at the bottom of this block is the
+ * non-vacuous tripwire for that; it MUST stay green before and after the fix.
+ *
+ * EXPECT RED today: the two 422 cases below fail because the classifier returns
+ * `retryable` on a 422 (no 422 arm exists yet). The 5xx guard PASSES today and
+ * must keep passing.
+ */
+describe("classifySearchResponse — a 422 source_rejected is INVALID_REQUEST carrying the cause, NEVER retryable (outcome c)", () => {
+  it("422 source_rejected WITH { error, message, source } → invalid_request carrying error+message (NEVER retryable, NEVER source-named)", () => {
+    // The headline contract: a 422 source rejection is outcome (c), non-retryable,
+    // carrying the real upstream cause. RED today — 422 falls through to
+    // retryableFromBody and, because the body names a source, returns
+    // { kind: "retryable", source, detail } (outcome b). The `error`/`message` are
+    // carried VERBATIM from the body (extractApiError reads them when present).
+    const out = classifySearchResponse(422, {
+      error: "source_rejected",
+      message: "The request was rejected: filter `gift_wrap` is not supported by this source.",
+      source: "shopify",
+    });
+    expect(out.kind).toBe("invalid_request");
+    expect(out.kind).not.toBe("retryable");
+    if (out.kind === "invalid_request") {
+      expect(out.error).toBe("source_rejected");
+      expect(out.message).toBe(
+        "The request was rejected: filter `gift_wrap` is not supported by this source.",
+      );
+    }
+  });
+
+  it("a 422 NEVER surfaces a `source` field — outcome c is non-retryable, NOT the source-named retryable (the (b)≡(c) collapse, inverted)", () => {
+    // The exact (b)≡(c) collapse this card closes, asserted at the seam: even though
+    // the 422 body carries a `source` (which is what mis-routes it to outcome b
+    // today), the classified outcome must be `invalid_request` — which has NO
+    // `source` key at all. A regression that kept routing 422 through
+    // retryableFromBody would re-expose `source`/`detail` here.
+    const out = classifySearchResponse(422, {
+      error: "source_rejected",
+      message: "Filter not supported.",
+      source: "shopify",
+    });
+    expect(out.kind).toBe("invalid_request");
+    expect(out).not.toHaveProperty("source");
+    expect(out).not.toHaveProperty("detail");
+  });
+
+  it("422 with a garbage / empty body ({}, null, 'boom', []) → STILL invalid_request via extractApiError's defaults (a rejection that says nothing is still non-retryable)", () => {
+    // The malformed-422 edge: a rejection whose body carries no usable { error,
+    // message } must STILL be non-retryable — never silently routed back to
+    // retryable. extractApiError fills its defaults (error → "invalid_request",
+    // message → the generic non-empty default), so the outcome is a well-formed
+    // invalid_request with non-empty fields. RED today: each of these returns a
+    // bare { kind: "retryable" } (retryableFromBody finds no `source`).
+    for (const body of [{}, null, "boom", []] as const) {
+      const out = classifySearchResponse(422, body);
+      expect(out.kind).toBe("invalid_request");
+      expect(out.kind).not.toBe("retryable");
+      if (out.kind === "invalid_request") {
+        // Defaults fired — both fields are present, non-empty strings (the agent
+        // always gets an actionable, if generic, cause rather than undefined).
+        expect(typeof out.error).toBe("string");
+        expect(out.error.length).toBeGreaterThan(0);
+        expect(typeof out.message).toBe("string");
+        expect(out.message.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("GUARD (anti-over-narrowing) — a 5xx source_unavailable that NAMES a source STILL returns retryable carrying that source (the fix narrows ONLY 422)", () => {
+    // The non-vacuous reverse-collapse tripwire: the 422 arm must NOT widen into a
+    // status range. A genuine source-down 5xx (outcome b) must remain
+    // { kind: "retryable", source, detail } — a wrong-direction `status >= 400`
+    // over-narrow would mis-route it to non-retryable and trip this. PASSES today
+    // (it is the current correct behavior) and must keep passing after the fix.
+    for (const code of [500, 502, 503, 504]) {
+      const out = classifySearchResponse(code, {
+        error: "source_unavailable",
+        message: "Catalog source 'shopify' is temporarily unavailable.",
+        source: "shopify",
+      });
+      expect(out.kind).toBe("retryable");
+      expect(out.kind).not.toBe("invalid_request");
+      if (out.kind === "retryable") {
+        expect(out.source).toBe("shopify");
+      }
+    }
+  });
+
+  it("GUARD — the unmapped 4xx defensive set [404, 409, 429] STILL routes to retryable, and NONE of them is invalid_request (422 is the ONLY 4xx narrowed)", () => {
+    // The companion tripwire on the low side: only 422 leaves the retryable path.
+    // 404/409/429 are NOT part of this card's contract (404 is sil-api's gateway-miss
+    // landing; an upstream 429 reaches the plugin as a 5xx source_unavailable, not a
+    // bare 429) and must stay `retryable`. A regression that narrowed the whole 4xx
+    // band into invalid_request would trip this. PASSES today and after the fix.
+    for (const code of [404, 409, 429]) {
+      const out = classifySearchResponse(code, {});
+      expect(out.kind).toBe("retryable");
+      expect(out.kind).not.toBe("invalid_request");
+    }
+  });
+
+  it("422 is DISTINCT from the source-named 5xx retryable (b) and the bare 5xx retryable (a) — three distinct landings, no collapse", () => {
+    // The taxonomy assertion for the final seam: outcome (c) 422-invalid_request,
+    // outcome (b) source-named 5xx-retryable, and outcome (a) bare 5xx-retryable are
+    // THREE distinct (kind, names-source?) signals. The (b)≡(c) collapse is the bug;
+    // this proves they no longer share a fingerprint.
+    const c422 = classifySearchResponse(422, { error: "source_rejected", message: "x", source: "shopify" });
+    const bSource = classifySearchResponse(500, { error: "source_unavailable", message: "x", source: "shopify" });
+    const aBare = classifySearchResponse(500, { error: "internal_error", message: "x" });
+    expect(c422.kind).toBe("invalid_request");
+    expect(bSource.kind).toBe("retryable");
+    expect(aBare.kind).toBe("retryable");
+    // (b) names a source, (a) does not, (c) is a different kind entirely.
+    const fingerprint = (o: SearchOutcome): string =>
+      `${o.kind}::${o.kind === "retryable" && o.source !== undefined ? "named" : "generic"}`;
+    expect(new Set([fingerprint(c422), fingerprint(bSource), fingerprint(aBare)]).size).toBe(3);
   });
 });
 

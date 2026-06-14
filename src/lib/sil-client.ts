@@ -558,6 +558,18 @@ export function classifySearchResponse(status: number, body: unknown): SearchOut
   }
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
+  // 422 source_rejected: the source LOOKED at this exact request and refused it —
+  // it can never succeed unchanged, so it is non-retryable invalid_request carrying
+  // the real upstream cause, NOT the source-named `retryable` the fallthrough below
+  // would produce (a 422 body names a `source`, so `retryableFromBody` would emit
+  // outcome (b) and tell the agent to retry a doomed request). This is the third
+  // arm of the 401-vs-403-vs-422 split: 401 refresh-and-retry, 403 forbidden
+  // (refresh won't help), 422 invalid_request (fix the request, don't retry).
+  // Matches EXACTLY 422 — a 5xx/429 source_unavailable stays `retryable` (outcome b).
+  if (status === 422) {
+    const { error, message } = extractApiError(body);
+    return { kind: "invalid_request", error, message };
+  }
   if (status !== 200) return retryableFromBody(body);
 
   const result = extractSearchResult(body);
@@ -609,6 +621,16 @@ export function classifyLookupResponse(status: number, body: unknown): LookupOut
   }
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
+  // 422 source_rejected: the twin seam of `classifySearchResponse` — sil-api emits
+  // 422 on the SHARED source layer backing both catalog routes, so a source-rejected
+  // lookup is the same non-retryable invalid_request, carrying the upstream cause,
+  // NOT the source-named `retryable` the fallthrough would produce. Same one error
+  // vocabulary across both catalog tools (see this fn's doc-comment). Matches EXACTLY
+  // 422 — a 5xx/429 source_unavailable stays `retryable` (outcome b).
+  if (status === 422) {
+    const { error, message } = extractApiError(body);
+    return { kind: "invalid_request", error, message };
+  }
   if (status !== 200) return retryableFromBody(body);
 
   const result = extractLookupResult(body);

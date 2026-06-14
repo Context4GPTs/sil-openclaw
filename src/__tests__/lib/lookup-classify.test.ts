@@ -87,7 +87,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { classifyLookupResponse } from "../../lib/sil-client.js";
+import { classifyLookupResponse, type LookupOutcome } from "../../lib/sil-client.js";
 
 /** A real lookup `variant`: UCP variant + sil-api's required non-empty
  * `checkout_url` + the REQUIRED lookup `inputs` correlation (UCP
@@ -437,6 +437,127 @@ describe("classifyLookupResponse — the no-fabrication guard: a sourceless retr
     if (out.kind === "retryable") {
       expect(out.source).toBeUndefined();
     }
+  });
+});
+
+/**
+ * CARD `classify-catalog-422-as-invalid-request` (epic
+ * `catalog-source-error-taxonomy-2026-06`) — the RED unit floor for the catalog
+ * 422 → `invalid_request` arm, SYMMETRIC with `search-classify.test.ts`. The two
+ * catalog tools share ONE agent-facing error vocabulary, and sil-api emits 422
+ * `source_rejected` on the SHARED source layer backing both `/catalog/search` and
+ * `/catalog/lookup` — so a source-rejected LOOKUP mis-maps the same (b)≡(c) way.
+ * Closing only the search seam would leave `sil_product_get` lying (a 422 reading
+ * non-retryable on one catalog tool and retryable on its companion) — a half-done
+ * taxonomy. The twin-seam verdict (CLOSE BOTH) is what makes this block mandatory.
+ *
+ * Same bug, same fix as search: `classifyLookupResponse` has no 422 arm (422 →
+ * retryable today, source-named because the body carries a `source`); the fix
+ * adds the identical `422 → invalid_request` arm reusing `extractApiError` — no new
+ * `kind`, no type change (`LookupOutcome` already carries `{ kind:
+ * "invalid_request"; error; message }`). EXPECT RED today (the classifier returns
+ * `retryable` on a 422); the 5xx/4xx guards PASS today and must stay green.
+ */
+describe("classifyLookupResponse — a 422 source_rejected is INVALID_REQUEST carrying the cause, NEVER retryable (outcome c)", () => {
+  it("422 source_rejected WITH { error, message, source } → invalid_request carrying error+message (NEVER retryable, NEVER source-named)", () => {
+    // The headline contract for the lookup twin seam — identical shape to the search
+    // path so the two tools present ONE vocabulary. RED today: 422 → retryable with
+    // the source named. The cause is carried verbatim.
+    const out = classifyLookupResponse(422, {
+      error: "source_rejected",
+      message: "Source 'etsy' rejected the request: identifier scheme not supported.",
+      source: "etsy",
+    });
+    expect(out.kind).toBe("invalid_request");
+    expect(out.kind).not.toBe("retryable");
+    if (out.kind === "invalid_request") {
+      expect(out.error).toBe("source_rejected");
+      expect(out.message).toBe(
+        "Source 'etsy' rejected the request: identifier scheme not supported.",
+      );
+    }
+  });
+
+  it("a 422 NEVER surfaces a `source` field — outcome c is non-retryable, NOT the source-named retryable (the (b)≡(c) collapse, inverted)", () => {
+    // The exact collapse this card closes, on the lookup seam: the 422 body carries a
+    // `source` (what mis-routes it to outcome b today), but the classified outcome
+    // must be `invalid_request`, which has NO `source` key.
+    const out = classifyLookupResponse(422, {
+      error: "source_rejected",
+      message: "Identifier scheme not supported.",
+      source: "etsy",
+    });
+    expect(out.kind).toBe("invalid_request");
+    expect(out).not.toHaveProperty("source");
+    expect(out).not.toHaveProperty("detail");
+  });
+
+  it("422 with a garbage / empty body ({}, null, 'boom', []) → STILL invalid_request via extractApiError's defaults (a rejection that says nothing is still non-retryable)", () => {
+    // The malformed-422 edge, symmetric with search: a rejection with no usable
+    // { error, message } is STILL non-retryable, never routed back to retryable.
+    // extractApiError fills its defaults. RED today: each returns a bare
+    // { kind: "retryable" }.
+    //
+    // NOTE (architect Risk, accepted in-scope): extractApiError's DEFAULT message is
+    // search-flavored ("…Provide a search query…") and rides this lookup path on a
+    // degenerate body. That copy nuance is consciously accepted for this card — the
+    // behavioral contract asserted here is only that the outcome is a well-formed
+    // NON-retryable invalid_request with non-empty fields, NOT the exact default
+    // wording. So this assertion does not pin the message text.
+    for (const body of [{}, null, "boom", []] as const) {
+      const out = classifyLookupResponse(422, body);
+      expect(out.kind).toBe("invalid_request");
+      expect(out.kind).not.toBe("retryable");
+      if (out.kind === "invalid_request") {
+        expect(typeof out.error).toBe("string");
+        expect(out.error.length).toBeGreaterThan(0);
+        expect(typeof out.message).toBe("string");
+        expect(out.message.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("GUARD (anti-over-narrowing) — a 5xx source_unavailable that NAMES a source STILL returns retryable carrying that source (the fix narrows ONLY 422)", () => {
+    // The non-vacuous reverse-collapse tripwire, symmetric with search: a genuine
+    // source-down 5xx (outcome b) must remain { kind: "retryable", source, detail }.
+    // A wrong-direction over-narrow trips this. PASSES today and after the fix.
+    for (const code of [500, 502, 503, 504]) {
+      const out = classifyLookupResponse(code, {
+        error: "source_unavailable",
+        message: "Catalog source 'etsy' is temporarily unavailable.",
+        source: "etsy",
+      });
+      expect(out.kind).toBe("retryable");
+      expect(out.kind).not.toBe("invalid_request");
+      if (out.kind === "retryable") {
+        expect(out.source).toBe("etsy");
+      }
+    }
+  });
+
+  it("GUARD — the unmapped 4xx defensive set [404, 409, 429] STILL routes to retryable, and NONE of them is invalid_request (422 is the ONLY 4xx narrowed)", () => {
+    // The low-side companion tripwire: only 422 leaves the retryable path. 404/409/429
+    // are not part of this card's contract and must stay `retryable`. PASSES today and
+    // after the fix.
+    for (const code of [404, 409, 429]) {
+      const out = classifyLookupResponse(code, {});
+      expect(out.kind).toBe("retryable");
+      expect(out.kind).not.toBe("invalid_request");
+    }
+  });
+
+  it("422 is DISTINCT from the source-named 5xx retryable (b) and the bare 5xx retryable (a) — three distinct landings, no collapse", () => {
+    // The taxonomy assertion for the lookup final seam — outcomes (a)/(b)/(c) are
+    // three distinct (kind, names-source?) signals; the (b)≡(c) collapse is gone.
+    const c422 = classifyLookupResponse(422, { error: "source_rejected", message: "x", source: "etsy" });
+    const bSource = classifyLookupResponse(500, { error: "source_unavailable", message: "x", source: "etsy" });
+    const aBare = classifyLookupResponse(500, { error: "internal_error", message: "x" });
+    expect(c422.kind).toBe("invalid_request");
+    expect(bSource.kind).toBe("retryable");
+    expect(aBare.kind).toBe("retryable");
+    const fingerprint = (o: LookupOutcome): string =>
+      `${o.kind}::${o.kind === "retryable" && o.source !== undefined ? "named" : "generic"}`;
+    expect(new Set([fingerprint(c422), fingerprint(bSource), fingerprint(aBare)]).size).toBe(3);
   });
 });
 
