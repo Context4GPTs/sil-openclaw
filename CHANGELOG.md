@@ -10,6 +10,20 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Fixed
+
+- **A catalog `422 source_rejected` is now classified non-retryable
+  `invalid_request`, not source-named `retryable`.** A real source *rejection*
+  (the source looked at the request and refused it — it can never succeed
+  unchanged) was falling through to `retryableFromBody`, and because the 422 body
+  carries a `source` it surfaced as the source-named `retryable` (outcome b) — a
+  false instruction that told the agent to retry a doomed request while the real
+  upstream cause was buried as a transient `detail`. Both catalog classifiers
+  (`classifySearchResponse` / `classifyLookupResponse`, backing `sil_search` /
+  `sil_product_get`) now special-case `422 → invalid_request` carrying the
+  upstream `{ error, message }`, mirroring the existing `400` arm. The narrowing
+  is exact: a `5xx`/`429 source_unavailable` stays `retryable`.
+
 ## [0.2.2] - 2026-06-13
 
 ### Fixed
