@@ -321,10 +321,20 @@ export interface SearchResult {
  * the body carries a real non-empty `source` field (never fabricated, never
  * scraped from `message`); a sil-internal 5xx, a bodyless/garbage non-200, and a
  * network-error throw all stay bare `{ kind: "retryable" }` (outcome a).
+ *
+ * The 401-vs-403 split is the load-bearing auth-branch distinction: `unauthorized`
+ * (401) is the refresh trigger; `forbidden` (403) is terminal-but-recoverable —
+ * refreshing a valid-but-unprovisioned token changes nothing. The `forbidden`
+ * variant carries the actionable `reason` (`user_not_provisioned` /
+ * `principal_mismatch`, defaulting to the generic `"forbidden"` marker on an
+ * unexpected body — byte-identical to `IdentityOutcome`'s variant), which the tool
+ * surfaces in the same forbidden envelope `sil_whoami` emits, and uses to decide
+ * whether to clear the dead token (only on `user_not_provisioned`).
  */
 export type SearchOutcome =
   | { kind: "ok"; products: SearchProduct[]; cursor?: string }
   | { kind: "unauthorized" }
+  | { kind: "forbidden"; reason: string }
   | { kind: "invalid_request"; error: string; message: string }
   | { kind: "retryable"; source?: string; detail?: string };
 
@@ -397,13 +407,16 @@ export interface LookupResult {
 
 /**
  * Outcome of a single sil-api catalog lookup (classified by status + body).
- * Models {@link SearchOutcome} — the SAME four error/success classes so the two
+ * Models {@link SearchOutcome} — the SAME error/success classes so the two
  * catalog tools present ONE agent-facing error vocabulary, NOT a divergent one.
  * The `ok` variant carries the projected `products` + optional `not_found`
  * DIRECTLY (no nested `result`). `unauthorized` (401) is the refresh trigger —
  * the caller routes it through {@link refreshAndRetryOnce} (transparent
  * refresh-and-retry-once, parity with `sil_search` and `sil_whoami`); it is no
- * longer terminal for the catalog tools.
+ * longer terminal for the catalog tools. `forbidden` (403) is terminal-but-
+ * recoverable, carrying the actionable `reason` exactly as {@link SearchOutcome}
+ * does — a 403 surfaces as the shared forbidden envelope, never the false-transient
+ * `retryable`; refreshing it would not help (it is not `unauthorized`).
  *
  * Structural deltas from `SearchOutcome`, both handled here: NO `cursor` (lookup
  * is a batch resolve, not a list) and a `not_found` id list parsed from the
@@ -412,6 +425,7 @@ export interface LookupResult {
 export type LookupOutcome =
   | { kind: "ok"; products: LookupProduct[]; not_found?: string[] }
   | { kind: "unauthorized" }
+  | { kind: "forbidden"; reason: string }
   | { kind: "invalid_request"; error: string; message: string }
   | { kind: "retryable"; source?: string; detail?: string };
 
@@ -516,6 +530,12 @@ export function classifyIdentityResponse(status: number, body: unknown): Identit
  *         retry or re-register)
  *   401 → unauthorized (the refresh trigger — the caller drives transparent
  *         refresh-and-retry-once via `refreshAndRetryOnce`, not terminal)
+ *   403 → forbidden (terminal-but-recoverable; carries the actionable reason
+ *         `user_not_provisioned`/`principal_mismatch`, defaulting to the generic
+ *         `"forbidden"` marker on an unexpected body — parity with
+ *         `classifyIdentityResponse`). A 403 is NOT a 401: it surfaces as the
+ *         shared forbidden envelope, never the false-transient `retryable`, and a
+ *         valid-but-unprovisioned token gains nothing from a refresh.
  *   5xx / other non-200 → retryable
  *   200 → read `products` off sil-api's FLAT envelope (`{ ucp, products,
  *         pagination? }` — top level, no `result` wrapper), normalize, and require
@@ -529,7 +549,7 @@ export function classifyIdentityResponse(status: number, body: unknown): Identit
  *
  * Pure and exported — unit-tested in isolation like `classifyIdentityResponse`;
  * conflating the empty-match success with a partial-200 false-green, or with the
- * 400/401/5xx error classes, is the highest-risk subtle bug in this flow.
+ * 400/401/403/5xx error classes, is the highest-risk subtle bug in this flow.
  */
 export function classifySearchResponse(status: number, body: unknown): SearchOutcome {
   if (status === 400) {
@@ -537,6 +557,7 @@ export function classifySearchResponse(status: number, body: unknown): SearchOut
     return { kind: "invalid_request", error, message };
   }
   if (status === 401) return { kind: "unauthorized" };
+  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
   if (status !== 200) return retryableFromBody(body);
 
   const result = extractSearchResult(body);
@@ -556,6 +577,12 @@ export function classifySearchResponse(status: number, body: unknown): SearchOut
  *         which never arises on the lookup route; do not special-case it.)
  *   401 → unauthorized (the refresh trigger — the caller drives transparent
  *         refresh-and-retry-once via `refreshAndRetryOnce`, parity with search)
+ *   403 → forbidden (terminal-but-recoverable; carries the actionable reason
+ *         `user_not_provisioned`/`principal_mismatch`, defaulting to the generic
+ *         `"forbidden"` marker on an unexpected body — parity with search and
+ *         `classifyIdentityResponse`). A 403 surfaces as the shared forbidden
+ *         envelope, never the false-transient `retryable`; it is NOT a 401, so no
+ *         refresh is triggered.
  *   5xx / other non-200 → retryable
  *   200 → read `products` off sil-api's FLAT envelope (`{ ucp, products,
  *         messages? }` — top level, no `result` wrapper), normalize, and require
@@ -581,6 +608,7 @@ export function classifyLookupResponse(status: number, body: unknown): LookupOut
     return { kind: "invalid_request", error, message };
   }
   if (status === 401) return { kind: "unauthorized" };
+  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
   if (status !== 200) return retryableFromBody(body);
 
   const result = extractLookupResult(body);

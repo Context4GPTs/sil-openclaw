@@ -1397,3 +1397,128 @@ describe("sil_product_get — the access token is sent on the read but NEVER lea
     expect(logs).not.toMatch(/Bearer/i);
   });
 });
+
+/**
+ * CARD `surface-user-not-provisioned-and-fix-recovery` — the RED integration
+ * ceiling for `sil_product_get`, SYMMETRIC with the sil_search block in
+ * `catalog-search.integration.test.ts`. Catalog parity is the whole point: a fix
+ * that lands only in `sil_search` leaves `sil_product_get` still false-transient
+ * (AC2/AC7 catch exactly that). Same two bugs, same forbidden envelope, same
+ * exact-equality token-clear gate; only the tool and request shape differ.
+ *
+ *   AC2  — 403 user_not_provisioned → forbidden (reason + recovery), NEVER retryable.
+ *   AC7  — that same 403 CLEARS the dead token (recovery terminates regardless of
+ *          which catalog tool revealed the state).
+ *   AC10 — 403 principal_mismatch → forbidden but the token SURVIVES (the credential
+ *          stays recoverable; the clear is scoped to user_not_provisioned ONLY).
+ *
+ * The only mock is `fetch` (installRouter). A 403 must NEVER enter the refresh
+ * path (AC3 — it is `forbidden`, not `unauthorized`). EXPECT RED today (the
+ * lookup classifier has no 403 arm, so a 403 reads as `retryable` and nothing
+ * clears).
+ */
+describe("sil_product_get — a 403 user_not_provisioned surfaces FORBIDDEN and clears the dead token (AC2, AC7)", () => {
+  it("403 user_not_provisioned → forbidden envelope (reason + recovery:sil_register), NEVER retryable (AC2)", async () => {
+    // AC2: catalog parity — sil_product_get speaks the SAME forbidden vocabulary
+    // as sil_search and sil_whoami, never the false-transient.
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "lookup"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: { access_token: "x", refresh_token: "y" } },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
+
+    expect(payload["status"]).toBe("forbidden");
+    expect(payload["status"]).not.toBe("retryable");
+    expect(payload["reason"]).toBe("user_not_provisioned");
+    expect(payload["recovery"]).toBe("sil_register");
+    expect(payload["products"]).toBeUndefined();
+    const message = String(payload["message"]).toLowerCase();
+    expect(message).toMatch(/provision|onboard|forbidden|not.*set.up/);
+    expect(message).not.toMatch(/temporar|transient|unavailable|try.again.later/);
+  });
+
+  it("the 403 is FORBIDDEN, NOT unauthorized — NO /auth/refresh call, exactly one lookup (AC3)", async () => {
+    // AC3: a 403 must not enter the refresh-and-retry-once path. The router 200s
+    // any refresh, so rec.refresh.length === 0 proves no refresh was attempted.
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    const rec = installRouter((kind) =>
+      kind === "lookup"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: { access_token: "rotated", refresh_token: "rotated-rt" } },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] });
+
+    expect(rec.refresh.length).toBe(0);
+    expect(rec.lookup.length).toBe(1);
+  });
+
+  it("the dead token is CLEARED on user_not_provisioned — tokens.json is gone (AC7)", async () => {
+    // AC7: recovery terminates regardless of which catalog tool revealed the
+    // state. Same clear as sil_search; asserted by file absence + null read.
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "lookup"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] });
+
+    expect(existsSync(getTokensPath())).toBe(false);
+    expect(readTokens()).toBeNull();
+  });
+});
+
+describe("sil_product_get — a 403 principal_mismatch is forbidden but does NOT clear the token (AC10)", () => {
+  it("403 principal_mismatch → forbidden envelope carrying that reason (NEVER retryable)", async () => {
+    seedTokens("valid-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "lookup"
+        ? { status: 403, body: { error: "principal_mismatch" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] }),
+    );
+
+    expect(payload["status"]).toBe("forbidden");
+    expect(payload["status"]).not.toBe("retryable");
+    expect(payload["reason"]).toBe("principal_mismatch");
+    expect(payload["recovery"]).toBe("sil_register");
+  });
+
+  it("the token SURVIVES on principal_mismatch — tokens.json is NOT cleared (AC10, the correctness boundary)", async () => {
+    // AC10: the same exact-equality gate as sil_search. principal_mismatch is
+    // recoverable; clearing it would force a destructive re-onboard on a good
+    // credential. Only reason === "user_not_provisioned" clears.
+    seedTokens("valid-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "lookup"
+        ? { status: 403, body: { error: "principal_mismatch" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { ids: ["gid://product/a"] });
+
+    expect(existsSync(getTokensPath())).toBe(true);
+    expect(readTokens()).not.toBeNull();
+    expect(readTokens()!.access_token).toBe("valid-at");
+  });
+});

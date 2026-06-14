@@ -66,6 +66,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerCatalogTools } from "../tools/catalog.js";
+// CARD surface-user-not-provisioned: the AC8 end-to-end recovery proof drives
+// sil_register (after a sil_search 403 clears the dead token) on the SAME api +
+// data dir — so the identity tools are registered alongside the catalog tools.
+import { registerIdentityTools } from "../tools/identity.js";
 import { setWebUrl, setApiUrl, getWebUrl, getApiUrl } from "../lib/config.js";
 import { getDataDir, getTokensPath, readTokens } from "../lib/credentials.js";
 import {
@@ -2114,5 +2118,253 @@ describe("sil_search — the access token is sent on the read but NEVER leaks", 
     const logs = logBlob(api);
     expect(logs).not.toContain(AT);
     expect(logs).not.toMatch(/Bearer/i);
+  });
+});
+
+/**
+ * CARD `surface-user-not-provisioned-and-fix-recovery` — the RED integration
+ * ceiling for `sil_search`. Two bugs, both wired-through here:
+ *
+ *   Bug 1 (legibility): a sil-api 403 `user_not_provisioned` must surface as the
+ *   forbidden envelope `{ status:"forbidden", reason, message, recovery:"sil_register" }`
+ *   — IDENTICAL to what `sil_whoami` emits — never the false-transient
+ *   `{ status:"retryable", message:"…temporarily unavailable…" }`. Today the catalog
+ *   classifier has no 403 arm, so a 403 reads as `retryable` (the agent retries a
+ *   call that can NEVER succeed). EXPECT RED.
+ *
+ *   Bug 2 (recovery terminates): on a `user_not_provisioned` 403 — and ONLY that
+ *   reason — the tool clears the structurally-dead token (`clearTokens()` at the
+ *   call site) so the next `sil_register` re-onboards instead of short-circuiting
+ *   to `already_registered`. A `principal_mismatch` (or any other/unknown reason)
+ *   must NOT clear — it can be transient and the credential must survive (AC10).
+ *
+ * The ONLY mock is `fetch` (installRouter). A 403 must NEVER enter the refresh
+ * path (it is `forbidden`, not `unauthorized` — AC3); the 5xx → retryable cases
+ * stay green unchanged (AC11). The message-register parity with `sil_whoami` is
+ * asserted by the same regex pair whoami.integration.test.ts uses (AC5).
+ */
+describe("sil_search — a 403 user_not_provisioned surfaces FORBIDDEN and clears the dead token (AC1, AC3, AC5, AC6, AC11)", () => {
+  it("403 user_not_provisioned → forbidden envelope (reason + recovery:sil_register), NEVER retryable / temporarily-unavailable (AC1)", async () => {
+    // AC1: the headline legibility fix. The agent sees `forbidden`, the real
+    // reason, and the recovery hint — not the lie it was getting before.
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: { access_token: "x", refresh_token: "y" } },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "office chair" }));
+
+    expect(payload["status"]).toBe("forbidden");
+    expect(payload["status"]).not.toBe("retryable");
+    expect(payload["reason"]).toBe("user_not_provisioned");
+    expect(payload["recovery"]).toBe("sil_register");
+    // No products, no false success.
+    expect(payload["products"]).toBeUndefined();
+    // The message is an actionable onboarding/provisioning prompt — and is NOT the
+    // false-transient "temporarily unavailable, try again later" copy the bug
+    // produced (this is the exact phrasing the false-transient symptom showed).
+    const message = String(payload["message"]).toLowerCase();
+    expect(message).not.toMatch(/temporar|transient|unavailable|try.again.later/);
+    expect(message).not.toContain("temporarily unavailable");
+  });
+
+  it("the 403 is classified FORBIDDEN, NOT unauthorized — NO /auth/refresh call is made, exactly one search (AC3)", async () => {
+    // AC3: a 403 is not a 401. Refreshing a valid-but-unprovisioned token changes
+    // nothing — the tool must NOT enter the refresh-and-retry-once path. The
+    // router 200s any refresh, so a stray refresh would (wrongly) recover; the
+    // `rec.refresh.length === 0` assertion is what proves no refresh was attempted.
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: { access_token: "rotated", refresh_token: "rotated-rt" } },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair" });
+
+    expect(rec.refresh.length).toBe(0); // NO refresh on a 403 — the load-bearing assertion
+    expect(rec.search.length).toBe(1); // exactly one read, no retry
+  });
+
+  it("the forbidden message + reason + recovery MATCH what sil_whoami emits for user_not_provisioned (one vocabulary, AC5)", async () => {
+    // AC5: parity on what the agent SEES. The catalog forbidden envelope must be
+    // byte-compatible with sil_whoami's — same reason, same recovery, same message
+    // register (matches /provision|onboard|forbidden|not.*set.up/, the same positive
+    // regex whoami.integration.test.ts asserts; NOT the transient regex).
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["reason"]).toBe("user_not_provisioned");
+    expect(payload["recovery"]).toBe("sil_register");
+    const blob = JSON.stringify(payload).toLowerCase();
+    expect(blob).toMatch(/provision|onboard|forbidden|not.*set.up/);
+    expect(blob).not.toMatch(/temporar|transient|unavailable|try.again.later/);
+  });
+
+  it("the dead token is CLEARED on user_not_provisioned — tokens.json is gone (AC6)", async () => {
+    // AC6: the recovery loop is broken. The structurally-dead token (maps to no
+    // account on this backend; a refresh cannot help) is cleared, so a subsequent
+    // sil_register no longer short-circuits to already_registered. Asserted both by
+    // file absence and a null read (the same two-pronged check whoami uses for the
+    // invalid_grant clear).
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair" });
+
+    expect(existsSync(getTokensPath())).toBe(false);
+    expect(readTokens()).toBeNull();
+  });
+
+  it("a genuine 5xx is STILL retryable with NO recovery:sil_register — the fix re-routes ONLY the 403 (AC11)", async () => {
+    // AC11: the load-bearing invariant the bug violated, asserted from the other
+    // side — a real transient must NOT collapse into forbidden. A 5xx stays
+    // `retryable`, no recovery hint, token untouched.
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 500, body: { error: "source_unavailable", message: "x" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("retryable");
+    expect(payload["status"]).not.toBe("forbidden");
+    expect(payload["recovery"]).not.toBe("sil_register");
+    // A 5xx is transient — the token is NOT cleared (it may be perfectly valid).
+    expect(readTokens()).not.toBeNull();
+  });
+});
+
+describe("sil_search — a 403 principal_mismatch is forbidden but does NOT clear the token (AC4, AC10)", () => {
+  it("403 principal_mismatch → forbidden envelope carrying that reason (NEVER retryable) (AC4)", async () => {
+    // AC4: every 403 is legible — a principal_mismatch is `forbidden` with its
+    // reason surfaced, with the recovery hint, never the false-transient.
+    seedTokens("valid-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 403, body: { error: "principal_mismatch" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("forbidden");
+    expect(payload["status"]).not.toBe("retryable");
+    expect(payload["reason"]).toBe("principal_mismatch");
+    expect(payload["recovery"]).toBe("sil_register");
+  });
+
+  it("the token SURVIVES on principal_mismatch — tokens.json is NOT cleared (AC10, the correctness boundary)", async () => {
+    // AC10: the cardinal scoping guard. principal_mismatch can be transient (an
+    // in-flight principal/agent-context resolution); the SAME valid credential
+    // must stay usable once the mismatch clears. Clearing here would force a
+    // destructive, pointless re-onboard. The clear is gated on EXACT equality
+    // reason === "user_not_provisioned" — principal_mismatch must not trip it.
+    seedTokens("valid-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 403, body: { error: "principal_mismatch" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    await getTool(api, TOOL).execute("c1", { query: "chair" });
+
+    // The valid token survives — not cleared on principal_mismatch.
+    expect(existsSync(getTokensPath())).toBe(true);
+    expect(readTokens()).not.toBeNull();
+    expect(readTokens()!.access_token).toBe("valid-at");
+  });
+
+  it("an UNKNOWN / generic 'forbidden' reason also does NOT clear the token (AC10, the default boundary)", async () => {
+    // AC10 (the default half): an unexpected 403 body defaults to reason
+    // "forbidden" (extractForbiddenReason's default), which does NOT equal
+    // "user_not_provisioned" — so it must NOT clear either. Only the one exact
+    // reason clears; everything else survives.
+    seedTokens("valid-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 403, body: { something_unexpected: true } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("forbidden");
+    expect(payload["reason"]).toBe("forbidden");
+    // Unknown reason → no clear.
+    expect(readTokens()).not.toBeNull();
+    expect(readTokens()!.access_token).toBe("valid-at");
+  });
+});
+
+describe("sil_search — the recovery TERMINATES end-to-end: after a user_not_provisioned clear, sil_register re-onboards (AC8)", () => {
+  it("sil_search 403 user_not_provisioned clears the token → a subsequent sil_register mints awaiting_browser, NOT already_registered", async () => {
+    // AC8: the headline end-to-end proof — the exit actually works, not just that
+    // the token vanished. Before this card, sil_register short-circuits to
+    // already_registered on ANY stored token, so the recovery hint loops forever
+    // (forbidden → sil_register → already_registered → forbidden …). With the dead
+    // token cleared by the 403, sil_register has nothing to short-circuit on and
+    // proceeds to mint a fresh registration session (`awaiting_browser`).
+    seedTokens("valid-but-unprovisioned-at", "valid-rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 403, body: { error: "user_not_provisioned" } }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    registerIdentityTools(api);
+
+    // Step 1 — the catalog 403 clears the dead token.
+    const searchPayload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "chair" }),
+    );
+    expect(searchPayload["status"]).toBe("forbidden");
+    expect(readTokens()).toBeNull(); // dead token gone
+
+    // Step 2 — sil_register now re-onboards. It arms a fire-and-forget background
+    // poll; restore the search router and trap that poll's fetch with a
+    // never-resolving promise so it cannot escape the test (the same isolation
+    // whoami.integration.test.ts uses for the post-clear sil_register).
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => new Promise<Response>(() => {}),
+    );
+
+    const regPayload = payloadOf(await getTool(api, "sil_register").execute("c2", {}));
+
+    // The recovery exit is live: NOT already_registered, but a fresh session.
+    expect(regPayload["status"]).not.toBe("already_registered");
+    expect(regPayload["status"]).toBe("awaiting_browser");
   });
 });
