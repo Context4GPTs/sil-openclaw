@@ -269,27 +269,65 @@ export interface SearchAvailability extends Record<string, unknown> {
 }
 
 /** The single purchasable variant the agent acts on — the featured (first)
- * variant of a product, projected to the five fields the agent needs to present
- * and buy it. `price`/`availability` pass through opaque; `checkout_url` is the
- * non-empty acquisition target. */
+ * variant of a product, projected to the fields the agent needs to present, view,
+ * dig into, and buy it. `price`/`availability` pass through opaque; `checkout_url`
+ * is the non-empty acquisition target (the BUY permalink).
+ *
+ * The enriched evaluate-before-buy surface (each surfaced WHERE PRESENT, omitted
+ * when absent — a hollow value is worse than omission): `url` (the variant PAGE —
+ * VIEW, distinct from `checkout_url`), `seller` (the seller context incl.
+ * `seller.links[]` dig-in policy/info links), `media`, and `metadata`. Every
+ * enriched field is passed through OPAQUE (filter-to-object/array, forward
+ * verbatim) keyed on PRESENCE — never narrowed on a guessed inner shape, so a
+ * `seller` carrying Shopify extension keys (`url`/`domain`) beyond the base
+ * `{ name, links }` survives whole (the [[sil-shared-catalog-client]]
+ * narrow-vs-pass-through rule; a `{ name, links }` narrow would drop a real
+ * `seller.url`). */
 export interface SearchVariant {
   id: string;
   title: string;
   price: SearchPrice;
   availability: SearchAvailability;
   checkout_url: string;
+  url?: string;
+  seller?: Record<string, unknown>;
+  media?: Record<string, unknown>[];
+  metadata?: Record<string, unknown>;
 }
 
 /** One agent-facing search result. Carries BOTH identities the agent needs:
  * product-level `id`/`title`/`source` (what was ranked + its provenance) AND the
  * nested featured `variant` (what to buy). Keeping the product id distinct from
  * the variant id matters — the ranked match is the product, the purchase target
- * is the variant; flattening them would lose one. */
+ * is the variant; flattening them would lose one.
+ *
+ * The enriched product surface (each surfaced WHERE PRESENT, omitted when absent):
+ * `url` (the canonical product PAGE — VIEW / learn more, NOT buy), `description`
+ * lifted to `{ plain }` (the short human summary — only the `plain` UCP format,
+ * surfaced only when non-empty), `media`, product `options` (the option
+ * DEFINITIONS — the menu of choices, distinct from a variant's SelectedOption
+ * picks), and `metadata`. Same OPAQUE pass-through discipline as the variant. */
 export interface SearchProduct {
   id: string;
   title: string;
   source: string;
   variant: SearchVariant;
+  url?: string;
+  description?: ProductDescription;
+  media?: Record<string, unknown>[];
+  options?: Record<string, unknown>[];
+  metadata?: Record<string, unknown>;
+}
+
+/** The agent-facing product description — the UCP `description` object's `plain`
+ * format lifted to a flat `{ plain }`, the short human summary an agent can show.
+ * ONLY `plain` is surfaced (never `html`/`markdown`): `html` is untrusted rich
+ * text the UCP spec flags for sanitization, and surfacing one named scalar keeps
+ * BOTH catalog tools on ONE `description` shape. Omitted entirely when `plain` is
+ * absent or empty (so the same product never yields a different `description`
+ * shape across `sil_search` and `sil_product_get`). */
+export interface ProductDescription {
+  plain: string;
 }
 
 /** The normalized search payload: the ranked products in server order (the tool
@@ -357,7 +395,13 @@ export interface LookupInput {
  * lookup-only `inputs` correlation. `price`/`availability` pass through opaque;
  * `checkout_url` is the non-empty acquisition target (re-fetched live — freshness
  * is the reason this tool exists). Optional fields are omitted when absent rather
- * than emitted as `undefined`. */
+ * than emitted as `undefined`.
+ *
+ * The enriched evaluate-before-buy surface mirrors {@link SearchVariant} exactly
+ * (ONE vocabulary across both tools): `url` / `seller` / `media` / `metadata`,
+ * each surfaced WHERE PRESENT via the same OPAQUE pass-through. `options` here is
+ * the variant's SelectedOption picks (the SELECTIONS, e.g. "Size: B") — NOT the
+ * product-level option DEFINITIONS that live on {@link LookupProduct.options}. */
 export interface LookupVariant {
   id: string;
   title: string;
@@ -367,6 +411,10 @@ export interface LookupVariant {
   sku?: string;
   options?: SelectedOption[];
   inputs?: LookupInput[];
+  url?: string;
+  seller?: Record<string, unknown>;
+  media?: Record<string, unknown>[];
+  metadata?: Record<string, unknown>;
 }
 
 /** One option selection on a variant, passed through OPAQUE from the UCP
@@ -378,19 +426,34 @@ export type SelectedOption = Record<string, unknown>;
 
 /** One looked-up product, projected to its RICH agent-facing detail (the deliberate
  * split vs search's LEAN six: a lookup caller is making a purchase decision, so it
- * gets `description`, `categories`, `handle`). Carries the product-level identity
+ * gets `categories`, `handle`, `price_range`). Carries the product-level identity
  * AND the single featured `variant` (what to buy) — mirroring search's structural
  * shape; the split is rich-vs-lean FIELDS, not a different envelope. `categories`/
- * `handle` are omitted when absent. `description`/`categories` pass through opaque
- * (the tool surfaces them, it does not interpret them). */
+ * `handle` are omitted when absent. `categories` passes through opaque (the tool
+ * surfaces it, it does not interpret it).
+ *
+ * `description` is the `{ plain }` lift — the SAME shape `sil_search` surfaces
+ * (ONE vocabulary). Lookup once passed the WHOLE `description` object opaque; that
+ * diverged from search the moment a wire `description` carried `html`/`markdown`,
+ * so the same product would have yielded a different `description` shape across the
+ * two tools. Lifting `.plain` on both reconciles it; `description` is omitted when
+ * `plain` is absent/empty (so it is now optional, where it was once required).
+ *
+ * The enriched product surface mirrors {@link SearchProduct} (ONE vocabulary):
+ * product-level `url` / `media` / `options` (the option DEFINITIONS) / `metadata`,
+ * each surfaced WHERE PRESENT via the same OPAQUE pass-through. */
 export interface LookupProduct {
   id: string;
   title: string;
-  description: Record<string, unknown>;
   price_range: unknown;
   source: string;
+  description?: ProductDescription;
   categories?: Record<string, unknown>[];
   handle?: string;
+  url?: string;
+  media?: Record<string, unknown>[];
+  options?: Record<string, unknown>[];
+  metadata?: Record<string, unknown>;
   variant: LookupVariant;
 }
 
@@ -1083,14 +1146,21 @@ function projectProduct(raw: unknown): SearchProduct | null {
   const variant = projectVariant(variants[0]);
   if (variant === null) return null;
 
-  return { id: productId, title: productTitle, source, variant };
+  const result: SearchProduct = { id: productId, title: productTitle, source, variant };
+  attachProductEnrichment(result, product);
+  return result;
 }
 
 /**
  * Project a `SilCatalogVariant` to the agent-facing {@link SearchVariant}, or
  * null if it is not a usable purchasable variant. Requires `id`, `title`, a price
  * object, and a non-empty `checkout_url`; `price`/`availability` pass through
- * opaque.
+ * opaque. The PURCHASABILITY gate is unchanged — the enriched fields are additive
+ * context, never a new gate: a variant lacking a non-empty `checkout_url` is still
+ * dropped even when it carries `url`/`seller`/`media`.
+ *
+ * The enriched per-variant surface (`url`/`seller`/`media`/`metadata`) is attached
+ * via {@link attachVariantEnrichment}, each ONLY when present.
  */
 function projectVariant(raw: unknown): SearchVariant | null {
   const variant = asRecord(raw);
@@ -1106,13 +1176,15 @@ function projectVariant(raw: unknown): SearchVariant | null {
   const price = extractPrice(variant["price"]);
   if (price === null) return null;
 
-  return {
+  const result: SearchVariant = {
     id,
     title,
     price,
     availability: extractAvailability(variant["availability"]),
     checkout_url: checkoutUrl,
   };
+  attachVariantEnrichment(result, variant);
+  return result;
 }
 
 /**
@@ -1176,8 +1248,6 @@ function projectLookupProduct(raw: unknown): LookupProduct | null {
   if (typeof title !== "string") return null;
   if (typeof source !== "string" || source.length === 0) return null;
 
-  const description = asRecord(product["description"]);
-  if (description === null) return null;
   const priceRange = product["price_range"];
   if (asRecord(priceRange) === null) return null;
 
@@ -1189,7 +1259,6 @@ function projectLookupProduct(raw: unknown): LookupProduct | null {
   const result: LookupProduct = {
     id,
     title,
-    description,
     price_range: priceRange,
     source,
     variant,
@@ -1198,6 +1267,11 @@ function projectLookupProduct(raw: unknown): LookupProduct | null {
   if (categories !== null) result.categories = categories;
   const handle = product["handle"];
   if (typeof handle === "string" && handle.length > 0) result.handle = handle;
+  // `description` is now the `{ plain }` lift (ONE vocabulary with search), NOT the
+  // whole opaque object — omitted entirely when `plain` is absent/empty. Reuses the
+  // SAME product-enrichment attach as search so both tools surface the identical
+  // enriched shape (`url`/`description`/`media`/`options`/`metadata`).
+  attachProductEnrichment(result, product);
   return result;
 }
 
@@ -1236,6 +1310,10 @@ function projectLookupVariant(raw: unknown): LookupVariant | null {
   if (options !== null) result.options = options;
   const inputs = extractInputs(variant["inputs"]);
   if (inputs !== null) result.inputs = inputs;
+  // The SAME enriched per-variant surface as search (ONE vocabulary):
+  // `url`/`seller`/`media`/`metadata`, each only when present. The variant's
+  // `options` SELECTIONS above and these enriched fields are distinct, additive.
+  attachVariantEnrichment(result, variant);
   return result;
 }
 
@@ -1253,6 +1331,80 @@ function passThroughObjects(raw: unknown): Record<string, unknown>[] | null {
     (o): o is Record<string, unknown> => asRecord(o) !== null,
   );
   return objects.length === 0 ? null : objects;
+}
+
+/** Pass a single wire OBJECT through OPAQUE — forward it verbatim when it is a
+ * plain object, never reading or remapping individual fields. The single-object
+ * counterpart to {@link passThroughObjects}, for `seller` and `metadata`: contextual
+ * data the tool SURFACES but does not interpret. This is the load-bearing
+ * narrow-vs-pass-through guard ([[sil-shared-catalog-client]]) — a typed
+ * `{ name, links }` narrow on `seller` would silently DROP the Shopify extension
+ * keys (`seller.url`/`seller.domain`) the source attaches, and pass a naive fixture;
+ * opaque pass-through keeps both the base shape and any extension/drift. An ARRAY is
+ * NOT a usable object here (a `seller`/`metadata` that arrived as `[]` is garbage),
+ * so arrays return null and the caller omits the key. */
+function passThroughObject(raw: unknown): Record<string, unknown> | null {
+  return raw !== null && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : null;
+}
+
+/** Lift the agent-facing {@link ProductDescription} (`{ plain }`) from a wire
+ * `description` object, or null to OMIT. Surfaces ONLY the `plain` UCP format, and
+ * ONLY when it is a non-empty string — `html`/`markdown` are never substituted into
+ * `plain` (the spec flags `html` as untrusted rich text), and an absent/empty `plain`
+ * omits the whole `description` key. This is the one SCALAR read in the enriched
+ * surface (a stable, named UCP sub-field), and lifting it identically on both catalog
+ * tools is what keeps them on ONE `description` shape. */
+function liftDescriptionPlain(raw: unknown): ProductDescription | null {
+  const obj = asRecord(raw);
+  if (obj === null) return null;
+  const plain = obj["plain"];
+  return typeof plain === "string" && plain.length > 0 ? { plain } : null;
+}
+
+/** Attach the enriched PRODUCT surface (`url`/`description`/`media`/`options`/
+ * `metadata`) onto a projected product, each ONLY when present on the wire object.
+ * Shared verbatim by `projectProduct` (search) and `projectLookupProduct` (lookup)
+ * so BOTH tools surface the IDENTICAL enriched shape — the ONE-vocabulary property.
+ * Mutates `target` in place (it is a freshly-built projection the caller owns). Every
+ * field is OPAQUE pass-through keyed on PRESENCE; the only scalar read is
+ * `description.plain`. Omit-when-absent is per-field — an absent / empty-`plain` /
+ * no-`metadata` / all-garbage-array field leaves its key off entirely (no null/''/[]). */
+function attachProductEnrichment(
+  target: SearchProduct | LookupProduct,
+  product: Record<string, unknown>,
+): void {
+  const url = product["url"];
+  if (typeof url === "string" && url.length > 0) target.url = url;
+  const description = liftDescriptionPlain(product["description"]);
+  if (description !== null) target.description = description;
+  const media = passThroughObjects(product["media"]);
+  if (media !== null) target.media = media;
+  const options = passThroughObjects(product["options"]);
+  if (options !== null) target.options = options;
+  const metadata = passThroughObject(product["metadata"]);
+  if (metadata !== null) target.metadata = metadata;
+}
+
+/** Attach the enriched per-VARIANT surface (`url`/`seller`/`media`/`metadata`) onto a
+ * projected variant, each ONLY when present. Shared verbatim by `projectVariant`
+ * (search) and `projectLookupVariant` (lookup) — the variant half of the
+ * ONE-vocabulary property. `seller` (incl. `seller.links[]`) and `metadata` are
+ * single-object opaque pass-through; `media` is array pass-through. Same
+ * omit-when-absent, per-field, never-narrow discipline as the product surface. */
+function attachVariantEnrichment(
+  target: SearchVariant | LookupVariant,
+  variant: Record<string, unknown>,
+): void {
+  const url = variant["url"];
+  if (typeof url === "string" && url.length > 0) target.url = url;
+  const seller = passThroughObject(variant["seller"]);
+  if (seller !== null) target.seller = seller;
+  const media = passThroughObjects(variant["media"]);
+  if (media !== null) target.media = media;
+  const metadata = passThroughObject(variant["metadata"]);
+  if (metadata !== null) target.metadata = metadata;
 }
 
 /** Narrow a wire `inputs` correlation array to {@link LookupInput}[] — each entry
