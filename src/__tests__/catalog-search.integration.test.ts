@@ -1600,6 +1600,123 @@ describe("sil_search — outcome c: upstream rejected the request → NON-retrya
   });
 });
 
+/**
+ * CARD `classify-catalog-422-as-invalid-request` (epic
+ * `catalog-source-error-taxonomy-2026-06`) — the RED integration ceiling for the
+ * 422 `source_rejected` → `invalid_request` end-to-end wiring. The FINAL seam of
+ * the taxonomy, proven through the REAL `sil_search` tool + real sil-client (only
+ * `fetch` mocked).
+ *
+ * WHY 422 SPECIFICALLY (the adversarial point): the existing "outcome c" block
+ * above — and the DISTINGUISHABILITY block below — both drive `source_rejected`
+ * with HTTP **400**, which already classifies as `invalid_request` today. But the
+ * REAL sil-api emits a source rejection as **422** (`source_rejected`), and 422 is
+ * NOT special-cased — it falls through to `retryableFromBody`, and because the body
+ * carries a `source`, the agent sees `status: "retryable"` naming a source (outcome
+ * b). So the 400-based tests give a FALSE sense that outcome (c) is wired; the 422
+ * path — the one production actually exercises — is the (b)≡(c) collapse. These
+ * cases drive the status the wire really uses and prove the agent payload is
+ * `status: "invalid_request"` carrying the upstream `message`, NOT `retryable`.
+ *
+ * EXPECT RED today: 422 → retryable (source-named) end-to-end → `status:
+ * "retryable"`. The 5xx-still-retryable guard PASSES today and must stay green.
+ */
+describe("sil_search — a 422 source_rejected surfaces invalid_request end-to-end carrying the upstream cause (outcome c, the FINAL seam)", () => {
+  it("422 source_rejected { error, message, source } → status invalid_request carrying the upstream message, NEVER retryable, NO source name, NO recovery", async () => {
+    seedTokens("at", "rt");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? {
+            status: 422,
+            body: {
+              error: "source_rejected",
+              message:
+                "Source 'shopify' rejected the request: filter `gift_wrap` is not supported by this source.",
+              source: "shopify",
+            },
+          }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    // Exactly one outbound search; the agent must NOT be told to retry a doomed request.
+    expect(rec.search.length).toBe(1);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["status"]).not.toBe("retryable");
+    // Carries the REAL upstream cause — error code + the server's message verbatim.
+    expect(payload["error"]).toBe("source_rejected");
+    const message = String(payload["message"]);
+    expect(message).toContain("gift_wrap");
+    // NOT the source-named transient copy (outcome b) and NOT the search-specific
+    // extractApiError default (the body carried a real message).
+    expect(message.toLowerCase()).not.toMatch(/temporarily unavailable|retry .* shortly|sil is /);
+    expect(message).not.toMatch(/Provide a search query or at least one filter/i);
+    // invalid_request carries NO transient `detail` and NO re-register hint.
+    expect(payload).not.toHaveProperty("detail");
+    expect(payload["recovery"]).not.toBe("sil_register");
+    expect(JSON.stringify(payload).toLowerCase()).not.toMatch(/sil_register/);
+  });
+
+  it("the 422 invalid_request is DISTINCT from a source-named 5xx retryable (outcome b) — same `source`, opposite agent instruction", async () => {
+    // The (b)-vs-(c) distinguishability, pinned end-to-end on the SAME source token:
+    // a 422 source_rejected and a 5xx source_unavailable both name 'shopify', but the
+    // agent must read STOP (invalid_request) on the 422 and TRY-AGAIN (retryable) on
+    // the 5xx. Today they collapse — both read retryable — which is the bug.
+    async function statusFor(reply: Reply): Promise<Record<string, unknown>> {
+      seedTokens("at", "rt");
+      installRouter((kind) => (kind === "search" ? reply : { status: 200, body: {} }));
+      const api = createMockPluginApi();
+      registerCatalogTools(api);
+      const p = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+      vi.restoreAllMocks();
+      return p;
+    }
+
+    const cReject422 = await statusFor({
+      status: 422,
+      body: { error: "source_rejected", message: "Source 'shopify' rejected the request.", source: "shopify" },
+    });
+    const bUnavailable5xx = await statusFor({
+      status: 503,
+      body: { error: "source_unavailable", message: "Source 'shopify' is temporarily unavailable.", source: "shopify" },
+    });
+
+    expect(cReject422["status"]).toBe("invalid_request");
+    expect(bUnavailable5xx["status"]).toBe("retryable");
+    expect(cReject422["status"]).not.toBe(bUnavailable5xx["status"]);
+    // The retryable (b) still names its source and carries a transient detail; the
+    // invalid_request (c) does neither — they are not the same envelope.
+    expect(String(bUnavailable5xx["message"])).toContain("shopify");
+    expect(bUnavailable5xx).toHaveProperty("detail");
+    expect(cReject422).not.toHaveProperty("detail");
+  });
+
+  it("GUARD — a genuine 5xx source_unavailable STILL surfaces status retryable end-to-end (the fix narrows ONLY 422, not the transient path)", async () => {
+    // The non-vacuous reverse-collapse tripwire at the integration tier: the 422 arm
+    // must not bleed into the 5xx transient path. PASSES today and must stay green.
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? {
+            status: 500,
+            body: { error: "source_unavailable", message: "Source 'etsy' is temporarily unavailable.", source: "etsy" },
+          }
+        : { status: 200, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "chair" }));
+
+    expect(payload["status"]).toBe("retryable");
+    expect(payload["status"]).not.toBe("invalid_request");
+    expect(String(payload["message"])).toContain("etsy");
+  });
+});
+
 describe("sil_search — DISTINGUISHABILITY: six failure/success cases are pairwise distinct agent envelopes (highest-value)", () => {
   it("{a-5xx, a-network, b-source, b-429, c-reject, empty-200} produce pairwise-distinguishable envelopes", async () => {
     // The single highest-value assertion (extends the existing 'three distinct
