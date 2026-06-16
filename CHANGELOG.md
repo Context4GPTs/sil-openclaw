@@ -10,6 +10,28 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **`sil_search` and `sil_product_get` now surface evaluate-before-buy detail.**
+  Beyond the purchasable variant, results carry — where the source provides them —
+  the product/variant `url` (the page to VIEW / learn more, distinct from the
+  buy-committing `checkout_url`), a short `description`, `media`, the product
+  `options` menu, the `seller` with its policy/info links (shipping & return/refund
+  policies, terms), and arbitrary `metadata`. The tool descriptions teach the three
+  distinct actions — VIEW (`url`), DIG IN (`seller.links`), BUY (`checkout_url`) — so
+  an agent can compare, answer "what's their return policy?", and hand back the right
+  link without conflating viewing with buying. (#23)
+
+### Changed
+
+- **`sil_search`: replaced the `ships_from` filter with a `local_merchants` boolean
+  bias.** It nudges shops based in the shopper's own country up the ranking,
+  best-effort — it does NOT restrict results to them (some local shops go
+  undetected, some non-local ones still appear). The agent passes no country: sil
+  resolves it server-side from the registered address. To actually surface local
+  stores, issue the `query` in the shopper's own language (a French query surfaces
+  French shops). (#20)
+
 ### Fixed
 
 - **A catalog `422 source_rejected` is now classified non-retryable
@@ -23,6 +45,17 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   `sil_product_get`) now special-case `422 → invalid_request` carrying the
   upstream `{ error, message }`, mirroring the existing `400` arm. The narrowing
   is exact: a `5xx`/`429 source_unavailable` stays `retryable`.
+
+- **`sil_search` / `sil_product_get` surface `user_not_provisioned` as a distinct
+  `forbidden` outcome and clear the structurally-dead token**, so the next
+  `sil_register` re-onboards the user instead of short-circuiting to
+  `already_registered`. A `principal_mismatch` or unknown 403 reason stays
+  recoverable and is NOT cleared. (#21)
+
+- **Catalog transient (5xx) failures now name the failed source** when the wire
+  carries one — "the catalog source X is temporarily unavailable; sil itself is
+  fine" — instead of mis-attributing one degraded source to sil being down, which
+  would make the agent abandon a healthy platform. (#19)
 
 ## [0.2.2] - 2026-06-13
 
