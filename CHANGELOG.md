@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-06-16
+
 ### Added
 
 - **`sil_search` and `sil_product_get` now surface evaluate-before-buy detail.**
