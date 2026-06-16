@@ -7,7 +7,7 @@
  *   - ClawHub: `@4gpts/sil`    (the plugin id `sil` cannot be claimed on its own;
  *              it is already owned by the @4gpts/sil package, so ClawHub publishes
  *              under the scoped @<owner>/<plugin-id> name. The runtime plugin id
- *              stays `sil`, so `openclaw plugins install clawhub:sil` still resolves.)
+ *              stays `sil`, but install uses the scoped name `openclaw plugins install clawhub:@4gpts/sil`.)
  *
  * One clean build, then the SAME file content to both registries: npm gets the
  * packed `sil-openclaw` tarball as-is; ClawHub gets those identical files
