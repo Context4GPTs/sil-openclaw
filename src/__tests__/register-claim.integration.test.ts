@@ -448,6 +448,125 @@ describe("claim lifecycle — a premature 404 KEEPS POLLING (the headline regres
   });
 });
 
+describe("system-browser steer — the awaiting_browser return carries the steer in BOTH fields while the claim→persist→whoami round-trip is unchanged (bounce-webview-auth-links-to-the-system-browser)", () => {
+  // INTEGRATION criterion: through the REAL sil_register execute (real PKCE mint,
+  // real auth-URL build, real poll, real persistence) + a real sil_whoami, the
+  // awaiting_browser return must carry the system-browser steer in BOTH `message`
+  // and `instructions`, AND the end-to-end claim→token-persist→whoami round-trip
+  // must be byte-for-byte the same as before this card — same session_id, same
+  // persisted tokens, same `ok` identity. This card adds NO new state, NO new
+  // tool, NO wire change — only the two copy fields. Mocks only the host-SDK +
+  // `fetch` boundary (via installFetch), never the logic.
+  //
+  // RED today: the awaiting_browser `message`/`instructions` carry no steer, so
+  // the steer assertions fail; the round-trip assertions stay GREEN (this card
+  // changes none of that path).
+
+  const SIL_API_STEER = "https://sil-api.steer.example.com";
+  const IDENTITY_ENVELOPE_STEER = {
+    protocol: "ucp",
+    version: "0.1",
+    domain: "identity",
+    result: {
+      name: "Polled User",
+      addresses: [{ line1: "1 Late Click Lane", city: "London", country: "GB" }],
+    },
+  };
+
+  // The semantic-content matchers (same contract as the unit tier): the steer
+  // names a default/system browser AND warns away from an in-app/built-in/
+  // embedded webview, case-insensitively. Wording latitude left to the dev.
+  const POSITIVE_STEER_RE = /\b(default|system)\b[\s\S]{0,40}\bbrowser\b/i;
+  const NEGATIVE_SURFACE_RE = /\b(in-?app|built-?in|embedded|webview|this app)\b/i;
+
+  it("steers to the system browser in message AND instructions, and the round-trip (session_id, persist, whoami) is unchanged", async () => {
+    setApiUrl(SIL_API_STEER); // pin the identity-read origin for the whoami leg
+    let claimTicks = 0;
+    installFetch((url) => {
+      if (url.includes("/identity")) {
+        return { status: 200, body: IDENTITY_ENVELOPE_STEER };
+      }
+      claimTicks += 1;
+      if (claimTicks < 2) {
+        return { status: 404, body: { error: "not_found", message: "Session not found." } };
+      }
+      return { status: 200, body: SUCCESS_BODY };
+    });
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    // ── The awaiting_browser return carries the steer in BOTH copy fields. ──
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+    expect(payload["status"]).toBe("awaiting_browser");
+
+    const message = payload["message"] as string;
+    const instructions = payload["instructions"] as string;
+    // message: positive + negative halves of the steer.
+    expect(message).toMatch(POSITIVE_STEER_RE);
+    expect(message).toMatch(NEGATIVE_SURFACE_RE);
+    // instructions: the same steer so the agent can't paraphrase back to "a browser".
+    expect(instructions).toMatch(POSITIVE_STEER_RE);
+    expect(instructions).toMatch(NEGATIVE_SURFACE_RE);
+
+    // auth_url rides through byte-unchanged (the #24 invariant; the steer is copy
+    // around the link, never the wire value) — it carries both params, unwrapped.
+    const authUrl = payload["auth_url"] as string;
+    const sessionId = payload["session_id"] as string;
+    const u = new URL(authUrl);
+    expect(u.pathname).toBe("/authorize");
+    expect(u.searchParams.get("session")).toBe(sessionId);
+    expect(u.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    // ── The claim→persist round-trip is UNCHANGED. ──
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(claimTicks).toBeGreaterThanOrEqual(2); // polled through the early 404
+    expect(vi.getTimerCount()).toBe(0); // settled, no leaked timer
+
+    await settleAsyncIo();
+    const tokens = await waitForTokens();
+    expect(tokens).not.toBeNull();
+    expect(tokens!.access_token).toBe("fresh-at");
+    expect(tokens!.refresh_token).toBe("fresh-rt");
+    const config = readJsonInDataDir<Record<string, unknown>>("config.json");
+    expect(JSON.stringify(config)).toContain("user-42");
+
+    // ── sil_whoami resolves the same identity (registration truly completed). ──
+    const whoami = payloadOf(await getTool(api, "sil_whoami").execute("w1", {}));
+    expect(whoami["status"]).toBe("ok");
+    expect((whoami["identity"] as { name?: string }).name).toBe("Polled User");
+  });
+
+  it("a SECOND sil_register after completion confirms already_registered (the confirmation path is unchanged) — and no longer steers a browser (nothing to open)", async () => {
+    // The card's "same already_registered confirmation path" guarantee: once the
+    // first registration has persisted tokens, a re-run of sil_register short-
+    // circuits to already_registered with the claimed user — no auth URL, no
+    // poll, and therefore no browser steer (there is nothing to open). This pins
+    // that the steer is scoped to the awaiting_browser return ONLY and does not
+    // bleed into the already_registered confirmation.
+    setApiUrl(SIL_API_STEER);
+    installFetch((url) => {
+      if (url.includes("/identity")) return { status: 200, body: IDENTITY_ENVELOPE_STEER };
+      return { status: 200, body: SUCCESS_BODY };
+    });
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    // First register → awaiting_browser, claim succeeds, tokens persist.
+    await getTool(api, TOOL).execute("c1", {});
+    await vi.advanceTimersByTimeAsync(10_000);
+    await settleAsyncIo();
+    expect((await waitForTokens())!.access_token).toBe("fresh-at");
+
+    // Second register → already_registered confirmation (unchanged path).
+    const second = payloadOf(await getTool(api, TOOL).execute("c2", {}));
+    expect(second["status"]).toBe("already_registered");
+    expect((second["user"] as { id?: string }).id).toBe("user-42");
+    // The confirmation carries no auth_url and no awaiting_browser steer copy.
+    expect(second["auth_url"]).toBeUndefined();
+    expect(second["message"]).toBeUndefined();
+  });
+});
+
 describe("claim lifecycle — claimStep maps a 404 not_found outcome to keep-polling (done:false)", () => {
   // The single-tick mapping the card's `[unit]` criterion pins: claimStep against
   // a `not_found` claim outcome returns `{ done: false }` (grouped with
