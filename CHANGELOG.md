@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-06-18
+
 ### Fixed
 
 - **`sil_register` now steers users into their device's default browser before the
