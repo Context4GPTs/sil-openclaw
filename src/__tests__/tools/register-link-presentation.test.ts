@@ -276,6 +276,172 @@ describe("sil_register — A: the human-presented link is one atomic, unbreakabl
   });
 });
 
+describe("sil_register — system-browser steer (bounce-webview-auth-links-to-the-system-browser)", () => {
+  let api: MockPluginAPI;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => new Promise<Response>(() => {}),
+    );
+    api = createMockPluginApi();
+    registerIdentityTools(api);
+  });
+
+  // ── Resilient steer matchers ───────────────────────────────────────────────
+  // The CONTRACT is "both halves present, case-insensitive" — the steer names a
+  // concrete default/system browser to use AND warns away from an app's
+  // built-in/in-app/embedded webview. Wording is the expert-developer's call
+  // within product-owner's intent ("default browser (Safari/Chrome), not this
+  // app's built-in browser"; neutral setup-step tone). These matchers pin the
+  // semantic content WITHOUT brittle exact-string equality, so any faithful
+  // phrasing reaches GREEN. They DELIBERATELY do not anchor on the precise term
+  // "system browser" (the open question flags plain "default browser" as the
+  // likely clearer phrasing) — either reads as the positive half.
+
+  /** Positive half: steers TO the user's own default/system browser, naming a
+   * concrete one (Safari / Chrome) so a non-technical user knows the action. */
+  const POSITIVE_STEER_RE = /\b(default|system)\b[\s\S]{0,40}\bbrowser\b/i;
+  /** Concrete browser named so the action is unmissable for a non-technical user. */
+  const NAMED_BROWSER_RE = /\b(safari|chrome)\b/i;
+  /** Negative half: steers AWAY from an in-app / built-in / embedded webview —
+   * the cookie-blocking surface. Matches "built-in browser", "in-app browser",
+   * "embedded webview", "this app's browser", etc. The "not" + the surface noun
+   * are the two load-bearing tokens. */
+  const NEGATIVE_NOT_RE = /\bnot\b/i;
+  const NEGATIVE_SURFACE_RE = /\b(in-?app|built-?in|embedded|webview|this app)\b/i;
+
+  it("message carries the system-browser steer — positive (default/system browser, named) AND negative (NOT the in-app/built-in browser) halves", async () => {
+    // RED today: the current message is the generic "Open this URL in a browser
+    // to register:" — it has NO default/system-browser steer and NO "not the
+    // in-app browser" warning, so a user reading inside a chat client's webview
+    // taps the link right there and dead-ends on Auth0's blocked cookie. The fix
+    // adds an unmissable steer to the human-facing copy.
+    const payload = await freshRegister(api);
+    const message = payload["message"];
+    expect(typeof message).toBe("string");
+    const msg = message as string;
+
+    // Positive half — steer TO the default/system browser, named concretely.
+    expect(msg).toMatch(POSITIVE_STEER_RE);
+    expect(msg).toMatch(NAMED_BROWSER_RE);
+
+    // Negative half — steer AWAY from the in-app/built-in/embedded webview.
+    expect(msg).toMatch(NEGATIVE_NOT_RE);
+    expect(msg).toMatch(NEGATIVE_SURFACE_RE);
+
+    // It must NOT remain the bare pre-card generic-browser copy. (A faithful fix
+    // may keep the verb "browser" elsewhere, but it can no longer say ONLY
+    // "Open this URL in a browser" with nothing steering the choice.)
+    expect(msg).not.toBe(`Open this URL in a browser to register:\n<${payload["auth_url"]}>`);
+  });
+
+  it("instructions carries the matching steer so the agent relays 'open in the default browser, not the in-app browser'", async () => {
+    // RED today: the current instructions are bare "Share the auth URL with the
+    // user. The plugin is polling…" — an agent paraphrasing that to the human
+    // re-introduces the generic "a browser" gap. The agent-facing copy must
+    // carry the same steer as `message` so the two cannot diverge (criterion 2).
+    const payload = await freshRegister(api);
+    const instructions = payload["instructions"];
+    expect(typeof instructions).toBe("string");
+    const ins = instructions as string;
+
+    // Positive half — the agent is primed to relay "default/system browser".
+    expect(ins).toMatch(POSITIVE_STEER_RE);
+    // Negative half — and to relay "not the in-app/built-in/embedded browser".
+    expect(ins).toMatch(NEGATIVE_NOT_RE);
+    expect(ins).toMatch(NEGATIVE_SURFACE_RE);
+
+    // It must NOT remain the exact pre-card instructions (which carry no steer).
+    expect(ins).not.toBe(
+      "Share the auth URL with the user. The plugin is polling in the"
+      + " background — once the user finishes signing in, call sil_register"
+      + " again to confirm (it will report already_registered).",
+    );
+  });
+
+  it("the steer is a separate lead line BEFORE the link line — it is NOT folded onto the atomic `<authUrl>` line (no #24 regression)", async () => {
+    // Regression guard for criterion 5 / the #24 atomic-link contract, expressed
+    // against the NEW copy: adding the steer must not glue prose onto the link's
+    // own line. The line carrying the URL must STILL be exactly `<authUrl>` and
+    // nothing else, and the steer text must live on a DIFFERENT (earlier) line.
+    // This stays GREEN against any faithful implementation (steer as a lead line
+    // before `\n<url>`); it goes RED only if the dev folds the steer onto the
+    // link line — the precise greedy-auto-linker truncation #24 fixed.
+    const payload = await freshRegister(api);
+    const msg = payload["message"] as string;
+    const authUrl = payload["auth_url"] as string;
+    const lines = msg.split("\n");
+
+    // The link sits alone on its own line, exactly `<authUrl>`.
+    const linkLineIdx = lines.findIndex((l) => l.trim().includes(authUrl));
+    expect(linkLineIdx).toBeGreaterThanOrEqual(0);
+    expect(lines[linkLineIdx]!.trim()).toBe(`<${authUrl}>`);
+
+    // The steer (the negative-surface token) appears on a DIFFERENT line, BEFORE
+    // the link line — never on the link line itself. (A non-technical reader sees
+    // the steer first, then the bare atomic link.)
+    const steerLineIdx = lines.findIndex((l) => NEGATIVE_SURFACE_RE.test(l));
+    expect(steerLineIdx).toBeGreaterThanOrEqual(0);
+    expect(steerLineIdx).toBeLessThan(linkLineIdx);
+    // The link line carries none of the steer prose.
+    expect(NEGATIVE_SURFACE_RE.test(lines[linkLineIdx]!)).toBe(false);
+    expect(POSITIVE_STEER_RE.test(lines[linkLineIdx]!)).toBe(false);
+  });
+
+  it("the new steer copy survives the greedy auto-linker with code_challenge intact (the #24 truncation defense holds with the steer added)", async () => {
+    // Belt-and-braces over A-3: with the steer prose now present in `message`,
+    // run the WHOLE message through the greedy auto-linker and assert the
+    // bracketed URL is still captured WHOLE (code_challenge included). If a future
+    // implementer folds the steer onto the link line, the bracket span breaks and
+    // this goes RED alongside the line-placement guard above. GREEN today only
+    // because A-2/A-3 hold; it must stay GREEN after the steer lands.
+    const payload = await freshRegister(api);
+    const message = payload["message"] as string;
+    const authUrl = payload["auth_url"] as string;
+    const expectedChallenge = new URL(authUrl).searchParams.get("code_challenge")!;
+
+    const targets = greedyAutoLink(message);
+    expect(targets.length).toBeGreaterThan(0);
+    const carriesChallenge = targets.filter((t) =>
+      t.includes(`code_challenge=${expectedChallenge}`),
+    );
+    expect(carriesChallenge.length).toBeGreaterThan(0);
+
+    // auth_url itself is untouched by the steer — byte-for-byte the unwrapped,
+    // un-re-encoded canonical URL (the #24 invariant; A-1 owns the full assertion,
+    // this is the steer-context regression guard).
+    expect(authUrl.startsWith("<")).toBe(false);
+    expect(authUrl).not.toContain("<");
+    expect(authUrl).not.toContain("&amp;");
+    expect(authUrl).not.toContain("%26");
+    expect(authUrl).toContain(`&code_challenge=${expectedChallenge}`);
+  });
+
+  it("the steer ships UNCONDITIONALLY — no host signal gates it (always-instruct verdict)", async () => {
+    // Criterion 6 / the always-instruct verdict: the mock api exposes no
+    // client/UA/surface signal (the real host surface has none either —
+    // openclaw.d.ts:23-44), and `sil_register` takes NO params. So there is
+    // nothing to gate on; calling execute() with the empty params it declares
+    // must ALWAYS produce the steer. We assert it across two independent fresh
+    // calls (distinct sessions) to pin "unconditional", not "happened once".
+    const a = await freshRegister(api);
+    const b = payloadOf(await getTool(api, TOOL).execute("c2", {}));
+
+    for (const p of [a, b]) {
+      const m = p["message"] as string;
+      const i = p["instructions"] as string;
+      expect(m).toMatch(POSITIVE_STEER_RE);
+      expect(m).toMatch(NEGATIVE_SURFACE_RE);
+      expect(i).toMatch(POSITIVE_STEER_RE);
+      expect(i).toMatch(NEGATIVE_SURFACE_RE);
+    }
+    // Two distinct registration attempts (different sessions) — the steer is not
+    // a one-shot, it is emitted on every awaiting_browser return.
+    expect(a["session_id"]).not.toBe(b["session_id"]);
+  });
+});
+
 describe("sil_register — A: the atomic-link presentation never leaks the PKCE verifier", () => {
   let api: MockPluginAPI;
   let sentVerifier: string | null;

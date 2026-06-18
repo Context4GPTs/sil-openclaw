@@ -122,20 +122,31 @@ function registerRegister(api: PluginAPI): void {
 
       return jsonResult({
         status: "awaiting_browser",
-        // Present the auth URL as ONE atomic, unbreakable link: on its own line,
-        // angle-bracket wrapped, so a greedy chat auto-linker captures the WHOLE
-        // URL (the `&code_challenge` included) instead of truncating at the `&`
-        // and 400-ing `invalid_code_challenge`. `auth_url` below stays the
-        // canonical, UNWRAPPED machine field agents parse. (FIX A.)
+        // The steer lead line routes the user into their OWN default browser
+        // BEFORE the Auth0 leg (where Auth0's session cookie works on its own
+        // domain), instead of an in-app/embedded webview that partitions it and
+        // dead-ends the login. It is a SEPARATE line ABOVE the link, so the link
+        // line stays exactly `<authUrl>` — ONE atomic, angle-bracket-wrapped
+        // target that a greedy chat auto-linker captures WHOLE (`&code_challenge`
+        // included) instead of truncating at the `&` and 400-ing
+        // `invalid_code_challenge`. `auth_url` below stays the canonical,
+        // UNWRAPPED machine field agents parse. (FIX A + system-browser steer.)
         message:
-          "Open this URL in a browser to register:\n"
+          BROWSER_STEER_HUMAN
+          + "\n"
           + presentAuthLink(authUrl),
         auth_url: authUrl,
         session_id: sessionId,
+        // The agent-facing steer MUST agree with the human `message` (both built
+        // from the shared BROWSER_STEER_NEGATIVE clause) so an agent relaying the
+        // instruction can't paraphrase it back to a generic "a browser" and
+        // re-open the cookie-blocking-webview gap.
         instructions:
-          "Share the auth URL with the user. The plugin is polling in the"
-          + " background — once the user finishes signing in, call sil_register"
-          + " again to confirm (it will report already_registered).",
+          "Share the auth URL with the user and tell them to "
+          + BROWSER_STEER_AGENT
+          + " The plugin is polling in the background — once the user finishes"
+          + " signing in, call sil_register again to confirm (it will report"
+          + " already_registered).",
       });
     },
   });
@@ -544,3 +555,33 @@ function describeCause(err: unknown): string {
 function presentAuthLink(authUrl: string): string {
   return `<${authUrl}>`;
 }
+
+/**
+ * System-browser steer copy (the proactive webview → default-browser handoff).
+ *
+ * Auth0's hosted login sets its session cookie on its OWN domain; an app's
+ * embedded/in-app webview routinely partitions or blocks that cookie, so opening
+ * the auth URL there dead-ends the login. The plugin CANNOT detect the surface —
+ * the host `api` exposes no client/UA/surface signal (see openclaw.d.ts) and a
+ * tool's execute receives no request context — so the steer ships UNCONDITIONALLY
+ * at presentation time, BEFORE the Auth0 leg (not as a post-failure recovery; that
+ * reactive path is sil-services #50). Phrased as a neutral setup step, not a
+ * warning — onboarding first-impression is the metric.
+ *
+ * One shared NEGATIVE clause feeds both the human `message` and the agent
+ * `instructions` so the two copies cannot drift — an agent paraphrasing must
+ * carry the same "not the in-app browser" half, never collapse it back to a
+ * generic "a browser". Plain "default browser (Safari/Chrome)" is used over the
+ * term "system browser": it names the concrete action a non-technical user can
+ * follow on their own device.
+ */
+const BROWSER_STEER_NEGATIVE =
+  "your device's default browser (Safari, Chrome, …), not this app's"
+  + " built-in / in-app browser";
+
+/** Human-facing lead line — the line ABOVE the atomic link in `message`. */
+const BROWSER_STEER_HUMAN = `Open this link in ${BROWSER_STEER_NEGATIVE}:`;
+
+/** Agent-facing steer — embedded mid-sentence in `instructions` (lower-cased lead
+ * so it reads naturally after "tell them to …"). */
+const BROWSER_STEER_AGENT = `open the link in ${BROWSER_STEER_NEGATIVE}.`;
