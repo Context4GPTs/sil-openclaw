@@ -1,0 +1,71 @@
+{
+  "id": "sil",
+  "name": "sil",
+  "description": "sil commerce plugin for OpenClaw — register on sil, read your identity, and search and look up products in the sil catalog.",
+  "version": "0.2.3",
+  "skills": ["./skill"],
+  "activation": {
+    "onCapabilities": ["tool"]
+  },
+  "contracts": {
+    "tools": [
+      "sil_product_get",
+      "sil_register",
+      "sil_search",
+      "sil_whoami"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "sil_web_url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Override for the sil-web origin (the auth authority — token refresh, registration). Falls back to the SIL_WEB_URL env var, then https://sil.4gpts.com."
+      },
+      "sil_api_url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Override for the sil-api origin (the domain service — sil_whoami's identity read). Distinct from sil_web_url (sil-web). Falls back to the SIL_API_URL env var, then https://sil-api.4gpts.com. Set this at deploy to pin the sil-api host (or to the same origin as sil_web_url if a single gateway fronts both)."
+      }
+    }
+  },
+  "uiHints": {
+    "sil_web_url": {
+      "label": "sil-web URL (auth)",
+      "help": "The sil-web origin — handles registration and token refresh. Override only for staging or self-hosted deployments.",
+      "placeholder": "https://sil.4gpts.com",
+      "advanced": true
+    },
+    "sil_api_url": {
+      "label": "sil-api URL (identity)",
+      "help": "The sil-api origin — sil_whoami reads the user's identity here. Distinct from the sil-web URL. Override for staging or self-hosted deployments.",
+      "placeholder": "https://sil-api.4gpts.com",
+      "advanced": true
+    }
+  },
+  "security": {
+    "shipsRuntimeCode": true,
+    "packagingNote": "Compiled JavaScript ships under ./dist. register() stays synchronous and opens nothing — it only registers tools. ALL I/O happens inside a tool's execute(): sil_register calls sil-web over the network, writes tokens.json + config.json to the plugin data directory (owner-only, 0600), and arms a bounded background poll timer that stops on the first terminal claim outcome or after the session deadline. sil_whoami reads the stored access token and calls sil-api for the user's identity, refreshing transparently via sil-web on a 401 (at most one refresh + one retry per call, no timer); a confirmed-dead session clears tokens.json. sil_search and sil_product_get read the stored access token and call sil-api's catalog endpoints (search / lookup) with it — read-only, no token write, no timer, a single round-trip (a 401 is a terminal re-register hint, no refresh). The PKCE verifier is held only in memory and is never written to disk. Tokens and identity PII are never logged.",
+    "registersLongLivedService": false,
+    "serviceIds": [],
+    "runsTimers": true,
+    "inboundHttpRoutes": [],
+    "networkEndpoints": [
+      "https://sil-api.4gpts.com",
+      "https://sil.4gpts.com"
+    ],
+    "filesystemScope": [
+      "$SIL_DATA_DIR (default $XDG_DATA_HOME/sil, else ~/.local/share/sil) — tokens.json, config.json"
+    ],
+    "credentialsOnDisk": [
+      "tokens.json (access + refresh token)",
+      "config.json (user identity)"
+    ],
+    "noNativeModules": true,
+    "noChildProcess": true,
+    "noInstallScripts": true,
+    "reportVulnerabilitiesTo": "https://x.com/4gpts"
+  }
+}
