@@ -89,19 +89,25 @@ function payloadOf(result: { content: { text?: string }[] }): Record<string, unk
 }
 
 /**
- * Flush the credential write that `onDone` fires un-awaited after a claim
- * settles. The success path persists via async fs (writeFile→rename→chmod);
- * those are REAL libuv ops that don't drain under fake timers. After a
- * terminal the poller has already cleared its interval (no live fake timer),
- * so we can safely drop to the real clock, yield a few macrotasks for the
- * write chain to land, and return. Tests that read tokens.json after a
- * success MUST await this first — otherwise they race the disk write.
+ * Flush the credential write the success path performs after a claim settles.
+ * `writeTokens`/`writeConfig` (credentials.ts) are async wrappers over
+ * SYNCHRONOUS fs internals (writeFileSync→renameSync→chmodSync), AWAITED inside
+ * `claimStep` (identity.ts:323-327) so the files are on disk before the poll
+ * settles. We still yield a few macrotasks on the real clock after a terminal
+ * (the poller has already cleared its interval, so no live fake timer remains)
+ * to be robust to slow CI disks before reading tokens.json.
  *
- * NOTE for the dev pair: this settle dance is necessary BECAUSE the tool's
- * `handleDone` does not await `writeTokens`/`writeConfig` (identity.ts:165).
- * Functionally fine on a real clock, but it means a disk-write failure on
- * the success path is an unhandled rejection with no agent-visible signal —
- * flagged in the QA handoff for the review pass, not weakened here.
+ * FIX C (this card) — the decisive defect addressed by the C tests below: that
+ * awaited persist is NOT error-checked, and the poller's catch (poller.ts:105-109)
+ * treats ANY step throw as a transient `{done:false}` retry. So an unwritable
+ * `$SIL_DATA_DIR` makes the write throw, the loop keeps polling, and the run ends
+ * as a generic `timeout` — a permission/space error masquerading as "the user
+ * never finished," and `sil_whoami` then reports a bare `not_registered`. The C
+ * tests make that write fail (a real unwritable data dir) and assert the
+ * terminal becomes a descriptive `persist_failed` (path+cause) — NOT timeout,
+ * NOT not_registered. (Earlier revisions of this note mis-stated the persist as
+ * un-awaited "in onDone / identity.ts:165"; the persist is in fact awaited in
+ * claimStep — the swallow is the poller catch, not an un-awaited promise.)
  */
 async function settleAsyncIo(): Promise<void> {
   vi.useRealTimers();
@@ -660,6 +666,194 @@ describe("SC8 (in-repo) — two instances, two data dirs, independent tokens", (
       rmSync(dirA, { recursive: true, force: true });
       rmSync(dirB, { recursive: true, force: true });
     }
+  });
+});
+
+// ===========================================================================
+// FIX C — fail-loud token persistence (the decisive defect). Card lines 186-192.
+//
+// After auth succeeds, `claimStep` awaits writeTokens/writeConfig (identity.ts
+// :323-327) but does NOT error-check them, and the poller's catch (poller.ts
+// :105-109) swallows ANY step throw as a transient `{done:false}` retry. So an
+// unwritable / missing-and-uncreatable / full `$SIL_DATA_DIR` makes the write
+// throw, the loop keeps polling, and the run settles as a generic `timeout` — a
+// permission/space error masquerading as "the user never finished". And
+// `sil_whoami` reports a bare `not_registered` (identity.ts:170-172) because a
+// failed write leaves exactly the no-tokens.json state a never-registered user
+// has, so the two are indistinguishable.
+//
+// The fix (three coupled moves): claimStep wraps ONLY the persist in try/catch →
+// a NEW terminal `{ done:true, outcome:"persist_failed", error:"<path>: <cause>" }`
+// + an in-process persist-failure marker; handleDone logs it LOUDLY at error
+// (`sil_register_persist_failed`, distinct from timeout/expired/already_claimed);
+// sil_whoami's not-registered branch returns a distinct `persistence_failed`
+// state when the in-process marker is set. The writable happy path is unchanged.
+//
+// HOW THE WRITE IS MADE TO FAIL (production-faithful, NO logic mocked): a real
+// unwritable data dir. We place a regular FILE where the data dir should be, so
+// writeJsonAtomic's `mkdirSync(dir, { recursive:true })` throws ENOTDIR — a
+// genuine filesystem failure carrying the path + cause. fetch stays mocked at
+// the boundary (a successful claim); the poller + claimStep + writeTokens all
+// run for real. This is the unwritable-`$SIL_DATA_DIR` repro from the card.
+//
+// EXPECT RED against current code: the write throw is swallowed by the poller
+// catch → the loop keeps polling → settles as `timeout` (logs
+// `sil_register_timeout`), NEVER `sil_register_persist_failed`; and an
+// in-process sil_whoami returns `not_registered`, not a distinct
+// persistence-failed state.
+// ===========================================================================
+describe("FIX C — a token-write failure is a terminal, descriptive persist_failed (NOT a retry, NOT timeout)", () => {
+  let parentDir: string;
+  let unwritableDataDir: string;
+
+  beforeEach(() => {
+    // Build a data-dir path whose PARENT is a regular file → mkdirSync throws
+    // ENOTDIR when writeJsonAtomic tries to create it. This is a real,
+    // un-fakeable filesystem failure (no fs mocking, no logic stubbing).
+    parentDir = mkdtempSync(join(tmpdir(), "sil-persistfail-"));
+    const blockerFile = join(parentDir, "blocker");
+    writeFileSync(blockerFile, "i am a file, not a directory");
+    unwritableDataDir = join(blockerFile, "sil-data"); // child of a file → ENOTDIR
+    process.env["SIL_DATA_DIR"] = unwritableDataDir;
+  });
+
+  afterEach(() => {
+    rmSync(parentDir, { recursive: true, force: true });
+  });
+
+  it("settles as persist_failed (logged LOUDLY at error with path + cause), NOT timeout, and stops polling — C-1 + C-2", async () => {
+    const fx = installFetch(() => ({ status: 200, body: SUCCESS_BODY }));
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    await getTool(api, TOOL).execute("c1", {});
+    // Drive a few ticks so the claim succeeds and the (failing) persist is
+    // attempted — well short of the 30-min deadline.
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    // C-1: the failure is TERMINAL, not a transient retry — the loop stopped and
+    // does NOT keep ticking (a swallowed throw would keep polling toward timeout).
+    const callsAfterClaim = fx.callCount();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fx.callCount()).toBe(callsAfterClaim);
+    expect(vi.getTimerCount()).toBe(0);
+
+    // C-1: nothing persisted (the write failed), and crucially the run did NOT
+    // end as a generic `timeout` — the persistence error must not masquerade as
+    // "the user never finished".
+    expect(readTokens()).toBeNull();
+    const infoMarkers = (api.logger.info as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    expect(infoMarkers).not.toContain("sil_register_timeout");
+
+    // C-2: the terminal is logged LOUDLY and DISTINCTLY — an error-level marker,
+    // distinguishable from timeout/expired/already_claimed, carrying the path +
+    // cause so an operator sees persistence failed (not user abandonment).
+    const errorCalls = (api.logger.error as ReturnType<typeof vi.fn>).mock.calls;
+    const errorMarkers = errorCalls.map((c) => c[0]);
+    expect(errorMarkers).toContain("sil_register_persist_failed");
+    // It is NOT mislabelled as any of the other terminals.
+    expect(errorMarkers).not.toContain("sil_register_timeout");
+    // The structured args name the path AND the cause (EACCES/ENOSPC/ENOTDIR…).
+    const persistErrCall = errorCalls.find((c) => c[0] === "sil_register_persist_failed");
+    expect(persistErrCall).toBeDefined();
+    const errBlob = JSON.stringify(persistErrCall);
+    // The path of the file that could not be written appears …
+    expect(errBlob).toContain("sil-data");
+    // … and a real errno cause is named (the ENOTDIR our unwritable dir produces).
+    expect(errBlob).toMatch(/ENOTDIR|EACCES|ENOSPC|ENOENT|not a directory|permission/i);
+    // No token material leaks into the loud error marker (privacy holds on it too).
+    expect(errBlob).not.toContain("fresh-at");
+    expect(errBlob).not.toContain("fresh-rt");
+  });
+
+  it("an in-process sil_whoami distinguishes persistence-failed from not_registered (path + cause + fix-then-reregister recovery) — C-3", async () => {
+    // Same registering process: after the persist fails, sil_whoami (called in
+    // THIS process, where the in-process marker is set) must return a state
+    // DISTINCT from `not_registered` — telling the user persistence failed and
+    // the recovery is "fix the data dir, then re-register", NOT a bare
+    // "run sil_register" that would just fail to persist again.
+    installFetch((url) => {
+      // Should not be reached by whoami (it has no tokens), but answer safely.
+      if (url.includes("/identity")) return { status: 200, body: {} };
+      return { status: 200, body: SUCCESS_BODY };
+    });
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    // Register → claim succeeds → persist fails → in-process marker set.
+    await getTool(api, TOOL).execute("c1", {});
+    await vi.advanceTimersByTimeAsync(10_000);
+    // The poll settled (persist_failed terminal); drop to the real clock so the
+    // subsequent whoami call isn't fighting fake timers.
+    vi.useRealTimers();
+
+    const whoamiPayload = payloadOf(await getTool(api, "sil_whoami").execute("w1", {}));
+
+    // It is NOT the bare never-registered terminal …
+    expect(whoamiPayload["status"]).not.toBe("not_registered");
+    // … it is a DISTINCT persistence-failed state.
+    expect(whoamiPayload["status"]).toBe("persistence_failed");
+    // … carrying the path + cause so the user knows WHAT to fix …
+    const blob = JSON.stringify(whoamiPayload);
+    expect(blob).toContain("sil-data");
+    expect(blob).toMatch(/ENOTDIR|EACCES|ENOSPC|ENOENT|not a directory|permission/i);
+    // … and the actionable recovery is "fix the data dir, THEN re-register" —
+    // distinct from a bare "run sil_register".
+    expect(blob.toLowerCase()).toMatch(/fix|writ|data.?dir|permission|directory/);
+    expect(blob).toContain("sil_register");
+    // No identity is presented (auth's tokens never reached disk).
+    expect(whoamiPayload["identity"]).toBeUndefined();
+    expect(whoamiPayload["name"]).toBeUndefined();
+  });
+});
+
+describe("FIX C — the writable happy path is UNCHANGED (no regression from the fail-loud change) — C-5", () => {
+  // C-5 (card line 192): with a fully-writable $SIL_DATA_DIR, auth+persist behave
+  // EXACTLY as before — tokens.json + config.json land, the terminal is the
+  // existing `success` marker (NOT persist_failed), a subsequent sil_register
+  // reports already_registered, and there is no new error log on the happy path.
+  // This guards the architect's "over-wide try/catch reclassifying a success as
+  // persist_failed" risk. It is GREEN today and MUST stay green through fix C.
+  it("on a writable data dir, persists tokens+config, logs success (NOT persist_failed), and sil_register then reports already_registered", async () => {
+    const fx = installFetch(() => ({ status: 200, body: SUCCESS_BODY }));
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    await getTool(api, TOOL).execute("c1", {});
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    // Exactly-once + no leak on the fake clock.
+    const callsAfterSuccess = fx.callCount();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fx.callCount()).toBe(callsAfterSuccess);
+    expect(vi.getTimerCount()).toBe(0);
+
+    // The credential write lands on the real clock.
+    await settleAsyncIo();
+    const tokens = await waitForTokens();
+    expect(tokens).not.toBeNull();
+    expect(tokens!.access_token).toBe("fresh-at");
+    const config = readJsonInDataDir<Record<string, unknown>>("config.json");
+    expect(JSON.stringify(config)).toContain("user-42");
+
+    // The terminal is the existing SUCCESS marker — NOT persist_failed.
+    const infoMarkers = (api.logger.info as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    expect(infoMarkers).toContain("sil_register_claimed");
+    const errorMarkers = (api.logger.error as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    expect(errorMarkers).not.toContain("sil_register_persist_failed");
+
+    // And a subsequent sil_register short-circuits to already_registered (the
+    // tokens truly stuck), with sil_whoami NOT reporting a persistence failure.
+    const reg2 = payloadOf(await getTool(api, TOOL).execute("c2", {}));
+    expect(reg2["status"]).toBe("already_registered");
+    const who = payloadOf(await getTool(api, "sil_whoami").execute("w1", {}));
+    expect(who["status"]).not.toBe("persistence_failed");
   });
 });
 
