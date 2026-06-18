@@ -10,6 +10,21 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Fixed
+
+- **`sil_register` now steers users into their device's default browser before the
+  Auth0 leg, so registration completes first-try from in-app/embedded webviews.** An
+  auth link opened in an app's built-in webview dead-ends — Auth0 can't set its
+  session cookie in a partitioned webview, so login bounces with `?error=`. The
+  `awaiting_browser` return now carries an explicit instruction, in both the
+  human-facing `message` and the agent-facing `instructions`, to open the link in the
+  **default browser (Safari, Chrome, …), not this app's built-in browser** — before
+  the link is ever opened, steering a webview user out ahead of the Auth0 leg. The
+  `auth_url` value is byte-for-byte unchanged and the link stays atomically
+  angle-bracket-wrapped on its own line (the #24 invariants hold); no new tool and no
+  webview detection (the host exposes no surface signal, so the steer ships
+  unconditionally). (#25)
+
 ## [0.2.3] - 2026-06-16
 
 ### Added
