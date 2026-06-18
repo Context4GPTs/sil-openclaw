@@ -33,9 +33,10 @@
 import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
-import { getWebUrl, getApiUrl } from "../lib/config.js";
+import { getWebUrl, getWebUrlSource, getApiUrl } from "../lib/config.js";
 import {
   clearTokens,
+  getTokensPath,
   hasTokens,
   readConfig,
   readTokens,
@@ -85,16 +86,24 @@ function registerRegister(api: PluginAPI): void {
         });
       }
 
+      // A fresh registration attempt clears any prior in-process persist-failure
+      // marker: this process is starting over, so a stale marker from an earlier
+      // failed attempt must not make a later genuine `not_registered` (or this
+      // attempt's own outcome) masquerade as `persistence_failed`. (FIX C.)
+      clearPersistFailure();
+
       // 2 — mint PKCE. The verifier stays in this closure (never on disk).
       const sessionId = newSessionId();
       const verifier = newVerifier();
       const challenge = deriveChallenge(verifier);
-      const apiUrl = getWebUrl();
+      // The sil-WEB origin (auth authority) — this is what the auth URL is built
+      // from. The local was historically misnamed `apiUrl`; it is the web origin.
+      const webUrl = getWebUrl();
 
       // 3 — build the auth URL. Opening it (by the user's browser) is what
       // creates the pending session server-side; the plugin does not pre-POST.
       const authUrl =
-        `${stripTrailingSlash(apiUrl)}/authorize`
+        `${stripTrailingSlash(webUrl)}/authorize`
         + `?session=${sessionId}&code_challenge=${challenge}`;
 
       // 4 — fire-and-forget bounded poll. Not awaited: execute() returns now.
@@ -105,7 +114,7 @@ function registerRegister(api: PluginAPI): void {
       startPoll({
         intervalMs: POLL_INTERVAL_MS,
         deadlineMs: POLL_DEADLINE_MS,
-        poll: () => claimStep(apiUrl, sessionId, verifier),
+        poll: () => claimStep(webUrl, sessionId, verifier),
         onDone: (result) => handleDone(api, sessionId, result),
       });
 
@@ -113,7 +122,14 @@ function registerRegister(api: PluginAPI): void {
 
       return jsonResult({
         status: "awaiting_browser",
-        message: `Open this URL in a browser to register: ${authUrl}`,
+        // Present the auth URL as ONE atomic, unbreakable link: on its own line,
+        // angle-bracket wrapped, so a greedy chat auto-linker captures the WHOLE
+        // URL (the `&code_challenge` included) instead of truncating at the `&`
+        // and 400-ing `invalid_code_challenge`. `auth_url` below stays the
+        // canonical, UNWRAPPED machine field agents parse. (FIX A.)
+        message:
+          "Open this URL in a browser to register:\n"
+          + presentAuthLink(authUrl),
         auth_url: authUrl,
         session_id: sessionId,
         instructions:
@@ -166,11 +182,36 @@ function registerWhoami(api: PluginAPI): void {
       + " the recovery action (run sil_register).",
     parameters: Type.Object({}),
     async execute() {
-      // 1 — not registered: terminal, zero network calls.
+      // 1 — not registered: terminal, zero network calls. If THIS process saw a
+      // token-persist failure (auth succeeded but the write failed), surface the
+      // distinct `persistence_failed` state instead — the no-tokens.json state on
+      // disk is identical for both, so the in-process marker is the only signal
+      // that tells them apart (FIX C; cold-restart correctly degrades to
+      // not_registered — see the persistence_failed/notRegistered helpers).
       const stored = readTokens();
       if (stored === null) {
-        return notRegistered();
+        const failure = getPersistFailure();
+        return failure !== null ? persistenceFailed(failure) : notRegistered();
       }
+
+      // B (origin visibility): resolve the sil-WEB origin (the origin the
+      // registration link is built from) + its source, surface it on the success
+      // payload so a wrong/staging origin is diagnosable BEFORE anything 404s,
+      // and emit a single warn when the source is non-default. Warn-only — a
+      // staging/self-host origin is legitimate, so it is NEVER rejected. Scope is
+      // the WEB origin only; the sil-api read origin is out of scope. (FIX B.)
+      const webOrigin = getWebUrl();
+      const webOriginSource = getWebUrlSource();
+      if (webOriginSource !== "default") {
+        api.logger.warn("sil_whoami_web_origin_override", {
+          web_origin: webOrigin,
+          web_origin_source: webOriginSource,
+        });
+      }
+      const originBlock = {
+        web_origin: webOrigin,
+        web_origin_source: webOriginSource,
+      };
 
       // 2 — read identity; on a 401 refresh-and-retry ONCE via the shared
       // choreography (the SAME `refreshAndRetryOnce` path sil_search /
@@ -190,7 +231,7 @@ function registerWhoami(api: PluginAPI): void {
           // emit the operator marker so a thrashing session is visible in logs —
           // logs-only, no token material, NOT a payload field (the agent never sees it).
           if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
-          return identityOutcomeToResult(api, recovered.outcome);
+          return identityOutcomeToResult(api, recovered.outcome, originBlock);
         case "must_reregister":
           // The refresh token is dead (invalid_grant) → clear the now-known-dead
           // pair so the user's sil_register recovery is not blocked by stale
@@ -212,12 +253,26 @@ function registerWhoami(api: PluginAPI): void {
   });
 }
 
+/** The web-origin visibility block attached to the success payload (FIX B):
+ * the resolved sil-web origin + its source, so a wrong/staging origin is
+ * diagnosable. Strings only — never any token material. */
+interface OriginBlock {
+  web_origin: string;
+  web_origin_source: string;
+}
+
 /** Map a non-401 identity outcome to the agent-facing result. (401 is handled
- * inline by the refresh path; it never reaches here.) */
-function identityOutcomeToResult(api: PluginAPI, outcome: IdentityOutcome) {
+ * inline by the refresh path; it never reaches here.) The origin block rides the
+ * SUCCESS payload (the point is pre-failure diagnosis); the terminal/transient
+ * envelopes don't carry it. */
+function identityOutcomeToResult(
+  api: PluginAPI,
+  outcome: IdentityOutcome,
+  originBlock: OriginBlock,
+) {
   switch (outcome.kind) {
     case "ok":
-      return identityResult(outcome.identity);
+      return identityResult(outcome.identity, originBlock);
     case "forbidden":
       // Decision B — the dead-token clear is UNIFORM across all three sil-api tools.
       // `sil_whoami` is the tool that is legible TODAY; an agent that diagnoses the
@@ -241,9 +296,11 @@ function identityOutcomeToResult(api: PluginAPI, outcome: IdentityOutcome) {
   }
 }
 
-/** Success: the identity payload ONLY — no token, no Bearer header. */
-function identityResult(identity: Identity) {
-  return jsonResult({ status: "ok", identity });
+/** Success: the identity payload + the web-origin visibility block (FIX B) —
+ * no token, no Bearer header. The origin block (strings only) lets the agent
+ * relay the resolved origin + its source so a wrong origin is diagnosable. */
+function identityResult(identity: Identity, originBlock: OriginBlock) {
+  return jsonResult({ status: "ok", identity, ...originBlock });
 }
 
 /** Not registered: a distinct, actionable outcome naming the recovery tool. No
@@ -254,6 +311,27 @@ function notRegistered() {
     message:
       "Not registered on sil. Run sil_register to authenticate, then call"
       + " sil_whoami again.",
+    recovery: "sil_register",
+  });
+}
+
+/**
+ * Registered-but-persistence-failed (FIX C): auth succeeded in THIS process but
+ * the token write failed, so nothing reached disk. DISTINCT from `not_registered`
+ * because the recovery differs — the user must FIX THE DATA DIR (the path + cause
+ * name what to fix), THEN re-register; a bare "run sil_register" would just fail
+ * to persist again, looping. `error` carries the "<path>: <cause>" from the
+ * in-process marker. No identity fields (the tokens never landed).
+ */
+function persistenceFailed(error: string) {
+  return jsonResult({
+    status: "persistence_failed",
+    message:
+      "Registration authenticated but the credentials could NOT be written to"
+      + " disk, so it did not stick. Fix the data directory (it must be writable"
+      + " — check permissions / free space / that $SIL_DATA_DIR is a directory),"
+      + " then run sil_register again.",
+    error,
     recovery: "sil_register",
   });
 }
@@ -289,11 +367,42 @@ function transient() {
   });
 }
 
-/** The terminal step shape carried through the poller to `onDone`. */
+/** The terminal step shape carried through the poller to `onDone`. `persist_failed`
+ * is FIX C's new terminal: auth succeeded but the token write failed — distinct
+ * from the wire terminals (it is not a `ClaimOutcome["kind"]`) and from a
+ * `timeout`. `error` carries the "<path>: <cause>" for the loud log + whoami. */
 interface ClaimStep extends Record<string, unknown> {
   done: boolean;
-  outcome?: ClaimOutcome["kind"];
+  outcome?: ClaimOutcome["kind"] | "persist_failed";
   user_id?: string;
+  error?: string;
+}
+
+/**
+ * In-process persist-failure marker (FIX C). A failed token write leaves NO
+ * `tokens.json` on disk — exactly the state a never-registered user has — so the
+ * two are indistinguishable from disk alone. This module-level marker is the only
+ * signal that tells `sil_whoami` "auth succeeded in THIS process but persistence
+ * failed" apart from a bare `not_registered`. It is intentionally in-process only:
+ * the failure mode IS an unwritable data dir, so an on-disk sentinel would fail to
+ * write for the same reason — and after a cold restart `not_registered` is the
+ * TRUE state (no creds exist), with a re-run of `sil_register` re-surfacing the
+ * write failure loudly. Set by `claimStep` on the persist_failed terminal; reset
+ * on a fresh `sil_register` start so a stale marker can't mislabel a later genuine
+ * not_registered (and resettable in tests via that same fresh-start path).
+ */
+let _persistFailure: string | null = null;
+
+function setPersistFailure(error: string): void {
+  _persistFailure = error;
+}
+
+function getPersistFailure(): string | null {
+  return _persistFailure;
+}
+
+function clearPersistFailure(): void {
+  _persistFailure = null;
 }
 
 /**
@@ -320,11 +429,25 @@ async function claimStep(
     case "not_found":
       return { done: false };
     case "success":
-      await writeTokens({
-        access_token: outcome.access_token,
-        refresh_token: outcome.refresh_token,
-      });
-      await writeConfig({ user: outcome.user });
+      // Persist the bearer pair + identity. FIX C: wrap ONLY the persist calls
+      // (never the whole step — a too-wide catch could mislabel a genuine claim
+      // success). A write failure (unwritable / missing-and-uncreatable / full
+      // $SIL_DATA_DIR) is TERMINAL, not transient: re-polling the claim cannot
+      // make the data dir writable, and the claim is single-use server-side. So
+      // return a descriptive `persist_failed` terminal (path + cause) and set the
+      // in-process marker — instead of letting the throw reach the poller's catch,
+      // which would swallow it as a retry and end the run as a misleading timeout.
+      try {
+        await writeTokens({
+          access_token: outcome.access_token,
+          refresh_token: outcome.refresh_token,
+        });
+        await writeConfig({ user: outcome.user });
+      } catch (err) {
+        const error = `${getTokensPath()}: ${describeCause(err)}`;
+        setPersistFailure(error);
+        return { done: true, outcome: "persist_failed", error };
+      }
       return { done: true, outcome: "success", user_id: outcome.user.id };
     case "expired":
     case "already_claimed":
@@ -353,6 +476,19 @@ function handleDone(
     return;
   }
 
+  // FIX C: a token-persist failure is logged LOUDLY at error — the most severe
+  // terminal, distinct from the routine info/warn terminals — carrying the path +
+  // cause (in `step.error`) so an operator sees persistence failed, NOT that the
+  // user abandoned the flow. The tokens never reached disk, so there is no token
+  // material to leak; only the session id + the path/cause error are logged.
+  if (step.outcome === "persist_failed") {
+    api.logger.error("sil_register_persist_failed", {
+      session_id: sessionId,
+      error: typeof step.error === "string" ? step.error : "",
+    });
+    return;
+  }
+
   if ("timedOut" in step && step.timedOut === true) {
     api.logger.info("sil_register_timeout", { session_id: sessionId });
     return;
@@ -374,4 +510,37 @@ function handleDone(
 
 function stripTrailingSlash(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
+}
+
+/**
+ * Render an errno-style cause from a caught (unknown) persist error, for the
+ * loud log + whoami `persistence_failed` state (FIX C). A Node fs error carries
+ * a `.code` (EACCES/ENOSPC/ENOTDIR/ENOENT…) and a `.message` that already names
+ * the code and the human cause ("not a directory") — surface the code first
+ * (prominent for an operator) then the full message. Carries NO token material:
+ * an fs error names paths/errnos only, and the tokens never reached this point.
+ */
+function describeCause(err: unknown): string {
+  if (err instanceof Error) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return code ? `${code}: ${err.message}` : err.message;
+  }
+  return String(err);
+}
+
+/**
+ * Present an auth URL as a single atomic link target for a human-rendered chat
+ * surface: angle-bracket wrapped (`<…>`). The angle brackets are the RFC-3986 /
+ * Markdown convention that bounds a URL so a greedy auto-linker captures the
+ * WHOLE span — including the `&code_challenge=…` query param — instead of
+ * terminating the link at the first `&` (the reported production break that
+ * dropped `code_challenge` and 400-ed `invalid_code_challenge`). The caller puts
+ * the returned token on its OWN line so no surrounding prose can be folded into
+ * the link. Pure (no I/O) — the [unit] seam for the atomic-link contract. The
+ * structured `auth_url` field is the UNWRAPPED canonical URL; this is the
+ * human-presentation form only, and it carries the same params byte-for-byte (it
+ * never re-encodes, never adds the verifier).
+ */
+function presentAuthLink(authUrl: string): string {
+  return `<${authUrl}>`;
 }

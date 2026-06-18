@@ -103,9 +103,15 @@ export function startPoll(opts: StartPollOptions): PollHandle {
     try {
       result = await opts.poll();
     } catch {
-      // A throw from the injected step is treated as non-terminal: the
-      // sil-client wrapper already maps network errors to a retryable result,
-      // so this is belt-and-braces; let the next tick (within budget) retry.
+      // A throw from the injected step is treated as non-terminal — the next
+      // tick (within budget) retries. This is correct ONLY for the claim call:
+      // the sil-client wrapper already maps network errors to a `retryable`
+      // result, so a genuine throw here is a rare transient. A TERMINAL failure
+      // that must NOT be retried (e.g. the token-persist failure) is never a
+      // throw that reaches this catch — `claimStep` classifies it and RETURNS a
+      // `{ done: true, outcome: "persist_failed", error }` terminal, so the
+      // poller stays generic over `done` and the terminal settles like any
+      // other. Do not move classification of a throw into this catch.
       result = { done: false };
     } finally {
       inFlight = false;

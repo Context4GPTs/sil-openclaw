@@ -187,6 +187,31 @@ describe("sil_whoami — not registered (no tokens.json) short-circuit", () => {
     expect(result).toBeTypeOf("object");
     expect(result.content[0]?.text).toBeTypeOf("string");
   });
+
+  // FIX C, criterion C-4 (card line 191) — the never-registered case must keep
+  // its existing terminal `not_registered` contract. Fix C adds a NEW
+  // "registered-but-persistence-failed" state to the not-registered branch
+  // (identity.ts:170-172); this guard pins that the genuine never-registered
+  // case is NOT swallowed or replaced by that new state. In a FRESH process with
+  // no in-process persist-failure marker set and no tokens.json, whoami must
+  // still return exactly `not_registered` with `sil_register` as the recovery.
+  //
+  // This is a REGRESSION GUARD (green today, must stay green through fix C): it
+  // is the boundary the new persistence_failed branch must not cross.
+  it("returns the EXACT `not_registered` status (NOT persistence_failed) with sil_register recovery — C-4 no-regression", async () => {
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+    // The exact existing terminal status — unchanged by fix C.
+    expect(payload["status"]).toBe("not_registered");
+    // It must NOT have been replaced/aliased by the new failed-persistence state.
+    expect(payload["status"]).not.toBe("persistence_failed");
+    // The recovery is the existing "run sil_register" (a bare re-register, since
+    // nothing was ever persisted — there is no data dir to fix).
+    expect(payload["recovery"]).toBe("sil_register");
+    // No path/cause leaks into a genuine never-registered outcome (those belong
+    // ONLY to the persistence_failed state).
+    const blob = JSON.stringify(payload).toLowerCase();
+    expect(blob).not.toMatch(/eacces|enospc|enotdir|persistence.?failed/);
+  });
 });
 
 describe("sil_whoami — success result carries ONLY identity (no credential echo)", () => {
