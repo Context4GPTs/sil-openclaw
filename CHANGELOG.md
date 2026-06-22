@@ -10,6 +10,42 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **The `sil` skill now runs a brainstorm interview before creating a shopping
+  expert.** An open, back-and-forth interview converges five sections *with* the
+  user — domain framing, persona, elicitation style, answer→`sil_search`-param
+  mapping, and recommendation rubric — eliciting BOTH the domain's
+  decision-attributes AND the user's own tastes/budget/constraints, then
+  assembles a tailored spec the agent-creation engine materializes via
+  `sil_profile_materialize`. Nothing is created until the user explicitly
+  endorses the assembled draft (abandon-mid-flow leaves nothing written, no
+  teardown); a vague domain is narrowed with the user first; a name collision
+  offers refine-or-rename and never clobbers. The mapping targets only real
+  `sil_search` params (budget → `price_min`/`price_max` in minor units, "prefer
+  secondhand" → `condition`, niche → `query`/`category`) and leaves `ship_to`
+  empty so sil resolves the registered default server-side.
+
+### Changed
+
+- **Restructured the bundled `sil` skill to progressive disclosure
+  (skill-creator convention).** `skill/SKILL.md` is now a maximally-lean pure
+  router: frontmatter, a one-paragraph role, the three always-on behavioural
+  principles, a brief session-start note, and an intent→tool→reference routing
+  table — nothing more. The detailed procedures moved into four self-contained
+  references loaded on demand: `references/catalog_tools_reference.md` (the four
+  core tools' per-tool behaviour + the shared status taxonomy),
+  `references/brainstorm_interview.md` (the interview),
+  `references/agent_creation_engine.md` (the ordered creation engine), and
+  `references/search_param_mapping.md` (the answer→`sil_search`-param mapping),
+  with a worked end-to-end walkthrough under
+  `examples/road_cycling_expert_walkthrough.md`. The endorsement-before-engine
+  gate now lives as the router's two-step trigger (interview first; engine only
+  after explicit endorsement). The contributor-facing "adding a tool" prose —
+  duplicated from the repo `CLAUDE.md` and never needed at runtime — was removed
+  from the skill entirely. No detail is duplicated between the router and any
+  reference.
+
 ## [0.2.4] - 2026-06-18
 
 ### Fixed
