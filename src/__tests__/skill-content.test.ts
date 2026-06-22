@@ -817,6 +817,94 @@ describe("references/agent_creation_engine.md — valid spec persists a host-loa
   });
 });
 
+/* ===========================================================================
+ * HOST-WIRING SHAPES PINNED TO alpine/openclaw:2026.4.15
+ * (card: realign-skill-4-host-cli-to-openclaw-2026-4-15)
+ *
+ * tier: unit. The engine's two host-wiring shapes drifted from the real
+ * 2026.4.15 OpenClaw CLI the sil-stage host round probes live:
+ *   - the plugin-ENABLE step used `--merge`, which is NOT a flag on this image;
+ *     the real path is a value-mode set with `--strict-json`;
+ *   - the VALIDATE-verdict read keyed off a non-existent `ok: false`; the real
+ *     `openclaw config validate --json` shape is `{ valid, path, issues? }`, so
+ *     the verdict is read from `valid`.
+ * These mirror the host round's real-shape probes (sil-stage host-round-create.mjs
+ * 321-337) rather than re-asserting prose, turning "doc says X, host proves X"
+ * from coincidence into a checked invariant. Each shape is pinned in BOTH the
+ * engine reference AND the worked example (the copy-paste-most-likely artefact),
+ * so the two duplicated wirings cannot silently re-diverge.
+ *
+ * Adversarial: for EACH shape we assert presence-of-correct AND absence-of-
+ * defective. A one-sided presence check passes while a stray `--merge` lingers
+ * beside `--strict-json`, or a residual `ok: false` lingers beside `valid`.
+ * ========================================================================= */
+
+/** Lower-cased worked-example body — the example carries the SAME two wiring
+ * shapes by hand, so it is pinned alongside the engine reference. */
+function exampleBodyLower(): string {
+  return readBody(EXAMPLE_PATH).toLowerCase();
+}
+
+describe("references/agent_creation_engine.md — host-wiring shapes match alpine/openclaw:2026.4.15", () => {
+  it("enables the sil plugin with the host's real value-mode set (`--strict-json`), NOT `--merge`", () => {
+    // The 2026.4.15 CLI has no `--merge` flag; the enable is a value-mode set
+    // with `--strict-json` (host-round-create.mjs:321-329). Anchor the POSITIVE
+    // on the FULL enable substring — `plugins.entries.sil.enabled true
+    // --strict-json` — not bare `--strict-json`, because the adjacent skills set
+    // already uses `--strict-json` correctly (line 45) and a bare-token check
+    // would pass even with the enable still on `--merge`.
+    const body = engineBodyLower();
+    expect(body).toContain(
+      "plugins.entries.sil.enabled true --strict-json",
+    );
+    // NEGATIVE: NO `--merge` remains anywhere in the engine reference — a stray
+    // `--merge` lingering beside the corrected `--strict-json` is exactly the
+    // one-sided-pass the card warns against. `--merge` appears nowhere
+    // legitimately in this doc, so absence of the bare flag is the tight check.
+    expect(body).not.toContain("--merge");
+  });
+
+  it("reads the validate verdict from `.valid` (the `{ valid, path, issues? }` shape), NOT a non-existent `ok: false`", () => {
+    // The real `openclaw config validate --json` shape is `{ valid, path,
+    // issues? }` (host-round-create.mjs:333-337) — success/failure keys off
+    // `valid`, never `ok`. POSITIVE: the verdict read references `valid`.
+    const body = engineBodyLower();
+    expect(body).toContain("valid");
+    // NEGATIVE: NO `ok: false` verdict read remains. Scope the negative match
+    // to the PRECISE verdict token `ok: false` — a bare `ok` is innocent prose
+    // elsewhere (step-4 `sil_profile_materialize` outcomes name a bare `ok`),
+    // and matching bare `ok` would false-positive on legitimate text.
+    expect(body).not.toContain("ok: false");
+  });
+
+  it("names/pins the asserted OpenClaw image tag `alpine/openclaw:2026.4.15` (couples the doc to the host that proves it)", () => {
+    // Surfacing the tag the sil-stage host round validates against
+    // (docker-compose.yml:254, OPENCLAW_VERSION=2026.4.15) makes "doc says X,
+    // host proves X" a coupled guarantee, not a coincidence — the next CLI
+    // surface change can no longer silently re-open this bug. Match the literal
+    // tag case-sensitively against the un-lowercased body so the asserted
+    // string is the exact tag, not an incidentally-cased near-miss.
+    const raw = readBody(ENGINE_PATH);
+    expect(raw).toContain("alpine/openclaw:2026.4.15");
+  });
+});
+
+describe("examples/road_cycling_expert_walkthrough.md — wiring shape stays coupled to the engine reference", () => {
+  it("carries the SAME corrected enable shape (`--strict-json`, NO `--merge`) as the engine reference", () => {
+    // The example is the copy-paste-most-likely artefact and duplicates the
+    // enable shape by hand (line 98). Pinning it here couples the two artefacts:
+    // a future edit cannot re-introduce `--merge` in the example with nothing
+    // red. Same FULL-substring anchor — the skills set on the same line already
+    // carries `--strict-json`, so a bare-token check would not catch a `--merge`
+    // enable.
+    const body = exampleBodyLower();
+    expect(body).toContain(
+      "plugins.entries.sil.enabled true --strict-json",
+    );
+    expect(body).not.toContain("--merge");
+  });
+});
+
 describe("references/agent_creation_engine.md — the created agent shops with no further setup (AC5 / SC3)", () => {
   it("states the created agent can call sil_search / sil_product_get with no further setup", () => {
     // AC5 / SC3 (the goal's primary correctness bar): after creation the agent
