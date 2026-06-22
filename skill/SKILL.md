@@ -1,6 +1,6 @@
 ---
 name: sil
-description: This skill should be used when the user wants to shop on sil — register an identity, see who they are, search the catalog for purchasable products, or look up specific products by id — or when they want to create a dedicated sil-wired shopping expert (a new OpenClaw agent profile). The plugin exposes sil_register, sil_whoami, sil_search, sil_product_get, and sil_profile_materialize.
+description: This skill should be used when the user wants to shop on sil — register an identity, see who they are, search the catalog for purchasable products, or look up specific products by id — or when they want to create a dedicated sil-wired shopping expert (a new OpenClaw agent profile) and then list, view, or remove the experts they have created. The plugin exposes sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_list, sil_profile_get, and sil_profile_remove.
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -119,7 +119,46 @@ The **sil plugin** and the **sil skill** are always attached (that is what makes
 
 When you (the sil skill) start a session inside a created expert, read `$SIL_DATA_DIR/agents/<agentId>/profile.json`, then load the `persona.md` (reaffirm the standing instructions) and `playbook.md` sub-skill (the domain shopping playbook) it points at. That is what lets the expert shop on its niche with no further setup.
 
-## 5. Adding a real tool
+## 5. Manage your sil shopping experts (list / view / remove)
+
+Once experts exist, the user manages them by intent — "what experts do I have?", "show me the gift buyer", "delete the grocery agent". These are pure local-lifecycle operations over the two stores the create-engine established — **host config = wiring, `$SIL_DATA_DIR/agents/<id>/` = behaviour artefacts**. No server call, no token read, no identity coupling: a user with zero experts (or who just removed their last) still shops generically exactly as before.
+
+**The source of truth for "what is a sil expert" is the sil artefact store, not the host agent list.** A directory `$SIL_DATA_DIR/agents/<id>/` with a readable `profile.json` IS a sil expert; a bare host `agents.list[]` entry without one is just a host agent and is not ours to list, view, or remove.
+
+| Intent | Tool(s) |
+|---|---|
+| "list my experts" / "what shopping experts do I have?" | `sil_profile_list` (no arguments) |
+| "show me / tell me about <expert>" | `sil_profile_get` (pass the expert's `agentId`) |
+| "remove / delete / get rid of <expert>" | host CLI `openclaw agents remove <agentId>` **FIRST**, then the artefact tool (see the remove flow below) |
+
+The two read intents behave as follows:
+
+- **`sil_profile_list`** enumerates the artefact store and returns the user's experts most-recently-created first (`createdAt` desc), each with its `agentId`, `name`, `hasPlaybook`, and `createdAt`. Present a name + a short domain summary (distilled from the persona; a playbook signals a specialized domain) plus the `agentId` so the user can refer to one unambiguously. An empty `experts: []` is a normal, successful outcome — say plainly "you have no sil shopping experts yet" and point at how to create one ("ask me to make a shopping expert for …"). One degraded expert lands in `unreadable[]` — mention it inline, but never let it hide the healthy ones.
+- **`sil_profile_get`** resolves one expert by `agentId` and returns its `name`, `persona`, optional `playbook`, `profilePath`, and `createdAt`. Render a human summary: the expert's name, its domain/persona, whether it carries a domain playbook (and a summary when present), and a wiring summary — it is a real host agent with the sil plugin enabled and the sil skill attached, ready to shop with no further setup. An unknown expert returns `not_found` — frame it plainly ("no sil expert named '<x>'") and list the experts that DO exist (or say there are none) so the next step is obvious. Never surface a stack trace or a raw filesystem path.
+
+### Remove flow — host-CLI FIRST, then the artefact tool
+
+Removal is **destructive and irreversible** (the persona and playbook the user authored are deleted), so **confirm before removing**: state exactly what will be deleted — this one named expert, both its host wiring and its sil behaviour artefacts — and proceed only on the user's explicit go-ahead. Then run these steps **in this exact order**:
+
+1. **Existence check (read).** Run `openclaw agents list --json` and confirm the `agentId` is a sil-wired agent the user means.
+2. **Remove the host wiring (host CLI) — FIRST.** Run `openclaw agents remove <agentId>`, then `openclaw config validate --json` to confirm the host config is still valid. The plugin cannot write the host config, so this half is always the host CLI's, and it runs ahead of the artefact removal.
+3. **Remove the sil artefacts (plugin tool) — SECOND.** Call `sil_profile_remove { agentId }` to delete the expert's behaviour-artefact directory. It deletes the **artefact half only** — the expert's `$SIL_DATA_DIR/agents/<id>/` directory — scoped to exactly the one validated `agentId`; a malformed/traversal/`main` id returns `invalid_request` and deletes nothing, and an unknown id returns `not_found` (idempotent — safe to re-run).
+
+**Never artefacts-first.** The order is a safety decision, not a style choice: if step 3 fails after step 2, the only survivor is a *residual artefact directory with no host entry* — harmless disk cruft, no broken agent ever loads, and `sil_profile_list` still surfaces it so the user retries `sil_profile_remove` clean. The **reverse** order is unsafe: artefacts removed first, then a failed host step, leaves a *host `agents` entry whose `profile.json` is gone* — the agent still loads but the sil skill ENOENTs on its persona/playbook at runtime, a visible, confusing, broken expert. Both halves are individually idempotent (host `agents remove` and `sil_profile_remove` both no-op on an absent target), so a re-run from any partial state converges to clean. After a successful removal, confirm the expert is gone and that the user's **other experts and generic shopping are untouched**.
+
+Leave `plugins.entries.sil.enabled` alone on removal — it is shared host state (every other expert depends on it; generic shopping is unaffected by it), not per-agent. Even removing the last expert leaves it enabled.
+
+### Status taxonomy (manage: list / view / remove)
+
+| `status` | Meaning | What to do |
+|---|---|---|
+| `ok` | List succeeded (`experts` may be empty — a normal outcome), or a view returned the expert's detail. | Relay the data; on an empty list, say so plainly and point at creation. |
+| `not_found` | No sil expert matches the `agentId` (view or remove). | Frame it plainly and list the experts that DO exist; do NOT re-register. For remove, this also means a re-run is safe (idempotent). |
+| `invalid_request` | The `agentId` was malformed, `main`, or traversal-shaped. **Nothing was read or deleted.** | Fix the id and call again — never a stack trace or a raw path to the user. |
+| `removed` | `sil_profile_remove` deleted the expert's artefact directory. | Confirm it is gone; ensure the host-wiring removal (step 2) ran first. |
+| `persistence_failed` | The artefact directory could not be removed (the **path** + **cause** name what to fix). | Fix the data directory (writable), then remove again; the already-done host-wiring half need not be redone. |
+
+## 6. Adding a real tool
 
 The mechanical steps live in the repo's `CLAUDE.md` ("How to add a tool"); the short version is three steps: register the tool inside a `registerXTools(api)` group in `src/tools/`, wire that group into `register()` in `src/index.ts`, and add the tool's name to `openclaw.plugin.json#contracts.tools`. The manifest↔code drift-guard test fails if those disagree, which keeps the pattern self-enforcing.
 

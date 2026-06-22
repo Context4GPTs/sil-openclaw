@@ -10,6 +10,27 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **Local expert lifecycle — list, view, and remove the shopping experts you
+  create.** Three new tools manage the artefact store the create-engine writes
+  (`$SIL_DATA_DIR/agents/<id>/`): `sil_profile_list` enumerates your experts
+  most-recently-created first (sourced from each `profile.json` manifest — the
+  authoritative "is a sil expert" signal — with one corrupt manifest isolated
+  in `unreadable[]`, never aborting the listing); `sil_profile_get` returns one
+  expert's full detail (name, persona, optional playbook, manifest path,
+  createdAt); and `sil_profile_remove` deletes exactly one validated expert's
+  behaviour-artefact directory. All three make no network call and read no
+  token — generic profile-less shopping is unchanged. Removal is the **artefact
+  half only**: the host-wiring half (`openclaw agents remove`) is host-CLI
+  driven and runs **first** (a failed artefact step then leaves only harmless,
+  list-surfaced disk cruft — never a broken-but-loading expert), and the skill
+  **confirms before removing**. `sil_profile_remove` is fail-closed and scoped:
+  a malformed/traversal/`main` id is rejected (`invalid_request`) and deletes
+  nothing, an absent id is `not_found` (idempotent — safe to re-run), and a
+  genuine filesystem failure is `persistence_failed` with the path + cause —
+  never a thrown error across the tool boundary.
+
 ## [0.2.4] - 2026-06-18
 
 ### Fixed

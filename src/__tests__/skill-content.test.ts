@@ -30,6 +30,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
+import { registerProfileTools } from "../tools/profile.js";
 import {
   createMockPluginApi,
   registeredToolNames,
@@ -85,11 +86,15 @@ function skillBody(content: string): string {
 /** The set of names the real register code emits against a mock api. Must
  * call EVERY tool group that src/index.ts#register() wires, so the skill
  * body is checked against the REAL tool surface (`sil_register`,
- * `sil_whoami`, `sil_search`, `sil_product_get`). Mirror register(). */
+ * `sil_whoami`, `sil_search`, `sil_product_get`, and the `sil_profile_*`
+ * family). Mirror register() — registerProfileTools is now wired in too, so
+ * the body-mentions check below covers the profile tools (materialize +
+ * list/get/remove), not just identity + catalog. */
 function registeredNames(): Set<string> {
   const api = createMockPluginApi();
   registerIdentityTools(api);
   registerCatalogTools(api);
+  registerProfileTools(api);
   return registeredToolNames(api);
 }
 
@@ -131,6 +136,116 @@ describe("skill/SKILL.md — body is a source of truth for the tool surface", ()
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
     expect(body).not.toContain("sil_ping");
     expect(body).not.toContain("sil_echo");
+  });
+});
+
+/* ===========================================================================
+ * MANAGE LOCAL EXPERTS — list / view / remove
+ * (card: list-view-and-remove-local-expert-agents)
+ *
+ * tier: integration. The three management intents are conversational prose in
+ * skill/SKILL.md driving the three new plugin tools (+ the host CLI for the
+ * wiring half of remove). The skill body IS the source of truth the host agent
+ * follows, so — exactly as the create-engine block above pins its procedure —
+ * we pin that the management section names each new tool and spells out the
+ * load-bearing invariants (host-CLI-FIRST remove ordering, confirm-before-
+ * remove, graceful not_found framing).
+ *
+ * Cross-card note: PR #28 (open, unmerged) also edits this file and renumbers
+ * the engine section. These assertions anchor on tool NAMES and content tokens,
+ * NEVER on `§N` section numbers, so they survive that renumber.
+ * ========================================================================= */
+
+describe("skill/SKILL.md — names the three management tools by name (list/view/remove)", () => {
+  it("names sil_profile_list, sil_profile_get, and sil_profile_remove in the body", () => {
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+    const missing = [
+      "sil_profile_list",
+      "sil_profile_get",
+      "sil_profile_remove",
+    ].filter((name) => !body.includes(name));
+    // Report by name so a forgotten tool is named, not an opaque false.
+    expect(missing).toEqual([]);
+  });
+});
+
+describe("skill/SKILL.md — manage-experts procedure spells out the load-bearing invariants", () => {
+  it("frames a distinct manage/list/view/remove capability (not just the create engine)", () => {
+    // Adversarial: the create-engine section already names experts. This card
+    // adds MANAGEMENT — the body must name listing/viewing/removing experts, so
+    // the new section is a real addition, not a re-read of the create prose.
+    const body = skillBodyLower();
+    const namesList = body.includes("list");
+    const namesView = body.includes("view") || body.includes("show");
+    const namesRemove = body.includes("remove") || body.includes("delete");
+    expect(namesList && namesView && namesRemove).toBe(true);
+  });
+
+  it("orders the remove flow host-CLI FIRST: `openclaw agents remove` precedes the procedural `sil_profile_remove` call", () => {
+    // The architect's partial-failure decision (card §110/§197): the skill runs
+    // the HOST wiring removal (`openclaw agents remove <id>`) BEFORE the sil
+    // artefact removal (`sil_profile_remove { agentId }`). Order in the prose IS
+    // the spec — artefacts-first then a failed host step leaves a broken-but-
+    // loading expert; host-first leaves only harmless, list-surfaced disk cruft.
+    //
+    // Adversarial precision on the anchor: `sil_profile_remove` is also named
+    // earlier in the intent→tool TABLE and the tool DESCRIPTION (before the
+    // numbered procedure). A naive first-occurrence `indexOf("sil_profile_remove")`
+    // would catch those reference mentions and FALSELY fail even on a correctly
+    // ordered procedure. Anchor the artefact step on its procedural CALL FORM
+    // (`sil_profile_remove { agentId }` — the invocation with its param), which
+    // appears only in the numbered remove procedure, so the ordering check pins
+    // the real step sequence, not an incidental earlier reference.
+    const body = skillBodyLower();
+    const hostRemoveIdx = body.indexOf("openclaw agents remove");
+    // The call-form prefix `sil_profile_remove {` marks the invocation (with its
+    // arg object) — present only in the numbered procedure, not the reference
+    // mentions. Resilient to whitespace inside the braces.
+    const artefactCallIdx = body.indexOf("sil_profile_remove {");
+    expect(hostRemoveIdx).toBeGreaterThanOrEqual(0);
+    expect(artefactCallIdx).toBeGreaterThanOrEqual(0);
+    expect(hostRemoveIdx).toBeLessThan(artefactCallIdx);
+  });
+
+  it("requires confirming with the user BEFORE a destructive remove", () => {
+    // Product rule 7 / UX: remove is destructive + irreversible, so the skill
+    // confirms before acting. The body must say so (confirm/confirmation before
+    // removing/deleting), so the agent does not silently delete.
+    const body = skillBodyLower();
+    const confirms =
+      body.includes("confirm") ||
+      body.includes("confirmation") ||
+      body.includes("explicit go-ahead") ||
+      body.includes("ask before");
+    expect(confirms).toBe(true);
+  });
+
+  it("names `not_found` graceful framing for an unknown expert (view & remove)", () => {
+    // Product rule 4 / UX principle: referencing an unknown expert fails
+    // gracefully — a plain not_found, ideally listing the experts that DO exist,
+    // never a stack trace or raw path. The body must name the not_found outcome.
+    expect(skillBodyLower()).toContain("not_found");
+  });
+
+  it("names `invalid_request` for a malformed/traversal expert id", () => {
+    // The fail-closed id-validation outcome the management tools surface — the
+    // body must name it so the agent recognizes a bad-id rejection (deletes
+    // nothing) versus an unknown expert (not_found).
+    expect(skillBodyLower()).toContain("invalid_request");
+  });
+
+  it("keeps the artefact-store source-of-truth framing (list reads profile.json, not the host list)", () => {
+    // Product rule 5: a sil expert IS a readable agents/<id>/profile.json — list
+    // reads the manifest, not the host agent list. The body must name the
+    // artefact store / profile.json as the listing source, so a bare host agent
+    // is not mistaken for a sil expert.
+    const body = skillBodyLower();
+    const namesArtefactSource =
+      body.includes("profile.json") ||
+      body.includes("artefact store") ||
+      body.includes("sil_data_dir") ||
+      body.includes("sil data dir");
+    expect(namesArtefactSource).toBe(true);
   });
 });
 

@@ -29,7 +29,8 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals { sil_product_get, sil_profile_materialize,
+ *     both sides equals { sil_product_get, sil_profile_get,
+ *     sil_profile_list, sil_profile_materialize, sil_profile_remove,
  *     sil_register, sil_search, sil_whoami }.
  */
 
@@ -127,7 +128,10 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // not just the symmetric drift check above.
     const expected = [
       "sil_product_get",
+      "sil_profile_get",
+      "sil_profile_list",
       "sil_profile_materialize",
+      "sil_profile_remove",
       "sil_register",
       "sil_search",
       "sil_whoami",
@@ -173,6 +177,29 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // registerProfileTools AND listed in openclaw.plugin.json#contracts.tools.
     expect(codeRegisteredNames().has("sil_profile_materialize")).toBe(true);
     expect(manifestToolNames().has("sil_profile_materialize")).toBe(true);
+  });
+
+  it("sil_profile_list is BOTH registered by register() and declared in contracts.tools", () => {
+    // The list-view-and-remove card's enumerate tool. Added to the existing
+    // registerProfileTools group (already wired into register() + here), so it
+    // must appear on BOTH sides of the equal set — registered AND declared.
+    expect(codeRegisteredNames().has("sil_profile_list")).toBe(true);
+    expect(manifestToolNames().has("sil_profile_list")).toBe(true);
+  });
+
+  it("sil_profile_get is BOTH registered by register() and declared in contracts.tools", () => {
+    // The list-view-and-remove card's view tool. Same group, same self-enforcing
+    // bar: a missing manifest entry (or a stale one) flips the set-equality RED.
+    expect(codeRegisteredNames().has("sil_profile_get")).toBe(true);
+    expect(manifestToolNames().has("sil_profile_get")).toBe(true);
+  });
+
+  it("sil_profile_remove is BOTH registered by register() and declared in contracts.tools", () => {
+    // The list-view-and-remove card's destructive remove tool (artefact half).
+    // Must appear on BOTH sides — registered by registerProfileTools AND listed
+    // in openclaw.plugin.json#contracts.tools.
+    expect(codeRegisteredNames().has("sil_profile_remove")).toBe(true);
+    expect(manifestToolNames().has("sil_profile_remove")).toBe(true);
   });
 });
 
