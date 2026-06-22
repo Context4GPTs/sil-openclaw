@@ -62,4 +62,4 @@ The **sil plugin** and the **sil skill** are always attached (that is what makes
 
 ## Runtime — how a created expert loads its behaviour
 
-When you (the sil skill) start a session inside a created expert, read `$SIL_DATA_DIR/agents/<agentId>/profile.json`, then load the `persona.md` (reaffirm the standing instructions) and `playbook.md` sub-skill (the domain shopping playbook) it points at. That is what lets the expert shop on its niche with no further setup.
+When you (the sil skill) start a session inside a created expert, read `$SIL_DATA_DIR/agents/<agentId>/profile.json`, then load the `persona.md` (reaffirm the standing instructions) and `playbook.md` sub-skill (the domain shopping playbook) it points at. That is what lets the expert shop on its niche with no further setup. To sharpen a created expert from what it observed in real sessions, see [`refine_expert.md`](refine_expert.md).

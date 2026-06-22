@@ -34,10 +34,13 @@ Confirm the `sil_*` tools are exposed. If they are missing from the available to
 | "what experts do I have?" / "list my experts" | `sil_profile_list` | [`references/manage_experts.md`](references/manage_experts.md) |
 | "show me / tell me about &lt;expert&gt;" | `sil_profile_get` | [`references/manage_experts.md`](references/manage_experts.md) |
 | "remove / delete &lt;expert&gt;" | `sil_profile_remove` (host-CLI-first — see the reference) | [`references/manage_experts.md`](references/manage_experts.md) |
+| "refine / sharpen / improve &lt;expert&gt;" / "the gift buyer keeps surfacing the wrong stuff — fix it" | (load → propose → confirm → persist — see the reference) | [`references/refine_expert.md`](references/refine_expert.md) |
 
 [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) holds the per-tool behaviour for the four core tools and the shared status taxonomy. Basic shopping needs only that one reference.
 
 [`references/manage_experts.md`](references/manage_experts.md) holds the list / view / remove flow for the experts the user has created — including the host-CLI-first remove ordering and the confirm-before-remove gate. Load it the moment the user wants to see or remove an existing expert.
+
+[`references/refine_expert.md`](references/refine_expert.md) holds the refinement loop for an *existing* expert — sharpening it from observed sessions, with a confirm-before-persist gate (nothing changes silently). Load it when the user wants to refine, sharpen, or amend an expert they already have.
 
 ### Creating a shopping expert — the endorsement-gated two-step
 
