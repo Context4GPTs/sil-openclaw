@@ -95,7 +95,7 @@ Following [`../references/agent_creation_engine.md`](../references/agent_creatio
 3. **Create the shell** — `openclaw agents add road-cycling-buyer --workspace ~/.openclaw/workspace-road-cycling-buyer --non-interactive --json`.
 4. **Materialize artefacts** — `sil_profile_materialize` with the spec writes `persona.md`, `playbook.md`, `profile.json` into `$SIL_DATA_DIR/agents/road-cycling-buyer/`.
 5. **System framing** — copy `persona.md` into the agent's workspace `SOUL.md`.
-6. **Wire sil** — `openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json` and `openclaw config set plugins.entries.sil.enabled true --merge`.
+6. **Wire sil** — `openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json` and `openclaw config set plugins.entries.sil.enabled true --strict-json`.
 7. **Validate with the host's OWN check, THEN declare created** — `openclaw config validate --json` returns valid → outcome **`created`**.
 8. **Tell the user** — the expert exists; opening it loads the persona + playbook and it shops on its niche with **no further setup**.
 
