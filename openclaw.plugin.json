@@ -10,6 +10,7 @@
   "contracts": {
     "tools": [
       "sil_product_get",
+      "sil_profile_materialize",
       "sil_register",
       "sil_search",
       "sil_whoami"
@@ -47,7 +48,7 @@
   },
   "security": {
     "shipsRuntimeCode": true,
-    "packagingNote": "Compiled JavaScript ships under ./dist. register() stays synchronous and opens nothing — it only registers tools. ALL I/O happens inside a tool's execute(): sil_register calls sil-web over the network, writes tokens.json + config.json to the plugin data directory (owner-only, 0600), and arms a bounded background poll timer that stops on the first terminal claim outcome or after the session deadline. sil_whoami reads the stored access token and calls sil-api for the user's identity, refreshing transparently via sil-web on a 401 (at most one refresh + one retry per call, no timer); a confirmed-dead session clears tokens.json. sil_search and sil_product_get read the stored access token and call sil-api's catalog endpoints (search / lookup) with it — read-only, no token write, no timer, a single round-trip (a 401 is a terminal re-register hint, no refresh). The PKCE verifier is held only in memory and is never written to disk. Tokens and identity PII are never logged.",
+    "packagingNote": "Compiled JavaScript ships under ./dist. register() stays synchronous and opens nothing — it only registers tools. ALL I/O happens inside a tool's execute(): sil_register calls sil-web over the network, writes tokens.json + config.json to the plugin data directory (owner-only, 0600), and arms a bounded background poll timer that stops on the first terminal claim outcome or after the session deadline. sil_whoami reads the stored access token and calls sil-api for the user's identity, refreshing transparently via sil-web on a 401 (at most one refresh + one retry per call, no timer); a confirmed-dead session clears tokens.json. sil_search and sil_product_get read the stored access token and call sil-api's catalog endpoints (search / lookup) with it — read-only, no token write, no timer, a single round-trip (a 401 is a terminal re-register hint, no refresh). sil_profile_materialize makes no network call and reads no token: it writes a created shopping expert's behaviour artefacts (persona.md, optional playbook.md, profile.json) atomically into $SIL_DATA_DIR/agents/<agentId>/ (owner-only, 0600) — the agent's host-config wiring is driven separately by the host CLI, never by this plugin. The PKCE verifier is held only in memory and is never written to disk. Tokens and identity PII are never logged.",
     "registersLongLivedService": false,
     "serviceIds": [],
     "runsTimers": true,
@@ -57,7 +58,7 @@
       "https://sil.4gpts.com"
     ],
     "filesystemScope": [
-      "$SIL_DATA_DIR (default $XDG_DATA_HOME/sil, else ~/.local/share/sil) — tokens.json, config.json"
+      "$SIL_DATA_DIR (default $XDG_DATA_HOME/sil, else ~/.local/share/sil) — tokens.json, config.json, agents/<agentId>/{persona.md,playbook.md,profile.json} (shopping-expert behaviour artefacts written by sil_profile_materialize)"
     ],
     "credentialsOnDisk": [
       "tokens.json (access + refresh token)",

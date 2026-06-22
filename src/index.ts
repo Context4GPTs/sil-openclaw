@@ -32,6 +32,7 @@ import {
 } from "./lib/config.js";
 import { registerCatalogTools } from "./tools/catalog.js";
 import { registerIdentityTools } from "./tools/identity.js";
+import { registerProfileTools } from "./tools/profile.js";
 
 export default definePluginEntry({
   id: "sil",
@@ -46,6 +47,7 @@ export default definePluginEntry({
 
     registerIdentityTools(api);
     registerCatalogTools(api);
+    registerProfileTools(api);
 
     api.logger.info("sil_plugin_loaded", {
       message: "sil plugin registered.",

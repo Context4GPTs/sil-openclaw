@@ -29,8 +29,8 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals { sil_product_get, sil_register, sil_search,
- *     sil_whoami }.
+ *     both sides equals { sil_product_get, sil_profile_materialize,
+ *     sil_register, sil_search, sil_whoami }.
  */
 
 import { describe, it, expect } from "vitest";
@@ -39,6 +39,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
+import { registerProfileTools } from "../tools/profile.js";
 import {
   createMockPluginApi,
   registeredToolNames,
@@ -80,6 +81,7 @@ function codeRegisteredNames(): Set<string> {
   const api = createMockPluginApi();
   registerIdentityTools(api);
   registerCatalogTools(api);
+  registerProfileTools(api);
   return registeredToolNames(api);
 }
 
@@ -125,6 +127,7 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // not just the symmetric drift check above.
     const expected = [
       "sil_product_get",
+      "sil_profile_materialize",
       "sil_register",
       "sil_search",
       "sil_whoami",
@@ -160,6 +163,16 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // openclaw.plugin.json#contracts.tools.
     expect(codeRegisteredNames().has("sil_product_get")).toBe(true);
     expect(manifestToolNames().has("sil_product_get")).toBe(true);
+  });
+
+  it("sil_profile_materialize is BOTH registered by register() and declared in contracts.tools", () => {
+    // The agent-creation engine's behaviour-artefact tool (card:
+    // create-a-valid-sil-wired-openclaw-agent-profile). registerProfileTools is
+    // wired into codeRegisteredNames (and into src/index.ts#register()), so the
+    // new tool must appear on BOTH sides of the equal set: registered by
+    // registerProfileTools AND listed in openclaw.plugin.json#contracts.tools.
+    expect(codeRegisteredNames().has("sil_profile_materialize")).toBe(true);
+    expect(manifestToolNames().has("sil_profile_materialize")).toBe(true);
   });
 });
 
