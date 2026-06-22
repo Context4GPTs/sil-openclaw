@@ -96,12 +96,15 @@ describe("plugin entry — registration contract", () => {
 
   it("wires the real tool groups into register() — registers exactly the real tool set", () => {
     // register() runs the real tool groups (no mock), so it populates the
-    // api with exactly the four real tools and NO example stub. This pins
+    // api with exactly the five real tools and NO example stub. This pins
     // the wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
+    // sil_profile_materialize (agent-creation engine, card:
+    // create-a-valid-sil-wired-openclaw-agent-profile) joins the set.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
       "sil_product_get",
+      "sil_profile_materialize",
       "sil_register",
       "sil_search",
       "sil_whoami",
