@@ -40,14 +40,14 @@ The **sil plugin** and the **sil skill** are always attached (that is what makes
 
 5. **Make the persona the agent's system framing.** Copy the materialized `persona.md` into the new agent's workspace `SOUL.md` (its persona bootstrap file), so the host injects the persona into the expert's system prompt.
 
-6. **Wire the sil skill and plugin into the agent (host CLI).** Attach the sil skill and enable the sil plugin for the created agent:
+6. **Wire the sil skill and plugin into the agent (host CLI).** Attach the sil skill and enable the sil plugin for the created agent. These shapes are asserted against the host the sil-stage round pins — **`alpine/openclaw:2026.4.15`** — where both are value-mode sets driven with `--strict-json` (the only set mode this image accepts):
    ```
    openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json
-   openclaw config set plugins.entries.sil.enabled true --merge
+   openclaw config set plugins.entries.sil.enabled true --strict-json
    ```
    The skill attach makes the agent **know how** to drive the tools; the plugin enable makes the four `sil_*` tools available to it (they come for free once the `sil` plugin is enabled). Keep `sil` in the agent's skill list and do not deny the `sil_*` tools in its tool profile.
 
-7. **Validate with the host's OWN check, THEN declare created.** Run `openclaw config validate --json`. "Valid" means *the host says yes* — never assert it yourself. Only when validation passes do you report the **`created`** outcome. If `openclaw config validate` returns `ok: false` (or any CLI step failed), report **`persistence_failed`** with the failing **path** and **cause**, and leave nothing partial behind. This validate-after-add step is what guarantees the host will load the profile.
+7. **Validate with the host's OWN check, THEN declare created.** Run `openclaw config validate --json`. On `alpine/openclaw:2026.4.15` the verdict shape is `{ valid, path, issues? }` — success keys off **`.valid`**, never an `ok` field. "Valid" means *the host says yes* — never assert it yourself. Only when the verdict reads `valid: true` do you report the **`created`** outcome. If `openclaw config validate` returns `valid: false` (or any CLI step failed), report **`persistence_failed`** with the failing **path** and **cause** (the `issues?` the verdict reports), and leave nothing partial behind. This validate-after-add step is what guarantees the host will load the profile.
 
 8. **Tell the user it is ready.** On `created`, tell the user the expert exists and how to open it. When they open the new agent, the host loads it: the sil plugin is enabled, the sil skill is attached, `SOUL.md` carries the persona, and the sil skill reads `$SIL_DATA_DIR/agents/<agentId>/profile.json` to load the persona + playbook — the expert calls `sil_search` / `sil_product_get` (and `sil_register` / `sil_whoami` as needed) on the user's intent with **no further setup**.
 
