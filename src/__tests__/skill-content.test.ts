@@ -69,6 +69,11 @@ const BRAINSTORM_PATH = join(SKILL_DIR, "references", "brainstorm_interview.md")
 const ENGINE_PATH = join(SKILL_DIR, "references", "agent_creation_engine.md");
 const MAPPING_PATH = join(SKILL_DIR, "references", "search_param_mapping.md");
 const MANAGE_PATH = join(SKILL_DIR, "references", "manage_experts.md");
+const EXPERT_SHOPPING_PATH = join(
+  SKILL_DIR,
+  "references",
+  "expert_shopping.md",
+);
 // SC6 — the refine-an-existing-expert loop (this card). NEW reference file; the
 // content-seam block at the foot of this file pins its load-bearing invariants.
 const REFINE_PATH = join(SKILL_DIR, "references", "refine_expert.md");
@@ -817,6 +822,100 @@ describe("references/agent_creation_engine.md — valid spec persists a host-loa
     const namesPathCause =
       body.includes("path") && body.includes("cause");
     expect(namesPathCause).toBe(true);
+  });
+});
+
+/* ===========================================================================
+ * HOST-WIRING SHAPES PINNED TO alpine/openclaw:2026.6.9
+ * (card: realign-skill-4-host-cli-to-openclaw-2026-4-15)
+ *
+ * tier: unit. The engine's two host-wiring shapes drifted from the real
+ * 2026.6.9 OpenClaw CLI the sil-stage host round probes live:
+ *   - the plugin-ENABLE step used `--merge`, which is NOT a flag on this image;
+ *     the real path is a value-mode set with `--strict-json`;
+ *   - the VALIDATE-verdict read keyed off a non-existent `ok: false`; the real
+ *     `openclaw config validate --json` shape is `{ valid, path, issues? }`, so
+ *     the verdict is read from `valid`.
+ * These mirror the host round's real-shape probes (sil-stage host-round-create.mjs
+ * 321-337) rather than re-asserting prose, turning "doc says X, host proves X"
+ * from coincidence into a checked invariant. Each shape is pinned in BOTH the
+ * engine reference AND the worked example (the copy-paste-most-likely artefact),
+ * so the two duplicated wirings cannot silently re-diverge.
+ *
+ * Adversarial: for EACH shape we assert presence-of-correct AND absence-of-
+ * defective. A one-sided presence check passes while a stray `--merge` lingers
+ * beside `--strict-json`, or a residual `ok: false` lingers beside `valid`.
+ * ========================================================================= */
+
+/** Lower-cased worked-example body — the example carries the SAME two wiring
+ * shapes by hand, so it is pinned alongside the engine reference. */
+function exampleBodyLower(): string {
+  return readBody(EXAMPLE_PATH).toLowerCase();
+}
+
+describe("references/agent_creation_engine.md — host-wiring shapes match alpine/openclaw:2026.6.9", () => {
+  it("enables the sil plugin with the host's real value-mode set (`--strict-json`), NOT `--merge`", () => {
+    // The 2026.6.9 CLI has no scalar `--merge` flag; the enable is a value-mode set
+    // with `--strict-json` (host-round-create.mjs:321-329). Anchor the POSITIVE
+    // on the FULL enable substring — `plugins.entries.sil.enabled true
+    // --strict-json` — not bare `--strict-json`, because the adjacent skills set
+    // already uses `--strict-json` correctly (line 45) and a bare-token check
+    // would pass even with the enable still on `--merge`.
+    const body = engineBodyLower();
+    expect(body).toContain(
+      "plugins.entries.sil.enabled true --strict-json",
+    );
+    // NEGATIVE: NO `--merge` remains anywhere in the engine reference — a stray
+    // `--merge` lingering beside the corrected `--strict-json` is exactly the
+    // one-sided-pass the card warns against. `--merge` appears nowhere
+    // legitimately in this doc, so absence of the bare flag is the tight check.
+    expect(body).not.toContain("--merge");
+  });
+
+  it("reads the validate verdict from `.valid` (the `{ valid, path, issues? }` shape), NOT a non-existent `ok: false`", () => {
+    // The real `openclaw config validate --json` shape is `{ valid, path,
+    // issues? }` (host-round-create.mjs:333-337) — success/failure keys off
+    // `valid`, never `ok`. POSITIVE: the verdict read references `valid`.
+    const body = engineBodyLower();
+    expect(body).toContain("valid");
+    // NEGATIVE: NO `ok: false` verdict read remains. Scope the negative match
+    // to the PRECISE verdict token `ok: false` — a bare `ok` is innocent prose
+    // elsewhere (step-4 `sil_profile_materialize` outcomes name a bare `ok`),
+    // and matching bare `ok` would false-positive on legitimate text.
+    expect(body).not.toContain("ok: false");
+  });
+
+  it("names/pins the LATEST asserted OpenClaw image tag `alpine/openclaw:2026.6.9` (couples the doc to the host that proves it), with NO stale `2026.4.15` lingering", () => {
+    // Surfacing the tag the sil-stage host round validates against makes "doc
+    // says X, host proves X" a coupled guarantee, not a coincidence — the next
+    // CLI surface change can no longer silently re-open this bug. Match the
+    // literal tag case-sensitively against the un-lowercased body so the
+    // asserted string is the exact tag, not an incidentally-cased near-miss.
+    const raw = readBody(ENGINE_PATH);
+    // POSITIVE: the doc pins the latest reproducible tag.
+    expect(raw).toContain("alpine/openclaw:2026.6.9");
+    // NEGATIVE: the superseded pin is gone everywhere — a stray `2026.4.15`
+    // lingering beside the corrected `2026.6.9` is exactly the one-sided-pass
+    // this card warns against (the doc↔host coupling is only real when a single
+    // tag is named). Scope the negative to the bare version token so any
+    // surviving `alpine/openclaw:2026.4.15` (or prose naming it) trips it.
+    expect(raw).not.toContain("2026.4.15");
+  });
+});
+
+describe("examples/road_cycling_expert_walkthrough.md — wiring shape stays coupled to the engine reference", () => {
+  it("carries the SAME corrected enable shape (`--strict-json`, NO `--merge`) as the engine reference", () => {
+    // The example is the copy-paste-most-likely artefact and duplicates the
+    // enable shape by hand (line 98). Pinning it here couples the two artefacts:
+    // a future edit cannot re-introduce `--merge` in the example with nothing
+    // red. Same FULL-substring anchor — the skills set on the same line already
+    // carries `--strict-json`, so a bare-token check would not catch a `--merge`
+    // enable.
+    const body = exampleBodyLower();
+    expect(body).toContain(
+      "plugins.entries.sil.enabled true --strict-json",
+    );
+    expect(body).not.toContain("--merge");
   });
 });
 
@@ -1986,5 +2085,540 @@ describe("references/refine_expert.md — no-observed-signal fallback: guided am
       (body.includes("fabricat") && body.includes("not")) ||
       (body.includes("invent") && body.includes("observation"));
     expect(disavowsFabrication).toBe(true);
+  });
+});
+
+/* ===========================================================================
+ * EXPERT-SHOPPING LOOP — the shop-time behaviour a created expert runs (SC4)
+ * (card: expert-shopping-behaviour-for-a-created-agent)
+ *
+ * tier: unit (single-reference content/ordering substring + indexOf checks) +
+ * integration (the cross-file additive-not-regressive seam). Same content-seam
+ * pattern as the engine/brainstorm blocks above: read the REAL
+ * skill/references/expert_shopping.md from disk, lowercase, and pin the
+ * shop-time loop as a SOURCE OF TRUTH — there is no plugin-tool change, no code
+ * path; the reference body IS the spec the created expert follows when a user
+ * states a shopping intent. The loop consumes the already-materialized profile
+ * artefacts (persona.md / playbook.md / profile.json under $SIL_DATA_DIR — the
+ * engine's Runtime hook ENDS where this loop STARTS) and the existing
+ * sil_search / sil_product_get tools UNCHANGED.
+ *
+ * Adversarial discipline (mirrors the engine/brainstorm blocks): anchor on step
+ * VERBS via indexOf ORDERING and OR-grouped intent tokens — NEVER on `§N`
+ * section numbers and NEVER on exact sentences, so any reword survives. The
+ * loop ORDER is the spec: elicit → map → search → compare → recommend, and
+ * re-fetch BEFORE the buy hand-off.
+ *
+ * No host, no network, no faked transcript: "a real expert genuinely shops like
+ * a specialist" is `live-verification`'s job, NOT a test tier (this repo has no
+ * host-load gate — CLAUDE.md). These pin the reference's load-bearing
+ * invariants, not merely that a keyword is present.
+ *
+ * Reference, not restate: the loop POINTS AT search_param_mapping.md for the
+ * param table and DELEGATES the status taxonomy to catalog_tools_reference.md —
+ * the no-duplication invariant the router-leanness tests already enforce on
+ * SKILL.md, extended here to the new reference.
+ * ========================================================================= */
+
+/** Lower-cased expert-shopping reference body — the file that OWNS the shop-time
+ * loop a created expert runs. Substring checks are intent ("the loop names X");
+ * indexOf comparisons pin step ORDER. */
+function expertShoppingBodyLower(): string {
+  return readBody(EXPERT_SHOPPING_PATH).toLowerCase();
+}
+
+describe("references/expert_shopping.md — exists and starts where the engine's Runtime hook ends", () => {
+  it("exists on disk", () => {
+    // RED until the expert-developer authors it. The router's
+    // every-references-path-exists glob auto-covers the new pointer once SKILL.md
+    // names it; this block pins the BODY's load-bearing invariants.
+    expect(existsSync(EXPERT_SHOPPING_PATH)).toBe(true);
+  });
+
+  it("frames a distinct shop-time loop for a created expert consuming the loaded profile artefacts", () => {
+    // SC4 is a NEW behaviour: the shop-time loop a created expert runs, driven by
+    // the playbook's rubric/priority order over the EXISTING tools. The body must
+    // name the profile artefacts it consumes (the engine's Runtime hook loads
+    // them — playbook/persona) AND the shopping subject, so this is a real
+    // addition, not a re-read of the engine's creation prose.
+    const body = expertShoppingBodyLower();
+    const namesArtefacts =
+      body.includes("playbook") ||
+      body.includes("persona") ||
+      body.includes("profile.json");
+    const namesShopping =
+      body.includes("shop") ||
+      body.includes("shopping intent") ||
+      body.includes("shopping");
+    expect(namesArtefacts).toBe(true);
+    expect(namesShopping).toBe(true);
+  });
+});
+
+describe("references/expert_shopping.md — the loop ORDER is the spec (elicit → map → search → compare → recommend)", () => {
+  it("names the elicit-in-priority-order step, disavows the form-fill, and forbids re-asking a stated attribute", () => {
+    // AC1: when a load-bearing attribute is missing, the expert elicits it through
+    // back-and-forth IN THE PLAYBOOK'S PRIORITY ORDER — not a fixed form-fill, and
+    // never re-asking what was already stated. Same shape as the brainstorm
+    // "not a form-fill" block: name the elicit step, the priority-order rule, the
+    // form-fill disavowal, and the no-re-ask rule (OR-grouped intent tokens).
+    const body = expertShoppingBodyLower();
+    expect(body).toContain("elicit");
+    const namesPriorityOrder =
+      body.includes("priority order") ||
+      body.includes("priority-order") ||
+      body.includes("priority-ordered") ||
+      (body.includes("priority") && body.includes("order"));
+    const disavowsForm =
+      body.includes("not a fixed form-fill") ||
+      body.includes("not a form-fill") ||
+      body.includes("not a form fill") ||
+      body.includes("not a form") ||
+      body.includes("not a fixed battery") ||
+      body.includes("not a question battery") ||
+      body.includes("not a wizard") ||
+      body.includes("not a questionnaire") ||
+      (body.includes("battery") && body.includes("not")) ||
+      (body.includes("form-fill") && body.includes("not"));
+    const forbidsReask =
+      body.includes("never re-ask") ||
+      body.includes("never reask") ||
+      body.includes("not re-ask") ||
+      body.includes("do not re-ask") ||
+      body.includes("don't re-ask") ||
+      body.includes("never re-asking") ||
+      body.includes("never ask again") ||
+      (body.includes("re-ask") && body.includes("never")) ||
+      (body.includes("already stated") && body.includes("never"));
+    expect(namesPriorityOrder).toBe(true);
+    expect(disavowsForm).toBe(true);
+    expect(forbidsReask).toBe(true);
+  });
+
+  it("states elicitation is need-driven — a sufficiently-specified intent proceeds straight to map+search (no invented question battery)", () => {
+    // AC (second criterion): the elicitation is need-driven, only for a MISSING
+    // load-bearing attribute. An intent that already carries enough load-bearing
+    // attributes for a defensible search proceeds to map + search — the expert
+    // does NOT invent an extra battery. The body must say elicitation triggers on
+    // a missing/load-bearing gap, not as a fixed gate before every search.
+    const body = expertShoppingBodyLower();
+    const namesLoadBearing =
+      body.includes("load-bearing") ||
+      body.includes("load bearing");
+    const namesNeedDriven =
+      body.includes("missing") ||
+      body.includes("need-driven") ||
+      body.includes("only when") ||
+      body.includes("only if") ||
+      body.includes("only for") ||
+      body.includes("already stated") ||
+      body.includes("sufficiently specified") ||
+      body.includes("enough") ||
+      body.includes("proceed straight") ||
+      body.includes("proceeds straight") ||
+      body.includes("straight to");
+    expect(namesLoadBearing).toBe(true);
+    expect(namesNeedDriven).toBe(true);
+  });
+
+  it("orders the loop steps elicit → map → search → compare → recommend (indexOf on step VERBS, not §N numbers)", () => {
+    // AC1+AC3+AC4: the loop ORDER is the spec, exactly as the engine pins
+    // validate-first / list-before-add. An agent following the prose top-to-bottom
+    // must elicit, then map answers to params, then search, then compare the
+    // returned candidates, then recommend. Anchor on the step VERBS so a reword of
+    // the prose survives and a §N renumber is irrelevant.
+    const body = expertShoppingBodyLower();
+    const elicitIdx = body.indexOf("elicit");
+    const mapIdx = body.indexOf("map");
+    const searchIdx = body.indexOf("sil_search");
+    const compareIdx = (() => {
+      for (const anchor of ["compare", "comparing", "evaluate"]) {
+        const i = body.indexOf(anchor);
+        if (i >= 0) return i;
+      }
+      return -1;
+    })();
+    const recommendIdx = (() => {
+      for (const anchor of ["recommend", "recommendation"]) {
+        const i = body.indexOf(anchor);
+        if (i >= 0) return i;
+      }
+      return -1;
+    })();
+    expect(elicitIdx).toBeGreaterThanOrEqual(0);
+    expect(mapIdx).toBeGreaterThanOrEqual(0);
+    expect(searchIdx).toBeGreaterThanOrEqual(0);
+    expect(compareIdx).toBeGreaterThanOrEqual(0);
+    expect(recommendIdx).toBeGreaterThanOrEqual(0);
+    // elicit precedes map precedes search precedes compare precedes recommend.
+    expect(elicitIdx).toBeLessThan(mapIdx);
+    expect(mapIdx).toBeLessThan(searchIdx);
+    expect(searchIdx).toBeLessThan(compareIdx);
+    expect(compareIdx).toBeLessThan(recommendIdx);
+  });
+});
+
+describe("references/expert_shopping.md — map step: real sil_search params, never an invented filter, ship_to empty", () => {
+  it("names sil_search, the never-invent-a-filter rule, and the ship_to-empty / no-sil_whoami-round-trip rule", () => {
+    // AC (map criterion): the expert maps each answer to a WELL-FORMED sil_search
+    // param, NEVER an invented filter, and leaves ship_to EMPTY so the server
+    // resolves the registered default (no sil_whoami round-trip). Same shape as
+    // the brainstorm mapping block: name the never-invent rule, ship_to, and
+    // disavow the sil_whoami round-trip — OR-grouped so a reword survives.
+    const body = expertShoppingBodyLower();
+    expect(body).toContain("sil_search");
+    const neverInvents =
+      body.includes("never invent a filter") ||
+      body.includes("never invent a param") ||
+      body.includes("not invent a filter") ||
+      body.includes("do not invent") ||
+      body.includes("never an invented filter") ||
+      body.includes("invented filter") ||
+      (body.includes("invent") && body.includes("filter"));
+    expect(neverInvents).toBe(true);
+    expect(body).toContain("ship_to");
+    const leavesShipToEmpty =
+      body.includes("ship_to empty") ||
+      body.includes("ship_to left empty") ||
+      body.includes("leave ship_to empty") ||
+      body.includes("leaves ship_to empty") ||
+      (body.includes("ship_to") && body.includes("empty"));
+    expect(leavesShipToEmpty).toBe(true);
+    const disavowsWhoamiRoundtrip =
+      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) ||
+      /sil_whoami[^.]*(never|not)/.test(body);
+    expect(disavowsWhoamiRoundtrip).toBe(true);
+  });
+
+  it("POINTS AT search_param_mapping.md for the param table (references, does NOT re-carry it)", () => {
+    // The references-not-restates invariant (architect risk): the loop's map step
+    // must LINK the dedicated mapping reference, not copy its table into this file.
+    // Two sources of truth drift. The body must name the mapping reference by
+    // relative path so an agent loads it for the worked table.
+    const body = expertShoppingBodyLower();
+    expect(body).toContain("search_param_mapping.md");
+  });
+});
+
+describe("references/expert_shopping.md — compare + recommend: rubric weighted by stated priorities, always the 'why', best-first preserved", () => {
+  it("names the compare-on-the-rubric step weighted by the user's stated priorities", () => {
+    // AC (compare/recommend criterion): the expert compares candidates on the
+    // PLAYBOOK'S RUBRIC weighted by the user's STATED priorities (plus persona
+    // hard-rules / hard-no's). The body must name the rubric AND tie it to the
+    // user's stated priorities — the specialist behaviour, not generic ranking.
+    const body = expertShoppingBodyLower();
+    const namesRubric =
+      body.includes("rubric") ||
+      (body.includes("compare") && body.includes("recommend"));
+    const tiesToStatedPriorities =
+      body.includes("stated priorities") ||
+      body.includes("stated priority") ||
+      body.includes("the user's stated") ||
+      body.includes("weighted by") ||
+      (body.includes("priorities") && body.includes("stated")) ||
+      (body.includes("priority") && body.includes("weight")) ||
+      body.includes("hard-no") ||
+      body.includes("hard no") ||
+      body.includes("hard-rule") ||
+      body.includes("hard rule");
+    expect(namesRubric).toBe(true);
+    expect(tiesToStatedPriorities).toBe(true);
+  });
+
+  it("requires domain-relevant rationale (always the 'why') with every recommendation", () => {
+    // UX principle / SC4 headline: the "why" IS the product. Every recommendation
+    // carries domain-relevant rationale tied to the rubric — not a bare list. The
+    // body must mandate the rationale / "why" with the recommendation.
+    const body = expertShoppingBodyLower();
+    const requiresWhy =
+      body.includes("rationale") ||
+      body.includes('"why"') ||
+      body.includes("the why") ||
+      body.includes("explain why") ||
+      body.includes("why it") ||
+      body.includes("why this") ||
+      (body.includes("recommend") && body.includes("because")) ||
+      (body.includes("recommendation") && body.includes("reason"));
+    expect(requiresWhy).toBe(true);
+  });
+
+  it("preserves sil_search's best-first order — present results best-first, never re-rank", () => {
+    // AC (compare criterion) + catalog_tools_reference: sil_search returns
+    // best-first; the expert presents in order and does NOT re-rank. The body must
+    // name the best-first / do-not-re-rank rule, so the rubric informs the
+    // recommendation's RATIONALE without re-sorting the list.
+    const body = expertShoppingBodyLower();
+    const namesBestFirst =
+      body.includes("best-first") ||
+      body.includes("best first") ||
+      body.includes("best match first") ||
+      body.includes("in order");
+    const disavowsRerank =
+      body.includes("never re-rank") ||
+      body.includes("never rerank") ||
+      body.includes("not re-rank") ||
+      body.includes("do not re-rank") ||
+      body.includes("don't re-rank") ||
+      (body.includes("re-rank") && body.includes("not")) ||
+      (body.includes("rerank") && body.includes("not"));
+    expect(namesBestFirst).toBe(true);
+    expect(disavowsRerank).toBe(true);
+  });
+});
+
+describe("references/expert_shopping.md — re-fetch before buy (sil_product_get) — never commit off the stale sil_search snapshot", () => {
+  it("names the re-fetch-with-sil_product_get-before-buy step", () => {
+    // AC (re-fetch criterion): before any buy hand-off, re-fetch the chosen item
+    // via sil_product_get for point-in-time price / availability / checkout_url.
+    // The body must name sil_product_get AND tie it to the pre-buy re-fetch.
+    const body = expertShoppingBodyLower();
+    expect(body).toContain("sil_product_get");
+    const namesRefetch =
+      body.includes("re-fetch") ||
+      body.includes("refetch") ||
+      body.includes("re-fetches") ||
+      body.includes("fetch again") ||
+      (body.includes("fetch") && body.includes("before"));
+    expect(namesRefetch).toBe(true);
+  });
+
+  it("forbids committing a buy off the stale sil_search snapshot", () => {
+    // AC (re-fetch criterion): never commit a buy off the earlier sil_search
+    // snapshot — price/availability/checkout_url are point-in-time. The body must
+    // disavow buying off the stale snapshot, distinct from merely naming the
+    // re-fetch step.
+    const body = expertShoppingBodyLower();
+    const namesStaleSnapshot =
+      body.includes("stale") ||
+      body.includes("point-in-time") ||
+      body.includes("point in time") ||
+      (body.includes("snapshot") && body.includes("never")) ||
+      (body.includes("snapshot") && body.includes("not")) ||
+      (body.includes("sil_search") && body.includes("snapshot"));
+    expect(namesStaleSnapshot).toBe(true);
+  });
+
+  it("orders the re-fetch step BEFORE the buy hand-off (indexOf on the re-fetch verb, not §N)", () => {
+    // The re-fetch must precede the buy/checkout hand-off in the prose, or an
+    // agent following top-to-bottom would commit on the stale snapshot. Anchor on
+    // sil_product_get (the re-fetch invocation) and the buy/checkout/purchase
+    // hand-off token. Same ordering discipline as the engine's add-then-validate.
+    const body = expertShoppingBodyLower();
+    const refetchIdx = body.indexOf("sil_product_get");
+    const buyIdx = (() => {
+      for (const anchor of [
+        "buy",
+        "checkout",
+        "purchase",
+        "hand-off to purchase",
+        "hand off to purchase",
+      ]) {
+        const i = body.indexOf(anchor);
+        if (i >= 0) return i;
+      }
+      return -1;
+    })();
+    expect(refetchIdx).toBeGreaterThanOrEqual(0);
+    expect(buyIdx).toBeGreaterThanOrEqual(0);
+    // The re-fetch (sil_product_get) precedes the buy hand-off — buy off fresh
+    // detail, never the stale sil_search snapshot.
+    expect(refetchIdx).toBeLessThan(buyIdx);
+  });
+});
+
+describe("references/expert_shopping.md — empty (ok + products: []) → relax-and-explain, distinct from the unservable case", () => {
+  it("names the ok-empty outcome, the relax/re-frame action, and the explain-what-changed rule", () => {
+    // AC (empty criterion): on status ok with products: [] the expert RELAXES or
+    // re-frames the params (loosens a constraint / broadens the query) and
+    // EXPLAINS what it changed and why — it does not dead-end silently. The body
+    // must name the ok-empty case, the relax/re-frame action, AND the explain
+    // rule — three distinct invariants.
+    const body = expertShoppingBodyLower();
+    const namesEmptyOk =
+      body.includes("products: []") ||
+      body.includes("products: [ ]") ||
+      body.includes("empty result") ||
+      body.includes("empty product") ||
+      body.includes("nothing matched") ||
+      body.includes("no matches") ||
+      (body.includes("ok") && body.includes("empty"));
+    const relaxes =
+      body.includes("relax") ||
+      body.includes("re-frame") ||
+      body.includes("reframe") ||
+      body.includes("loosen") ||
+      body.includes("broaden");
+    const explains =
+      body.includes("explain") ||
+      body.includes("what changed") ||
+      body.includes("what it changed") ||
+      body.includes("what was relaxed") ||
+      body.includes("say what");
+    expect(namesEmptyOk).toBe(true);
+    expect(relaxes).toBe(true);
+    expect(explains).toBe(true);
+  });
+
+  it("forbids the silent dead-end on empty (it never just stops)", () => {
+    // The empty-result silent dead-end is the named failure mode. The body must
+    // disavow stopping silently on an empty match — distinct from relaxing.
+    const body = expertShoppingBodyLower();
+    const forbidsDeadEnd =
+      body.includes("dead-end") ||
+      body.includes("dead end") ||
+      body.includes("never just stop") ||
+      body.includes("not just stop") ||
+      body.includes("does not dead-end") ||
+      body.includes("not stop silently") ||
+      body.includes("never stop silently") ||
+      (body.includes("silently") && body.includes("not")) ||
+      (body.includes("silent") && body.includes("never"));
+    expect(forbidsDeadEnd).toBe(true);
+  });
+});
+
+describe("references/expert_shopping.md — unservable domain → honest 'no', never junk (distinct from empty)", () => {
+  it("names the honest-'no' for a domain the catalog cannot serve, distinct from the empty-but-servable case", () => {
+    // AC (unservable criterion): for a domain the catalog GENUINELY cannot serve
+    // (not shippable / age-gated / out of scope) the expert says so HONESTLY — a
+    // different outcome from the empty-but-servable relax case. The body must name
+    // the unservable case (its triggers) AND that the answer is an honest "no".
+    const body = expertShoppingBodyLower();
+    const namesUnservable =
+      body.includes("cannot serve") ||
+      body.includes("can't serve") ||
+      body.includes("unservable") ||
+      body.includes("not shippable") ||
+      body.includes("non-shippable") ||
+      body.includes("age-gated") ||
+      body.includes("age gated") ||
+      body.includes("out of scope") ||
+      body.includes("out-of-scope");
+    const namesHonestNo =
+      body.includes("honest") ||
+      body.includes('say "no"') ||
+      body.includes("say so") ||
+      body.includes("says so") ||
+      body.includes("plainly") ||
+      body.includes('an honest "no"') ||
+      (body.includes("honest") && body.includes("no"));
+    expect(namesUnservable).toBe(true);
+    expect(namesHonestNo).toBe(true);
+  });
+
+  it("forbids fabricating / padding with junk to avoid saying 'no'", () => {
+    // UX principle "never return junk": the expert never pads with irrelevant or
+    // unbuyable options to avoid saying "no". The body must disavow the
+    // fabricate/pad-with-junk behaviour — distinct from the relax-and-explain path.
+    const body = expertShoppingBodyLower();
+    const forbidsJunk =
+      body.includes("never fabricate") ||
+      body.includes("not fabricate") ||
+      body.includes("do not fabricate") ||
+      body.includes("never pad") ||
+      body.includes("not pad") ||
+      body.includes("never junk") ||
+      body.includes("never return junk") ||
+      body.includes("not return junk") ||
+      body.includes("irrelevant") ||
+      body.includes("unbuyable") ||
+      (body.includes("junk") && body.includes("never")) ||
+      (body.includes("junk") && body.includes("not"));
+    expect(forbidsJunk).toBe(true);
+  });
+});
+
+describe("references/expert_shopping.md — non-ok status → follow the tool's own recovery, never improvise (and a non-ok is NOT an empty match)", () => {
+  it("names the follow-the-tool's-own-recovery / never-improvise rule on a non-ok status", () => {
+    // AC (non-ok criterion): on a sil_search/sil_product_get non-ok status the
+    // expert follows the tool's OWN recovery hint and never improvises a different
+    // one. Same shape as catalog_tools_reference's recovery rule, but the loop
+    // must REFERENCE it. The body must name the recovery hint AND the
+    // never-improvise rule.
+    const body = expertShoppingBodyLower();
+    expect(body).toContain("recovery");
+    const neverImprovise =
+      body.includes("never improvise") ||
+      body.includes("not improvise") ||
+      body.includes("do not improvise") ||
+      body.includes("don't improvise") ||
+      body.includes("never a different") ||
+      body.includes("follow the tool") ||
+      body.includes("follow the recovery") ||
+      (body.includes("recovery") && body.includes("never"));
+    expect(neverImprovise).toBe(true);
+  });
+
+  it("states a non-ok status is NOT an empty match (no pointless param-relaxing on a retryable / auth failure)", () => {
+    // The mis-attribution failure mode: a retryable (transient/source down) or an
+    // auth status must NOT be treated like an empty match — relaxing params on a
+    // retryable is wrong recovery. The body must distinguish a non-ok status from
+    // an ok-empty result, so the expert retries / re-auths instead of relaxing.
+    const body = expertShoppingBodyLower();
+    const distinguishesNonOkFromEmpty =
+      body.includes("not an empty match") ||
+      body.includes("not the same as empty") ||
+      body.includes("not an empty result") ||
+      body.includes("not treat") ||
+      body.includes("do not treat") ||
+      body.includes("never treat") ||
+      body.includes("not mistake") ||
+      body.includes("don't mistake") ||
+      body.includes("not the same as a non-ok") ||
+      (body.includes("retryable") && body.includes("not")) ||
+      (body.includes("transient") &&
+        (body.includes("not") || body.includes("never")));
+    expect(distinguishesNonOkFromEmpty).toBe(true);
+  });
+
+  it("DELEGATES the status taxonomy to catalog_tools_reference.md — does NOT re-carry the taxonomy tokens that belong only to it", () => {
+    // The references-not-restates invariant (architect risk): the loop must LINK
+    // catalog_tools_reference.md for the status taxonomy, NOT copy it. Anchor on
+    // tokens that belong ONLY to the moved taxonomy detail — the register
+    // browser-handshake status and the catalog status vocabulary that the
+    // router-leanness test (skill-content.test.ts:350-365) already pins as ABSENT
+    // from the lean SKILL.md. Apply the same discipline to the new reference: it
+    // must NOT re-carry those taxonomy tokens.
+    const body = expertShoppingBodyLower();
+    // It must POINT AT the taxonomy's owner.
+    expect(body).toContain("catalog_tools_reference.md");
+    // And it must NOT re-list the taxonomy that belongs only there. These tokens
+    // are unique to catalog_tools_reference.md's per-tool detail + status table;
+    // the loop references the outcomes by behaviour (empty / non-ok / recovery),
+    // never by re-carrying the vocabulary.
+    expect(body).not.toContain("awaiting_browser");
+    expect(body).not.toContain("not_registered");
+    expect(body).not.toContain("must_reregister");
+  });
+});
+
+describe("skill bundle — the expert-shopping path is ADDITIVE: the generic profile-less flow does NOT regress", () => {
+  it("keeps the lean router's four-core-tools-in-the-router invariant intact (no regression from the additive pointer)", () => {
+    // Integration AC: the generic, profile-less shopping flow must keep working —
+    // the four core tools stay named in the lean router, and the new
+    // expert-shopping pointer is ADDITIVE, not a replacement. This re-asserts the
+    // router-leanness invariant survives the additive change (the existing
+    // four-core-tools-in-the-router test at :200-213 is the canonical guard; this
+    // pins it together with the bundle's source-of-truth for the new reference).
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+    for (const tool of [
+      "sil_register",
+      "sil_whoami",
+      "sil_search",
+      "sil_product_get",
+    ]) {
+      expect(body).toContain(tool);
+    }
+  });
+
+  it("the new reference stays a SHOP-TIME reference — no contributor 'adding a tool' prose leaked in", () => {
+    // The bundle-wide no-contributor-prose invariant (skill-content.test.ts
+    // :555-579) applies to the new reference too: a runtime shopping reference
+    // never carries registerXTools / contracts.tools / "adding a tool" plumbing.
+    const body = expertShoppingBodyLower();
+    expect(body).not.toContain("registerxtools");
+    expect(body).not.toContain("contracts.tools");
+    expect(body).not.toContain("adding a real tool");
+    expect(body).not.toContain("adding a tool");
   });
 });
