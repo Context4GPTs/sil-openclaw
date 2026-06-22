@@ -10,6 +10,23 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **The `sil` skill now runs a brainstorm interview before creating a shopping
+  expert.** A new §4 in `skill/SKILL.md` drives an open, back-and-forth interview
+  that converges five sections *with* the user — domain framing, persona,
+  elicitation style, answer→`sil_search`-param mapping, and recommendation rubric
+  — eliciting BOTH the domain's decision-attributes AND the user's own
+  tastes/budget/constraints, then assembles a tailored spec the §5 engine
+  materializes via `sil_profile_materialize`. Nothing is created until the user
+  explicitly endorses the assembled draft (abandon-mid-flow leaves nothing
+  written, no teardown); a vague domain is narrowed with the user first; a name
+  collision offers refine-or-rename and never clobbers. The mapping targets only
+  real `sil_search` params (budget → `price_min`/`price_max` in minor units,
+  "prefer secondhand" → `condition`, niche → `query`/`category`) and leaves
+  `ship_to` empty so sil resolves the registered default server-side. The engine
+  section is renumbered §4→§5 (and "Adding a real tool" §5→§6).
+
 ## [0.2.4] - 2026-06-18
 
 ### Fixed
