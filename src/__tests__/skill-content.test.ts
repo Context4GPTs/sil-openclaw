@@ -818,11 +818,11 @@ describe("references/agent_creation_engine.md — valid spec persists a host-loa
 });
 
 /* ===========================================================================
- * HOST-WIRING SHAPES PINNED TO alpine/openclaw:2026.4.15
+ * HOST-WIRING SHAPES PINNED TO alpine/openclaw:2026.6.9
  * (card: realign-skill-4-host-cli-to-openclaw-2026-4-15)
  *
  * tier: unit. The engine's two host-wiring shapes drifted from the real
- * 2026.4.15 OpenClaw CLI the sil-stage host round probes live:
+ * 2026.6.9 OpenClaw CLI the sil-stage host round probes live:
  *   - the plugin-ENABLE step used `--merge`, which is NOT a flag on this image;
  *     the real path is a value-mode set with `--strict-json`;
  *   - the VALIDATE-verdict read keyed off a non-existent `ok: false`; the real
@@ -845,9 +845,9 @@ function exampleBodyLower(): string {
   return readBody(EXAMPLE_PATH).toLowerCase();
 }
 
-describe("references/agent_creation_engine.md — host-wiring shapes match alpine/openclaw:2026.4.15", () => {
+describe("references/agent_creation_engine.md — host-wiring shapes match alpine/openclaw:2026.6.9", () => {
   it("enables the sil plugin with the host's real value-mode set (`--strict-json`), NOT `--merge`", () => {
-    // The 2026.4.15 CLI has no `--merge` flag; the enable is a value-mode set
+    // The 2026.6.9 CLI has no scalar `--merge` flag; the enable is a value-mode set
     // with `--strict-json` (host-round-create.mjs:321-329). Anchor the POSITIVE
     // on the FULL enable substring — `plugins.entries.sil.enabled true
     // --strict-json` — not bare `--strict-json`, because the adjacent skills set
@@ -877,15 +877,21 @@ describe("references/agent_creation_engine.md — host-wiring shapes match alpin
     expect(body).not.toContain("ok: false");
   });
 
-  it("names/pins the asserted OpenClaw image tag `alpine/openclaw:2026.4.15` (couples the doc to the host that proves it)", () => {
-    // Surfacing the tag the sil-stage host round validates against
-    // (docker-compose.yml:254, OPENCLAW_VERSION=2026.4.15) makes "doc says X,
-    // host proves X" a coupled guarantee, not a coincidence — the next CLI
-    // surface change can no longer silently re-open this bug. Match the literal
-    // tag case-sensitively against the un-lowercased body so the asserted
-    // string is the exact tag, not an incidentally-cased near-miss.
+  it("names/pins the LATEST asserted OpenClaw image tag `alpine/openclaw:2026.6.9` (couples the doc to the host that proves it), with NO stale `2026.4.15` lingering", () => {
+    // Surfacing the tag the sil-stage host round validates against makes "doc
+    // says X, host proves X" a coupled guarantee, not a coincidence — the next
+    // CLI surface change can no longer silently re-open this bug. Match the
+    // literal tag case-sensitively against the un-lowercased body so the
+    // asserted string is the exact tag, not an incidentally-cased near-miss.
     const raw = readBody(ENGINE_PATH);
-    expect(raw).toContain("alpine/openclaw:2026.4.15");
+    // POSITIVE: the doc pins the latest reproducible tag.
+    expect(raw).toContain("alpine/openclaw:2026.6.9");
+    // NEGATIVE: the superseded pin is gone everywhere — a stray `2026.4.15`
+    // lingering beside the corrected `2026.6.9` is exactly the one-sided-pass
+    // this card warns against (the doc↔host coupling is only real when a single
+    // tag is named). Scope the negative to the bare version token so any
+    // surviving `alpine/openclaw:2026.4.15` (or prose naming it) trips it.
+    expect(raw).not.toContain("2026.4.15");
   });
 });
 
