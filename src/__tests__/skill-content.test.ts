@@ -69,6 +69,9 @@ const BRAINSTORM_PATH = join(SKILL_DIR, "references", "brainstorm_interview.md")
 const ENGINE_PATH = join(SKILL_DIR, "references", "agent_creation_engine.md");
 const MAPPING_PATH = join(SKILL_DIR, "references", "search_param_mapping.md");
 const MANAGE_PATH = join(SKILL_DIR, "references", "manage_experts.md");
+// SC6 — the refine-an-existing-expert loop (this card). NEW reference file; the
+// content-seam block at the foot of this file pins its load-bearing invariants.
+const REFINE_PATH = join(SKILL_DIR, "references", "refine_expert.md");
 const EXAMPLE_PATH = join(
   SKILL_DIR,
   "examples",
@@ -1486,5 +1489,502 @@ describe("examples/ — a worked end-to-end example exists and demonstrates the 
     expect(endorseIdx).toBeGreaterThanOrEqual(0);
     expect(addIdx).toBeGreaterThanOrEqual(0);
     expect(endorseIdx).toBeLessThan(addIdx);
+  });
+});
+
+/* ===========================================================================
+ * REFINE AN EXISTING EXPERT — the self-reinforcement loop seam
+ * (card: refine-an-expert-from-observed-sessions-self-reinf — SC6)
+ *
+ * tier: unit (the *nature* of each assertion is a single-artefact prose check
+ * over the real reference body — the umbrella file declares itself integration
+ * because it reads real skill files, but these mirror how the sibling SC4 card
+ * tagged its identical reference-content criteria). Same content-seam pattern as
+ * the engine/brainstorm blocks above: read the REAL
+ * skill/references/refine_expert.md from disk, lowercase, and pin the loop's
+ * load-bearing invariants via OR-grouped intent-token substrings + indexOf
+ * step-VERB ordering anchors — NEVER `§N` numbers, NEVER exact sentences, so the
+ * prose stays editable.
+ *
+ * The architect's verdict: SC6 is skill-guidance-only — no `src/` change, no new
+ * plugin tool. The refine loop COMPOSES the existing `sil_profile_get` (load) +
+ * `sil_profile_materialize` (atomic in-place re-write) tools; the reference body
+ * IS the spec the host agent follows, exactly as it is for the engine. These
+ * never fake a host: "a real refinement genuinely sharpens the expert" is
+ * `live-verification`'s job (this repo has NO host-load gate per CLAUDE.md), and
+ * the artefact-interaction half (the in-place re-write preserving prior artefacts
+ * on failure; the materialize→re-materialize→read round-trip) is pinned by the
+ * integration test in src/__tests__/lib/refine-rewrite.test.ts.
+ *
+ * The 7 unit invariants pinned here come straight from the card's 7 `unit`
+ * acceptance criteria / the In-Dev handoff "Where to start (qa-developer)" list.
+ * RED on arrival: refine_expert.md does not exist yet (expert-developer authors
+ * it in GREEN) — every read + assert below fails until it does.
+ * ========================================================================= */
+
+/** Lower-cased refine reference body — the file that OWNS the refine loop. */
+function refineBodyLower(): string {
+  return readBody(REFINE_PATH).toLowerCase();
+}
+
+/** The refine reference + the search-param mapping it DELEGATES the param table
+ * to, read as one corpus — for the never-invent-a-filter / ship_to-empty checks
+ * where the worked param detail legitimately lives in the mapping reference the
+ * refine loop POINTS AT (rather than re-carrying). */
+function refineCorpusLower(): string {
+  return (readBody(REFINE_PATH) + "\n" + readBody(MAPPING_PATH)).toLowerCase();
+}
+
+describe("references/refine_expert.md — exists + names the load/persist tools it composes (AC1/AC4)", () => {
+  it("exists on disk", () => {
+    // RED until expert-developer authors the reference. A refine loop with no
+    // reference is a broken capability — the router would point at a missing file.
+    expect(existsSync(REFINE_PATH)).toBe(true);
+  });
+
+  it("names the load step `sil_profile_get` (load the expert it sharpens)", () => {
+    // Step 1 (trigger + load): the loop loads the named expert's current
+    // artefacts via the existing get tool — manifest + persona + playbook. The
+    // reference must name the real load tool so the path is loadable.
+    expect(refineBodyLower()).toContain("sil_profile_get");
+  });
+
+  it("names the persist step `sil_profile_materialize` (the atomic in-place re-write)", () => {
+    // Step 4 (persist): the confirmed subset persists by re-running the engine's
+    // persist step — `sil_profile_materialize` with the UPDATED spec. The
+    // reference must name the real persist tool (NOT a hand-rolled write under
+    // $SIL_DATA_DIR — that would diverge from the store's atomic-write idiom and
+    // re-open the half-refined surface).
+    expect(refineBodyLower()).toContain("sil_profile_materialize");
+  });
+});
+
+describe("references/refine_expert.md — propose from the OBSERVED session, tied to evidence, not a generic template (AC1)", () => {
+  it("frames a distinct REFINE capability (load→propose→confirm→persist), not the create engine or a shop loop", () => {
+    // Adversarial: the engine already CREATES experts and SC4 owns the SHOP loop.
+    // This card adds REFINE — sharpening an EXISTING expert. The body must name
+    // refining/sharpening an existing expert, so it is a real distinct capability,
+    // not a re-read of the create prose or a duplicate of the shop loop.
+    const body = refineBodyLower();
+    const namesRefine =
+      body.includes("refine") ||
+      body.includes("sharpen") ||
+      body.includes("amend");
+    const namesExistingExpert =
+      body.includes("existing expert") ||
+      body.includes("an existing") ||
+      (body.includes("existing") && body.includes("expert")) ||
+      body.includes("the named expert");
+    expect(namesRefine).toBe(true);
+    expect(namesExistingExpert).toBe(true);
+  });
+
+  it("proposes refinements drawn from the OBSERVED session (not invented out of nothing)", () => {
+    // Step 2 (propose, session-grounded): proposals are drawn from what the agent
+    // actually OBSERVED in the just-completed/in-progress shopping session under
+    // this expert. The body must name the observed session as the source.
+    const body = refineBodyLower();
+    const namesObserved =
+      body.includes("observed session") ||
+      body.includes("observed shopping") ||
+      body.includes("what it observed") ||
+      body.includes("what the agent observed") ||
+      (body.includes("observed") && body.includes("session"));
+    expect(namesObserved).toBe(true);
+  });
+
+  it("ties each proposal to CONCRETE observed evidence (a query that returned junk, what was rejected, a taste volunteered-but-uncaptured)", () => {
+    // Business rule / AC1: every proposal CITES the observed evidence behind it —
+    // a `sil_search` param mapping that returned (ir)relevant items, what the user
+    // accepted/rejected, a taste volunteered but never captured. The body must
+    // name the evidence categories so a proposal is grounded, not guesswork.
+    const body = refineBodyLower();
+    // The evidence is tied to what was returned / accepted / rejected / volunteered.
+    const namesEvidence =
+      body.includes("evidence") ||
+      body.includes("grounded") ||
+      body.includes("returned relevant") ||
+      body.includes("returned irrelevant") ||
+      body.includes("relevant or irrelevant") ||
+      body.includes("relevant vs irrelevant") ||
+      body.includes("accepted") ||
+      body.includes("rejected") ||
+      body.includes("volunteered");
+    expect(namesEvidence).toBe(true);
+    // And it names WHICH artefact element each proposal changes — a persona
+    // standing rule, a mapping entry, a rubric weight — so a proposal is concrete.
+    const namesArtefactTarget =
+      body.includes("persona") &&
+      (body.includes("mapping") || body.includes("rubric"));
+    expect(namesArtefactTarget).toBe(true);
+  });
+
+  it("disavows a generic, ungrounded improvement template (no plausible-sounding guesswork)", () => {
+    // AC1 / risk: a proposal NOT tied to anything the session showed is guesswork
+    // dressed as expertise. The body must disavow the generic-template shape —
+    // "not a generic template", "never a generic improvement", "do not fabricate".
+    const body = refineBodyLower();
+    const disavowsGeneric =
+      body.includes("not a generic template") ||
+      body.includes("not a generic") ||
+      body.includes("never a generic") ||
+      body.includes("not a template") ||
+      body.includes("not generic") ||
+      body.includes("ungrounded") ||
+      (body.includes("generic") && body.includes("not")) ||
+      (body.includes("template") && body.includes("not"));
+    expect(disavowsGeneric).toBe(true);
+  });
+});
+
+describe("references/refine_expert.md — per-proposal SUBSET confirmation; only the confirmed subset folds in (AC2)", () => {
+  it("names per-proposal subset confirmation (all / some / none — not all-or-nothing)", () => {
+    // AC2: the user confirms a SUBSET (per-proposal accept/reject), not just a
+    // single yes/no over the whole batch. The body must name subset confirmation.
+    const body = refineBodyLower();
+    const namesSubset =
+      body.includes("subset") ||
+      body.includes("all, some, or none") ||
+      body.includes("all/some/none") ||
+      body.includes("all, some or none") ||
+      body.includes("per-proposal") ||
+      body.includes("per proposal") ||
+      body.includes("which to keep") ||
+      body.includes("which refinements to keep");
+    expect(namesSubset).toBe(true);
+  });
+
+  it("states ONLY the confirmed subset is folded into the spec + persisted (the rest discarded with the conversation)", () => {
+    // AC2: only the confirmed subset persists; the unconfirmed proposals are
+    // discarded with the conversation. The body must say only the confirmed
+    // changes are folded in / persisted — no over-persist.
+    const body = refineBodyLower();
+    const onlyConfirmed =
+      body.includes("only the confirmed") ||
+      body.includes("only confirmed") ||
+      body.includes("confirmed subset") ||
+      (body.includes("confirmed") && body.includes("folded")) ||
+      (body.includes("only") && body.includes("confirm") && body.includes("persist"));
+    expect(onlyConfirmed).toBe(true);
+    const discardsRest =
+      body.includes("discard") ||
+      body.includes("discarded") ||
+      body.includes("dies with the conversation") ||
+      body.includes("live only in the conversation") ||
+      body.includes("lives only in the conversation") ||
+      body.includes("only in the conversation") ||
+      body.includes("nothing else persists") ||
+      body.includes("no more");
+    expect(discardsRest).toBe(true);
+  });
+});
+
+describe("references/refine_expert.md — confirm-before-persist GATE; never inferred from silence/off-topic (AC3)", () => {
+  it("names the confirm-before-persist gate (an explicit affirmative act)", () => {
+    // AC3 (the strongest invariant): nothing persists without the user's explicit
+    // confirmation. The body must name confirmation as an explicit affirmative act
+    // gating the persist.
+    const body = refineBodyLower();
+    const namesConfirmGate =
+      body.includes("confirm") ||
+      body.includes("confirmation") ||
+      body.includes("explicit") ||
+      body.includes("affirmative");
+    expect(namesConfirmGate).toBe(true);
+  });
+
+  it("states confirmation is NEVER inferred from silence or an off-topic / unrelated reply", () => {
+    // AC3 headline trust contract: "confirm" is never inferred from silence or
+    // from the user answering an unrelated question. The body must disavow both.
+    const body = refineBodyLower();
+    const disavowsSilence =
+      body.includes("never inferred from silence") ||
+      body.includes("not inferred from silence") ||
+      body.includes("never from silence") ||
+      (body.includes("silence") && body.includes("never")) ||
+      (body.includes("silence") && body.includes("not"));
+    const disavowsOffTopic =
+      body.includes("off-topic") ||
+      body.includes("off topic") ||
+      body.includes("unrelated question") ||
+      body.includes("unrelated reply") ||
+      body.includes("answering an unrelated") ||
+      body.includes("answering something unrelated") ||
+      body.includes("an unrelated");
+    expect(disavowsSilence).toBe(true);
+    expect(disavowsOffTopic).toBe(true);
+  });
+
+  it("orders the CONFIRM verb strictly BEFORE the persist/materialize verb (the gate precedes the write)", () => {
+    // AC3 ordering anchor (mirrors the engine's validate-before-add): the confirm
+    // step must come textually BEFORE the `sil_profile_materialize`/persist step,
+    // so an agent following top-to-bottom confirms first and can never persist a
+    // proposal the user has not confirmed. Order in the prose IS the spec.
+    //
+    // Adversarial precision: anchor the persist side on the materialize TOOL
+    // token (the write surface), and the confirm side on the `confirm` verb. If
+    // the reference legitimately names the materialize tool earlier (e.g. naming
+    // the persist step it routes to), the LAST confirm before the materialize
+    // CALL still proves the gate; here we require the FIRST confirm to precede the
+    // materialize mention — a procedure that materializes before any confirm is
+    // exactly the trust violation this pins.
+    const body = refineBodyLower();
+    const confirmIdx = body.indexOf("confirm");
+    const materializeIdx = body.indexOf("sil_profile_materialize");
+    expect(confirmIdx).toBeGreaterThanOrEqual(0);
+    expect(materializeIdx).toBeGreaterThanOrEqual(0);
+    expect(confirmIdx).toBeLessThan(materializeIdx);
+  });
+});
+
+describe("references/refine_expert.md — persist is atomic; a failure leaves the PRIOR artefacts intact (AC4)", () => {
+  it("frames the persist as an atomic in-place re-write of THAT ONE agentId's artefacts", () => {
+    // AC4: persona drift → persona.md; mapping/rubric/elicitation drift →
+    // playbook.md; the re-materialize is an ATOMIC in-place re-write of that one
+    // expert's artefacts (full-spec, never a partial/field-level write). The body
+    // must name the atomic/all-or-nothing re-write and the artefact files.
+    const body = refineBodyLower();
+    const namesAtomic =
+      body.includes("atomic") ||
+      body.includes("all-or-nothing") ||
+      body.includes("all or nothing") ||
+      body.includes("in-place re-write") ||
+      body.includes("in-place rewrite") ||
+      body.includes("re-write") ||
+      body.includes("rewrite") ||
+      body.includes("overwrite");
+    expect(namesAtomic).toBe(true);
+    // The artefact files the re-write targets.
+    expect(body).toContain("persona.md");
+    expect(body).toContain("playbook.md");
+  });
+
+  it("states a persist FAILURE leaves the PRIOR artefacts intact (never a half-refined expert) and tells the user it did not stick", () => {
+    // AC4 failure half: a failed re-write leaves the PRIOR artefacts intact (the
+    // store's `dirPreexisted` guard never tears down a pre-existing dir), and the
+    // user is told the refinement did not stick. The body must name BOTH — prior
+    // artefacts survive, and never a half-refined expert.
+    const body = refineBodyLower();
+    const priorSurvives =
+      body.includes("prior artefacts") ||
+      body.includes("prior artifacts") ||
+      body.includes("prior expert") ||
+      body.includes("leaves the prior") ||
+      body.includes("leave the prior") ||
+      body.includes("prior state") ||
+      body.includes("left intact") ||
+      body.includes("leaves intact") ||
+      (body.includes("intact") && body.includes("prior")) ||
+      (body.includes("unchanged") && body.includes("fail"));
+    const neverHalfRefined =
+      body.includes("half-refined") ||
+      body.includes("half refined") ||
+      body.includes("never half") ||
+      body.includes("nothing partial") ||
+      body.includes("no partial") ||
+      body.includes("did not stick") ||
+      body.includes("didn't stick") ||
+      body.includes("does not stick");
+    expect(priorSurvives).toBe(true);
+    expect(neverHalfRefined).toBe(true);
+  });
+});
+
+describe("references/refine_expert.md — per-user/local under $SIL_DATA_DIR; NO server endpoint on the refine path (AC6)", () => {
+  it("frames refinement as per-user + local under $SIL_DATA_DIR (no shared store, no cross-user signal)", () => {
+    // AC6: the improvement is per-user and local — written only to this user's
+    // $SIL_DATA_DIR/agents/<agentId>/, no server-side aggregation, no shared
+    // store. The body must name per-user/local AND the data dir.
+    const body = refineBodyLower();
+    const namesPerUserLocal =
+      body.includes("per-user") ||
+      body.includes("per user") ||
+      body.includes("local") ||
+      body.includes("on this machine") ||
+      body.includes("your own");
+    const namesDataDir =
+      body.includes("$sil_data_dir") ||
+      body.includes("sil_data_dir") ||
+      body.includes("sil data directory") ||
+      body.includes("sil data dir");
+    expect(namesPerUserLocal).toBe(true);
+    expect(namesDataDir).toBe(true);
+    // And it disavows server-side aggregation / a shared store / cross-user signal.
+    const disavowsServer =
+      body.includes("no server-side aggregation") ||
+      body.includes("no server side aggregation") ||
+      body.includes("no shared store") ||
+      body.includes("no shared expert") ||
+      body.includes("no cross-user") ||
+      body.includes("no server endpoint") ||
+      (body.includes("no") && body.includes("aggregation")) ||
+      (body.includes("never") && body.includes("shared"));
+    expect(disavowsServer).toBe(true);
+  });
+
+  it("NEGATIVE: names NO server / sil-api endpoint on the refine path (no register/whoami round-trip, no network call)", () => {
+    // AC6 negative token check: the refine/persist path calls no server endpoint.
+    // The catalog/identity server-call surface must NOT appear as a refine STEP —
+    // the loop reasons over loaded artefacts + observations and persists locally.
+    // sil_register / sil_whoami are the identity round-trips the refine path must
+    // not perform; a `sil-api` / server-endpoint token would mean a network call.
+    const body = refineBodyLower();
+    // No identity round-trip on the refine path (the loop loads + persists, it
+    // does not register or whoami).
+    expect(body).not.toContain("sil_register");
+    expect(body).not.toContain("sil_whoami");
+    // No raw server/api endpoint token on the refine path.
+    expect(body).not.toContain("sil-api");
+    expect(body).not.toContain("api.sil");
+    expect(body).not.toContain("https://");
+  });
+});
+
+describe("references/refine_expert.md — single-agentId isolation; other experts + generic shopping untouched (AC7)", () => {
+  it("scopes the persist to the single named agentId's directory", () => {
+    // AC7: the persist touches exactly `agents/<agentId>/` for the named expert.
+    // The body must name the single-agentId scope (keyed off the one validated id).
+    const body = refineBodyLower();
+    const namesAgentScope =
+      body.includes("agentid") ||
+      body.includes("agent id") ||
+      body.includes("agents/<") ||
+      body.includes("agents/") ||
+      body.includes("the named expert");
+    expect(namesAgentScope).toBe(true);
+  });
+
+  it("states other experts AND the generic profile-less shopping path are UNTOUCHED", () => {
+    // AC7 isolation bar: no sibling expert's artefacts mutate, and a plain sil
+    // session still shops exactly as today. The body must name BOTH — other
+    // experts untouched AND generic/profile-less shopping untouched.
+    const body = refineBodyLower();
+    const othersUntouched =
+      body.includes("other expert") ||
+      body.includes("sibling") ||
+      body.includes("another expert") ||
+      (body.includes("other") && body.includes("untouched"));
+    const genericUntouched =
+      body.includes("generic") ||
+      body.includes("profile-less") ||
+      body.includes("profileless") ||
+      body.includes("plain sil") ||
+      body.includes("plain shopping") ||
+      (body.includes("untouched") && body.includes("shopping"));
+    expect(othersUntouched).toBe(true);
+    expect(genericUntouched).toBe(true);
+  });
+});
+
+describe("references/refine_expert.md — mapping refinements target REAL sil_search params; POINT AT the mapping, don't restate it (AC8)", () => {
+  it("names the never-invent-a-filter rule (a no-matching-param taste folds into query text or the rubric)", () => {
+    // AC8: a refinement to the answer→param mapping maps ONLY onto real
+    // sil_search params; a volunteered taste with no matching param folds into
+    // `query` text or the rubric — NEVER a fabricated filter. The body must name
+    // the never-invent rule AND the fold-into-query/rubric fallback.
+    const body = refineBodyLower();
+    const namesNeverInvent =
+      body.includes("never an invented filter") ||
+      body.includes("never invent a filter") ||
+      body.includes("not invent a filter") ||
+      body.includes("never an invented") ||
+      body.includes("invented filter") ||
+      body.includes("fabricated filter") ||
+      body.includes("real sil_search param") ||
+      body.includes("only real") ||
+      (body.includes("invent") && body.includes("filter"));
+    expect(namesNeverInvent).toBe(true);
+    const foldsIntoQueryOrRubric =
+      body.includes("query text") ||
+      body.includes("into query") ||
+      body.includes("into the query") ||
+      body.includes("the rubric") ||
+      (body.includes("query") && body.includes("rubric"));
+    expect(foldsIntoQueryOrRubric).toBe(true);
+  });
+
+  it("names the ship_to-empty / no-sil_whoami-round-trip rule", () => {
+    // AC8: the mapping leaves ship_to EMPTY (server resolves the registered
+    // default) and never round-trips sil_whoami to populate it. The refine
+    // reference must name this rule (consistent with the established mapping
+    // rules) — read with the mapping reference it points at, since the worked
+    // ship_to detail may legitimately live in the mapping reference.
+    const body = refineCorpusLower();
+    expect(body).toContain("ship_to");
+    const leavesEmpty =
+      body.includes("ship_to empty") ||
+      body.includes("ship_to left empty") ||
+      body.includes("leave ship_to empty") ||
+      body.includes("leaves ship_to empty") ||
+      (body.includes("ship_to") && body.includes("empty"));
+    expect(leavesEmpty).toBe(true);
+    const disavowsWhoamiRoundtrip =
+      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) ||
+      /sil_whoami[^.]*(never|not)/.test(body);
+    expect(disavowsWhoamiRoundtrip).toBe(true);
+  });
+
+  it("POINTS AT search_param_mapping.md rather than re-carrying the param table (references-not-restates)", () => {
+    // AC8 / the no-duplication invariant (same one the router tests pin): the
+    // refine reference must LINK the mapping reference, NOT restate the param
+    // table. Two checks: (1) it names the mapping reference by relative path;
+    // (2) it does NOT re-carry the worked param TOKENS that belong only to the
+    // mapping reference (a refine reference that lists price_min/price_max/
+    // condition itself has duplicated the table — drift waiting to happen).
+    const body = readBody(REFINE_PATH).toLowerCase();
+    const pointsAtMapping =
+      body.includes("search_param_mapping.md") ||
+      body.includes("references/search_param_mapping.md");
+    expect(pointsAtMapping).toBe(true);
+    // It must NOT re-carry the param table's worked tokens (link, don't restate).
+    expect(body).not.toContain("price_min");
+    expect(body).not.toContain("price_max");
+  });
+});
+
+describe("references/refine_expert.md — no-observed-signal fallback: guided amend, never fabricate (AC9)", () => {
+  it("names the no-observed-signal fallback — guided amend (ask what to change) or invite-to-shop-first", () => {
+    // AC9: when no observed session signal is available (a fresh session, or the
+    // prior session out of context), the agent falls back to a guided amend (ask
+    // the user what to change) or invites them to shop first. The body must name
+    // the no-signal case AND the fallback.
+    const body = refineBodyLower();
+    const namesNoSignal =
+      body.includes("no observed") ||
+      body.includes("no session") ||
+      body.includes("fresh session") ||
+      body.includes("out of context") ||
+      body.includes("no signal") ||
+      body.includes("without an observed") ||
+      body.includes("no shopping session");
+    expect(namesNoSignal).toBe(true);
+    const namesFallback =
+      body.includes("guided amend") ||
+      body.includes("ask the user what to change") ||
+      body.includes("ask what to change") ||
+      body.includes("ask what they") ||
+      body.includes("invite") ||
+      body.includes("shop first") ||
+      body.includes("shop a session first");
+    expect(namesFallback).toBe(true);
+  });
+
+  it("states the agent must NOT fabricate session observations", () => {
+    // AC9 trust bar: the expert must NEVER invent session evidence to propose
+    // against. The body must disavow fabricating observations.
+    const body = refineBodyLower();
+    const disavowsFabrication =
+      body.includes("not fabricate") ||
+      body.includes("never fabricate") ||
+      body.includes("do not fabricate") ||
+      body.includes("don't fabricate") ||
+      body.includes("not invent") ||
+      body.includes("never invent") ||
+      body.includes("without inventing") ||
+      body.includes("rather than inventing") ||
+      body.includes("rather than invent") ||
+      (body.includes("fabricat") && body.includes("not")) ||
+      (body.includes("invent") && body.includes("observation"));
+    expect(disavowsFabrication).toBe(true);
   });
 });
