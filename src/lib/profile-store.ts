@@ -120,7 +120,17 @@ export type MaterializeResult =
 const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 /** Resolve the per-agent artefact directory under the plugin's data dir. Never
- * hardcoded — `getDataDir()` honors `$SIL_DATA_DIR`/`$XDG_DATA_HOME`. */
+ * hardcoded — `getDataDir()` honors `$SIL_DATA_DIR`/`$XDG_DATA_HOME`.
+ *
+ * SAFETY: this resolver does NOT guard `agentId` — it joins it as a path segment
+ * verbatim. The path-traversal guard lives at the only caller, `materializeProfile`,
+ * which validates `agentId` against `AGENT_ID_RE` (lower-kebab, not `main`) BEFORE
+ * the join, so `../escape`, `a/../b`, `.`, etc. never reach here. The guard is
+ * placed at the caller (not here) because validation must precede ALL writes for
+ * the validate-first / write-nothing-on-bad-input invariant to hold; a guard
+ * duplicated here would be redundant for that path. A FUTURE DIRECT CALLER of this
+ * exported resolver would bypass the guard — re-run `AGENT_ID_RE` (or route through
+ * `materializeProfile`) before trusting the returned path with any filesystem op. */
 export function getAgentArtefactDir(agentId: string): string {
   return join(getDataDir(), AGENTS_SUBDIR, agentId);
 }
