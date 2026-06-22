@@ -25,6 +25,26 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   `sil_search` params (budget → `price_min`/`price_max` in minor units, "prefer
   secondhand" → `condition`, niche → `query`/`category`) and leaves `ship_to`
   empty so sil resolves the registered default server-side.
+- **Local expert lifecycle — list, view, and remove the shopping experts you
+  create.** Three new tools manage the artefact store the create-engine writes
+  (`$SIL_DATA_DIR/agents/<id>/`): `sil_profile_list` enumerates your experts
+  most-recently-created first (sourced from each `profile.json` manifest — the
+  authoritative "is a sil expert" signal — with one corrupt manifest isolated
+  in `unreadable[]`, never aborting the listing); `sil_profile_get` returns one
+  expert's full detail (name, persona, optional playbook, manifest path,
+  createdAt); and `sil_profile_remove` deletes exactly one validated expert's
+  behaviour-artefact directory. All three make no network call and read no
+  token — generic profile-less shopping is unchanged. Removal is the **artefact
+  half only**: the host-wiring half (`openclaw agents remove`) is host-CLI
+  driven and runs **first** (a failed artefact step then leaves only harmless,
+  list-surfaced disk cruft — never a broken-but-loading expert), and the skill
+  **confirms before removing**. `sil_profile_remove` is fail-closed and scoped:
+  a malformed/traversal/`main` id is rejected (`invalid_request`) and deletes
+  nothing, an absent id is `not_found` (idempotent — safe to re-run), and a
+  genuine filesystem failure is `persistence_failed` with the path + cause —
+  never a thrown error across the tool boundary. The list/view/remove flow lives
+  in its own progressive-disclosure reference, `references/manage_experts.md`,
+  which the router routes the manage intents to.
 
 ### Changed
 
@@ -32,19 +52,19 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   (skill-creator convention).** `skill/SKILL.md` is now a maximally-lean pure
   router: frontmatter, a one-paragraph role, the three always-on behavioural
   principles, a brief session-start note, and an intent→tool→reference routing
-  table — nothing more. The detailed procedures moved into four self-contained
+  table — nothing more. The detailed procedures moved into self-contained
   references loaded on demand: `references/catalog_tools_reference.md` (the four
   core tools' per-tool behaviour + the shared status taxonomy),
   `references/brainstorm_interview.md` (the interview),
-  `references/agent_creation_engine.md` (the ordered creation engine), and
+  `references/agent_creation_engine.md` (the ordered creation engine),
   `references/search_param_mapping.md` (the answer→`sil_search`-param mapping),
-  with a worked end-to-end walkthrough under
-  `examples/road_cycling_expert_walkthrough.md`. The endorsement-before-engine
-  gate now lives as the router's two-step trigger (interview first; engine only
-  after explicit endorsement). The contributor-facing "adding a tool" prose —
-  duplicated from the repo `CLAUDE.md` and never needed at runtime — was removed
-  from the skill entirely. No detail is duplicated between the router and any
-  reference.
+  and `references/manage_experts.md` (the list/view/remove flow), with a worked
+  end-to-end walkthrough under `examples/road_cycling_expert_walkthrough.md`.
+  The endorsement-before-engine gate now lives as the router's two-step trigger
+  (interview first; engine only after explicit endorsement). The
+  contributor-facing "adding a tool" prose — duplicated from the repo
+  `CLAUDE.md` and never needed at runtime — was removed from the skill entirely.
+  No detail is duplicated between the router and any reference.
 
 ## [0.2.4] - 2026-06-18
 

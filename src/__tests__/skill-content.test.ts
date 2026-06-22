@@ -47,6 +47,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
+import { registerProfileTools } from "../tools/profile.js";
 import {
   createMockPluginApi,
   registeredToolNames,
@@ -67,6 +68,7 @@ const CATALOG_TOOLS_PATH = join(
 const BRAINSTORM_PATH = join(SKILL_DIR, "references", "brainstorm_interview.md");
 const ENGINE_PATH = join(SKILL_DIR, "references", "agent_creation_engine.md");
 const MAPPING_PATH = join(SKILL_DIR, "references", "search_param_mapping.md");
+const MANAGE_PATH = join(SKILL_DIR, "references", "manage_experts.md");
 const EXAMPLE_PATH = join(
   SKILL_DIR,
   "examples",
@@ -125,13 +127,35 @@ function readBody(path: string): string {
 
 /** The set of names the real register code emits against a mock api. Must
  * call EVERY tool group that src/index.ts#register() wires, so the skill
- * body is checked against the REAL tool surface (`sil_register`,
- * `sil_whoami`, `sil_search`, `sil_product_get`). Mirror register(). */
+ * is checked against the REAL tool surface (`sil_register`, `sil_whoami`,
+ * `sil_search`, `sil_product_get`, and the `sil_profile_*` family —
+ * materialize + list/get/remove). Mirror register() — registerProfileTools
+ * is wired in too, so the bundle-mentions check below covers the profile
+ * tools, not just identity + catalog. */
 function registeredNames(): Set<string> {
   const api = createMockPluginApi();
   registerIdentityTools(api);
   registerCatalogTools(api);
+  registerProfileTools(api);
   return registeredToolNames(api);
+}
+
+/** The whole progressive-disclosure bundle as one lower-case corpus: the
+ * router PLUS every reference + example. Under progressive disclosure the
+ * BUNDLE is the source of truth for the tool surface — a tool may be named
+ * in the file that OWNS its procedure (e.g. `sil_profile_materialize` lives
+ * in the engine reference, the manage tools in `manage_experts.md`), not
+ * forced into the lean router. The bundle-mentions gate checks against this. */
+function bundleCorpus(): string {
+  return [
+    readBody(SKILL_PATH),
+    readBody(CATALOG_TOOLS_PATH),
+    readBody(BRAINSTORM_PATH),
+    readBody(ENGINE_PATH),
+    readBody(MAPPING_PATH),
+    readBody(MANAGE_PATH),
+    readBody(EXAMPLE_PATH),
+  ].join("\n");
 }
 
 describe("skill/SKILL.md — discoverability", () => {
@@ -157,21 +181,43 @@ describe("skill/SKILL.md — discoverability", () => {
   });
 });
 
-describe("skill/SKILL.md — body is a source of truth for the tool surface", () => {
-  it("names EVERY registered real tool in its body", () => {
-    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+describe("skill bundle — source of truth for the tool surface", () => {
+  it("names EVERY registered real tool somewhere in the bundle (router or the reference that owns it)", () => {
+    // Progressive disclosure: the BUNDLE (router + references + example) is the
+    // source of truth, not the lean router alone. Every registered tool must be
+    // named in the file that OWNS its procedure — the four core tools + the
+    // manage tools in the router/their references, and `sil_profile_materialize`
+    // in the engine reference (the router must NOT inline it — the lean-router
+    // block below pins that). So we check the registered surface against the
+    // whole bundle, reporting any unnamed tool by name.
+    const corpus = bundleCorpus();
     const names = registeredNames();
     expect(names.size).toBeGreaterThan(0); // sanity: there ARE tools
-    const missing = [...names].filter((name) => !body.includes(name));
+    const missing = [...names].filter((name) => !corpus.includes(name));
     expect(missing).toEqual([]);
   });
 
-  it("names no removed example tool (sil_ping / sil_echo) in its body", () => {
-    // The card's contributor-mental-model goal: the skill no longer
-    // presents the deleted stubs as a real, callable tool surface.
+  it("names the four core tools in the LEAN router itself (the always-loaded entry point)", () => {
+    // The router is what an agent reads first, before loading any reference. The
+    // four core shopping tools must be named in the router so the session-start
+    // tool check has a source of truth without loading a reference.
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    expect(body).not.toContain("sil_ping");
-    expect(body).not.toContain("sil_echo");
+    for (const tool of [
+      "sil_register",
+      "sil_whoami",
+      "sil_search",
+      "sil_product_get",
+    ]) {
+      expect(body).toContain(tool);
+    }
+  });
+
+  it("names no removed example tool (sil_ping / sil_echo) anywhere in the bundle", () => {
+    // The contributor-mental-model goal: the skill no longer presents the
+    // deleted stubs as a real, callable tool surface — in NO bundle file.
+    const corpus = bundleCorpus();
+    expect(corpus).not.toContain("sil_ping");
+    expect(corpus).not.toContain("sil_echo");
   });
 });
 
@@ -320,7 +366,10 @@ describe("skill/SKILL.md — lean router that routes to references + examples", 
 
   it("every references/… and examples/… path SKILL.md mentions EXISTS on disk", () => {
     // Mirrors skill-creator's referenced-files-must-exist validation: a
-    // router that points at a missing reference is a broken skill.
+    // router that points at a missing reference is a broken skill. This glob
+    // auto-covers references/manage_experts.md once the router names it (the
+    // manage block below asserts that route), so a dangling manage pointer
+    // fails here too.
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
     const referenced = [
       ...body.matchAll(/(references|examples)\/[A-Za-z0-9_./-]+\.md/g),
@@ -329,6 +378,176 @@ describe("skill/SKILL.md — lean router that routes to references + examples", 
     const missing = referenced.filter(
       (rel) => !existsSync(join(SKILL_DIR, rel)),
     );
+    expect(missing).toEqual([]);
+    // Explicitly: the manage reference is one of the paths the router points
+    // at, and it exists on disk (path-integrity, named for clarity).
+    expect(referenced).toContain("references/manage_experts.md");
+    expect(existsSync(MANAGE_PATH)).toBe(true);
+  });
+
+  it("routes the manage intents (list/view/remove) to references/manage_experts.md", () => {
+    // The new manage capability is wired into the router exactly like the other
+    // intents: a routing row mapping the list/view/remove intents to the three
+    // sil_profile_* tools and pointing at the manage reference. The router must
+    // name all three tools AND the reference, so an agent reading the router
+    // alone knows where the manage flow's detail lives.
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+    for (const tool of [
+      "sil_profile_list",
+      "sil_profile_get",
+      "sil_profile_remove",
+    ]) {
+      expect(body).toContain(tool);
+    }
+    expect(body).toContain("references/manage_experts.md");
+  });
+});
+
+/* ===========================================================================
+ * MANAGE LOCAL EXPERTS — list / view / remove
+ * (card: list-view-and-remove-local-expert-agents)
+ *
+ * tier: integration. The three management procedures are conversational prose
+ * in references/manage_experts.md (the file that OWNS the manage flow after the
+ * progressive-disclosure re-home) driving the three plugin tools — plus the
+ * host CLI for the wiring half of remove. The reference body IS the source of
+ * truth the host agent follows, so — exactly as the engine block pins its
+ * procedure — we pin that the manage reference names each tool and spells out
+ * the load-bearing invariants: host-CLI-FIRST remove ordering, confirm-before-
+ * remove, graceful not_found / invalid_request framing, and the artefact-store
+ * (`profile.json`) source-of-truth (never the host agent list).
+ *
+ * These anchor on tool NAMES + content tokens, NEVER on `§N` section numbers,
+ * so they survive any renumber.
+ * ========================================================================= */
+
+/** Lower-cased manage reference body — the file that OWNS the list/view/remove
+ * flow after the re-home. The manage tools' procedure detail lives here, not in
+ * the lean router. */
+function manageBodyLower(): string {
+  return readBody(MANAGE_PATH).toLowerCase();
+}
+
+describe("references/manage_experts.md — names the three management tools by name (list/view/remove)", () => {
+  it("exists on disk", () => {
+    expect(existsSync(MANAGE_PATH)).toBe(true);
+  });
+
+  it("names sil_profile_list, sil_profile_get, and sil_profile_remove in the reference", () => {
+    const body = readBody(MANAGE_PATH);
+    const missing = [
+      "sil_profile_list",
+      "sil_profile_get",
+      "sil_profile_remove",
+    ].filter((name) => !body.includes(name));
+    // Report by name so a forgotten tool is named, not an opaque false.
+    expect(missing).toEqual([]);
+  });
+});
+
+describe("references/manage_experts.md — manage-experts procedure spells out the load-bearing invariants", () => {
+  it("frames a distinct manage/list/view/remove capability (not just the create engine)", () => {
+    // The create engine already names experts. This card adds MANAGEMENT — the
+    // reference must name listing/viewing/removing experts, so the re-homed
+    // section is a real capability, not a re-read of the create prose.
+    const body = manageBodyLower();
+    const namesList = body.includes("list");
+    const namesView = body.includes("view") || body.includes("show");
+    const namesRemove = body.includes("remove") || body.includes("delete");
+    expect(namesList && namesView && namesRemove).toBe(true);
+  });
+
+  it("orders the remove flow host-CLI FIRST: `openclaw agents remove` precedes the procedural `sil_profile_remove` call", () => {
+    // The architect's partial-failure decision: the skill runs the HOST wiring
+    // removal (`openclaw agents remove <id>`) BEFORE the sil artefact removal
+    // (`sil_profile_remove { agentId }`). Order in the prose IS the spec —
+    // artefacts-first then a failed host step leaves a broken-but-loading
+    // expert; host-first leaves only harmless, list-surfaced disk cruft.
+    //
+    // Adversarial precision on the anchor: `sil_profile_remove` is also named
+    // earlier in the intent→tool TABLE and the per-tool prose (before the
+    // numbered procedure). A naive first-occurrence indexOf would catch those
+    // reference mentions and FALSELY fail even on a correctly ordered procedure.
+    // Anchor the artefact step on its procedural CALL FORM (`sil_profile_remove {`
+    // — the invocation with its arg object), which appears only in the numbered
+    // remove procedure, so the ordering check pins the real step sequence.
+    const body = manageBodyLower();
+    const hostRemoveIdx = body.indexOf("openclaw agents remove");
+    const artefactCallIdx = body.indexOf("sil_profile_remove {");
+    expect(hostRemoveIdx).toBeGreaterThanOrEqual(0);
+    expect(artefactCallIdx).toBeGreaterThanOrEqual(0);
+    expect(hostRemoveIdx).toBeLessThan(artefactCallIdx);
+  });
+
+  it("requires confirming with the user BEFORE a destructive remove", () => {
+    // Remove is destructive + irreversible, so the skill confirms before acting.
+    // The reference must say so (confirm/confirmation before removing), so the
+    // agent does not silently delete.
+    const body = manageBodyLower();
+    const confirms =
+      body.includes("confirm") ||
+      body.includes("confirmation") ||
+      body.includes("explicit go-ahead") ||
+      body.includes("ask before");
+    expect(confirms).toBe(true);
+  });
+
+  it("names `not_found` graceful framing for an unknown expert (view & remove)", () => {
+    // Referencing an unknown expert fails gracefully — a plain not_found, ideally
+    // listing the experts that DO exist, never a stack trace or raw path. The
+    // reference must name the not_found outcome AND the graceful framing.
+    const body = manageBodyLower();
+    expect(body).toContain("not_found");
+    const graceful =
+      body.includes("never surface a stack trace") ||
+      body.includes("never a stack trace") ||
+      body.includes("not a stack trace") ||
+      (body.includes("stack trace") && body.includes("never")) ||
+      body.includes("raw path") ||
+      body.includes("raw filesystem path");
+    expect(graceful).toBe(true);
+  });
+
+  it("names `invalid_request` for a malformed/traversal expert id (deletes nothing)", () => {
+    // The fail-closed id-validation outcome the management tools surface — the
+    // reference must name it so the agent recognizes a bad-id rejection (deletes
+    // nothing) versus an unknown expert (not_found).
+    expect(manageBodyLower()).toContain("invalid_request");
+  });
+
+  it("keeps the artefact-store source-of-truth framing (list reads profile.json, not the host list)", () => {
+    // A sil expert IS a readable agents/<id>/profile.json — list reads the
+    // manifest, not the host agent list. The reference must name the artefact
+    // store / profile.json as the listing source, so a bare host agent is not
+    // mistaken for a sil expert.
+    const body = manageBodyLower();
+    const namesArtefactSource =
+      body.includes("profile.json") ||
+      body.includes("artefact store") ||
+      body.includes("sil_data_dir") ||
+      body.includes("sil data dir");
+    expect(namesArtefactSource).toBe(true);
+    // And it must say this is the source of truth (never artefacts-first /
+    // never the host list as the authority).
+    const namesSourceOfTruth =
+      body.includes("source of truth") ||
+      body.includes("source-of-truth") ||
+      body.includes("never the host agent list") ||
+      body.includes("not the host agent list");
+    expect(namesSourceOfTruth).toBe(true);
+  });
+
+  it("names the manage status taxonomy (ok / not_found / invalid_request / removed / persistence_failed)", () => {
+    // The manage flow has its own outcome vocabulary. The reference must name
+    // each status so an agent loading it knows how to route each outcome.
+    const body = manageBodyLower();
+    const missing = [
+      "ok",
+      "not_found",
+      "invalid_request",
+      "removed",
+      "persistence_failed",
+    ].filter((s) => !body.includes(s));
     expect(missing).toEqual([]);
   });
 });
@@ -345,6 +564,7 @@ describe("skill — the contributor-facing 'adding a tool' prose is GONE from th
       readBody(BRAINSTORM_PATH),
       readBody(ENGINE_PATH),
       readBody(MAPPING_PATH),
+      readBody(MANAGE_PATH),
       readBody(EXAMPLE_PATH),
     ]
       .join("\n")

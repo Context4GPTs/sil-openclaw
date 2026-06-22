@@ -38,11 +38,14 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
+  readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   writeFileSync,
+  type Dirent,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 
 import { getDataDir } from "./credentials.js";
@@ -245,4 +248,347 @@ function atomicWrite(path: string, contents: string): void {
   writeFileSync(tmp, contents, { mode: FILE_MODE });
   renameSync(tmp, path);
   chmodSync(path, FILE_MODE);
+}
+
+// ===========================================================================
+// Local expert lifecycle — list / view / remove the artefact half.
+//
+// The manifest (`profile.json`) is the source of truth for "is this a sil
+// expert": a directory under `agents/<id>/` with a readable profile.json IS an
+// expert; a bare host `agents.list[]` entry without one is not ours to manage.
+// The host-config (wiring) half of list/remove is the host agent driving its
+// own `openclaw …` CLI — these primitives only ever touch `$SIL_DATA_DIR`.
+//
+// Each primitive returns a discriminated result and NEVER throws across the
+// boundary (mirroring MaterializeResult), so one corrupt manifest or a single
+// failed delete degrades only its own outcome — never the whole operation.
+// ===========================================================================
+
+/** Resolve the agents subtree root under the plugin's data dir — the parent of
+ * every per-agent artefact directory. The deleter asserts a target is strictly
+ * a child of this (and never this itself), so a delete can never reach the
+ * parent and wipe sibling experts. */
+function getAgentsRoot(): string {
+  return join(getDataDir(), AGENTS_SUBDIR);
+}
+
+/** Re-run the writer's exact `agentId` gate at a DIRECT caller of
+ * `getAgentArtefactDir`. Returns `null` when valid; an `invalid_request`
+ * variant naming the field otherwise. The gate is identical to
+ * `materializeProfile`'s validate-first block (`AGENT_ID_RE` + non-`main`),
+ * applied BEFORE any `join`/`read`/`rm` so a `../`, `/`, `.`, or `main` never
+ * becomes a filesystem path segment. `getAgentArtefactDir`'s SAFETY note
+ * mandates exactly this for every direct caller — list does not (it never
+ * trusts a caller-supplied id; it reads only ids it discovered on disk), but
+ * read and remove DO take a caller id and so call this first. */
+function rejectBadAgentId(
+  agentId: unknown,
+): { ok: false; kind: "invalid_request"; field: "agentId"; message: string } | null {
+  if (!nonBlank(agentId)) {
+    return invalidAgentId("agentId is required and must be non-empty.");
+  }
+  if (agentId === "main") {
+    return invalidAgentId('"main" is host-reserved and is not a sil expert id.');
+  }
+  if (!AGENT_ID_RE.test(agentId)) {
+    return invalidAgentId(
+      "agentId must be lower-kebab (a-z, 0-9, hyphen) — got: " + JSON.stringify(agentId),
+    );
+  }
+  return null;
+}
+
+function invalidAgentId(
+  message: string,
+): { ok: false; kind: "invalid_request"; field: "agentId"; message: string } {
+  return { ok: false, kind: "invalid_request", field: "agentId", message };
+}
+
+/** One listed expert, summarized from its manifest (no body read — list stays
+ * cheap). `hasPlaybook` lets the skill flag a specialized expert at a glance. */
+export interface ListedProfile {
+  agentId: string;
+  name: string;
+  hasPlaybook: boolean;
+  createdAt: string;
+}
+
+/** A `profile.json` that could not be read or parsed — surfaced inline so one
+ * corrupt expert never blinds the user to the healthy ones (Product rule 6). */
+export interface UnreadableProfile {
+  /** The directory name (best-effort id); the manifest may be unreadable. */
+  agentId: string;
+  /** Human-readable cause (no token/PII — a parse error or fs error message). */
+  error: string;
+}
+
+/** `listAgentProfiles()` result — always `ok: true` (an empty/absent store is a
+ * normal, successful empty listing, not an error). The `ok` discriminator keeps
+ * the shape uniform with the read/remove results so callers narrow identically. */
+export interface ListResult {
+  ok: true;
+  experts: ListedProfile[];
+  unreadable: UnreadableProfile[];
+}
+
+/** `readAgentProfile(agentId)` result — discriminated, never throws. */
+export type ReadResult =
+  | {
+      ok: true;
+      agentId: string;
+      name: string;
+      persona: string;
+      playbook?: string;
+      profilePath: string;
+      createdAt: string;
+    }
+  | { ok: false; kind: "not_found"; agentId: string; message: string }
+  | { ok: false; kind: "invalid_request"; field: "agentId"; message: string };
+
+/** `removeAgentArtefacts(agentId)` result — discriminated, never throws. */
+export type RemoveResult =
+  | { ok: true; agentId: string }
+  | { ok: false; kind: "not_found"; agentId: string; message: string }
+  | { ok: false; kind: "invalid_request"; field: "agentId"; message: string }
+  | {
+      ok: false;
+      kind: "persistence_failed";
+      /** "<dir>: <cause>" so recovery is actionable. */
+      error: string;
+      message: string;
+      recovery: "fix_data_dir";
+    };
+
+/** Read + parse one `agents/<id>/profile.json` into a typed manifest, or throw
+ * a descriptive error the caller maps to an `unreadable`/`not_found` outcome.
+ * A manifest whose JSON parses but is missing the required string fields is
+ * treated as corrupt (an interrupted or hand-edited write) — not silently
+ * coerced. */
+function readManifestFile(profilePath: string): ProfileManifest {
+  const raw = readFileSync(profilePath, "utf8");
+  const parsed = JSON.parse(raw) as unknown;
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    typeof (parsed as { agentId?: unknown }).agentId !== "string" ||
+    typeof (parsed as { name?: unknown }).name !== "string" ||
+    typeof (parsed as { personaPath?: unknown }).personaPath !== "string" ||
+    typeof (parsed as { createdAt?: unknown }).createdAt !== "string"
+  ) {
+    throw new Error("profile.json is missing required manifest fields");
+  }
+  return parsed as ProfileManifest;
+}
+
+/**
+ * Enumerate the materialized experts under each `$SIL_DATA_DIR/agents/<id>/`.
+ *
+ * The manifest is the source of truth — each `agents/<id>/profile.json` is read
+ * and parsed (no dirname guessing). Experts are returned `createdAt` DESC (the
+ * just-made expert first, the one the user most likely wants to act on). An
+ * absent/empty store yields a normal empty listing. One unreadable or corrupt
+ * manifest lands in `unreadable[]` and never aborts the listing — the healthy
+ * experts still list. Reads only; never writes, never reads a token.
+ */
+export function listAgentProfiles(): ListResult {
+  const root = getAgentsRoot();
+  if (!existsSync(root)) {
+    return { ok: true, experts: [], unreadable: [] };
+  }
+
+  const experts: ListedProfile[] = [];
+  const unreadable: UnreadableProfile[] = [];
+
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch (err) {
+    // The agents root exists but cannot be enumerated (e.g. EACCES). Surface it
+    // as a single degraded entry rather than throwing across the boundary.
+    unreadable.push({
+      agentId: AGENTS_SUBDIR,
+      error: errCause(err),
+    });
+    return { ok: true, experts, unreadable };
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const agentId = entry.name;
+    const profilePath = join(root, agentId, PROFILE_FILE);
+    if (!existsSync(profilePath)) {
+      // A directory under agents/ with no manifest is not a (loadable) sil
+      // expert — report it degraded so the user sees the residue (e.g. a
+      // remove that cleared the manifest but left a stray file).
+      unreadable.push({ agentId, error: "no profile.json manifest" });
+      continue;
+    }
+    try {
+      const manifest = readManifestFile(profilePath);
+      experts.push({
+        agentId: manifest.agentId,
+        name: manifest.name,
+        hasPlaybook: manifest.playbookPath !== undefined,
+        createdAt: manifest.createdAt,
+      });
+    } catch (err) {
+      unreadable.push({ agentId, error: errCause(err) });
+    }
+  }
+
+  // Most-recently-created first (Product Flow 1). createdAt is ISO 8601, so a
+  // lexical compare is also chronological; fall back to it when Date.parse is
+  // NaN (a corrupt-but-parseable date) so the sort is total and stable-ish.
+  experts.sort((a, b) => createdAtDesc(a.createdAt, b.createdAt));
+
+  return { ok: true, experts, unreadable };
+}
+
+/** Compare two ISO 8601 createdAt strings, most-recent first. */
+function createdAtDesc(a: string, b: string): number {
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  if (Number.isNaN(ta) || Number.isNaN(tb)) {
+    // Lexical fallback keeps the sort total when a timestamp is unparseable.
+    return a < b ? 1 : a > b ? -1 : 0;
+  }
+  return tb - ta;
+}
+
+/**
+ * Read one expert's full detail — the manifest PLUS the persona/playbook bodies
+ * from the files it points at — so the skill can render a complete view.
+ *
+ * Re-runs the writer's `agentId` gate BEFORE any `join`/read (a traversal-shaped
+ * id → `invalid_request`, reading nothing). An unknown id, an absent/unreadable
+ * manifest, or an absent persona body → `not_found` (a degraded expert is, from
+ * the user's view, not viewable). Never throws across the boundary; reads only.
+ */
+export function readAgentProfile(agentId: string): ReadResult {
+  const bad = rejectBadAgentId(agentId);
+  if (bad) return bad;
+
+  const dir = getAgentArtefactDir(agentId);
+  const profilePath = join(dir, PROFILE_FILE);
+  if (!existsSync(profilePath)) {
+    return notFoundRead(agentId);
+  }
+
+  let manifest: ProfileManifest;
+  try {
+    manifest = readManifestFile(profilePath);
+  } catch {
+    // A corrupt/half-written manifest is, to the viewer, an expert that cannot
+    // be loaded — surface not_found (the skill lists the healthy ones), never a
+    // raw parse error across the boundary.
+    return notFoundRead(agentId);
+  }
+
+  let persona: string;
+  try {
+    persona = readFileSync(manifest.personaPath, "utf8");
+  } catch {
+    // Manifest present but its persona body is gone (a partial removal, or a
+    // hand-deleted file) — the expert is not viewable.
+    return notFoundRead(agentId);
+  }
+
+  let playbook: string | undefined;
+  if (manifest.playbookPath !== undefined) {
+    try {
+      playbook = readFileSync(manifest.playbookPath, "utf8");
+    } catch {
+      // The playbook is optional detail; its absence does not make the expert
+      // unviewable. Render the rest without it.
+      playbook = undefined;
+    }
+  }
+
+  return {
+    ok: true,
+    agentId: manifest.agentId,
+    name: manifest.name,
+    persona,
+    ...(playbook !== undefined ? { playbook } : {}),
+    profilePath,
+    createdAt: manifest.createdAt,
+  };
+}
+
+function notFoundRead(agentId: string): ReadResult {
+  return {
+    ok: false,
+    kind: "not_found",
+    agentId,
+    message: 'No sil expert "' + agentId + '" — list your experts to see which exist.',
+  };
+}
+
+/**
+ * Remove one expert's behaviour-artefact directory — the sil-side half of a
+ * clean removal (the host-wiring half is the skill's `openclaw` CLI step; the
+ * plugin cannot write `~/.openclaw`).
+ *
+ * Fail-closed and scoped to exactly the named expert:
+ *   - re-runs the writer's `agentId` gate ITSELF (never trusts the caller) — a
+ *     bad/`main`/traversal-shaped id → `invalid_request`, deletes NOTHING;
+ *   - asserts the resolved target is strictly UNDER `getDataDir()/agents/` and
+ *     is NOT the `agents/` parent, so a delete can never escape the subtree or
+ *     wipe sibling experts;
+ *   - `rmSync(dir, { recursive, force })` the single leaf dir.
+ *
+ * Absent target → `not_found` (idempotent — a re-run after a partial host-CLI
+ * failure is safe). A genuine `rmSync` failure (e.g. EACCES) →
+ * `persistence_failed` with `<dir>: <cause>`. Never throws across the boundary.
+ */
+export function removeAgentArtefacts(agentId: string): RemoveResult {
+  const bad = rejectBadAgentId(agentId);
+  if (bad) return bad;
+
+  const dir = getAgentArtefactDir(agentId);
+
+  // Defence in depth beyond the id gate: assert the resolved path is strictly a
+  // child of the agents root and never the root itself. A `rmSync` of the
+  // parent would wipe every sibling expert — refuse it even if some future
+  // change to the gate let a separator-bearing id through.
+  const root = getAgentsRoot();
+  if (dirname(dir) !== root || dir === root) {
+    return invalidAgentId(
+      "agentId resolves outside the agents subtree — refusing to delete: " +
+        JSON.stringify(agentId),
+    );
+  }
+
+  if (!existsSync(dir)) {
+    return {
+      ok: false,
+      kind: "not_found",
+      agentId,
+      message:
+        'No sil expert "' + agentId + '" to remove (already gone) — list your'
+        + " experts to see which exist. A re-run is safe (idempotent).",
+    };
+  }
+
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (err) {
+    return {
+      ok: false,
+      kind: "persistence_failed",
+      error: dir + ": " + errCause(err),
+      message:
+        "The expert's behaviour artefacts could NOT be removed from the sil data"
+        + " directory. Fix the data directory (it must be writable — check"
+        + " permissions), then remove the expert again.",
+      recovery: "fix_data_dir",
+    };
+  }
+
+  return { ok: true, agentId };
+}
+
+/** Extract a human-readable cause from an unknown thrown value (never PII). */
+function errCause(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

@@ -1,6 +1,6 @@
 ---
 name: sil
-description: This skill should be used when the user wants to shop on sil — register an identity, see who they are, search the catalog for purchasable products, or look up specific products by id — or when they want to create a dedicated sil-wired shopping expert (a new OpenClaw agent profile). The plugin exposes sil_register, sil_whoami, sil_search, sil_product_get, and sil_profile_materialize.
+description: This skill should be used when the user wants to shop on sil — register an identity, see who they are, search the catalog for purchasable products, or look up specific products by id — or when they want to create a dedicated sil-wired shopping expert (a new OpenClaw agent profile) and then list, view, or remove the experts they have created. The plugin exposes sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_list, sil_profile_get, and sil_profile_remove.
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -8,7 +8,7 @@ metadata:
 
 # sil
 
-Drive the sil plugin's tools on the user's behalf: register them on sil, read their identity, help them find purchasable products in the sil catalog — and, when asked, create a dedicated sil-wired shopping expert. Read user intent, route to the matching tool (loading its reference on demand), call it, and report what came back.
+Drive the sil plugin's tools on the user's behalf: register them on sil, read their identity, help them find purchasable products in the sil catalog — and, when asked, create a dedicated sil-wired shopping expert, then list, view, or remove the experts they have created. Read user intent, route to the matching tool (loading its reference on demand), call it, and report what came back.
 
 ## Always-on behavioural contract
 
@@ -31,8 +31,13 @@ Confirm the `sil_*` tools are exposed. If they are missing from the available to
 | "find X" / "search for X" / browse a category or price range | `sil_search` | [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) |
 | "look up these items" / re-check ids from a prior result, a saved list, or a deep link | `sil_product_get` | [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) |
 | "make me a shopping expert" / "set up an agent that shops for me" / build a dedicated shopping expert | (interview, then the engine) | see the two-step gate below |
+| "what experts do I have?" / "list my experts" | `sil_profile_list` | [`references/manage_experts.md`](references/manage_experts.md) |
+| "show me / tell me about &lt;expert&gt;" | `sil_profile_get` | [`references/manage_experts.md`](references/manage_experts.md) |
+| "remove / delete &lt;expert&gt;" | `sil_profile_remove` (host-CLI-first — see the reference) | [`references/manage_experts.md`](references/manage_experts.md) |
 
 [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) holds the per-tool behaviour for the four core tools and the shared status taxonomy. Basic shopping needs only that one reference.
+
+[`references/manage_experts.md`](references/manage_experts.md) holds the list / view / remove flow for the experts the user has created — including the host-CLI-first remove ordering and the confirm-before-remove gate. Load it the moment the user wants to see or remove an existing expert.
 
 ### Creating a shopping expert — the endorsement-gated two-step
 
