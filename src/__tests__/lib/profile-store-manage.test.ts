@@ -17,13 +17,13 @@
  *   LIST   (Flow 1, AC List):
  *     1. empty/absent store → ok with empty experts (a normal outcome).
  *     2. multiple experts → all present, each from its profile.json manifest
- *        (no dirname guessing — name/createdAt/hasPlaybook come from the file).
+ *        (no dirname guessing — name/createdAt come from the file).
  *     3. ordered createdAt DESC (most-recently-created first).
  *     4. one corrupt/unreadable profile.json among healthy ones → that one in
  *        unreadable[], the rest still listed (the list never aborts/throws).
  *   READ   (Flow 2, AC View):
- *     5. ok → manifest + the required spec bodies (+ the lazy user/playbook bodies
- *        when present) read from the files the manifest points at.
+ *     5. ok → manifest + ALL FOUR spec bodies (round-2: all present from creation)
+ *        read from the files the manifest points at.
  *     6. unknown id → not_found (a normal outcome, never a throw).
  *     7. traversal-shaped id (../x, a/b, .., a/../b, main, Mixed-Case) →
  *        invalid_request via AGENT_ID_RE, rejected BEFORE any join/read.
@@ -43,11 +43,12 @@
  * Contract this file pins for the implementation (expert-developer),
  * `src/lib/profile-store.ts`:
  *   - listAgentProfiles(): ListProfilesResult — discriminated, never throws.
- *     ok variant: { ok:true, experts: {agentId,name,hasPlaybook,createdAt}[]
- *     (createdAt DESC), unreadable: {agentId,error}[] }.
+ *     ok variant: { ok:true, experts: {agentId,name,…,createdAt}[]
+ *     (createdAt DESC), unreadable: {agentId,error}[] }. (round-2: with all four
+ *     specs required+present, a per-slot presence flag carries no signal.)
  *   - readAgentProfile(agentId): ReadProfileResult — discriminated, never throws.
- *     ok: { ok:true, agentId, name, domainSpec, intentSpec, userSpec?, playbook?,
- *     profilePath, createdAt } (NO persona);
+ *     ok: { ok:true, agentId, name, domainSpec, intentSpec, userSpec, playbook,
+ *     profilePath, createdAt } (NO persona; all four present at creation);
  *     not_found: { ok:false, kind:"not_found", agentId, message };
  *     bad id: { ok:false, kind:"invalid_request", field:"agentId", message }.
  *   - removeAgentArtefacts(agentId): RemoveProfileResult — discriminated, never
@@ -125,9 +126,9 @@ afterEach(() => {
  * own writer is used (never a hand-rolled fixture) so the test exercises the
  * real on-disk shape readAgentProfile/listAgentProfiles must parse.
  *
- * After the SDS reframe the store holds NO persona; domainSpec + intentSpec are
- * REQUIRED, userSpec + playbook are lazy. The fixture always supplies the two
- * required specs (a real create) and surfaces the lazy slots via opts. */
+ * After the SDS reframe the store holds NO persona. Round-2: ALL FOUR specs are
+ * REQUIRED and present from creation, so the fixture ALWAYS supplies all four (a
+ * real create). Callers may override any of the four via opts. */
 function makeExpert(
   agentId: string,
   opts: {
@@ -144,8 +145,8 @@ function makeExpert(
     name: opts.name ?? `Expert ${agentId}`,
     domainSpec: opts.domainSpec ?? `# Domain spec for ${agentId}\nResearched dimensions.`,
     intentSpec: opts.intentSpec ?? `# Intent spec for ${agentId}\nDecomposition dimensions.`,
-    ...(opts.userSpec !== undefined ? { userSpec: opts.userSpec } : {}),
-    ...(opts.playbook !== undefined ? { playbook: opts.playbook } : {}),
+    userSpec: opts.userSpec ?? `# User spec for ${agentId}\nFacts + hard constraints.`,
+    playbook: opts.playbook ?? `# Buying taste for ${agentId}\nSeeded preferences.`,
   });
   if (!result.ok) {
     throw new Error(`fixture setup failed for ${agentId}: ${JSON.stringify(result)}`);
@@ -200,9 +201,13 @@ describe("listAgentProfiles — empty/absent store is a normal, successful empty
 });
 
 describe("listAgentProfiles — multiple experts: all present, sourced from profile.json", () => {
-  it("lists every materialized expert with name + hasPlaybook + agentId from its manifest", () => {
-    makeExpert("gift-buyer", { name: "Gift Buyer", playbook: "# Buying taste\nValue-conscious." });
-    makeExpert("grocery-agent", { name: "Grocery Agent" }); // no lazy playbook
+  it("lists every materialized expert with name + agentId + createdAt from its manifest", () => {
+    // Round-2: with all four specs required+present, a hasPlaybook flag is trivially
+    // true for every created expert and carries no discriminating signal — so we do
+    // NOT assert it. The durable behaviour is: every expert is enumerated, with its
+    // manifest name + createdAt sourced from the file (not the directory name).
+    makeExpert("gift-buyer", { name: "Gift Buyer" });
+    makeExpert("grocery-agent", { name: "Grocery Agent" });
 
     const result = listAgentProfiles();
     expect(result.unreadable).toEqual([]);
@@ -214,15 +219,11 @@ describe("listAgentProfiles — multiple experts: all present, sourced from prof
     expect(gift).toBeDefined();
     // name comes from the manifest, NOT from the directory name.
     expect(gift!.name).toBe("Gift Buyer");
-    // hasPlaybook flags the LAZY buying-taste slot (the required specs always exist).
-    expect(gift!.hasPlaybook).toBe(true);
     expect(typeof gift!.createdAt).toBe("string");
 
     const grocery = byId.get("grocery-agent");
     expect(grocery).toBeDefined();
     expect(grocery!.name).toBe("Grocery Agent");
-    // hasPlaybook reflects the manifest's playbookPath presence (none here).
-    expect(grocery!.hasPlaybook).toBe(false);
   });
 
   it("reads name from the manifest, not the directory name (no filesystem-name guessing)", () => {
@@ -322,18 +323,20 @@ describe("readAgentProfile — ok: manifest + artefact bodies for one expert", (
     expect(Number.isNaN(Date.parse(result.createdAt))).toBe(false);
   });
 
-  it("omits the lazy bodies (userSpec / playbook) when the expert is a min create", () => {
-    makeExpert("grocery-agent", { name: "Grocery Agent" }); // required specs only
+  it("returns ALL FOUR spec bodies for a created expert (round-2: none is absent at creation)", () => {
+    makeExpert("grocery-agent", { name: "Grocery Agent" }); // all four seeded by default
     const result = readAgentProfile("grocery-agent");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.playbook).toBeUndefined();
-    expect(result.userSpec).toBeUndefined();
-    // The required specs are always present.
+    // All four specs are present from creation now.
     expect(typeof result.domainSpec).toBe("string");
     expect(result.domainSpec.length).toBeGreaterThan(0);
     expect(typeof result.intentSpec).toBe("string");
     expect(result.intentSpec.length).toBeGreaterThan(0);
+    expect(typeof result.userSpec).toBe("string");
+    expect(result.userSpec!.length).toBeGreaterThan(0);
+    expect(typeof result.playbook).toBe("string");
+    expect(result.playbook!.length).toBeGreaterThan(0);
   });
 });
 

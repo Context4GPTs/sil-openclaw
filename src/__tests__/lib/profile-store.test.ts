@@ -2,15 +2,16 @@
  * UNIT — materializeProfile() behaviour-artefact writer (tier: unit, real temp
  * dir via the SIL_DATA_DIR override, no network, no host).
  *
- * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 1
- * (PR #33 bounced). After the SDS reframe the sil store holds FOUR behaviour
- * artefacts and NO persona (the persona is the host SOUL.md, written by the
- * engine via the host CLI — not a sil-side file). Two specs are REQUIRED at
- * creation, two are lazy:
+ * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 2
+ * (PR #33 bounced a SECOND time). After the SDS reframe the sil store holds FOUR
+ * behaviour artefacts and NO persona (the persona is the host SOUL.md, written by
+ * the engine via the host CLI — not a sil-side file). Round-2: ALL FOUR specs are
+ * REQUIRED and present non-blank from creation (seeded partial, then augmented
+ * per-query) — none is lazy/optional:
  *   - domain_spec.md  (REQUIRED) — deep researched niche expertise;
  *   - intent_spec.md  (REQUIRED) — the decomposition-dimension schema;
- *   - user_spec.md    (lazy)     — the user's domain-relevant facts + constraints;
- *   - playbook.md     (lazy)     — the user's buying taste.
+ *   - user_spec.md    (REQUIRED) — the user's domain-relevant facts + constraints;
+ *   - playbook.md     (REQUIRED) — the user's buying taste.
  *
  * This file pins the GENERIC store invariants (the agentId gate, atomicity, the
  * 0600/0700 modes, no-token-coupling). The SDS-specific slot semantics
@@ -82,7 +83,7 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-/** A full create — the two REQUIRED specs + the two lazy ones. */
+/** A full create — ALL FOUR REQUIRED specs (round-2: none is lazy/optional). */
 const GOOD = {
   agentId: "gift-buyer",
   name: "Gift Buyer",
@@ -95,13 +96,10 @@ const GOOD = {
   playbook: "# Buying taste\nValue-conscious; prefers experiences over objects.",
 } as const;
 
-/** The minimum valid create — the two required specs only. */
-const MIN = {
-  agentId: "gift-buyer",
-  name: "Gift Buyer",
-  domainSpec: GOOD.domainSpec,
-  intentSpec: GOOD.intentSpec,
-} as const;
+/** The minimum valid create. After Founder review round 2, all four sil specs are
+ * REQUIRED + present from creation — so the minimum create IS the full four-spec
+ * create. Kept as a named alias for call-site legibility. */
+const MIN = GOOD;
 
 function readManifest(agentId: string): ProfileManifest {
   const path = join(getAgentArtefactDir(agentId), "profile.json");
@@ -167,21 +165,21 @@ describe("materializeProfile — valid spec writes the behaviour artefacts", () 
     expect(Number.isNaN(Date.parse(manifest.createdAt))).toBe(false);
   });
 
-  it("omits the lazy slots AND their manifest paths for a min create (required specs only)", () => {
+  it("writes ALL FOUR spec files AND their manifest paths for a create (round-2: none is lazily absent)", () => {
     const result = materializeProfile({ ...MIN });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     expect(existsSync(join(result.dir, "domain_spec.md"))).toBe(true);
     expect(existsSync(join(result.dir, "intent_spec.md"))).toBe(true);
-    expect(existsSync(join(result.dir, "user_spec.md"))).toBe(false);
-    expect(existsSync(join(result.dir, "playbook.md"))).toBe(false);
-    expect(result.userSpecPath).toBeUndefined();
-    expect(result.playbookPath).toBeUndefined();
+    expect(existsSync(join(result.dir, "user_spec.md"))).toBe(true);
+    expect(existsSync(join(result.dir, "playbook.md"))).toBe(true);
+    expect(result.userSpecPath).toBeDefined();
+    expect(result.playbookPath).toBeDefined();
 
     const manifest = readManifest(GOOD.agentId);
-    expect(manifest.userSpecPath).toBeUndefined();
-    expect(manifest.playbookPath).toBeUndefined();
+    expect(typeof manifest.userSpecPath).toBe("string");
+    expect(typeof manifest.playbookPath).toBe("string");
   });
 
   it("writes artefacts owner-only (0600) inside a 0700 dir", () => {
@@ -296,7 +294,29 @@ describe("materializeProfile — validate-first: a bad spec writes NOTHING (inva
     expect(dirExists()).toBe(false);
   });
 
-  it("present-but-blank playbook (lazy) → invalid_request(field=playbook), nothing written", () => {
+  it("missing userSpec (required, round-2) → invalid_request(field=userSpec), nothing written", () => {
+    const { userSpec: _u, ...noUser } = GOOD;
+    const result = materializeProfile(noUser as unknown as ProfileSpec);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.kind).toBe("invalid_request");
+    if (result.kind !== "invalid_request") return;
+    expect(result.field).toBe("userSpec");
+    expect(dirExists()).toBe(false);
+  });
+
+  it("missing playbook (required, round-2) → invalid_request(field=playbook), nothing written", () => {
+    const { playbook: _p, ...noPlaybook } = GOOD;
+    const result = materializeProfile(noPlaybook as unknown as ProfileSpec);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.kind).toBe("invalid_request");
+    if (result.kind !== "invalid_request") return;
+    expect(result.field).toBe("playbook");
+    expect(dirExists()).toBe(false);
+  });
+
+  it("present-but-blank playbook (required) → invalid_request(field=playbook), nothing written", () => {
     const result = materializeProfile({ ...GOOD, playbook: "   " });
     expect(result.ok).toBe(false);
     if (result.ok) return;

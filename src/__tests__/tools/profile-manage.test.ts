@@ -26,8 +26,8 @@
  *   - registers sil_profile_list (Type.Object({})), sil_profile_get and
  *     sil_profile_remove (Type.Object({agentId})) — agentId required;
  *   - list  → jsonResult({status:"ok", experts, unreadable}), createdAt DESC;
- *   - get   → {status:"ok", agentId, name, domainSpec, intentSpec, userSpec?,
- *     playbook?, profilePath, createdAt} (NO persona) /
+ *   - get   → {status:"ok", agentId, name, domainSpec, intentSpec, userSpec,
+ *     playbook, profilePath, createdAt} (NO persona; all four present) /
  *     {status:"not_found", agentId, …recovery} /
  *     {status:"invalid_request", field, message};
  *   - remove→ {status:"removed", agentId} / {status:"not_found", agentId} /
@@ -83,9 +83,9 @@ function payloadOf(result: { content: { text?: string }[] }): Record<string, unk
 /** Materialize an expert via the real store writer (never a hand fixture), so
  * the tools read the genuine on-disk shape. Optionally pin createdAt.
  *
- * After the SDS reframe the store holds NO persona; domainSpec + intentSpec are
- * REQUIRED, userSpec + playbook are lazy. The fixture always supplies the two
- * required specs and surfaces the lazy slots via opts. */
+ * After the SDS reframe the store holds NO persona. Round-2: ALL FOUR specs are
+ * REQUIRED and present from creation, so the fixture ALWAYS supplies all four.
+ * Callers may override any of the four via opts. */
 function makeExpert(
   agentId: string,
   opts: {
@@ -102,8 +102,8 @@ function makeExpert(
     name: opts.name ?? `Expert ${agentId}`,
     domainSpec: opts.domainSpec ?? `# Domain spec for ${agentId}\nResearched dimensions.`,
     intentSpec: opts.intentSpec ?? `# Intent spec for ${agentId}\nDecomposition dimensions.`,
-    ...(opts.userSpec !== undefined ? { userSpec: opts.userSpec } : {}),
-    ...(opts.playbook !== undefined ? { playbook: opts.playbook } : {}),
+    userSpec: opts.userSpec ?? `# User spec for ${agentId}\nFacts + hard constraints.`,
+    playbook: opts.playbook ?? `# Buying taste for ${agentId}\nSeeded preferences.`,
   });
   if (!result.ok) throw new Error(`fixture setup failed: ${JSON.stringify(result)}`);
   if (opts.createdAt !== undefined) {
@@ -186,13 +186,13 @@ describe("sil_profile_list — ok envelope", () => {
     expect(payload["unreadable"]).toEqual([]);
   });
 
-  it("lists every expert (name + hasPlaybook + agentId from the manifest), createdAt DESC", async () => {
+  it("lists every expert (name + agentId from the manifest), createdAt DESC", async () => {
+    // Round-2: with all four specs required+present, a hasPlaybook flag is trivially
+    // true for every expert and carries no discriminating signal — so we do NOT
+    // assert it. The durable behaviour is enumeration + createdAt-DESC ordering +
+    // the manifest name.
     makeExpert("oldest", { name: "Oldest", createdAt: "2026-01-01T00:00:00.000Z" });
-    makeExpert("newest", {
-      name: "Newest",
-      playbook: "pb",
-      createdAt: "2026-06-22T00:00:00.000Z",
-    });
+    makeExpert("newest", { name: "Newest", createdAt: "2026-06-22T00:00:00.000Z" });
 
     const tool = getTool(api, LIST);
     const payload = payloadOf(await tool.execute("c-2", {}));
@@ -201,8 +201,7 @@ describe("sil_profile_list — ok envelope", () => {
     // Most-recently-created first.
     expect(experts.map((e) => e["agentId"])).toEqual(["newest", "oldest"]);
     expect(experts[0]!["name"]).toBe("Newest");
-    expect(experts[0]!["hasPlaybook"]).toBe(true);
-    expect(experts[1]!["hasPlaybook"]).toBe(false);
+    expect(experts[1]!["name"]).toBe("Oldest");
   });
 
   it("one corrupt manifest → healthy experts still list, broken one in unreadable[]", async () => {
@@ -252,16 +251,16 @@ describe("sil_profile_get — ok envelope (full detail from artefacts)", () => {
     expect(typeof payload["createdAt"]).toBe("string");
   });
 
-  it("omits the lazy bodies (userSpec / playbook) when the expert is a min create", async () => {
-    makeExpert("grocery", { name: "Grocery" });
+  it("returns ALL FOUR spec bodies for a created expert (round-2: none is absent at creation)", async () => {
+    makeExpert("grocery", { name: "Grocery" }); // all four seeded by default
     const tool = getTool(api, GET);
     const payload = payloadOf(await tool.execute("c-5", { agentId: "grocery" }));
     expect(payload["status"]).toBe("ok");
-    expect(payload["playbook"]).toBeUndefined();
-    expect(payload["userSpec"]).toBeUndefined();
-    // The required specs are always present.
+    // All four specs are present from creation now.
     expect(typeof payload["domainSpec"]).toBe("string");
     expect(typeof payload["intentSpec"]).toBe("string");
+    expect(typeof payload["userSpec"]).toBe("string");
+    expect(typeof payload["playbook"]).toBe("string");
   });
 });
 

@@ -2,37 +2,43 @@
  * UNIT — the SDS artefact store after the five-artefact reframe (tier: unit,
  * real temp dir via the SIL_DATA_DIR override, no network, no host).
  *
- * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 1
- * (PR #33 bounced). SDS is the operating model for EVERY created expert, not an
- * additive optional layer. The sil store now holds FOUR behaviour artefacts (the
- * persona left the store — it is the host SOUL.md, written by the engine via the
- * host CLI, never a sil-side file):
+ * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 2
+ * (PR #33 bounced a SECOND time). SDS is the operating model for EVERY created
+ * expert. The sil store holds FOUR behaviour artefacts (the persona left the
+ * store — it is the host SOUL.md, written by the engine via the host CLI, never a
+ * sil-side file). The ROUND-2 correction: all four sil docs are PRESENT, non-blank,
+ * from creation — seeded *partial* (the ≤10-question setup + a quick initial
+ * research pass), then lazily AUGMENTED/reinforced on every query. None is
+ * "absent-is-fine"; none "starts empty". All four are REQUIRED:
  *
  *   domain_spec.md  — REQUIRED. The deep, researched niche expertise (how to buy
  *                     well, the full mechanics) — web-refreshed every query.
  *   intent_spec.md  — REQUIRED. The agent-specific decomposition DIMENSIONS
  *                     (PRD-style) a good query must resolve, derived from the
  *                     domain at creation.
- *   user_spec.md    — LAZY (optional). The user's domain-relevant facts + hard
- *                     constraints, captured incrementally per-query.
- *   playbook.md     — LAZY (optional). The user's buying TASTE (price sensitivity,
- *                     brand, preferences) — captured incrementally per-query.
+ *   user_spec.md    — REQUIRED. The user's domain-relevant facts + hard
+ *                     constraints, seeded partial at creation, AUGMENTED per-query.
+ *   playbook.md     — REQUIRED. The user's buying TASTE (price sensitivity, brand,
+ *                     preferences) — seeded partial at creation, AUGMENTED per-query.
  *
  * The store-layer contract this file pins for the implementation
  * (`src/lib/profile-store.ts`):
  *   1. NO PERSONA in the store. `ProfileSpec` has no `persona`; `materializeProfile`
  *      writes no persona.md; `ProfileManifest` has no personaPath;
- *      `readManifestFile`'s required gate is agentId/name/createdAt/domainSpecPath/
- *      intentSpecPath (NOT personaPath); `readAgentProfile` returns no persona.
- *   2. `domainSpec` + `intentSpec` are REQUIRED on materialize. A present-but-blank
- *      OR omitted domainSpec/intentSpec → invalid_request naming the field, and
- *      WRITES NOTHING (whole-spec validate-first — not even the other good files).
- *   3. `userSpec` + `playbook` are OPTIONAL (lazy): omitted is a valid create;
- *      present-but-blank is rejected (a blank spec is not a spec).
- *   4. Manifest gains domainSpecPath + intentSpecPath (required), keeps
- *      userSpecPath + playbookPath (optional). A manifest missing user/playbook
- *      keys is valid; one missing domain/intent keys is corrupt (not_found).
- *   5. The store NOW carries `intentSpec` (the persisted decomposition-dimension
+ *      `readManifestFile`'s required gate is agentId/name/createdAt + ALL FOUR spec
+ *      paths (NOT personaPath); `readAgentProfile` returns no persona.
+ *   2. ALL FOUR specs are REQUIRED on materialize (Founder review round 2). A
+ *      present-but-blank OR omitted domainSpec / intentSpec / userSpec / playbook →
+ *      invalid_request naming the field, and WRITES NOTHING (whole-spec
+ *      validate-first — not even the other good files). A min create IS a full
+ *      create: there is no two-spec-only valid create any more.
+ *   3. The manifest carries ALL FOUR path keys (domainSpecPath + intentSpecPath +
+ *      userSpecPath + playbookPath), all REQUIRED in `readManifestFile`'s gate. A
+ *      manifest missing ANY of the four path keys is corrupt (not_found).
+ *   4. `readAgentProfile` is fail-closed on ANY of the four bodies missing — a
+ *      referenced-but-missing domain/intent/user/playbook body → not_found (all
+ *      four always exist; there is no degrade-to-undefined path any more).
+ *   5. The store carries `intentSpec` (the persisted decomposition-dimension
  *      SCHEMA). The prior @ts-expect-error that blocked an intent store field is
  *      REVERSED — intentSpec is a real, required field. The per-query intent (the
  *      filled dimensions) is STILL never persisted: no intent.md of filled values
@@ -131,7 +137,8 @@ const PLAYBOOK =
   "# Buying taste\nBudget comfort zone around €1500; will stretch 10% for the"
   + " right frame. Brand-agnostic but distrusts house-brand groupsets.";
 
-/** A complete create: the two REQUIRED specs + the two LAZY ones. */
+/** A complete create: ALL FOUR REQUIRED specs (Founder review round 2 — none is
+ * lazy/optional; all four are present non-blank from creation). */
 const GOOD = {
   agentId: "road-cycling-buyer",
   name: "Road Cycling Buyer",
@@ -141,14 +148,12 @@ const GOOD = {
   playbook: PLAYBOOK,
 } as const;
 
-/** The minimum valid create: ONLY the two required specs (the lazy slots fill
- * later, per-query). This is what creation actually produces. */
-const MIN_CREATE = {
-  agentId: "road-cycling-buyer",
-  name: "Road Cycling Buyer",
-  domainSpec: DOMAIN_SPEC,
-  intentSpec: INTENT_SPEC,
-} as const;
+/** The minimum valid create. After Founder review round 2, ALL FOUR sil docs are
+ * REQUIRED and present (seeded partial at creation), so the minimum create IS the
+ * full four-spec create — there is no two-spec-only valid create any more. Kept as
+ * a named alias so the intent ("the smallest thing that creates an expert") stays
+ * legible at each call site. */
+const MIN_CREATE = GOOD;
 
 function readManifest(agentId: string): ProfileManifest {
   const path = join(getAgentArtefactDir(agentId), "profile.json");
@@ -201,8 +206,8 @@ describe("materializeProfile — persona is GONE from the store (it is the host 
   });
 });
 
-describe("materializeProfile — domain_spec.md + intent_spec.md are REQUIRED and land with the lazy slots", () => {
-  it("writes domain_spec.md, intent_spec.md, user_spec.md, playbook.md under agents/<id>/ for a full create", () => {
+describe("materializeProfile — all four SDS specs are REQUIRED and land at creation (round-2: none lazy)", () => {
+  it("writes domain_spec.md, intent_spec.md, user_spec.md, playbook.md under agents/<id>/ for a create", () => {
     const result = materializeProfile({ ...GOOD });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -226,27 +231,28 @@ describe("materializeProfile — domain_spec.md + intent_spec.md are REQUIRED an
     expect(readFileSync(result.playbookPath!, "utf8")).toBe(PLAYBOOK);
   });
 
-  it("the minimum create is the two required specs alone — the lazy slots are simply absent", () => {
-    // Cross-cutting rule A: domain_spec + intent_spec are substantive at creation;
-    // user_spec + playbook start (near-)empty and fill lazily per-query. A create
-    // with ONLY the two required specs is the normal creation output.
+  it("a creation produces ALL FOUR spec files + their manifest paths — none is lazily absent (round-2)", () => {
+    // Founder review round 2: all four sil docs are PRESENT, non-blank, from
+    // creation (seeded partial by the ≤10-question setup + the agent's initial
+    // research). There is no two-spec-only create — the minimum create IS the full
+    // four-spec create.
     const result = materializeProfile({ ...MIN_CREATE });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     expect(existsSync(join(result.dir, "domain_spec.md"))).toBe(true);
     expect(existsSync(join(result.dir, "intent_spec.md"))).toBe(true);
-    expect(existsSync(join(result.dir, "user_spec.md"))).toBe(false);
-    expect(existsSync(join(result.dir, "playbook.md"))).toBe(false);
+    expect(existsSync(join(result.dir, "user_spec.md"))).toBe(true);
+    expect(existsSync(join(result.dir, "playbook.md"))).toBe(true);
 
-    expect(result.userSpecPath).toBeUndefined();
-    expect(result.playbookPath).toBeUndefined();
+    expect(result.userSpecPath).toBeDefined();
+    expect(result.playbookPath).toBeDefined();
     const manifest = readManifest(GOOD.agentId);
-    expect(manifest.userSpecPath).toBeUndefined();
-    expect(manifest.playbookPath).toBeUndefined();
-    // Only the two required artefacts + manifest.
+    expect(typeof manifest.userSpecPath).toBe("string");
+    expect(typeof manifest.playbookPath).toBe("string");
+    // All four required artefacts + manifest.
     expect(walkFiles(result.dir).sort()).toEqual(
-      ["domain_spec.md", "intent_spec.md", "profile.json"].sort(),
+      ["domain_spec.md", "intent_spec.md", "user_spec.md", "playbook.md", "profile.json"].sort(),
     );
   });
 
@@ -307,6 +313,33 @@ describe("materializeProfile — validate-first: a missing/blank REQUIRED spec w
     expect(dirExists()).toBe(false);
   });
 
+  it("OMITTED userSpec → invalid_request(field=userSpec), nothing written (round-2: user_spec is REQUIRED)", () => {
+    // Founder review round 2: user_spec is no longer lazy/optional — it is present
+    // (seeded partial) from creation. Omitting it is a defect the store rejects
+    // fail-closed, exactly like a missing domain/intent spec.
+    const { userSpec: _u, ...noUser } = GOOD;
+    const result = materializeProfile(noUser as unknown as ProfileSpec);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.kind).toBe("invalid_request");
+    if (result.kind !== "invalid_request") return;
+    expect(result.field).toBe("userSpec");
+    expect(dirExists()).toBe(false);
+  });
+
+  it("OMITTED playbook → invalid_request(field=playbook), nothing written (round-2: playbook is REQUIRED)", () => {
+    // Founder review round 2: playbook (buying taste) is no longer lazy/optional —
+    // it is present (seeded partial) from creation. Omitting it is rejected.
+    const { playbook: _p, ...noPlaybook } = GOOD;
+    const result = materializeProfile(noPlaybook as unknown as ProfileSpec);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.kind).toBe("invalid_request");
+    if (result.kind !== "invalid_request") return;
+    expect(result.field).toBe("playbook");
+    expect(dirExists()).toBe(false);
+  });
+
   it("present-but-blank domainSpec → invalid_request(field=domainSpec), nothing written", () => {
     const result = materializeProfile({ ...GOOD, domainSpec: "   " });
     expect(result.ok).toBe(false);
@@ -338,17 +371,9 @@ describe("materializeProfile — validate-first: a missing/blank REQUIRED spec w
   });
 });
 
-describe("materializeProfile — the LAZY slots are optional; present-but-blank is still rejected", () => {
-  it("creates with only the two required specs — user_spec/playbook fill lazily later", () => {
-    const result = materializeProfile({ ...MIN_CREATE });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.userSpecPath).toBeUndefined();
-    expect(result.playbookPath).toBeUndefined();
-  });
-
+describe("materializeProfile — every spec is required + non-blank; a later query AUGMENTS one in place", () => {
   it("present-but-blank userSpec → invalid_request(field=userSpec), nothing written", () => {
-    const result = materializeProfile({ ...MIN_CREATE, userSpec: "   " });
+    const result = materializeProfile({ ...GOOD, userSpec: "   " });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("invalid_request");
@@ -358,7 +383,7 @@ describe("materializeProfile — the LAZY slots are optional; present-but-blank 
   });
 
   it("present-but-blank playbook → invalid_request(field=playbook), nothing written", () => {
-    const result = materializeProfile({ ...MIN_CREATE, playbook: "" });
+    const result = materializeProfile({ ...GOOD, playbook: "" });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("invalid_request");
@@ -367,16 +392,21 @@ describe("materializeProfile — the LAZY slots are optional; present-but-blank 
     expect(existsSync(getAgentArtefactDir(GOOD.agentId))).toBe(false);
   });
 
-  it("a later re-materialize ADDS a lazily-captured user_spec without disturbing domain/intent", () => {
-    // Lazy capture (Correction 5): the user side fills incrementally per-query via
-    // re-materialize. After a min create, a second materialize adds user_spec.md.
-    const first = materializeProfile({ ...MIN_CREATE });
+  it("a later re-materialize AUGMENTS the already-present user_spec in place, without disturbing domain/intent", () => {
+    // Round-2 model: user_spec is PRESENT (seeded partial) from creation, then
+    // lazily AUGMENTED per-query — not "added from absent". After a create, a
+    // second materialize overwrites user_spec.md with the augmented body.
+    const first = materializeProfile({ ...GOOD });
     expect(first.ok).toBe(true);
-    const second = materializeProfile({ ...MIN_CREATE, userSpec: USER_SPEC });
+    if (!first.ok) return;
+    expect(readFileSync(first.userSpecPath!, "utf8")).toBe(USER_SPEC);
+
+    const augmented = USER_SPEC + "\n- HARD-NO: anything over 9 kg (reinforced this query).";
+    const second = materializeProfile({ ...GOOD, userSpec: augmented });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
-    expect(readFileSync(second.userSpecPath!, "utf8")).toBe(USER_SPEC);
-    // Domain + intent untouched by a user-side lazy capture.
+    expect(readFileSync(second.userSpecPath!, "utf8")).toBe(augmented);
+    // Domain + intent untouched by a user-side augmentation.
     expect(readFileSync(second.domainSpecPath, "utf8")).toBe(DOMAIN_SPEC);
     expect(readFileSync(second.intentSpecPath, "utf8")).toBe(INTENT_SPEC);
   });
@@ -414,28 +444,28 @@ describe("readAgentProfile — round-trips the four bodies; no persona; required
     expect(spec).toBe(USER_SPEC);
   });
 
-  it("a min-create expert reads back OK — required specs present, lazy slots absent", () => {
+  it("a created expert reads back ALL FOUR specs — none is absent at creation (round-2)", () => {
     materializeProfile({ ...MIN_CREATE });
     const read = readAgentProfile(GOOD.agentId);
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     expect(read.domainSpec).toBe(DOMAIN_SPEC);
     expect(read.intentSpec).toBe(INTENT_SPEC);
-    expect(read.userSpec).toBeUndefined();
-    expect(read.playbook).toBeUndefined();
+    // All four are present from creation — the user side is no longer absent.
+    expect(read.userSpec).toBe(USER_SPEC);
+    expect(read.playbook).toBe(PLAYBOOK);
   });
 
-  it("a manifest missing user/playbook keys is VALID; the required gate is agentId/name/createdAt/domainSpecPath/intentSpecPath", () => {
-    // A min-create manifest carries no user/playbook path keys at all — and still
-    // reads. readManifestFile must keep userSpecPath/playbookPath OPTIONAL.
+  it("a created manifest carries ALL FOUR path keys; the required gate is agentId/name/createdAt + all four spec paths", () => {
+    // Round-2: the manifest's required gate includes userSpecPath + playbookPath.
+    // A created expert's manifest carries all four spec path keys.
     const result = materializeProfile({ ...MIN_CREATE });
     expect(result.ok).toBe(true);
     const manifest = readManifest(GOOD.agentId);
-    expect("userSpecPath" in manifest).toBe(false);
-    expect("playbookPath" in manifest).toBe(false);
-    // But it carries the two REQUIRED path keys.
     expect(typeof manifest.domainSpecPath).toBe("string");
     expect(typeof manifest.intentSpecPath).toBe("string");
+    expect(typeof manifest.userSpecPath).toBe("string");
+    expect(typeof manifest.playbookPath).toBe("string");
     expect(readAgentProfile(GOOD.agentId).ok).toBe(true);
   });
 });
@@ -472,20 +502,56 @@ describe("readAgentProfile — a manifest missing a REQUIRED spec key is corrupt
     expect(read.kind).toBe("not_found");
   });
 
-  it("a manifest pointing at a user_spec.md whose body is GONE degrades gracefully (lazy slot is optional detail)", () => {
+  it("a profile.json with NO userSpecPath → not_found (round-2: user_spec is a required-gate field)", () => {
+    // Founder review round 2: userSpecPath joins the required gate. A manifest
+    // missing it is an interrupted/hand-edited write → not_found, never a
+    // coherent-but-incomplete expert.
+    materializeProfile({ ...GOOD });
+    const manifestPath = join(getAgentArtefactDir(GOOD.agentId), "profile.json");
+    const manifest = readManifest(GOOD.agentId) as unknown as Record<string, unknown>;
+    delete manifest["userSpecPath"];
+    chmodSync(manifestPath, 0o600);
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+    const read = readAgentProfile(GOOD.agentId);
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    expect(read.kind).toBe("not_found");
+  });
+
+  it("a profile.json with NO playbookPath → not_found (round-2: playbook is a required-gate field)", () => {
+    materializeProfile({ ...GOOD });
+    const manifestPath = join(getAgentArtefactDir(GOOD.agentId), "profile.json");
+    const manifest = readManifest(GOOD.agentId) as unknown as Record<string, unknown>;
+    delete manifest["playbookPath"];
+    chmodSync(manifestPath, 0o600);
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+    const read = readAgentProfile(GOOD.agentId);
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    expect(read.kind).toBe("not_found");
+  });
+
+  it("a manifest pointing at a user_spec.md whose body is GONE fails closed → not_found (round-2: all four are required)", () => {
     // Per-file atomic, not transactional: a manifest can point at a user_spec.md
-    // that was hand-deleted. The user spec is OPTIONAL/lazy detail — its absent
-    // body must NOT brick the read. The expert stays viewable; userSpec is just
-    // undefined. (The REQUIRED specs are present, so the gate still passes.)
+    // that was hand-deleted. After round-2 the user spec is REQUIRED — a
+    // referenced-but-missing body of ANY of the four is fail-closed, exactly the
+    // role persona played pre-SDS. The read must NOT serve a coherent-but-partial
+    // expert off a missing required body.
     materializeProfile({ ...GOOD });
     rmSync(join(getAgentArtefactDir(GOOD.agentId), "user_spec.md"), { force: true });
     const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(true);
-    if (!read.ok) return;
-    expect(read.userSpec).toBeUndefined();
-    // The healthy parts still load.
-    expect(read.domainSpec).toBe(DOMAIN_SPEC);
-    expect(read.intentSpec).toBe(INTENT_SPEC);
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    expect(read.kind).toBe("not_found");
+  });
+
+  it("a manifest pointing at a playbook.md whose body is GONE fails closed → not_found (round-2: all four are required)", () => {
+    materializeProfile({ ...GOOD });
+    rmSync(join(getAgentArtefactDir(GOOD.agentId), "playbook.md"), { force: true });
+    const read = readAgentProfile(GOOD.agentId);
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    expect(read.kind).toBe("not_found");
   });
 });
 

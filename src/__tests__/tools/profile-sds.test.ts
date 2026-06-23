@@ -2,21 +2,24 @@
  * UNIT — the SDS tool seam after the five-artefact reframe (tier: unit, mock api
  * + temp data dir, no network, no host).
  *
- * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 1
- * (PR #33 bounced). The pure store invariants live in
+ * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 2
+ * (PR #33 bounced a SECOND time). The pure store invariants live in
  * `lib/profile-store-sds.test.ts`; here we pin the TOOL boundary after the
  * reframe — WITHOUT adding a new tool (the 8-tool manifest is FROZEN;
- * manifest-contract stays green unchanged):
+ * manifest-contract stays green unchanged). The round-2 correction: ALL FOUR sil
+ * specs are REQUIRED (present non-blank from creation, seeded partial then
+ * augmented per-query) — userSpec + playbook are no longer lazy/optional:
  *
  *   sil_profile_materialize — drops `persona` entirely (the persona is the host
  *     SOUL.md, written by the engine via the host CLI). REQUIRES domainSpec +
- *     intentSpec; userSpec + playbook are optional (lazy). The ok envelope returns
- *     domainSpecPath / intentSpecPath (+ userSpecPath / playbookPath when present).
- *     A missing or present-but-blank required spec → invalid_request naming it.
+ *     intentSpec + userSpec + playbook (all four). The ok envelope returns all four
+ *     paths. A missing or present-but-blank spec → invalid_request naming it.
  *   sil_profile_get         — the ok envelope returns the domainSpec / intentSpec /
- *     userSpec / playbook bodies (no persona; lazy slots absent-is-fine).
- *   sil_profile_list        — the summary flags presence (hasUserSpec /
- *     hasPlaybook) — cheap manifest flags, no body read.
+ *     userSpec / playbook bodies (no persona; all four always present).
+ *   sil_profile_list        — the summary lists experts. With all four specs
+ *     required+present, hasUserSpec / hasPlaybook would be trivially true and carry
+ *     no signal — so we pin the durable list shape (the expert is listed), not a
+ *     no-signal flag.
  *
  * Hermetic via the SIL_DATA_DIR temp-dir override (mirrors
  * profile-materialize.test.ts / profile-manage.test.ts).
@@ -69,7 +72,7 @@ const USER_SPEC =
   "# User spec\nFacts: inseam 81cm, endurance geometry.\nHARD-NO: rim brakes; over 9kg.";
 const PLAYBOOK = "# Buying taste\nBudget ~€1500; brand-agnostic.";
 
-/** A full create. */
+/** A full create — all four REQUIRED specs (round-2: none is lazy/optional). */
 const GOOD_PARAMS = {
   agentId: "road-cycling-buyer",
   name: "Road Cycling Buyer",
@@ -79,13 +82,10 @@ const GOOD_PARAMS = {
   playbook: PLAYBOOK,
 };
 
-/** The minimum valid create — the two required specs only. */
-const MIN_PARAMS = {
-  agentId: "road-cycling-buyer",
-  name: "Road Cycling Buyer",
-  domainSpec: DOMAIN_SPEC,
-  intentSpec: INTENT_SPEC,
-};
+/** The minimum valid create. After Founder review round 2, all four sil specs are
+ * REQUIRED + present from creation — so the minimum create IS the full four-spec
+ * create. Kept as a named alias for call-site legibility. */
+const MIN_PARAMS = GOOD_PARAMS;
 
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-profile-sds-tool-"));
@@ -101,8 +101,8 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe("sil_profile_materialize — schema: persona GONE, domainSpec + intentSpec REQUIRED", () => {
-  it("declares NO persona param; domainSpec + intentSpec are required; userSpec + playbook are optional", () => {
+describe("sil_profile_materialize — schema: persona GONE, ALL FOUR specs REQUIRED (round-2)", () => {
+  it("declares NO persona param; domainSpec + intentSpec + userSpec + playbook are ALL required", () => {
     const tool = getTool(api, MATERIALIZE);
     const schema = tool.parameters as unknown as {
       type?: string;
@@ -115,18 +115,22 @@ describe("sil_profile_materialize — schema: persona GONE, domainSpec + intentS
     expect(schema.properties?.["persona"]).toBeUndefined();
     expect(schema.required ?? []).not.toContain("persona");
 
-    // The two required specs exist as strings AND are in the required gate.
+    // All four specs exist as strings AND are in the required gate (round-2:
+    // userSpec + playbook are no longer optional — they are present from creation).
     expect(schema.properties?.["domainSpec"]?.type).toBe("string");
     expect(schema.properties?.["intentSpec"]?.type).toBe("string");
-    expect(schema.required).toEqual(
-      expect.arrayContaining(["agentId", "name", "domainSpec", "intentSpec"]),
-    );
-
-    // The two lazy specs exist as strings but are NOT required.
     expect(schema.properties?.["userSpec"]?.type).toBe("string");
     expect(schema.properties?.["playbook"]?.type).toBe("string");
-    expect(schema.required ?? []).not.toContain("userSpec");
-    expect(schema.required ?? []).not.toContain("playbook");
+    expect(schema.required).toEqual(
+      expect.arrayContaining([
+        "agentId",
+        "name",
+        "domainSpec",
+        "intentSpec",
+        "userSpec",
+        "playbook",
+      ]),
+    );
   });
 });
 
@@ -151,17 +155,17 @@ describe("sil_profile_materialize — ok envelope returns the spec paths; no per
     expect(readFileSync(join(dir, "playbook.md"), "utf8")).toBe(PLAYBOOK);
   });
 
-  it("a min create (required specs only) omits userSpecPath / playbookPath — the lazy slots fill later", async () => {
+  it("a create returns ALL FOUR spec paths and lands all four files (round-2: none is lazily absent)", async () => {
     const tool = getTool(api, MATERIALIZE);
     const payload = payloadOf(await tool.execute("c-2", { ...MIN_PARAMS }));
     expect(payload["status"]).toBe("ok");
     expect(payload["domainSpecPath"]).toBeDefined();
     expect(payload["intentSpecPath"]).toBeDefined();
-    expect(payload["userSpecPath"]).toBeUndefined();
-    expect(payload["playbookPath"]).toBeUndefined();
+    expect(payload["userSpecPath"]).toBeDefined();
+    expect(payload["playbookPath"]).toBeDefined();
     const dir = join(getDataDir(), "agents", GOOD_PARAMS.agentId);
-    expect(existsSync(join(dir, "user_spec.md"))).toBe(false);
-    expect(existsSync(join(dir, "playbook.md"))).toBe(false);
+    expect(existsSync(join(dir, "user_spec.md"))).toBe(true);
+    expect(existsSync(join(dir, "playbook.md"))).toBe(true);
   });
 });
 
@@ -181,6 +185,24 @@ describe("sil_profile_materialize — a missing/blank REQUIRED spec → invalid_
     const payload = payloadOf(await tool.execute("c-4", { ...noIntent }));
     expect(payload["status"]).toBe("invalid_request");
     expect(payload["field"]).toBe("intentSpec");
+    expect(existsSync(getAgentArtefactDir(GOOD_PARAMS.agentId))).toBe(false);
+  });
+
+  it("omitted userSpec → invalid_request(field=userSpec), no artefact dir (round-2: user_spec is REQUIRED)", async () => {
+    const tool = getTool(api, MATERIALIZE);
+    const { userSpec: _u, ...noUser } = GOOD_PARAMS;
+    const payload = payloadOf(await tool.execute("c-4u", { ...noUser }));
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("userSpec");
+    expect(existsSync(getAgentArtefactDir(GOOD_PARAMS.agentId))).toBe(false);
+  });
+
+  it("omitted playbook → invalid_request(field=playbook), no artefact dir (round-2: playbook is REQUIRED)", async () => {
+    const tool = getTool(api, MATERIALIZE);
+    const { playbook: _p, ...noPlaybook } = GOOD_PARAMS;
+    const payload = payloadOf(await tool.execute("c-4p", { ...noPlaybook }));
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("playbook");
     expect(existsSync(getAgentArtefactDir(GOOD_PARAMS.agentId))).toBe(false);
   });
 
@@ -221,7 +243,7 @@ describe("sil_profile_get — ok envelope returns the four spec bodies, no perso
     expect(payload["persona"]).toBeUndefined();
   });
 
-  it("a min-create expert omits userSpec / playbook in the envelope (lazy slots absent-is-fine)", async () => {
+  it("a created expert returns ALL FOUR bodies in the envelope (round-2: none is absent at creation)", async () => {
     await getTool(api, MATERIALIZE).execute("c-9", { ...MIN_PARAMS });
     const payload = payloadOf(
       await getTool(api, GET).execute("c-10", { agentId: GOOD_PARAMS.agentId }),
@@ -229,29 +251,31 @@ describe("sil_profile_get — ok envelope returns the four spec bodies, no perso
     expect(payload["status"]).toBe("ok");
     expect(payload["domainSpec"]).toBe(DOMAIN_SPEC);
     expect(payload["intentSpec"]).toBe(INTENT_SPEC);
-    expect(payload["userSpec"]).toBeUndefined();
-    expect(payload["playbook"]).toBeUndefined();
+    expect(payload["userSpec"]).toBe(USER_SPEC);
+    expect(payload["playbook"]).toBe(PLAYBOOK);
   });
 });
 
-describe("sil_profile_list — summary flags lazy-slot presence (hasUserSpec / hasPlaybook)", () => {
-  it("flags hasUserSpec + hasPlaybook true for a full expert, false for a min-create one", async () => {
+describe("sil_profile_list — lists every created expert (name + agentId from the manifest)", () => {
+  it("lists each created expert with its manifest name + agentId — the durable list shape", async () => {
+    // Round-2: with all four specs required+present, hasUserSpec / hasPlaybook
+    // would be trivially true for EVERY created expert and carry no discriminating
+    // signal — so we do NOT assert them. The durable behaviour the list must hold
+    // is: every created expert is enumerated with its manifest name + agentId.
     await getTool(api, MATERIALIZE).execute("c-11", { ...GOOD_PARAMS });
     await getTool(api, MATERIALIZE).execute("c-12", {
-      ...MIN_PARAMS,
-      agentId: "bare-expert",
-      name: "Bare Expert",
+      ...GOOD_PARAMS,
+      agentId: "second-expert",
+      name: "Second Expert",
     });
 
     const payload = payloadOf(await getTool(api, LIST).execute("c-13", {}));
     expect(payload["status"]).toBe("ok");
     const experts = payload["experts"] as Array<Record<string, unknown>>;
-    const full = experts.find((e) => e["agentId"] === GOOD_PARAMS.agentId)!;
-    const bare = experts.find((e) => e["agentId"] === "bare-expert")!;
-
-    expect(full["hasUserSpec"]).toBe(true);
-    expect(full["hasPlaybook"]).toBe(true);
-    expect(bare["hasUserSpec"]).toBe(false);
-    expect(bare["hasPlaybook"]).toBe(false);
+    const byId = new Map(experts.map((e) => [e["agentId"], e]));
+    expect(byId.has(GOOD_PARAMS.agentId)).toBe(true);
+    expect(byId.has("second-expert")).toBe(true);
+    expect(byId.get(GOOD_PARAMS.agentId)!["name"]).toBe(GOOD_PARAMS.name);
+    expect(byId.get("second-expert")!["name"]).toBe("Second Expert");
   });
 });

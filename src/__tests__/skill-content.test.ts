@@ -2911,21 +2911,29 @@ describe("SDS — per-query WEB REFRESH of domain_spec.md (kept current + comple
   });
 });
 
-describe("SDS — LAZY capture of facts→user_spec.md / taste→playbook.md (replaces first-shop batch capture)", () => {
-  it("the loop captures a needed fact/taste LAZILY, per-query, on demand — NOT a first-shop batch up front (Correction 5 step 3)", () => {
-    // Correction 5 step 3: if resolving the query's dimensions needs a user fact
-    // or taste the store does not yet hold, capture it LAZILY — in-context for THIS
-    // query — into user_spec.md (a fact/measurement/hard-constraint) or playbook.md
-    // (a buying-taste preference), then persist + never re-ask. This REPLACES
-    // first-shop batch capture: the user side fills incrementally, on demand. The
-    // body must name lazy/per-query/on-demand capture, NOT a batch up-front gate.
+describe("SDS — every query lazily AUGMENTS the already-present user_spec.md / playbook.md (we keep learning)", () => {
+  it("the loop AUGMENTS the already-present user_spec/playbook with a new fact/taste, per-query, on demand — not a capture-from-empty (round-2)", () => {
+    // Founder review round 2: user_spec.md + playbook.md are PRESENT (seeded
+    // partial) from creation. On a query, if a new user fact or taste surfaces, the
+    // expert AUGMENTS the already-present doc — in-context for THIS query — into
+    // user_spec.md (a fact/measurement/hard-constraint) or playbook.md (a
+    // buying-taste preference), then persists + never re-asks. The user side grows
+    // incrementally by reinforcement, never "captured from empty for the first
+    // time". The body must name lazy/per-query augmentation of an already-present
+    // doc, NOT a one-time capture.
     const body = expertShoppingBodyLower();
-    const namesLazy =
+    const namesLazyPerQuery =
       body.includes("lazy") || body.includes("lazily") ||
       body.includes("on demand") || body.includes("on-demand") ||
       body.includes("incremental") || body.includes("as needed") ||
       body.includes("when needed") || body.includes("only when") ||
-      body.includes("per-query") || body.includes("per query");
+      body.includes("per-query") || body.includes("per query") ||
+      body.includes("every query");
+    const namesAugment =
+      body.includes("augment") || body.includes("reinforce") ||
+      body.includes("enrich") || body.includes("sharpen") ||
+      body.includes("keep learning") || body.includes("grows") ||
+      body.includes("grow") || body.includes("update");
     const namesUserOrTaste =
       body.includes("user_spec") || body.includes("user spec") ||
       body.includes("user-spec") || body.includes("userspec") ||
@@ -2933,46 +2941,54 @@ describe("SDS — LAZY capture of facts→user_spec.md / taste→playbook.md (re
     const namesPersist =
       body.includes("persist") || body.includes("re-materialize") ||
       body.includes("rematerialize") || body.includes("sil_profile_materialize");
-    expect(namesLazy).toBe(true);
+    expect(namesLazyPerQuery).toBe(true);
+    expect(namesAugment).toBe(true);
     expect(namesUserOrTaste).toBe(true);
     expect(namesPersist).toBe(true);
   });
 
-  it("the doc REPLACES first-shop batch capture with lazy per-query capture — and prescribes NO up-front batch as the procedure (Correction 5)", () => {
-    // Correction 5 explicitly REPLACES first-shop batch capture with lazy,
-    // per-query, on-demand capture. The doc must STATE the replacement (lazy
-    // replaces batch / never a big up-front onboarding form), AND must not carry an
-    // ACTIVE instruction to elicit the whole user spec up front before the loop.
-    //
-    // NOTE: we do NOT forbid the words "batch" / "first-shop" outright — the
-    // corrected doc legitimately uses them to DISAVOW the old model ("this replaces
-    // first-shop batch capture"). We pin the BEHAVIOUR: the replacement is stated,
-    // and no up-front batch instruction survives.
+  it("all four sil docs are PRESENT from creation (seeded partial) — the loop AUGMENTS them, it does not capture them from empty (round-2)", () => {
+    // Round-2 correction: all four sil docs exist non-blank from creation, seeded
+    // quickly/partial (the ≤10-question setup + an initial research pass), then
+    // augmented/reinforced over time. The loop doc must FRAME the user side as
+    // already-present-and-augmented (we keep learning), NOT as captured-from-empty.
+    // It must NOT carry an ACTIVE instruction to capture the whole user spec from
+    // empty before the loop (the bounced round-1 model).
     const body = expertShoppingBodyLower();
-    const statesReplacement =
-      body.includes("replaces first-shop batch") ||
-      body.includes("replaces the first-shop batch") ||
-      body.includes("not a big up-front") ||
-      body.includes("never a big up-front") ||
-      body.includes("no up-front") ||
-      body.includes("not up-front") ||
-      (body.includes("lazy") && body.includes("instead of")) ||
-      (body.includes("incremental") && body.includes("not") && body.includes("up-front"));
-    expect(statesReplacement).toBe(true);
-    // No ACTIVE up-front batch instruction (an imperative to capture the whole user
-    // spec before the loop) survives beside the lazy model.
-    const prescribesBatchUpFront =
+    const framesAlreadyPresentAndAugmented =
+      body.includes("already present") || body.includes("already exist") ||
+      body.includes("seeded") || body.includes("present from creation") ||
+      body.includes("keep learning") ||
+      (body.includes("augment") &&
+        (body.includes("user_spec") || body.includes("user spec") ||
+          body.includes("playbook"))) ||
+      (body.includes("reinforce") &&
+        (body.includes("user_spec") || body.includes("user spec") ||
+          body.includes("playbook")));
+    expect(framesAlreadyPresentAndAugmented).toBe(true);
+    // No ACTIVE "the user side starts empty / capture it before the loop"
+    // instruction (the bounced round-1 lazy-from-absent model) survives. We pin
+    // only the unambiguous active-instruction tokens — NOT a brittle forbid on
+    // "batch" / "first-shop", which a corrected doc may legitimately use to DISAVOW
+    // the old model (the literal-token-trap from the qa-developer pair memory).
+    const framesUserSideAsStartingEmpty =
       body.includes("capture the whole user spec before") ||
       body.includes("capture the user spec before searching") ||
       body.includes("before the per-request loop runs, capture") ||
-      body.includes("before the loop, capture the user spec");
-    expect(prescribesBatchUpFront).toBe(false);
+      body.includes("before the loop, capture the user spec") ||
+      body.includes("user_spec.md starts empty") ||
+      body.includes("user spec starts empty") ||
+      body.includes("playbook starts empty") ||
+      body.includes("starts (near-)empty") ||
+      body.includes("start empty, fill lazily") ||
+      body.includes("fill from empty");
+    expect(framesUserSideAsStartingEmpty).toBe(false);
   });
 
   it("a held user_spec/playbook fact is REUSED and NEVER re-asked once captured (capture-once-per-fact)", () => {
     // Rule B / business rule 2: once a fact or taste is captured it is reused and
-    // never re-asked. (Lazy capture-once is PER FACT, not a one-shot batch.) The
-    // body must name reuse AND the never-re-ask rule for a stored attribute.
+    // never re-asked. (Augmentation is PER FACT, not a one-shot batch.) The body
+    // must name reuse AND the never-re-ask rule for a stored attribute.
     const body = expertShoppingBodyLower();
     const namesReuse =
       body.includes("reuse") || body.includes("reuses") ||
@@ -3217,12 +3233,13 @@ describe("SDS — refine targets domain_spec / user_spec / playbook / intent_spe
   });
 });
 
-describe("SDS — domainSpec + intentSpec are the REQUIRED materialize inputs (8-tool manifest frozen, no new tool)", () => {
-  it("the engine names domainSpec AND intentSpec as REQUIRED sil_profile_materialize inputs", () => {
-    // The store grows an intentSpec param (Correction 4) and makes domainSpec +
-    // intentSpec REQUIRED. The engine (which owns the materialize call) must name
-    // BOTH as inputs to the SAME tool — proving the five-artefact model rides the
-    // existing tool, not a new one (the 8-tool manifest stays frozen).
+describe("SDS — all four specs are the REQUIRED materialize inputs, seeded at creation (8-tool manifest frozen, no new tool)", () => {
+  it("the engine names ALL FOUR specs (domainSpec, intentSpec, userSpec, playbook) as REQUIRED sil_profile_materialize inputs (round-2)", () => {
+    // Round-2: the store makes ALL FOUR specs REQUIRED (domainSpec + intentSpec +
+    // userSpec + playbook) — present non-blank from creation. The engine (which
+    // owns the materialize call) must name all four as inputs to the SAME tool —
+    // proving the five-artefact model rides the existing tool, not a new one (the
+    // 8-tool manifest stays frozen).
     const body = engineBodyLower();
     const namesDomainSpec =
       body.includes("domainspec") || body.includes("domain spec") ||
@@ -3230,9 +3247,64 @@ describe("SDS — domainSpec + intentSpec are the REQUIRED materialize inputs (8
     const namesIntentSpec =
       body.includes("intentspec") || body.includes("intent spec") ||
       body.includes("intent-spec") || body.includes("intent_spec");
-    expect(namesDomainSpec).toBe(true);
-    expect(namesIntentSpec).toBe(true);
+    const namesUserSpec =
+      body.includes("userspec") || body.includes("user spec") ||
+      body.includes("user-spec") || body.includes("user_spec");
+    const namesPlaybook = body.includes("playbook");
+    const missing: string[] = [];
+    if (!namesDomainSpec) missing.push("domainSpec");
+    if (!namesIntentSpec) missing.push("intentSpec");
+    if (!namesUserSpec) missing.push("userSpec");
+    if (!namesPlaybook) missing.push("playbook");
+    expect(missing).toEqual([]);
     expect(body).toContain("sil_profile_materialize");
+  });
+
+  it("the engine SEEDS the user side (user_spec + playbook) at creation — all four present non-blank from the start, not deferred (round-2)", () => {
+    // Round-2 cross-cutting rule A: the creation step seeds ALL FOUR sil docs
+    // quickly (partial) at creation — the researched domain_spec + derived
+    // intent_spec dimensions AND an initial user_spec + playbook. The engine doc
+    // (which owns the materialize call) must name seeding/passing the user side at
+    // creation — not deferring it to first shop.
+    const body = engineBodyLower();
+    const seedsUserSide =
+      ((body.includes("seed") || body.includes("seeded") || body.includes("initial")) &&
+        (body.includes("user_spec") || body.includes("user spec") ||
+          body.includes("playbook"))) ||
+      (body.includes("all four") &&
+        (body.includes("creation") || body.includes("materialize"))) ||
+      (body.includes("present") &&
+        (body.includes("user_spec") || body.includes("user spec")) &&
+        body.includes("creation"));
+    expect(seedsUserSide).toBe(true);
+  });
+
+  it("the interview seeds all four sil docs under the ≤10-question LIGHT setup — the user side is present from creation, NOT 'filled lazily later' (round-2)", () => {
+    // Round-2 cross-cutting rule B: setup is light (≤10 questions) and seeds ALL
+    // FOUR sil docs (partial) at creation. The brainstorm doc owns the ≤10-question
+    // bound. It must (1) keep the ≤10-question light-setup bound, (2) seed the user
+    // side at creation, and (3) NOT carry the bounced round-1 "user spec / buying
+    // taste fill lazily later" framing (the user side is present from creation now).
+    const body = brainstormBodyLower();
+    const namesLightSetup =
+      body.includes("≤10") || body.includes("<=10") ||
+      body.includes("10 question") || body.includes("ten question") ||
+      body.includes("at most 10") || body.includes("light setup") ||
+      body.includes("no more than 10");
+    const seedsUserSideAtCreation =
+      ((body.includes("seed") || body.includes("seeded") || body.includes("initial")) &&
+        (body.includes("user spec") || body.includes("user_spec") ||
+          body.includes("playbook") || body.includes("buying taste"))) ||
+      (body.includes("all four") && body.includes("present")) ||
+      (body.includes("present") && body.includes("creation"));
+    expect(namesLightSetup).toBe(true);
+    expect(seedsUserSideAtCreation).toBe(true);
+    // The bounced round-1 "fill lazily later" / "start empty" framing for the user
+    // side must be GONE — all four are present from creation now.
+    expect(body).not.toContain("fill lazily later");
+    expect(body).not.toContain("fill later");
+    expect(body).not.toContain("starts empty");
+    expect(body).not.toContain("start empty");
   });
 
   it("the engine's Runtime hook loads the FOUR sil-store artefacts (domain_spec + intent_spec + user_spec + playbook); the persona is the host SOUL.md", () => {

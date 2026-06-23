@@ -3,26 +3,27 @@
  * over a real temp $SIL_DATA_DIR (tier: integration — real filesystem artefact
  * interaction, no mock of the store, no network, no host).
  *
- * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 1
- * (PR #33 bounced). The refine loop AND the per-query lazy-capture path both
- * COMPOSE the existing `sil_profile_get` (load) + `sil_profile_materialize`
+ * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 2
+ * (PR #33 bounced a SECOND time). The refine loop AND the per-query augment path
+ * both COMPOSE the existing `sil_profile_get` (load) + `sil_profile_materialize`
  * (atomic in-place re-write) store paths — no new code. These tests pin the
  * EXISTING profile-store re-write semantics the loop relies on, in the SDS
  * five-artefact shape:
  *
  *   (a) re-running materializeProfile over a PRE-EXISTING agents/<id>/ dir
- *       overwrites the artefact bodies IN PLACE (the refinement / lazy capture
- *       persists);
+ *       overwrites the artefact bodies IN PLACE (the refinement / per-query
+ *       augmentation persists);
  *   (b) an injected write failure on a PRE-EXISTING dir leaves the PRIOR
  *       artefacts INTACT — the `dirPreexisted` guard never tears down a dir it
  *       did not create, so a failed re-write never half-refines an expert;
  *   (c) materialize → re-materialize-with-an-updated-spec → readAgentProfile
  *       returns the UPDATED bodies — the load-then-refine-then-reload loop closes.
  *
- * After the SDS reframe: NO persona in the store (it is the host SOUL.md);
- * domain_spec.md + intent_spec.md are REQUIRED; user_spec.md + playbook.md fill
- * lazily per-query. Refine can target domain_spec / user_spec / playbook /
- * intent_spec. The per-query INTENT (filled dimensions) is never persisted — only
+ * After the SDS reframe: NO persona in the store (it is the host SOUL.md). Round-2
+ * correction: ALL FOUR sil specs (domain_spec / intent_spec / user_spec /
+ * playbook) are REQUIRED and PRESENT from creation (seeded partial), then lazily
+ * AUGMENTED in place per-query — never "added from absent". Refine can target any
+ * of the four. The per-query INTENT (filled dimensions) is never persisted — only
  * the intent_spec.md SCHEMA is — so it is never a refine target and never
  * re-materialized.
  *
@@ -71,8 +72,8 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-/** The SDS expert as first created — the two REQUIRED specs (a min create; the
- * lazy slots fill per-query). */
+/** The SDS expert as first created — ALL FOUR REQUIRED specs (round-2: every sil
+ * doc is present non-blank from creation, seeded partial). */
 const CREATED = {
   agentId: "road-cycling-buyer",
   name: "Road Cycling Buyer",
@@ -82,6 +83,10 @@ const CREATED = {
   intentSpec:
     "# Intent spec — dimensions\nuse-case, terrain, budget, timeline, compatibility,"
     + " performance priorities, aesthetics.",
+  userSpec:
+    "# User spec (seeded partial)\nFacts: endurance geometry, inseam 81cm.\n"
+    + "HARD-NO: rim brakes.",
+  playbook: "# Buying taste (seeded partial)\nBudget ~€1500; brand-agnostic.",
 } as const;
 
 /** The refined spec — SAME agentId, the domain spec ENHANCED (a per-query web
@@ -263,18 +268,20 @@ describe("refine round-trip — materialize → re-materialize(updated) → read
 });
 
 // ===========================================================================
-// LAZY CAPTURE + REFINE OF THE SDS LAYERS — domain_spec / intent_spec /
+// PER-QUERY AUGMENT + REFINE OF THE SDS LAYERS — domain_spec / intent_spec /
 // user_spec / playbook re-materialize in place
 //
-// Card: spec-driven-shopping-sds-for-created-experts. The per-query lazy-capture
-// path (Correction 5) and the refine path both re-materialize a layer IN PLACE
-// through the same `sil_profile_materialize` store path. The three properties the
-// domain re-write proved above must hold for each layer:
-//   (a) re-materialize over a PRE-EXISTING dir overwrites / adds the layer in
-//       place (the kept capture/refinement sticks);
+// Card: spec-driven-shopping-sds-for-created-experts (Founder review round 2).
+// All four sil docs are PRESENT from creation (seeded partial); the per-query
+// augment path and the refine path both re-materialize a layer IN PLACE through
+// the same `sil_profile_materialize` store path — augmenting an already-present
+// doc, never adding one from absent. The three properties the domain re-write
+// proved above must hold for each layer:
+//   (a) re-materialize over a PRE-EXISTING dir overwrites the layer in place (the
+//       kept augmentation/refinement sticks);
 //   (b) a failed re-write on a PRE-EXISTING dir leaves the PRIOR SDS artefacts
-//       intact (never a half-captured user spec);
-//   (c) updating ONE layer leaves the OTHERS intact — a user_spec capture is not
+//       intact (never a half-augmented user spec);
+//   (c) augmenting ONE layer leaves the OTHERS intact — a user_spec augment is not
 //       a full-expert rewrite that drops domain_spec/intent_spec.
 //
 // The per-query INTENT (filled dimensions) is deliberately ABSENT here: it is
@@ -282,27 +289,32 @@ describe("refine round-trip — materialize → re-materialize(updated) → read
 // re-materialized. Only the intent_spec.md SCHEMA is persisted.
 // ===========================================================================
 
-/** The SDS expert as first created — required specs only. */
+/** The SDS expert as first created — ALL FOUR REQUIRED specs present (seeded
+ * partial; round-2). */
 const SDS_CREATED = {
   agentId: "road-cycling-buyer",
   name: "Road Cycling Buyer",
   domainSpec: "# Domain spec\nFit mechanics, gearing theory, frame geometry.",
   intentSpec: "# Intent spec — dimensions\nuse-case, terrain, budget, compatibility.",
+  userSpec:
+    "# User spec (seeded partial)\n## Domain-relevant facts (soft)\n- Endurance geometry.\n"
+    + "## Hard constraints (INVIOLABLE)\n- HARD-NO: rim brakes.",
+  playbook: "# Buying taste (seeded partial)\nBrand-agnostic.",
 } as const;
 
-/** Same expert, a lazily-captured user_spec ADDED (a hard constraint the user
+/** Same expert, the already-present user_spec AUGMENTED in place (a fact the user
  * surfaced mid-query) — domain/intent unchanged. */
-const SDS_USER_CAPTURED = {
+const SDS_USER_AUGMENTED = {
   ...SDS_CREATED,
   userSpec:
     "# User spec\n## Domain-relevant facts (soft)\n- Endurance geometry, inseam 81cm.\n"
     + "## Hard constraints (INVIOLABLE)\n- HARD-NO: rim brakes.",
 } as const;
 
-/** Same expert, the user_spec then SHARPENED (a refine that targets a user_spec
- * hard constraint) PLUS a lazily-captured playbook taste. */
+/** Same expert, the user_spec then SHARPENED again (a refine targeting a user_spec
+ * hard constraint) PLUS the playbook taste augmented in place. */
 const SDS_USER_REFINED = {
-  ...SDS_USER_CAPTURED,
+  ...SDS_USER_AUGMENTED,
   userSpec:
     "# User spec\n## Domain-relevant facts (soft)\n- Endurance geometry, inseam 81cm.\n"
     + "## Hard constraints (INVIOLABLE)\n- HARD-NO: rim brakes.\n"
@@ -310,29 +322,32 @@ const SDS_USER_REFINED = {
   playbook: "# Buying taste\nBudget ~€1500; brand-agnostic.",
 } as const;
 
-describe("lazy capture — re-materialize ADDS a user_spec/playbook in place (the kept capture sticks)", () => {
-  it("a second materialize with a new userSpec adds user_spec.md; domain/intent survive untouched", () => {
+describe("per-query augment — re-materialize AUGMENTS an already-present user_spec/playbook in place", () => {
+  it("a second materialize with an augmented userSpec overwrites user_spec.md in place; domain/intent survive untouched", () => {
     const first = materializeProfile({ ...SDS_CREATED });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     const dir = getAgentArtefactDir(SDS_CREATED.agentId);
-    expect(existsSync(join(dir, "user_spec.md"))).toBe(false); // not captured yet
+    // The user_spec is PRESENT from creation (round-2) — augmentation overwrites it.
+    expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(SDS_CREATED.userSpec);
 
-    const second = materializeProfile({ ...SDS_USER_CAPTURED });
+    const second = materializeProfile({ ...SDS_USER_AUGMENTED });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
-    // user_spec.md now exists with the captured fact + hard constraint…
-    expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(SDS_USER_CAPTURED.userSpec);
-    // …and the required specs are untouched by a user-side lazy capture.
+    // user_spec.md now holds the augmented fact + hard constraint…
+    expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(SDS_USER_AUGMENTED.userSpec);
+    expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toContain("inseam 81cm");
+    // …and the other specs are untouched by a user-side augmentation.
     expect(readFileSync(join(dir, "domain_spec.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
     expect(readFileSync(join(dir, "intent_spec.md"), "utf8")).toBe(SDS_CREATED.intentSpec);
+    expect(readFileSync(join(dir, "playbook.md"), "utf8")).toBe(SDS_CREATED.playbook);
     expect(walkFiles(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
   });
 
-  it("a later refine sharpens user_spec AND adds a playbook taste; domain/intent still survive", () => {
+  it("a later refine sharpens user_spec AND augments the playbook taste; domain/intent still survive", () => {
     materializeProfile({ ...SDS_CREATED });
-    materializeProfile({ ...SDS_USER_CAPTURED });
+    materializeProfile({ ...SDS_USER_AUGMENTED });
     const dir = getAgentArtefactDir(SDS_CREATED.agentId);
 
     const third = materializeProfile({ ...SDS_USER_REFINED });
@@ -341,7 +356,7 @@ describe("lazy capture — re-materialize ADDS a user_spec/playbook in place (th
 
     expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(SDS_USER_REFINED.userSpec);
     expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toContain("over 9kg");
-    // The buying taste (playbook) is now captured too…
+    // The buying taste (playbook) is augmented in place…
     expect(readFileSync(join(dir, "playbook.md"), "utf8")).toBe(SDS_USER_REFINED.playbook);
     // …and the required specs survive.
     expect(readFileSync(join(dir, "domain_spec.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
@@ -350,13 +365,13 @@ describe("lazy capture — re-materialize ADDS a user_spec/playbook in place (th
 
   it("the round-trip closes: read after a user_spec refine returns the UPDATED user spec, not the stale one", () => {
     materializeProfile({ ...SDS_CREATED });
-    materializeProfile({ ...SDS_USER_CAPTURED });
+    materializeProfile({ ...SDS_USER_AUGMENTED });
     materializeProfile({ ...SDS_USER_REFINED });
     const read = readAgentProfile(SDS_CREATED.agentId);
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     expect(read.userSpec).toBe(SDS_USER_REFINED.userSpec);
-    expect(read.userSpec).not.toBe(SDS_USER_CAPTURED.userSpec);
+    expect(read.userSpec).not.toBe(SDS_USER_AUGMENTED.userSpec);
     // The intent spec (the persisted dimension schema) is unchanged — a user-spec
     // refine is not an intent-spec rewrite.
     expect(read.intentSpec).toBe(SDS_CREATED.intentSpec);
@@ -387,7 +402,7 @@ describe("refine SDS layers — a failed re-write leaves the PRIOR layers intact
     "when the re-write fails (dir read-only), the original user_spec + domain_spec survive — never a half-refined SDS expert",
     () => {
       materializeProfile({ ...SDS_CREATED });
-      materializeProfile({ ...SDS_USER_CAPTURED });
+      materializeProfile({ ...SDS_USER_AUGMENTED });
       const dir = getAgentArtefactDir(SDS_CREATED.agentId);
 
       // Block the re-write: make the PRE-EXISTING dir read-only so the tmp write
@@ -399,9 +414,9 @@ describe("refine SDS layers — a failed re-write leaves the PRIOR layers intact
       expect(refined.kind).toBe("persistence_failed");
       chmodSync(dir, 0o700);
 
-      // The PRIOR SDS artefacts survive untouched — the captured bodies, not the
+      // The PRIOR SDS artefacts survive untouched — the augmented bodies, not the
       // refined ones, and not a partial mix.
-      expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(SDS_USER_CAPTURED.userSpec);
+      expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(SDS_USER_AUGMENTED.userSpec);
       expect(readFileSync(join(dir, "domain_spec.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
       expect(readFileSync(join(dir, "intent_spec.md"), "utf8")).toBe(SDS_CREATED.intentSpec);
       expect(walkFiles(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
