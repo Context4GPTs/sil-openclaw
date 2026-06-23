@@ -285,3 +285,112 @@ describe("refine round-trip — materialize → re-materialize(updated) → read
     expect(Number.isNaN(Date.parse(read.createdAt))).toBe(false);
   });
 });
+
+// ===========================================================================
+// SDS LAYERS — refine targets a user.md attribute or a domain.md dimension
+//
+// Card: spec-driven-shopping-sds-for-created-experts. SDS makes refine able to
+// sharpen the NEW artefact layers too: a user.md standing attribute / hard
+// constraint, or a domain.md decision-dimension. Each is re-materialized
+// IN PLACE through the same `sil_profile_materialize` store path the refine loop
+// already composes — so the same three properties the playbook/persona re-write
+// proved must hold for the new files:
+//   (a) re-materialize over a PRE-EXISTING dir overwrites domain.md / user.md
+//       in place (the kept SDS refinement sticks);
+//   (b) a failed re-write on a PRE-EXISTING dir leaves the PRIOR SDS artefacts
+//       intact (never a half-refined user spec);
+//   (c) updating ONE SDS layer leaves the OTHER (and persona/playbook) intact —
+//       a user.md update is not a full-expert rewrite that drops domain.md.
+//
+// The intent spec is deliberately ABSENT here: it is ephemeral and never
+// persisted, so it is never a refine target and never re-materialized.
+// ===========================================================================
+
+/** The SDS expert as first created — persona + playbook + the two new layers. */
+const SDS_CREATED = {
+  agentId: "road-cycling-buyer",
+  name: "Road Cycling Buyer",
+  persona: "You are a road-cycling buyer. Prefer endurance geometry.",
+  playbook: "Map budget to price params. Rank by comfort, then weight.",
+  domainSpec:
+    "# Domain spec\nDimensions: fit (stack/reach), groupset tier, rim depth vs"
+    + " crosswind, gearing range. Trade-offs noted.",
+  userSpec:
+    "# User spec\n## Soft preferences\n- Endurance geometry, ~€1500.\n"
+    + "## Hard constraints (INVIOLABLE)\n- HARD-NO: rim brakes.",
+} as const;
+
+/** Same expert, the USER SPEC sharpened (a refine that targets a user.md hard
+ * constraint) — domain.md/persona/playbook unchanged. */
+const SDS_USER_REFINED = {
+  ...SDS_CREATED,
+  userSpec:
+    "# User spec\n## Soft preferences\n- Endurance geometry, ~€1500.\n"
+    + "## Hard constraints (INVIOLABLE)\n- HARD-NO: rim brakes.\n"
+    + "- HARD-NO: anything over 9kg (the user said it three times).",
+} as const;
+
+describe("refine SDS layers — re-materialize a user.md attribute in place (the kept refinement sticks)", () => {
+  it("a second materialize with an updated userSpec overwrites user.md in place; domain.md + persona survive", () => {
+    const first = materializeProfile({ ...SDS_CREATED });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const dir = getAgentArtefactDir(SDS_CREATED.agentId);
+    expect(readFileSync(join(dir, "user.md"), "utf8")).toBe(SDS_CREATED.userSpec);
+
+    const second = materializeProfile({ ...SDS_USER_REFINED });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+
+    // user.md now holds the sharpened spec…
+    expect(readFileSync(join(dir, "user.md"), "utf8")).toBe(SDS_USER_REFINED.userSpec);
+    expect(readFileSync(join(dir, "user.md"), "utf8")).toContain("over 9kg");
+    // …and the OTHER layers are untouched by a user-spec-only refine.
+    expect(readFileSync(join(dir, "domain.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
+    expect(readFileSync(join(dir, "persona.md"), "utf8")).toBe(SDS_CREATED.persona);
+    expect(readFileSync(join(dir, "playbook.md"), "utf8")).toBe(SDS_CREATED.playbook);
+    // No tmp leftover from the atomic re-write.
+    expect(walkFiles(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
+  });
+
+  it("the round-trip closes: read after a user.md refine returns the UPDATED user spec, not the stale one", () => {
+    materializeProfile({ ...SDS_CREATED });
+    materializeProfile({ ...SDS_USER_REFINED });
+    const read = readAgentProfile(SDS_CREATED.agentId);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.userSpec).toBe(SDS_USER_REFINED.userSpec);
+    expect(read.userSpec).not.toBe(SDS_CREATED.userSpec);
+    // The domain spec is unchanged — a user-spec refine is not a domain rewrite.
+    expect(read.domainSpec).toBe(SDS_CREATED.domainSpec);
+  });
+});
+
+describe("refine SDS layers — a failed re-write leaves the PRIOR user.md/domain.md intact", () => {
+  const asRoot = typeof process.getuid === "function" && process.getuid() === 0;
+
+  it.skipIf(asRoot)(
+    "when the re-write fails (dir read-only), the original user.md + domain.md survive — never a half-refined SDS expert",
+    () => {
+      const first = materializeProfile({ ...SDS_CREATED });
+      expect(first.ok).toBe(true);
+      if (!first.ok) return;
+      const dir = getAgentArtefactDir(SDS_CREATED.agentId);
+
+      // Block the re-write: make the PRE-EXISTING dir read-only so the tmp write
+      // fails EACCES. The dirPreexisted guard must NOT tear the expert down.
+      chmodSync(dir, 0o500);
+      const second = materializeProfile({ ...SDS_USER_REFINED });
+      expect(second.ok).toBe(false);
+      if (second.ok) return;
+      expect(second.kind).toBe("persistence_failed");
+      chmodSync(dir, 0o700);
+
+      // The PRIOR SDS artefacts survive untouched — the original bodies, not the
+      // refined ones, and not a partial mix.
+      expect(readFileSync(join(dir, "user.md"), "utf8")).toBe(SDS_CREATED.userSpec);
+      expect(readFileSync(join(dir, "domain.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
+      expect(walkFiles(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
+    },
+  );
+});

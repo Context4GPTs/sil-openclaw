@@ -2622,3 +2622,435 @@ describe("skill bundle — the expert-shopping path is ADDITIVE: the generic pro
     expect(body).not.toContain("adding a tool");
   });
 });
+
+/* ===========================================================================
+ * SPEC-DRIVEN SHOPPING (SDS) — the four-slot artefact model + the three layered
+ * specs the created expert runs on (card:
+ * spec-driven-shopping-sds-for-created-experts).
+ *
+ * tier: integration. Same content-seam pattern as every block above: the SDS
+ * behaviour is SKILL PROSE the host agent follows — there is NO new plugin tool
+ * (the 8-tool manifest is frozen; manifest-contract stays green unchanged), and
+ * the two new persisted layers reuse `sil_profile_materialize` via two new
+ * optional params. So the reference BODIES are the spec, pinned here via
+ * OR-grouped intent-token substrings and indexOf ORDERING anchors. These never
+ * fake a transcript: whether a real expert VISIBLY reasons over the three layers
+ * (cites the derived intent + a stored user attribute + a researched domain
+ * dimension) and NEVER violates a hard constraint end-to-end is
+ * `live-verification`'s job — the e2e tier — NOT a deterministic assertion here.
+ *
+ * What this block pins (the doc-pinnable SDS invariants):
+ *   - the FOUR-slot framing REPLACES the old two-slot / "no third slot" framing
+ *     (and no residual two-slot assertion lingers beside it — the false-green
+ *     the architect's Risk #3 warns against);
+ *   - a creation-time DOMAIN-RESEARCH pass produces the domain spec (domainSpec),
+ *     niche-concrete, not restated persona prose;
+ *   - first-shop USER-SPEC capture-once-and-reuse (never re-ask a held attribute);
+ *   - per-request INTENT-SPEC derivation, ephemeral (never persisted);
+ *   - layering PRECEDENCE intent > user > domain, with hard-constraint
+ *     INVIOLABILITY as the exception (intent never overrides a hard constraint);
+ *   - refine can target a user.md attribute OR a domain.md dimension;
+ *   - domainSpec / userSpec are named in the engine doc as materialize inputs.
+ * ========================================================================= */
+
+describe("SDS — the four-slot artefact model REPLACES the two-slot / no-third-slot framing (no false-green residue)", () => {
+  it("the interview no longer asserts 'no third slot' / a strict two-slot model (the superseded framing is GONE)", () => {
+    // Architect Risk #3 (false-green): the four-slot rewrite must REPLACE, not sit
+    // beside, the old framing. A lingering "no third slot" / "exactly the two
+    // artefact slots" sentence is the one-sided pass the content-seam tests warn
+    // against. The superseded language must be removed from the interview doc.
+    const body = brainstormBodyLower();
+    expect(body).not.toContain("no third slot");
+    expect(body).not.toContain("there is no third");
+    // The "exactly the two artefact slots / two slots the engine materializes"
+    // framing must be gone too — SDS materializes four.
+    expect(body).not.toContain("two artefact slots");
+    expect(body).not.toContain("exactly the two");
+  });
+
+  it("the interview names the FOUR artefact slots (persona, playbook, domain spec, user spec)", () => {
+    // The replacement framing: four first-class slots. The interview owns the
+    // mapping of converged sections → slots, so it must name all four (the two
+    // originals AND the two new SDS layers) so the agent fills the right ones.
+    const body = brainstormBodyLower();
+    expect(body).toContain("persona");
+    expect(body).toContain("playbook");
+    const namesDomainSpec =
+      body.includes("domain spec") ||
+      body.includes("domain-spec") ||
+      body.includes("domainspec") ||
+      body.includes("domain.md");
+    const namesUserSpec =
+      body.includes("user spec") ||
+      body.includes("user-spec") ||
+      body.includes("userspec") ||
+      body.includes("user.md");
+    expect(namesDomainSpec).toBe(true);
+    expect(namesUserSpec).toBe(true);
+    // And it frames the count as four, not two — the model GREW.
+    const namesFour =
+      body.includes("four slot") ||
+      body.includes("four artefact") ||
+      body.includes("four first-class") ||
+      body.includes("four-slot");
+    expect(namesFour).toBe(true);
+  });
+});
+
+describe("SDS — creation runs a DOMAIN-RESEARCH pass producing the domain spec (researched, niche-concrete)", () => {
+  it("the interview names an active domain-research pass that converges the niche's decision-dimensions", () => {
+    // Flow (a): after the niche is narrowed/confirmed, the expert ACTIVELY
+    // RESEARCHES the niche's real decision-dimensions and converges a domain spec
+    // — not latent persona prose relabelled. The body must name the research pass
+    // AND the dimensions/trade-offs it converges.
+    const body = brainstormBodyLower();
+    const namesResearch =
+      body.includes("research") ||
+      body.includes("researched") ||
+      body.includes("domain-research") ||
+      body.includes("domain research");
+    const namesDimensions =
+      body.includes("decision-dimension") ||
+      body.includes("decision dimension") ||
+      body.includes("decision-dimensions") ||
+      (body.includes("dimension") && body.includes("trade-off")) ||
+      (body.includes("dimension") && body.includes("trade off"));
+    expect(namesResearch).toBe(true);
+    expect(namesDimensions).toBe(true);
+  });
+
+  it("the domain spec must be niche-CONCRETE, never generic restated persona prose (the spec-theatre guard)", () => {
+    // Business rule 1 + Architect's biggest product risk (spec theatre): a domain
+    // spec that is just relabelled persona prose defeats SDS. The doc must STATE
+    // the bar — the dimensions are niche-specific, things a layperson can't name —
+    // so the agent is told NOT to restate persona prose as a domain spec.
+    const body = brainstormBodyLower();
+    const namesNicheConcrete =
+      body.includes("niche-specific") ||
+      body.includes("niche-concrete") ||
+      body.includes("specific to") ||
+      body.includes("concrete to") ||
+      body.includes("a layperson") ||
+      body.includes("layperson") ||
+      body.includes("cannot name") ||
+      body.includes("can't name") ||
+      body.includes("couldn't enumerate") ||
+      body.includes("could not enumerate");
+    const disavowsGeneric =
+      body.includes("not generic") ||
+      body.includes("never generic") ||
+      body.includes("not restated persona") ||
+      body.includes("not just restated") ||
+      body.includes("not a generic");
+    expect(namesNicheConcrete).toBe(true);
+    expect(disavowsGeneric).toBe(true);
+  });
+
+  it("the engine passes domainSpec to sil_profile_materialize (the domain spec is persisted at creation)", () => {
+    // The engine's step 4 must pass domainSpec into the materialize call, so the
+    // researched domain spec is persisted alongside persona + playbook. The engine
+    // doc must NAME domainSpec as a materialize input (the param the store grew).
+    const body = engineBodyLower();
+    const namesDomainSpecInput =
+      body.includes("domainspec") ||
+      body.includes("domain spec") ||
+      body.includes("domain-spec") ||
+      body.includes("domain.md");
+    expect(namesDomainSpecInput).toBe(true);
+    // It is materialized through the same tool — named near the materialize call.
+    expect(body).toContain("sil_profile_materialize");
+  });
+});
+
+describe("SDS — first-shop user-spec capture: captured once, persisted, REUSED, never re-asked", () => {
+  it("the shop-time loop names a first-shop user-spec capture before searching, guided by the domain dimensions", () => {
+    // Flow (b): the first time a user shops, BEFORE the per-request loop, the
+    // expert captures a user spec (standing attributes + hard constraints),
+    // guided by the domain spec's dimensions, in the persona's voice, then
+    // PERSISTS it via re-materialize. The body must name the first-shop capture
+    // AND that it persists the user spec.
+    const body = expertShoppingBodyLower();
+    const namesFirstShop =
+      body.includes("first shop") ||
+      body.includes("first-shop") ||
+      body.includes("first time") ||
+      body.includes("onboarding") ||
+      body.includes("first session");
+    const namesUserSpecCapture =
+      body.includes("user spec") ||
+      body.includes("user-spec") ||
+      body.includes("user.md") ||
+      body.includes("userspec");
+    const namesPersist =
+      body.includes("persist") ||
+      body.includes("re-materialize") ||
+      body.includes("rematerialize") ||
+      body.includes("sil_profile_materialize");
+    expect(namesFirstShop).toBe(true);
+    expect(namesUserSpecCapture).toBe(true);
+    expect(namesPersist).toBe(true);
+  });
+
+  it("the loop states a held user-spec attribute is REUSED and NEVER re-asked (capture-once)", () => {
+    // Business rule 2: captured once, reused every later request; the expert NEVER
+    // re-elicits an attribute the user spec already holds. The body must name the
+    // reuse AND the never-re-ask rule for a STORED user-spec attribute (distinct
+    // from the existing never-re-ask-a-STATED-attribute rule).
+    const body = expertShoppingBodyLower();
+    const namesReuse =
+      body.includes("reuse") ||
+      body.includes("reuses") ||
+      body.includes("reused") ||
+      body.includes("already holds") ||
+      body.includes("captured once");
+    const namesNeverReask =
+      body.includes("never re-ask") ||
+      body.includes("never re-elicit") ||
+      body.includes("not re-ask") ||
+      body.includes("does not re-ask") ||
+      body.includes("never reask");
+    expect(namesReuse).toBe(true);
+    expect(namesNeverReask).toBe(true);
+  });
+
+  it("the loop states a request that CONTRADICTS a stored preference UPDATES the user spec (not silently ignored)", () => {
+    // Business rule 2 tail: a request that contradicts a standing attribute updates
+    // the user spec (with the user's awareness) — it does not silently ignore the
+    // stored value. The body must name the contradict→update behaviour.
+    const body = expertShoppingBodyLower();
+    const namesContradict =
+      body.includes("contradict") ||
+      body.includes("conflicts with a stored") ||
+      body.includes("changes a standing") ||
+      body.includes("stated change") ||
+      body.includes("differs from the stored");
+    const namesUpdate =
+      body.includes("update the user spec") ||
+      body.includes("updates the user spec") ||
+      body.includes("update the stored") ||
+      body.includes("not silently ignore") ||
+      body.includes("never silently ignore");
+    expect(namesContradict).toBe(true);
+    expect(namesUpdate).toBe(true);
+  });
+
+  it("the user spec is per-user + local — no server aggregation / cross-user signal (privacy posture)", () => {
+    // Business rule 5: the user spec is written only to this user's
+    // $SIL_DATA_DIR/agents/<id>/, same posture as refinement — no server
+    // aggregation, no shared store, no cross-user pooling. The loop must name the
+    // local/per-user posture for the user spec.
+    const body = expertShoppingBodyLower();
+    const namesLocal =
+      body.includes("$sil_data_dir") ||
+      body.includes("sil_data_dir") ||
+      body.includes("sil data directory") ||
+      body.includes("per-user") ||
+      body.includes("local");
+    const namesNoServer =
+      body.includes("no server") ||
+      body.includes("no cross-user") ||
+      body.includes("no shared store") ||
+      body.includes("no aggregation") ||
+      body.includes("not pooled") ||
+      body.includes("never pooled");
+    expect(namesLocal).toBe(true);
+    expect(namesNoServer).toBe(true);
+  });
+});
+
+describe("SDS — per-request intent-spec derivation (ephemeral, never persisted)", () => {
+  it("the loop names a per-request intent-spec derived from the user's words BEFORE searching", () => {
+    // Flow (c): on a new request the expert DERIVES an intent spec (what this
+    // request demands) before searching, then layers it. The body must name the
+    // intent-spec derivation as a per-request step.
+    const body = expertShoppingBodyLower();
+    const namesIntentSpec =
+      body.includes("intent spec") ||
+      body.includes("intent-spec") ||
+      body.includes("intentspec");
+    const namesDerive =
+      body.includes("derive") ||
+      body.includes("derives") ||
+      body.includes("derived") ||
+      body.includes("map per request") ||
+      body.includes("per request") ||
+      body.includes("per-request");
+    expect(namesIntentSpec).toBe(true);
+    expect(namesDerive).toBe(true);
+  });
+
+  it("the intent spec is EPHEMERAL — explicitly conversation-only, NEVER persisted (no intent.md)", () => {
+    // Recorded assumption + Architect Risk (intent-spec persistence creep): the
+    // intent spec lives in the session and is never written to disk. The doc must
+    // STATE the ephemerality so a dev is told not to persist it. And no skill doc
+    // may instruct writing an intent.md.
+    const body = expertShoppingBodyLower();
+    const namesEphemeral =
+      body.includes("ephemeral") ||
+      body.includes("conversation-only") ||
+      body.includes("conversation only") ||
+      body.includes("never persisted") ||
+      body.includes("not persisted") ||
+      body.includes("lives in the session") ||
+      body.includes("lives in the conversation");
+    expect(namesEphemeral).toBe(true);
+    // No doc instructs an intent.md artefact (the store has no slot for it).
+    const noIntentFile =
+      brainstormBodyLower() +
+      engineBodyLower() +
+      expertShoppingBodyLower() +
+      refineBodyLower();
+    expect(noIntentFile).not.toContain("intent.md");
+  });
+});
+
+describe("SDS — layering precedence intent > user > domain, with hard-constraint inviolability", () => {
+  it("the loop states the precedence ordering intent > user > domain for PREFERENCES", () => {
+    // Business rule 4: the more specific layer wins for preferences — intent
+    // overrides a standing user preference, which overrides a domain default. The
+    // body must name the precedence ordering.
+    const body = expertShoppingBodyLower();
+    const namesPrecedence =
+      body.includes("intent > user > domain") ||
+      body.includes("intent>user>domain") ||
+      body.includes("intent over user over domain") ||
+      (body.includes("precedence") &&
+        body.includes("intent") &&
+        body.includes("user") &&
+        body.includes("domain")) ||
+      (body.includes("more specific layer") && body.includes("wins"));
+    expect(namesPrecedence).toBe(true);
+  });
+
+  it("the loop states a user-spec HARD CONSTRAINT is INVIOLABLE — intent never overrides it", () => {
+    // Business rules 3 + 4 exception: intent can override a SOFT user preference,
+    // but NEVER a HARD constraint. A hard constraint holds at search-param time,
+    // in the rubric, and in the final pick — a violating recommendation is a
+    // defect even if the catalog surfaced it. The body must name the hard
+    // constraint, its inviolability, AND that intent does not override it.
+    const body = expertShoppingBodyLower();
+    const namesHardConstraint =
+      body.includes("hard constraint") ||
+      body.includes("hard-constraint") ||
+      body.includes("hard-no") ||
+      body.includes("hard no") ||
+      body.includes("inviolable");
+    const namesInviolable =
+      body.includes("inviolable") ||
+      body.includes("never break") ||
+      body.includes("never broken") ||
+      body.includes("never violate") ||
+      body.includes("never overrid") || // override / overridden / overrides
+      body.includes("not overrid");
+    expect(namesHardConstraint).toBe(true);
+    expect(namesInviolable).toBe(true);
+  });
+
+  it("the mapping doc routes a hard constraint to a real FILTER + a reject-at-recommend rule, never only query free text", () => {
+    // Architect Risk (hard-constraint leak): a hard constraint that lives only as
+    // soft `query` text can leak. The mapping doc must state a hard constraint is
+    // routed to a real filter where one exists AND to an explicit reject-at-
+    // recommend rubric rule — never ONLY into query free text. We read the mapping
+    // doc (which owns the param routing) for the hard-constraint handling.
+    const body = readBody(MAPPING_PATH).toLowerCase();
+    const namesHardConstraint =
+      body.includes("hard constraint") ||
+      body.includes("hard-constraint") ||
+      body.includes("hard-no") ||
+      body.includes("inviolable");
+    const routesToFilterAndReject =
+      (body.includes("filter") || body.includes("condition") || body.includes("available")) &&
+      (body.includes("reject") || body.includes("never recommend") || body.includes("rubric"));
+    const disavowsQueryOnly =
+      body.includes("not only") ||
+      body.includes("never only") ||
+      body.includes("not just query") ||
+      body.includes("more than query") ||
+      body.includes("not merely query");
+    expect(namesHardConstraint).toBe(true);
+    expect(routesToFilterAndReject).toBe(true);
+    expect(disavowsQueryOnly).toBe(true);
+  });
+});
+
+describe("SDS — refine can target a user.md attribute or a domain.md dimension", () => {
+  it("the refine doc names the user spec AND the domain spec as refinable artefact elements", () => {
+    // Flow (d): refine can now target a user.md standing attribute / hard
+    // constraint OR a domain.md decision-dimension, persisted via the same
+    // in-place re-materialize. The refine doc must name BOTH new layers as
+    // distinct refinable elements (alongside the existing persona/mapping/rubric).
+    const body = refineBodyLower();
+    const namesUserSpec =
+      body.includes("user spec") ||
+      body.includes("user-spec") ||
+      body.includes("user.md") ||
+      body.includes("userspec");
+    const namesDomainSpec =
+      body.includes("domain spec") ||
+      body.includes("domain-spec") ||
+      body.includes("domain.md") ||
+      body.includes("domainspec");
+    expect(namesUserSpec).toBe(true);
+    expect(namesDomainSpec).toBe(true);
+  });
+
+  it("a user/domain refinement is persisted via the SAME in-place re-materialize (no new tool, no hand-rolled write)", () => {
+    // The refine doc must persist the new layers through the EXISTING
+    // sil_profile_materialize re-write — no new tool (the 8-tool manifest is
+    // frozen), no hand-rolled write under the data dir. It already names the tool;
+    // this pins that the new layers ride the SAME persist path.
+    const body = refineBodyLower();
+    expect(body).toContain("sil_profile_materialize");
+    // The atomic / in-place re-write framing is preserved (do not hand-roll).
+    const namesInPlace =
+      body.includes("in-place") ||
+      body.includes("in place") ||
+      body.includes("re-materialize") ||
+      body.includes("rematerialize") ||
+      body.includes("overwrit");
+    expect(namesInPlace).toBe(true);
+  });
+});
+
+describe("SDS — domainSpec / userSpec are named in the engine as materialize inputs (no manifest tool change)", () => {
+  it("the engine names BOTH domainSpec and userSpec as sil_profile_materialize inputs", () => {
+    // The architect's slice-1: sil_profile_materialize grows two optional params.
+    // The engine (which owns the materialize call) must name BOTH the domain spec
+    // and the user spec as inputs to the SAME tool — proving the four-slot model
+    // rides the existing tool, not a new one.
+    const body = engineBodyLower();
+    const namesDomainSpec =
+      body.includes("domainspec") ||
+      body.includes("domain spec") ||
+      body.includes("domain-spec") ||
+      body.includes("domain.md");
+    const namesUserSpec =
+      body.includes("userspec") ||
+      body.includes("user spec") ||
+      body.includes("user-spec") ||
+      body.includes("user.md");
+    expect(namesDomainSpec).toBe(true);
+    expect(namesUserSpec).toBe(true);
+  });
+
+  it("the engine's Runtime hook loads ALL FOUR artefacts (persona + playbook + domain + user)", () => {
+    // The Runtime hook that the engine documents must now load the two new layers
+    // too, so the shop-time loop has them. The body must name loading the domain
+    // spec + user spec at runtime alongside persona + playbook.
+    const body = engineBodyLower();
+    expect(body).toContain("persona");
+    expect(body).toContain("playbook");
+    const loadsDomain =
+      body.includes("domain spec") ||
+      body.includes("domain-spec") ||
+      body.includes("domain.md") ||
+      body.includes("domainspec");
+    const loadsUser =
+      body.includes("user spec") ||
+      body.includes("user-spec") ||
+      body.includes("user.md") ||
+      body.includes("userspec");
+    expect(loadsDomain).toBe(true);
+    expect(loadsUser).toBe(true);
+  });
+});
