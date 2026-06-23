@@ -181,9 +181,9 @@ Namespaced `sil_*` so they never collide with other plugins. Your agent calls th
 
 | Tool | What it does |
 |---|---|
-| `sil_profile_materialize` | Persist a created expert's SDS behaviour artefacts — the required `domain_spec.md` (deep researched niche expertise) + `intent_spec.md` (the decomposition-dimension schema), the lazy `user_spec.md` (your facts + hard constraints) + `playbook.md` (your buying taste), and a `profile.json` manifest — under `$SIL_DATA_DIR/agents/<id>/`. (The persona is the agent's host workspace `SOUL.md`, not a sil artefact.) Driven by the skill's creation engine once you endorse the draft, and again per-query to web-refresh the domain or lazily capture your facts/taste; validate-first and fail-closed, it never clobbers an existing expert. |
-| `sil_profile_list` | List the experts you've created, most-recently-made first, each flagged with whether it has yet captured your user spec or buying taste. Takes no arguments. |
-| `sil_profile_get` | Show one expert in full — `name`, its `domainSpec` + `intentSpec` (always present) and `userSpec` + `playbook` (when captured), manifest path, and `createdAt`. |
+| `sil_profile_materialize` | Persist a created expert's SDS behaviour artefacts — `domain_spec.md` (deep researched niche expertise) + `intent_spec.md` (the decomposition-dimension schema) + `user_spec.md` (your facts + hard constraints) + `playbook.md` (your buying taste), all four required and present from creation, plus a `profile.json` manifest — under `$SIL_DATA_DIR/agents/<id>/`. (The persona is the agent's host workspace `SOUL.md`, not a sil artefact.) Driven by the skill's creation engine once you endorse the draft, and again per-query to web-refresh the domain and augment your facts/taste; validate-first and fail-closed, it never clobbers an existing expert. |
+| `sil_profile_list` | List the experts you've created, most-recently-made first. Takes no arguments. |
+| `sil_profile_get` | Show one expert in full — `name`, its `domainSpec` + `intentSpec` + `userSpec` + `playbook` (all four present), manifest path, and `createdAt`. |
 | `sil_profile_remove` | Delete one expert's behaviour artefacts. Scoped and idempotent; the agent confirms with you before removing. |
 
 ---

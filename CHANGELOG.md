@@ -21,11 +21,12 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   *researched* niche expertise — how to buy well, the full mechanics; the agent
   researches it itself from web + knowledge, and **web-refreshes it on every
   query**) and **`intent_spec.md`** (the agent-specific **decomposition dimensions**,
-  a PRD-style schema derived from the domain) — and two **lazy** — **`user_spec.md`**
-  (the user's domain-relevant facts + **hard constraints**) and **`playbook.md`**
-  (the user's **buying taste** — price sensitivity, brand, preferences), both filled
-  **incrementally per-query on demand** (replacing first-shop batch capture), never
-  re-asked. The per-query **intent** (the dimensions filled in for one request) is
+  a PRD-style schema derived from the domain) — and **`user_spec.md`** (the user's
+  domain-relevant facts + **hard constraints**) and **`playbook.md`** (the user's
+  **buying taste** — price sensitivity, brand, preferences). **All four are required
+  and present from creation** — seeded *partial* by the light setup, then **augmented
+  every query** (we keep learning), never re-asked. The per-query **intent** (the
+  dimensions filled in for one request) is
   **ephemeral** — only the dimension *schema* is persisted. The shop-time loop
   web-refreshes the domain, decomposes the request, lazily captures the user side,
   and layers **intent → playbook → user_spec → domain_spec** (a user-spec **hard
@@ -34,7 +35,7 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   "why" that visibly cites the intent + a stored user fact + a domain mechanic.
   Setup stays **light (≤10 questions)** — the depth comes from the agent's own
   research. All four artefacts ride the existing **`sil_profile_materialize`** store
-  path (`domainSpec` + `intentSpec` required, `userSpec` + `playbook` optional) with
+  path (`domainSpec` + `intentSpec` + `userSpec` + `playbook` all required) with
   **no new tool** (the 8-tool manifest is unchanged) and the same atomic,
   validate-first, per-file-all-or-nothing discipline. Refinement can target the
   domain spec, the intent-spec dimensions, a user-spec fact/hard-constraint, or the
