@@ -21,8 +21,23 @@
  *     ├─ playbook.md    the generated domain sub-skill (host-natural — same
  *     │                 shape as a SKILL.md body; loaded by the sil skill at
  *     │                 session start). OPTIONAL — written only when supplied.
+ *     ├─ domain.md      the SDS domain spec — the niche's researched decision-
+ *     │                 dimensions and how they trade off (last/width/volume,
+ *     │                 terrain, gait…), converged at creation. OPTIONAL —
+ *     │                 written only when supplied.
+ *     ├─ user.md        the SDS user spec — this user's standing niche-relevant
+ *     │                 attributes + hard constraints, captured on first shop
+ *     │                 and reused. OPTIONAL — written only when supplied.
  *     └─ profile.json   the strictly-typed manifest the sil skill resolves the
  *                       artefacts from (no filesystem guessing)
+ *
+ * The four behaviour bodies are four INDEPENDENT optional-or-required slots,
+ * NOT one blended file: persona (required) + playbook + domain spec + user spec
+ * (each optional, absent-is-fine). They have distinct lifecycles — persona +
+ * playbook + domain spec are authored at creation; the user spec is captured on
+ * first shop; all four are refine-mutable in place. The intent spec is NOT a
+ * slot here: it is per-request and ephemeral, derived in the conversation and
+ * never persisted.
  *
  * Store boundary: host config = wiring; `$SIL_DATA_DIR` = behaviour artefacts.
  * Identity/tokens already live in `$SIL_DATA_DIR` but stay logically separate
@@ -61,6 +76,8 @@ const AGENTS_SUBDIR = "agents";
  * but the names are also documented so a human can find them). */
 const PERSONA_FILE = "persona.md";
 const PLAYBOOK_FILE = "playbook.md";
+const DOMAIN_FILE = "domain.md";
+const USER_FILE = "user.md";
 const PROFILE_FILE = "profile.json";
 
 /**
@@ -77,6 +94,15 @@ export interface ProfileSpec {
   persona: string;
   /** The generated domain sub-skill playbook — optional, non-blank when present. */
   playbook?: string;
+  /** The SDS domain spec — the niche's researched decision-dimensions and how
+   * they trade off, converged at creation. Optional, non-blank when present
+   * (same discipline as `playbook`): an absent domain spec is a valid state, a
+   * present-but-blank one is rejected. */
+  domainSpec?: string;
+  /** The SDS user spec — this user's standing niche-relevant attributes + hard
+   * constraints, captured on first shop and reused. Optional, non-blank when
+   * present (same discipline as `playbook`). Per-user + per-expert, local. */
+  userSpec?: string;
 }
 
 /** The strictly-typed manifest persisted as `profile.json`. The sil skill reads
@@ -88,6 +114,13 @@ export interface ProfileManifest {
   personaPath: string;
   /** Absolute path to the playbook artefact, when one was materialized. */
   playbookPath?: string;
+  /** Absolute path to the SDS domain-spec artefact, when one was materialized.
+   * Absent on a pre-SDS expert — a valid state (mirrors `playbookPath`), NOT a
+   * field `readManifestFile` requires. */
+  domainSpecPath?: string;
+  /** Absolute path to the SDS user-spec artefact, when one was materialized.
+   * Absent until first-shop capture — a valid state (mirrors `playbookPath`). */
+  userSpecPath?: string;
   /** ISO 8601 creation timestamp. */
   createdAt: string;
 }
@@ -102,6 +135,8 @@ export type MaterializeResult =
       dir: string;
       personaPath: string;
       playbookPath?: string;
+      domainSpecPath?: string;
+      userSpecPath?: string;
       profilePath: string;
     }
   | {
@@ -180,10 +215,20 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
   if (spec.playbook !== undefined && !nonBlank(spec.playbook)) {
     return invalid("playbook", "playbook, when provided, must be non-empty.");
   }
+  // domainSpec / userSpec are the two SDS slots — optional, but present-but-blank
+  // is rejected exactly like playbook (a blank spec is not a spec; write nothing).
+  if (spec.domainSpec !== undefined && !nonBlank(spec.domainSpec)) {
+    return invalid("domainSpec", "domainSpec, when provided, must be non-empty.");
+  }
+  if (spec.userSpec !== undefined && !nonBlank(spec.userSpec)) {
+    return invalid("userSpec", "userSpec, when provided, must be non-empty.");
+  }
 
   const dir = getAgentArtefactDir(spec.agentId);
   const personaPath = join(dir, PERSONA_FILE);
   const playbookPath = spec.playbook !== undefined ? join(dir, PLAYBOOK_FILE) : undefined;
+  const domainSpecPath = spec.domainSpec !== undefined ? join(dir, DOMAIN_FILE) : undefined;
+  const userSpecPath = spec.userSpec !== undefined ? join(dir, USER_FILE) : undefined;
   const profilePath = join(dir, PROFILE_FILE);
 
   const manifest: ProfileManifest = {
@@ -191,6 +236,8 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
     name: spec.name,
     personaPath,
     ...(playbookPath ? { playbookPath } : {}),
+    ...(domainSpecPath ? { domainSpecPath } : {}),
+    ...(userSpecPath ? { userSpecPath } : {}),
     createdAt: new Date().toISOString(),
   };
 
@@ -206,6 +253,12 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
     atomicWrite(personaPath, spec.persona);
     if (playbookPath && spec.playbook !== undefined) {
       atomicWrite(playbookPath, spec.playbook);
+    }
+    if (domainSpecPath && spec.domainSpec !== undefined) {
+      atomicWrite(domainSpecPath, spec.domainSpec);
+    }
+    if (userSpecPath && spec.userSpec !== undefined) {
+      atomicWrite(userSpecPath, spec.userSpec);
     }
     atomicWrite(profilePath, JSON.stringify(manifest, null, 2) + "\n");
   } catch (err) {
@@ -236,6 +289,8 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
     dir,
     personaPath,
     ...(playbookPath ? { playbookPath } : {}),
+    ...(domainSpecPath ? { domainSpecPath } : {}),
+    ...(userSpecPath ? { userSpecPath } : {}),
     profilePath,
   };
 }
@@ -305,11 +360,16 @@ function invalidAgentId(
 }
 
 /** One listed expert, summarized from its manifest (no body read — list stays
- * cheap). `hasPlaybook` lets the skill flag a specialized expert at a glance. */
+ * cheap). The boolean flags are read straight off the manifest's `*Path` fields
+ * (no artefact-body read), so the skill can flag a specialized / SDS-equipped
+ * expert at a glance: `hasPlaybook` a domain sub-skill, `hasDomainSpec` a
+ * researched domain spec, `hasUserSpec` a captured user spec. */
 export interface ListedProfile {
   agentId: string;
   name: string;
   hasPlaybook: boolean;
+  hasDomainSpec: boolean;
+  hasUserSpec: boolean;
   createdAt: string;
 }
 
@@ -339,6 +399,11 @@ export type ReadResult =
       name: string;
       persona: string;
       playbook?: string;
+      /** The SDS domain spec body, when one was materialized (optional, like
+       * `playbook` — absent is a valid state, never makes the expert unviewable). */
+      domainSpec?: string;
+      /** The SDS user spec body, when one was captured (optional, like `playbook`). */
+      userSpec?: string;
       profilePath: string;
       createdAt: string;
     }
@@ -429,6 +494,8 @@ export function listAgentProfiles(): ListResult {
         agentId: manifest.agentId,
         name: manifest.name,
         hasPlaybook: manifest.playbookPath !== undefined,
+        hasDomainSpec: manifest.domainSpecPath !== undefined,
+        hasUserSpec: manifest.userSpecPath !== undefined,
         createdAt: manifest.createdAt,
       });
     } catch (err) {
@@ -504,12 +571,38 @@ export function readAgentProfile(agentId: string): ReadResult {
     }
   }
 
+  // The two SDS bodies degrade EXACTLY like playbook: optional, absent-is-fine,
+  // and a referenced-but-missing body never makes the expert unviewable. The
+  // expert remains coherent on persona alone — a half-written domain/user spec
+  // (manifest points at it, file gone) reads back as "no spec", never as a
+  // broken expert. This is the per-file-atomic, NOT-cross-file-transactional
+  // safety boundary: a partial write degrades to absence, it does not brick.
+  let domainSpec: string | undefined;
+  if (manifest.domainSpecPath !== undefined) {
+    try {
+      domainSpec = readFileSync(manifest.domainSpecPath, "utf8");
+    } catch {
+      domainSpec = undefined;
+    }
+  }
+
+  let userSpec: string | undefined;
+  if (manifest.userSpecPath !== undefined) {
+    try {
+      userSpec = readFileSync(manifest.userSpecPath, "utf8");
+    } catch {
+      userSpec = undefined;
+    }
+  }
+
   return {
     ok: true,
     agentId: manifest.agentId,
     name: manifest.name,
     persona,
     ...(playbook !== undefined ? { playbook } : {}),
+    ...(domainSpec !== undefined ? { domainSpec } : {}),
+    ...(userSpec !== undefined ? { userSpec } : {}),
     profilePath,
     createdAt: manifest.createdAt,
   };

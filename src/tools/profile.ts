@@ -3,8 +3,9 @@
  *
  * `sil_profile_materialize` is the plugin's half of the agent-creation engine:
  * it writes the created expert's *behaviour* artefacts (persona + optional
- * domain sub-skill playbook + a typed manifest) into the plugin's own data
- * directory (`$SIL_DATA_DIR`, the disclosed `filesystemScope`). The *wiring*
+ * domain sub-skill playbook + the optional SDS domain spec + the optional SDS
+ * user spec + a typed manifest) into the plugin's own data directory
+ * (`$SIL_DATA_DIR`, the disclosed `filesystemScope`). The *wiring*
  * half — the host `agents.list[]` entry, the enabled `sil` plugin, the attached
  * `sil` skill — is the host agent driving its own `openclaw …` CLI under the
  * bundled `skill/SKILL.md` procedure; the plugin never writes `~/.openclaw`
@@ -49,8 +50,12 @@ function registerMaterialize(api: PluginAPI): void {
     description:
       "Write a created sil shopping expert's behaviour artefacts into the sil"
       + " data directory: the persona/instructions, an optional generated domain"
-      + " sub-skill (playbook), and a typed manifest the sil skill reads at"
-      + " runtime to load them. Call this AFTER the host agent has been created"
+      + " sub-skill (playbook), the optional SDS domain spec (the niche's"
+      + " researched decision-dimensions), the optional SDS user spec (this"
+      + " user's standing attributes + hard constraints, captured on first shop),"
+      + " and a typed manifest the sil skill reads at runtime to load them. Re-run"
+      + " it over the SAME agentId to refine an expert in place (it overwrites the"
+      + " bodies atomically). Call this AFTER the host agent has been created"
       + " (openclaw agents add) and BEFORE openclaw config validate. It does NOT"
       + " touch the host OpenClaw config — the plugin enable + skill attach are"
       + " driven by the host CLI, not this tool. Writes are atomic: an invalid"
@@ -79,6 +84,26 @@ function registerMaterialize(api: PluginAPI): void {
             + " when the expert needs no domain playbook.",
         }),
       ),
+      domainSpec: Type.Optional(
+        Type.String({
+          description:
+            "The SDS domain spec — the niche's researched decision-dimensions and"
+            + " how they trade off (for shoes: last/width/volume, terrain, gait,"
+            + " materials), converged at creation by actively researching the"
+            + " niche. Materialized as domain.md. Omit when the expert has no"
+            + " researched domain spec yet.",
+        }),
+      ),
+      userSpec: Type.Optional(
+        Type.String({
+          description:
+            "The SDS user spec — this user's standing niche-relevant attributes"
+            + " and hard constraints (their foot profile, climate, the rules they"
+            + " never break), captured ONCE on first shop and reused. Materialized"
+            + " as user.md (per-user, per-expert, local). Omit until first-shop"
+            + " capture or when re-materializing without changing it.",
+        }),
+      ),
     }),
     async execute(_callId, params) {
       // The host validates `params` against the schema above before we run, but
@@ -91,6 +116,12 @@ function registerMaterialize(api: PluginAPI): void {
         ...(typeof params["playbook"] === "string"
           ? { playbook: params["playbook"] }
           : {}),
+        ...(typeof params["domainSpec"] === "string"
+          ? { domainSpec: params["domainSpec"] }
+          : {}),
+        ...(typeof params["userSpec"] === "string"
+          ? { userSpec: params["userSpec"] }
+          : {}),
       };
 
       const result = materializeProfile(spec);
@@ -99,6 +130,8 @@ function registerMaterialize(api: PluginAPI): void {
         api.logger.info("sil_profile_materialized", {
           agent_id: result.agentId,
           has_playbook: result.playbookPath !== undefined,
+          has_domain_spec: result.domainSpecPath !== undefined,
+          has_user_spec: result.userSpecPath !== undefined,
         });
         return jsonResult({
           status: "ok",
@@ -106,6 +139,8 @@ function registerMaterialize(api: PluginAPI): void {
           dir: result.dir,
           personaPath: result.personaPath,
           ...(result.playbookPath ? { playbookPath: result.playbookPath } : {}),
+          ...(result.domainSpecPath ? { domainSpecPath: result.domainSpecPath } : {}),
+          ...(result.userSpecPath ? { userSpecPath: result.userSpecPath } : {}),
           profilePath: result.profilePath,
         });
       }
@@ -150,7 +185,8 @@ function registerList(api: PluginAPI): void {
       + " agents/<id>/profile.json is the authoritative \"is a sil expert\""
       + " signal — a bare host agent without one is not listed). Returns the"
       + " experts most-recently-created first, each with its agentId, name,"
-      + " whether it carries a domain playbook, and createdAt. An empty store is"
+      + " whether it carries a domain playbook, a researched SDS domain spec, a"
+      + " captured SDS user spec, and createdAt. An empty store is"
       + " a normal, successful empty listing — not an error. One unreadable or"
       + " corrupt manifest is reported inline in `unreadable` and never aborts"
       + " the listing. Reads no token and writes nothing.",
@@ -186,11 +222,13 @@ function registerGet(api: PluginAPI): void {
     description:
       "Show one sil shopping expert's full detail — read-only. Pass its"
       + " `agentId`. Returns the expert's name, its persona/instructions, its"
-      + " domain playbook when one exists, the manifest path, and createdAt,"
-      + " read from the artefact store so the agent can summarize the expert."
-      + " An unknown expert returns `not_found` (list the experts to see which"
-      + " exist) — never a stack trace or a raw path. A malformed/traversal id"
-      + " returns `invalid_request`. Reads no token and writes nothing.",
+      + " domain playbook when one exists, its SDS domain spec and user spec when"
+      + " present (each a distinct layer from persona/playbook), the manifest"
+      + " path, and createdAt, read from the artefact store so the agent can"
+      + " summarize the expert. An unknown expert returns `not_found` (list the"
+      + " experts to see which exist) — never a stack trace or a raw path. A"
+      + " malformed/traversal id returns `invalid_request`. Reads no token and"
+      + " writes nothing.",
     parameters: Type.Object({
       agentId: Type.String({
         description:
@@ -206,6 +244,8 @@ function registerGet(api: PluginAPI): void {
         api.logger.info("sil_profile_viewed", {
           agent_id: result.agentId,
           has_playbook: result.playbook !== undefined,
+          has_domain_spec: result.domainSpec !== undefined,
+          has_user_spec: result.userSpec !== undefined,
         });
         return jsonResult({
           status: "ok",
@@ -213,6 +253,8 @@ function registerGet(api: PluginAPI): void {
           name: result.name,
           persona: result.persona,
           ...(result.playbook !== undefined ? { playbook: result.playbook } : {}),
+          ...(result.domainSpec !== undefined ? { domainSpec: result.domainSpec } : {}),
+          ...(result.userSpec !== undefined ? { userSpec: result.userSpec } : {}),
           profilePath: result.profilePath,
           createdAt: result.createdAt,
         });
