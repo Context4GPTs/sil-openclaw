@@ -24,11 +24,11 @@
  *     │                   per-query intent (dimensions filled in) is EPHEMERAL —
  *     │                   never persisted.
  *     ├─ user_spec.md     the SDS USER SPEC — the user's domain-relevant facts +
- *     │                   hard constraints. LAZY — starts absent, filled
- *     │                   incrementally per-query on demand.
+ *     │                   hard constraints. REQUIRED at creation (seeded partial
+ *     │                   by the ≤10-question setup), AUGMENTED every query.
  *     ├─ playbook.md      the SDS PLAYBOOK — the user's buying TASTE (price
- *     │                   sensitivity, brand, preferences). LAZY — starts absent,
- *     │                   filled incrementally per-query on demand.
+ *     │                   sensitivity, brand, preferences). REQUIRED at creation
+ *     │                   (seeded partial), AUGMENTED every query.
  *     └─ profile.json     the strictly-typed manifest the sil skill resolves the
  *                         artefacts from (no filesystem guessing)
  *
@@ -37,11 +37,15 @@
  * engine — there is no `persona.md` in this store and no copy step. This store
  * holds only the four SDS BEHAVIOUR artefacts.
  *
- * Two slots are REQUIRED at creation (`domainSpec` + `intentSpec`) — a created
- * expert without them is a defect, not "absent-is-fine"; the other two
- * (`userSpec` + `playbook`) start absent and fill LAZILY per-query (Correction
- * 5). All four are refine-mutable in place. The per-query intent is NOT a slot
- * here: only the intent_spec *dimension schema* is persisted; the filled
+ * All FOUR slots are REQUIRED at creation (`domainSpec` + `intentSpec` +
+ * `userSpec` + `playbook`) — SDS is the operating model, not an optional layer,
+ * so a created expert without all four is a defect (Founder review round 2: all
+ * four sil docs are present, non-blank, from creation). They are seeded *partial*
+ * (the ≤10-question setup + a quick initial research pass), then lazily
+ * AUGMENTED / reinforced on EVERY query — domain_spec web-refreshed, intent_spec
+ * dimensions sharpened, user_spec facts and playbook taste reinforced. We keep
+ * learning. All four are refine-mutable in place. The per-query intent is NOT a
+ * slot here: only the intent_spec *dimension schema* is persisted; the filled
  * dimensions for one request are ephemeral, derived in the conversation.
  *
  * Store boundary: host config + `SOUL.md` (identity/wiring) = host; the four SDS
@@ -109,13 +113,14 @@ export interface ProfileSpec {
    * never passed here or persisted. */
   intentSpec: string;
   /** The SDS user spec — the user's domain-relevant facts + hard constraints.
-   * LAZY: optional, non-blank when present. Starts absent and fills incrementally
-   * per-query on demand. Per-user + per-expert, local. */
-  userSpec?: string;
+   * REQUIRED and non-blank (Founder review round 2): present from creation
+   * (seeded partial by the ≤10-question setup), then AUGMENTED every query.
+   * Per-user + per-expert, local. */
+  userSpec: string;
   /** The SDS playbook — the user's buying TASTE (price sensitivity, brand,
-   * preferences). LAZY: optional, non-blank when present. Starts absent and fills
-   * incrementally per-query on demand. */
-  playbook?: string;
+   * preferences). REQUIRED and non-blank: present from creation (seeded partial),
+   * then AUGMENTED every query. */
+  playbook: string;
 }
 
 /** The strictly-typed manifest persisted as `profile.json`. The sil skill reads
@@ -129,13 +134,14 @@ export interface ProfileManifest {
   /** Absolute path to the SDS intent-spec (dimension schema) artefact. REQUIRED —
    * a created expert always has an intent spec; `readManifestFile` gates on it. */
   intentSpecPath: string;
-  /** Absolute path to the SDS user-spec artefact, once one has been captured.
-   * Absent until the first lazy per-query capture — a valid state (LAZY slot),
-   * NOT a field `readManifestFile` requires. */
-  userSpecPath?: string;
-  /** Absolute path to the SDS playbook artefact, once a buying taste has been
-   * captured. Absent until the first lazy per-query capture — a valid state. */
-  playbookPath?: string;
+  /** Absolute path to the SDS user-spec artefact. REQUIRED — a created expert
+   * always carries a user spec (seeded partial at creation); `readManifestFile`
+   * gates on it. */
+  userSpecPath: string;
+  /** Absolute path to the SDS playbook artefact. REQUIRED — a created expert
+   * always carries a buying-taste playbook (seeded partial at creation);
+   * `readManifestFile` gates on it. */
+  playbookPath: string;
   /** ISO 8601 creation timestamp. */
   createdAt: string;
 }
@@ -150,8 +156,8 @@ export type MaterializeResult =
       dir: string;
       domainSpecPath: string;
       intentSpecPath: string;
-      userSpecPath?: string;
-      playbookPath?: string;
+      userSpecPath: string;
+      playbookPath: string;
       profilePath: string;
     }
   | {
@@ -222,28 +228,29 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
   if (!nonBlank(spec.name)) {
     return invalid("name", "name is required and must be non-empty.");
   }
-  // domainSpec + intentSpec are REQUIRED at creation — SDS is the operating
-  // model, not an optional layer. A created expert always carries both.
+  // All FOUR SDS specs are REQUIRED at creation — SDS is the operating model,
+  // not an optional layer. A created expert always carries all four (Founder
+  // review round 2): they are seeded *partial* at creation, then augmented every
+  // query. A present-but-blank or omitted spec is rejected (validate-first; write
+  // nothing).
   if (!nonBlank(spec.domainSpec)) {
     return invalid("domainSpec", "domainSpec is required and must be non-empty.");
   }
   if (!nonBlank(spec.intentSpec)) {
     return invalid("intentSpec", "intentSpec is required and must be non-empty.");
   }
-  // userSpec / playbook are the two LAZY slots — optional, but present-but-blank
-  // is rejected (a blank spec is not a spec; write nothing).
-  if (spec.userSpec !== undefined && !nonBlank(spec.userSpec)) {
-    return invalid("userSpec", "userSpec, when provided, must be non-empty.");
+  if (!nonBlank(spec.userSpec)) {
+    return invalid("userSpec", "userSpec is required and must be non-empty.");
   }
-  if (spec.playbook !== undefined && !nonBlank(spec.playbook)) {
-    return invalid("playbook", "playbook, when provided, must be non-empty.");
+  if (!nonBlank(spec.playbook)) {
+    return invalid("playbook", "playbook is required and must be non-empty.");
   }
 
   const dir = getAgentArtefactDir(spec.agentId);
   const domainSpecPath = join(dir, DOMAIN_SPEC_FILE);
   const intentSpecPath = join(dir, INTENT_SPEC_FILE);
-  const userSpecPath = spec.userSpec !== undefined ? join(dir, USER_SPEC_FILE) : undefined;
-  const playbookPath = spec.playbook !== undefined ? join(dir, PLAYBOOK_FILE) : undefined;
+  const userSpecPath = join(dir, USER_SPEC_FILE);
+  const playbookPath = join(dir, PLAYBOOK_FILE);
   const profilePath = join(dir, PROFILE_FILE);
 
   const manifest: ProfileManifest = {
@@ -251,8 +258,8 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
     name: spec.name,
     domainSpecPath,
     intentSpecPath,
-    ...(userSpecPath ? { userSpecPath } : {}),
-    ...(playbookPath ? { playbookPath } : {}),
+    userSpecPath,
+    playbookPath,
     createdAt: new Date().toISOString(),
   };
 
@@ -267,12 +274,8 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
     mkdirSync(dir, { recursive: true, mode: DIR_MODE });
     atomicWrite(domainSpecPath, spec.domainSpec);
     atomicWrite(intentSpecPath, spec.intentSpec);
-    if (userSpecPath && spec.userSpec !== undefined) {
-      atomicWrite(userSpecPath, spec.userSpec);
-    }
-    if (playbookPath && spec.playbook !== undefined) {
-      atomicWrite(playbookPath, spec.playbook);
-    }
+    atomicWrite(userSpecPath, spec.userSpec);
+    atomicWrite(playbookPath, spec.playbook);
     atomicWrite(profilePath, JSON.stringify(manifest, null, 2) + "\n");
   } catch (err) {
     // Leave nothing partial behind — but only tear down the dir if WE created it.
@@ -302,8 +305,8 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
     dir,
     domainSpecPath,
     intentSpecPath,
-    ...(userSpecPath ? { userSpecPath } : {}),
-    ...(playbookPath ? { playbookPath } : {}),
+    userSpecPath,
+    playbookPath,
     profilePath,
   };
 }
@@ -373,16 +376,13 @@ function invalidAgentId(
 }
 
 /** One listed expert, summarized from its manifest (no body read — list stays
- * cheap). Every created expert has a domain spec + intent spec (both required),
- * so flagging those carries no signal. The boolean flags are read straight off
- * the manifest's `*Path` fields (no artefact-body read) and report only the two
- * LAZY slots, so the skill can tell whether this user has shopped the expert yet:
- * `hasUserSpec` a captured user spec (facts), `hasPlaybook` a captured taste. */
+ * cheap). After Founder review round 2 every created expert carries all four SDS
+ * specs (all required + present from creation), so per-slot presence flags would
+ * be trivially true for every expert and carry no discriminating signal — the
+ * list therefore exposes only the durable identity (agentId + name + createdAt). */
 export interface ListedProfile {
   agentId: string;
   name: string;
-  hasUserSpec: boolean;
-  hasPlaybook: boolean;
   createdAt: string;
 }
 
@@ -416,12 +416,14 @@ export type ReadResult =
       /** The SDS intent spec (dimension schema) body. Always present for a created
        * expert (required); a referenced-but-missing body fails the read closed. */
       intentSpec: string;
-      /** The SDS user spec body, once one has been lazily captured (LAZY slot —
-       * absent is a valid state, never makes the expert unviewable). */
-      userSpec?: string;
-      /** The SDS playbook (taste) body, once one has been lazily captured (LAZY
-       * slot — absent is a valid state). */
-      playbook?: string;
+      /** The SDS user spec body. Always present for a created expert (required —
+       * seeded partial at creation, augmented every query); a referenced-but-missing
+       * body fails the read closed (`not_found`). */
+      userSpec: string;
+      /** The SDS playbook (taste) body. Always present for a created expert
+       * (required — seeded partial at creation, augmented every query); a
+       * referenced-but-missing body fails the read closed (`not_found`). */
+      playbook: string;
       profilePath: string;
       createdAt: string;
     }
@@ -457,6 +459,8 @@ function readManifestFile(profilePath: string): ProfileManifest {
     typeof (parsed as { name?: unknown }).name !== "string" ||
     typeof (parsed as { domainSpecPath?: unknown }).domainSpecPath !== "string" ||
     typeof (parsed as { intentSpecPath?: unknown }).intentSpecPath !== "string" ||
+    typeof (parsed as { userSpecPath?: unknown }).userSpecPath !== "string" ||
+    typeof (parsed as { playbookPath?: unknown }).playbookPath !== "string" ||
     typeof (parsed as { createdAt?: unknown }).createdAt !== "string"
   ) {
     throw new Error("profile.json is missing required manifest fields");
@@ -512,8 +516,6 @@ export function listAgentProfiles(): ListResult {
       experts.push({
         agentId: manifest.agentId,
         name: manifest.name,
-        hasUserSpec: manifest.userSpecPath !== undefined,
-        hasPlaybook: manifest.playbookPath !== undefined,
         createdAt: manifest.createdAt,
       });
     } catch (err) {
@@ -546,10 +548,12 @@ function createdAtDesc(a: string, b: string): number {
  *
  * Re-runs the writer's `agentId` gate BEFORE any `join`/read (a traversal-shaped
  * id → `invalid_request`, reading nothing). An unknown id, an absent/unreadable
- * manifest, or an absent REQUIRED body (`domain_spec.md` / `intent_spec.md`) →
- * `not_found` (a degraded expert is, from the user's view, not viewable). The two
- * LAZY bodies (`user_spec.md` / `playbook.md`) degrade to `undefined` and never
- * make the expert unviewable. Never throws across the boundary; reads only.
+ * manifest, or an absent body of ANY of the four REQUIRED SDS specs
+ * (`domain_spec.md` / `intent_spec.md` / `user_spec.md` / `playbook.md`) →
+ * `not_found` (Founder review round 2: all four always exist; a degraded expert
+ * is, from the user's view, not viewable). There is no degrade-to-undefined path
+ * any more — a referenced-but-missing body of any of the four fails the read
+ * closed. Never throws across the boundary; reads only.
  */
 export function readAgentProfile(agentId: string): ReadResult {
   const bad = rejectBadAgentId(agentId);
@@ -571,45 +575,25 @@ export function readAgentProfile(agentId: string): ReadResult {
     return notFoundRead(agentId);
   }
 
-  // The two SDS spec bodies are REQUIRED for a created expert — they gate the
-  // read fail-closed (like the persona body did pre-SDS). A manifest that points
-  // at a domain_spec.md / intent_spec.md whose body is gone (a partial write, a
-  // hand-deleted file) is, to the viewer, an expert that cannot be loaded.
+  // All FOUR SDS spec bodies are REQUIRED for a created expert — they gate the
+  // read fail-closed (the role the persona body played pre-SDS). A manifest that
+  // points at a domain_spec.md / intent_spec.md / user_spec.md / playbook.md whose
+  // body is gone (a partial write, a hand-deleted file) is, to the viewer, an
+  // expert that cannot be loaded. This is the per-file-atomic, NOT-cross-file-
+  // transactional safety boundary: a partial write degrades to a fail-closed
+  // not_found, never a coherent-but-incomplete expert (Founder review round 2:
+  // all four are present from creation, so none degrades to absence).
   let domainSpec: string;
+  let intentSpec: string;
+  let userSpec: string;
+  let playbook: string;
   try {
     domainSpec = readFileSync(manifest.domainSpecPath, "utf8");
-  } catch {
-    return notFoundRead(agentId);
-  }
-
-  let intentSpec: string;
-  try {
     intentSpec = readFileSync(manifest.intentSpecPath, "utf8");
+    userSpec = readFileSync(manifest.userSpecPath, "utf8");
+    playbook = readFileSync(manifest.playbookPath, "utf8");
   } catch {
     return notFoundRead(agentId);
-  }
-
-  // The two LAZY bodies degrade to absence: optional, absent-is-fine, and a
-  // referenced-but-missing body never makes the expert unviewable. This is the
-  // per-file-atomic, NOT-cross-file-transactional safety boundary for the lazy
-  // slots: a partial lazy write degrades to "no user spec / no taste yet", it
-  // does not brick the expert (which stays coherent on its two required specs).
-  let userSpec: string | undefined;
-  if (manifest.userSpecPath !== undefined) {
-    try {
-      userSpec = readFileSync(manifest.userSpecPath, "utf8");
-    } catch {
-      userSpec = undefined;
-    }
-  }
-
-  let playbook: string | undefined;
-  if (manifest.playbookPath !== undefined) {
-    try {
-      playbook = readFileSync(manifest.playbookPath, "utf8");
-    } catch {
-      playbook = undefined;
-    }
   }
 
   return {
@@ -618,8 +602,8 @@ export function readAgentProfile(agentId: string): ReadResult {
     name: manifest.name,
     domainSpec,
     intentSpec,
-    ...(userSpec !== undefined ? { userSpec } : {}),
-    ...(playbook !== undefined ? { playbook } : {}),
+    userSpec,
+    playbook,
     profilePath,
     createdAt: manifest.createdAt,
   };

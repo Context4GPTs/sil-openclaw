@@ -5,12 +5,15 @@ A complete walkthrough from a free-form request through the **light** interview
 to a created expert via the engine
 ([`../references/agent_creation_engine.md`](../references/agent_creation_engine.md)),
 then on to its **Spec-Driven Shopping (SDS)** sessions: a **deep** domain spec
-researched at creation, the **intent-spec dimensions** derived from it, a
-**per-query web refresh** of the domain, a **lazily-captured** user fact + buying
-taste, and a layered recommendation whose "why" cites the intent + a stored user
-fact + a domain mechanic. The transcript is illustrative — a real interview adapts
-to the user; this shows the *shape*, the gates, and the SDS layering. **Setup is
-light (≤10 questions); the depth comes from the agent's own research.**
+researched at creation, the **intent-spec dimensions** derived from it, an
+**initial user spec + buying taste seeded (partial) at creation**, then a
+**per-query web refresh** of the domain plus a **per-query augment** of the
+already-present user spec (a new measurement) and playbook (a taste), and a
+layered recommendation whose "why" cites the intent + a stored user fact + a
+domain mechanic. **All four sil docs are present from creation and grow every
+query — we keep learning.** The transcript is illustrative — a real interview
+adapts to the user; this shows the *shape*, the gates, and the SDS layering.
+**Setup is light (≤10 questions); the depth comes from the agent's own research.**
 
 ## 1. The free-form request
 
@@ -102,6 +105,24 @@ resolve, never the values for one request (those are the ephemeral per-query int
 → becomes the host workspace **`SOUL.md`** (the persona is the agent's system
 framing — not a sil artefact). *(Question budget: ~5 total. Well under 10.)*
 
+## 5b. Seed the user side — an initial user spec + buying taste (partial)
+
+From what the user already said (no deep questionnaire — setup stays light), the
+agent seeds a *partial* user spec and buying taste so all four sil docs are present
+from creation. It reflects what it captured and confirms:
+
+> **Expert:** "I'll start your profile with what you've told me: you want **comfort
+> and enjoyment over outright speed** (a standing preference), and a **hard no on
+> carbon-fibre handlebars**. On budget/brand — any rough feel, or shall I learn it
+> as we shop?"
+> **User:** "Around €1500-ish to start, no strong brand feelings."
+
+→ seeds an initial **`userSpec`** (→ `user_spec.md`): *comfort-first preference
+(soft); HARD-NO: carbon-fibre handlebars (inviolable)* — and an initial
+**`playbook`** (→ `playbook.md`): *budget feel ~€1500; brand-agnostic.* Both are
+**partial** — body measurements and finer taste fill in per-query as the user
+shops — but **present from creation**, never absent. *(Question budget: ~6 total.)*
+
 ## 6. Derive + confirm the identity
 
 > **Expert:** "I'll call it **Road-Cycling Buyer** (`road-cycling-buyer`). Good?"
@@ -112,8 +133,8 @@ framing — not a sil artefact). *(Question budget: ~5 total. Well under 10.)*
 ## 7. Assemble the draft and present it back
 
 The assembled spec — a valid `sil_profile_materialize` input. The persona goes to
-`SOUL.md` (host); the two **required** SDS specs go to the sil store. The user spec
-and buying taste are **absent** — they fill lazily on first shop:
+`SOUL.md` (host); **all four** SDS specs go to the sil store, **all present from
+creation** (the user spec + buying taste seeded *partial*, to grow per-query):
 
 ```jsonc
 {
@@ -121,14 +142,18 @@ and buying taste are **absent** — they fill lazily on first shop:
   "name": "Road-Cycling Buyer",
   "persona": "A patient, clear first-road-bike advisor. Always explains fit. Standing rule: never recommend carbon-fibre handlebars.",
   "domainSpec": "## First road bike — how to buy well (deep)\n### Fit (the full process)\nFrame size from height AND inseam; stack/reach set torso angle; saddle setback from KOPS; crank length scales with inseam; bar reach + drop set hand position. Bad fit is the #1 reason first bikes get abandoned.\n### Geometry\nEndurance (taller stack, slacker, longer chainstays — comfort) vs race (aggressive — speed). Head-tube angle + trail govern handling.\n### Groupset & gearing theory\n105/Ultegra/Dura-Ace = shift quality + weight, not capability. gear-inches = chainring/cog × wheel diameter. Compact vs mid-compact vs 1x trade range for step size — pick for terrain.\n### Material & wheels\nAlloy vs carbon (feel/price/repairability); rim depth vs crosswind stability; tyre clearance bounds comfort.\n### Trade-offs\nStiffness vs comfort; aero (deep wheels) vs crosswind handling; groupset tier vs budget. For a first bike: weight fit + comfort over outright speed.",
-  "intentSpec": "## Decomposition dimensions for a road-bike query (schema)\nuse-case (commute/fitness/racing/touring); terrain (flat/hilly/mixed); budget band; fit envelope (body measurements); timeline; compatibility (kept parts); performance priorities (comfort/speed/weight); aesthetics.\nEach is a dimension the per-query intent fills in — the fill is ephemeral; this schema is persisted."
+  "intentSpec": "## Decomposition dimensions for a road-bike query (schema)\nuse-case (commute/fitness/racing/touring); terrain (flat/hilly/mixed); budget band; fit envelope (body measurements); timeline; compatibility (kept parts); performance priorities (comfort/speed/weight); aesthetics.\nEach is a dimension the per-query intent fills in — the fill is ephemeral; this schema is persisted.",
+  "userSpec": "## User spec (seeded partial)\n### Domain-relevant facts (soft preferences)\n- Comfort + enjoyment over outright speed (first proper bike).\n### Hard constraints (INVIOLABLE — never recommend a violating item)\n- HARD-NO: carbon-fibre handlebars.\n_(Body measurements to be captured per-query as they're needed.)_",
+  "playbook": "## Buying taste (seeded partial)\n- Budget feel ~€1500 to start.\n- Brand-agnostic; no strong brand feelings yet.\n_(Finer taste — secondhand tolerance, brand likes — fills in per-query.)_"
 }
 ```
 
 > **Expert:** "Here's the expert: a patient first-bike advisor that knows the full
-> fit process, geometry, gearing theory, and the comfort-vs-speed trade-offs, and
-> that decomposes every request along use-case, terrain, budget, fit, timeline,
-> compatibility, priorities, and looks. Shall I create it?"
+> fit process, geometry, gearing theory, and the comfort-vs-speed trade-offs;
+> decomposes every request along use-case, terrain, budget, fit, timeline,
+> compatibility, priorities, and looks; and already holds your comfort-first
+> preference, your no-carbon-bars hard rule, and a ~€1500 budget feel to grow from.
+> Shall I create it?"
 
 ## 8. Explicit endorsement — the gate
 
@@ -142,7 +167,8 @@ run** — nothing was written. Only now does the engine proceed.
 Following [`../references/agent_creation_engine.md`](../references/agent_creation_engine.md) in order:
 
 1. **Validate the spec FIRST** — `agentId` lower-kebab & ≠ `main` ✓, `name` ✓,
-   `persona` ✓, `workspace` ✓, **`domainSpec` non-blank ✓, `intentSpec` non-blank ✓**.
+   `persona` ✓, `workspace` ✓, **all four SDS specs non-blank ✓** (`domainSpec`,
+   `intentSpec`, `userSpec`, `playbook` — the user side seeded partial, never blank).
 2. **Collision check** — `openclaw agents list --json`; no existing
    `road-cycling-buyer` → proceed.
 3. **Create the shell** — `openclaw agents add road-cycling-buyer --workspace
@@ -152,21 +178,26 @@ Following [`../references/agent_creation_engine.md`](../references/agent_creatio
 4. **Persona → `SOUL.md` (host CLI)** — write the persona text directly into the
    agent's workspace `SOUL.md`. No `persona.md`, no copy step.
 5. **Materialize SDS artefacts** — `sil_profile_materialize { agentId, name,
-   domainSpec, intentSpec }` writes `domain_spec.md`, `intent_spec.md`, and
-   `profile.json` into `$SIL_DATA_DIR/agents/road-cycling-buyer/`. No
-   `user_spec.md` / `playbook.md` yet — those fill lazily, per-query.
+   domainSpec, intentSpec, userSpec, playbook }` writes all four bodies
+   (`domain_spec.md`, `intent_spec.md`, `user_spec.md`, `playbook.md`) and
+   `profile.json` into `$SIL_DATA_DIR/agents/road-cycling-buyer/`. All four are
+   present from creation — the user spec + playbook seeded *partial*, then augmented
+   per-query.
 6. **Wire sil** — `openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json` and `openclaw config set plugins.entries.sil.enabled true --strict-json`.
 7. **Validate with the host's OWN check, THEN declare created** — `openclaw config
    validate --json` returns valid → outcome **`created`**.
-8. **Tell the user** — the expert exists; opening it loads the domain spec + intent
-   spec and it shops on its niche with **no further setup**.
+8. **Tell the user** — the expert exists; opening it loads all four SDS specs
+   (domain, intent, the seeded user spec + buying taste) and it shops on its niche
+   with **no further setup**.
 
-## 10. First query — web-refresh the domain, decompose, lazily capture what's needed
+## 10. First query — web-refresh the domain, decompose, augment the already-present user side
 
 Later the user opens the expert and shops
-([`../references/expert_shopping.md`](../references/expert_shopping.md)). On **every
-query** the expert refreshes the domain, decomposes the request, and captures only
-what a dimension actually needs — **lazily**, not as an up-front form:
+([`../references/expert_shopping.md`](../references/expert_shopping.md)). All four
+sil docs are **already present** (seeded at creation). On **every query** the expert
+refreshes the domain, decomposes the request, and **augments** the already-present
+user spec / playbook with whatever new fact a dimension needs — **we keep
+learning**, not an up-front form, and not a one-time capture from empty:
 
 > **User:** "Find me a road bike, budget around €1500."
 
@@ -175,23 +206,25 @@ current — this season's 105 groupset revision, current alloy-vs-carbon price
 crossover at the €1500 band — and re-materializes the enhanced `domain_spec.md`.
 
 **(2) Decompose along the intent dimensions (ephemeral).** "So: **use-case** fitness
-(your words earlier), **budget** ~€1500, **performance priority** comfort. Missing
-for a good fit: your **fit envelope**." The filled decomposition is the per-query
-intent — it is never persisted.
+(your words earlier), **budget** ~€1500, **performance priority** comfort (from your
+profile). Missing for a good fit: your **fit envelope**." The filled decomposition is
+the per-query intent — it is never persisted.
 
-**(3) Lazily capture the one missing thing.** A defensible pick needs the fit
-envelope, so the expert asks for it **now, in context** (not a wizard form):
+**(3) Augment the already-present user side with the one missing fact.** The seeded
+`user_spec.md` already holds the comfort-first preference and the no-carbon-bars hard
+rule; a defensible pick now needs the fit envelope, so the expert asks for it **in
+context** (not a wizard form) and **augments** the existing user spec:
 
 > **Expert:** "Before I search — for fit I need two numbers I'll keep so I never
-> re-ask: your **height** and **inseam**. And one taste check: any brand you love or
-> won't touch?"
-> **User:** "178 cm, 81 cm inseam. No strong brand feelings, but secondhand is fine
-> if it saves money."
+> re-ask: your **height** and **inseam**. And to sharpen your budget profile: is
+> secondhand fine if it saves money?"
+> **User:** "178 cm, 81 cm inseam. No strong brand feelings, but secondhand is fine."
 
-→ The fit facts fold into **`user_spec.md`** (re-materialize: height 178 cm, inseam
-81 cm — soft facts) and the taste folds into **`playbook.md`** (re-materialize:
-budget ~€1500, secondhand acceptable, brand-agnostic). Both are now stored and
-**never re-asked**.
+→ The fit facts **augment** the already-present **`user_spec.md`** (re-materialize:
+add height 178 cm, inseam 81 cm — soft facts, alongside the seeded comfort-first
+preference + carbon-bars hard rule) and the secondhand tolerance **reinforces** the
+already-present **`playbook.md`** (re-materialize: ~€1500, secondhand acceptable,
+brand-agnostic). Each is now sharper than it was, and **never re-asked**.
 
 **(4–6) Map → search → compare.** Mapping the decomposition + the stored facts/taste:
 

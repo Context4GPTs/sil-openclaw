@@ -32,22 +32,21 @@ exists.
 
 - **`sil_profile_list`** enumerates the artefact store and returns the user's
   experts most-recently-created first (`createdAt` desc), each with its
-  `agentId`, `name`, `hasUserSpec`, `hasPlaybook`, and `createdAt`. Every expert
-  carries the required domain spec + intent spec, so those are not flagged; the
-  two flags report whether the user has yet captured a **user spec** (facts) or a
-  **playbook** (buying taste) — i.e. whether they have shopped this expert. Present
-  a name + a short domain summary plus the `agentId` so the user can refer to one
-  unambiguously. An empty `experts: []` is a normal, successful outcome — say
-  plainly "you have no sil shopping experts yet" and point at how to create one
+  `agentId`, `name`, and `createdAt`. Every expert carries all four SDS specs
+  (domain + intent + user + playbook, all required and present from creation), so
+  per-slot presence is not flagged — the list reports only the durable identity.
+  Present a name + a short domain summary plus the `agentId` so the user can refer
+  to one unambiguously. An empty `experts: []` is a normal, successful outcome —
+  say plainly "you have no sil shopping experts yet" and point at how to create one
   ("ask me to make a shopping expert for …"). One degraded expert lands in
   `unreadable[]` — mention it inline, but never let it hide the healthy ones.
 - **`sil_profile_get`** resolves one expert by `agentId` and returns its `name`,
-  its SDS **`domainSpec`** + **`intentSpec`** (always present), its optional
-  **`userSpec`** + **`playbook`** (when the user has captured them), `profilePath`,
-  and `createdAt`. The persona is **not** here — it is the host workspace
-  `SOUL.md`. Render a human summary: the expert's name, its niche (from the domain
-  spec), whether the user has captured a user spec / buying taste, and a wiring
-  summary — it is a real host agent with the sil plugin enabled and the sil skill
+  its four SDS specs — **`domainSpec`** + **`intentSpec`** + **`userSpec`** +
+  **`playbook`** (all present from creation) — `profilePath`, and `createdAt`. The
+  persona is **not** here — it is the host workspace `SOUL.md`. Render a human
+  summary: the expert's name, its niche (from the domain spec), what it knows about
+  the user (user spec facts + buying taste), and a wiring summary — it is a real
+  host agent with the sil plugin enabled and the sil skill
   attached, ready to shop with no further setup. An unknown expert returns
   `not_found` — frame it plainly ("no sil expert named '<x>'") and list the experts
   that DO exist (or say there are none) so the next step is obvious. Never surface

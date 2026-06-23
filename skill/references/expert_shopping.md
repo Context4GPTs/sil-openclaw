@@ -5,25 +5,31 @@ user states a shopping intent ("find me something for a steak dinner around $40"
 The [agent-creation engine's Runtime hook](agent_creation_engine.md) ends where
 this loop begins: the host has already injected the persona via the workspace
 **`SOUL.md`** (the expert's voice, standing rules, hard-no's), and the sil skill
-has read `$SIL_DATA_DIR/agents/<agentId>/profile.json` and loaded the SDS
-artefacts — **`domain_spec.md`** (the deep researched niche expertise, always
-present), **`intent_spec.md`** (the decomposition-dimension schema, always
-present), and — **when the user has shopped this expert before** — **`user_spec.md`**
-(the user's domain-relevant facts + hard constraints) and **`playbook.md`** (the
-user's shopping taste). Those artefacts are now your operating instructions.
+has read `$SIL_DATA_DIR/agents/<agentId>/profile.json` and loaded the four SDS
+artefacts — all **present from creation** (seeded partial at creation, then
+augmented every query): **`domain_spec.md`** (the deep researched niche
+expertise), **`intent_spec.md`** (the decomposition-dimension schema),
+**`user_spec.md`** (the user's domain-relevant facts + hard constraints,
+**already present** and reinforced as you learn more), and **`playbook.md`** (the
+user's shopping taste, **already present** and reinforced over time). Those
+artefacts are now your operating instructions.
 
 This is **shop time**, not create time. The expert behaves like a specialist a
 user trusts, in the persona's voice — never a generic clerk. It consumes the
 existing catalog tools **unchanged**; the rubric is applied by you at reasoning
 time, not by any new tool.
 
-This is **Spec-Driven Shopping (SDS)**: on **every query** the expert (a) keeps
-its `domain_spec.md` current from the **web**, (b) **decomposes the request along
-the intent-spec dimensions** into an ephemeral per-query intent, and (c) **lazily
-captures** any missing user fact (→ `user_spec.md`) or taste (→ `playbook.md`) on
-demand — then layers **intent > playbook > user_spec > domain_spec** to drive the
-search and the pick. The layering is the product: the picked item's "why" must
-visibly cite the layers
+This is **Spec-Driven Shopping (SDS)**, and **every query is a learning step** —
+all four sil docs are **already present** (seeded partial at creation) and the
+loop **augments / reinforces** them, it never fills them from nothing. On **every
+query** the expert (a) keeps its `domain_spec.md` current from the **web**, (b)
+**decomposes the request along the intent-spec dimensions** into an ephemeral
+per-query intent and **sharpens** those dimensions, and (c) **augments the
+already-present `user_spec.md`** with any new fact and **reinforces the
+already-present `playbook.md`** with any taste this query surfaces — we keep
+learning. It then layers **intent > playbook > user_spec > domain_spec** to drive
+the catalog query and the pick. The layering is the product: the picked item's
+"why" must visibly cite the layers
 (see the [layering rules](#layering--precedence-intent--playbook--user--domain)).
 
 The router's three always-on rules still hold (act-don't-narrate, follow the
@@ -59,24 +65,30 @@ and is **NEVER persisted**. There is no intent artefact file of filled values, a
 `sil_profile_materialize` is never called to store it. Only the `intent_spec.md`
 *schema* is persisted (at creation / refine); the fill is throwaway.
 
-### 3. Lazily capture the missing user side — facts to `user_spec.md`, taste to `playbook.md`
+### 3. Augment the already-present user side — facts to `user_spec.md`, taste to `playbook.md`
 
-Resolving the intent dimensions may need a **user fact** the store doesn't yet
-hold (a body measurement, a compatibility detail, a hard constraint) or a
-**shopping taste** (price sensitivity, brand preference). Capture it **lazily** —
-asked in-context for *this* query, in the persona's voice, **only when a dimension
-actually needs it** — then persist it and never re-ask:
+`user_spec.md` and `playbook.md` are **already present** (seeded partial at
+creation) — this step **augments / reinforces** them, it does not build them from
+nothing. Resolving the intent dimensions may surface a **new user fact** the store
+doesn't yet hold (a body measurement, a compatibility detail, a hard constraint)
+or a **new shopping taste** (price sensitivity, brand preference). Augment the
+already-present doc with it — asked in-context for *this* query, in the persona's
+voice, **only when a dimension actually needs it** — then persist it and never
+re-ask:
 
-- A **fact / measurement / hard constraint** → fold into `user_spec.md` and
-  re-materialize (`sil_profile_materialize` with the updated `userSpec`). Mark each
-  item as a **soft preference** (bendable) or a **hard constraint** (inviolable —
-  "never leather", "nothing over 8 kg", an allergy, an age gate).
+- A **fact / measurement / hard constraint** → fold into the already-present
+  `user_spec.md` and re-materialize (`sil_profile_materialize` with the updated
+  `userSpec`). Mark each item as a **soft preference** (bendable) or a **hard
+  constraint** (inviolable — "never leather", "nothing over 8 kg", an allergy, an
+  age gate).
 - A **shopping-taste preference** (budget band, brand likes/dislikes, general taste)
-  → fold into `playbook.md` and re-materialize (`sil_profile_materialize` with the
-  updated `playbook`).
+  → fold into the already-present `playbook.md` and re-materialize
+  (`sil_profile_materialize` with the updated `playbook`).
 
-This **replaces first-shop batch capture**: the user side fills **incrementally,
-per-query, on demand** — never a big up-front onboarding form. Elicitation is
+The user side **grows incrementally, per-query** — augmenting what is already
+there, never a big up-front onboarding form and never a one-time capture from
+nothing. **We keep learning**: every query leaves `user_spec.md` and `playbook.md`
+at least as sharp as it found them. Elicitation is
 **need-driven and load-bearing**: only a dimension that is **missing** from BOTH
 the request AND the stored user side is elicited, and you elicit it in the
 **playbook's priority order** (the highest-priority missing dimension first, then
