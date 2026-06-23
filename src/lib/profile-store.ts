@@ -9,39 +9,45 @@
  *
  * What the plugin DOES own is the agent's *behaviour* layer, materialized into
  * its own disclosed `filesystemScope` — `$SIL_DATA_DIR` (the same directory
- * `lib/credentials.ts` uses for tokens/identity). Per the founder steer
- * (2026-06-22) the engine writes a fixed, minimal set of artefacts there that
- * power the created expert's behaviour, read by the sil skill at runtime:
+ * `lib/credentials.ts` uses for tokens/identity). The created expert runs
+ * entirely on Spec-Driven Shopping (SDS): the engine writes the SDS behaviour
+ * artefacts there, read by the sil skill at runtime:
  *
  *   $SIL_DATA_DIR/agents/<agentId>/
- *     ├─ persona.md     the shopping persona/instructions (host-natural —
- *     │                 same shape as a workspace SOUL.md; the skill copies it
- *     │                 into the agent workspace SOUL.md and re-reads it at
- *     │                 session start)
- *     ├─ playbook.md    the generated domain sub-skill (host-natural — same
- *     │                 shape as a SKILL.md body; loaded by the sil skill at
- *     │                 session start). OPTIONAL — written only when supplied.
- *     ├─ domain.md      the SDS domain spec — the niche's researched decision-
- *     │                 dimensions and how they trade off (last/width/volume,
- *     │                 terrain, gait…), converged at creation. OPTIONAL —
- *     │                 written only when supplied.
- *     ├─ user.md        the SDS user spec — this user's standing niche-relevant
- *     │                 attributes + hard constraints, captured on first shop
- *     │                 and reused. OPTIONAL — written only when supplied.
- *     └─ profile.json   the strictly-typed manifest the sil skill resolves the
- *                       artefacts from (no filesystem guessing)
+ *     ├─ domain_spec.md   the SDS DOMAIN SPEC — deep researched niche expertise:
+ *     │                   how to buy well, the full mechanics (gearing theory,
+ *     │                   frame geometry, the complete bike-fit process…).
+ *     │                   REQUIRED at creation; web-refreshed every query.
+ *     ├─ intent_spec.md   the SDS INTENT SPEC — the agent-specific decomposition
+ *     │                   DIMENSIONS (a PRD-style template) a query must resolve,
+ *     │                   derived from domain_spec. REQUIRED at creation. The
+ *     │                   per-query intent (dimensions filled in) is EPHEMERAL —
+ *     │                   never persisted.
+ *     ├─ user_spec.md     the SDS USER SPEC — the user's domain-relevant facts +
+ *     │                   hard constraints. LAZY — starts absent, filled
+ *     │                   incrementally per-query on demand.
+ *     ├─ playbook.md      the SDS PLAYBOOK — the user's buying TASTE (price
+ *     │                   sensitivity, brand, preferences). LAZY — starts absent,
+ *     │                   filled incrementally per-query on demand.
+ *     └─ profile.json     the strictly-typed manifest the sil skill resolves the
+ *                         artefacts from (no filesystem guessing)
  *
- * The four behaviour bodies are four INDEPENDENT optional-or-required slots,
- * NOT one blended file: persona (required) + playbook + domain spec + user spec
- * (each optional, absent-is-fine). They have distinct lifecycles — persona +
- * playbook + domain spec are authored at creation; the user spec is captured on
- * first shop; all four are refine-mutable in place. The intent spec is NOT a
- * slot here: it is per-request and ephemeral, derived in the conversation and
- * never persisted.
+ * The persona is NOT a sil artefact: the agent's identity/voice/standing rules
+ * are the host workspace `SOUL.md`, written directly via the host CLI by the
+ * engine — there is no `persona.md` in this store and no copy step. This store
+ * holds only the four SDS BEHAVIOUR artefacts.
  *
- * Store boundary: host config = wiring; `$SIL_DATA_DIR` = behaviour artefacts.
- * Identity/tokens already live in `$SIL_DATA_DIR` but stay logically separate
- * (no identity coupling — creating an expert reads/writes no token).
+ * Two slots are REQUIRED at creation (`domainSpec` + `intentSpec`) — a created
+ * expert without them is a defect, not "absent-is-fine"; the other two
+ * (`userSpec` + `playbook`) start absent and fill LAZILY per-query (Correction
+ * 5). All four are refine-mutable in place. The per-query intent is NOT a slot
+ * here: only the intent_spec *dimension schema* is persisted; the filled
+ * dimensions for one request are ephemeral, derived in the conversation.
+ *
+ * Store boundary: host config + `SOUL.md` (identity/wiring) = host; the four SDS
+ * behaviour artefacts = `$SIL_DATA_DIR` via this plugin tool. Identity/tokens
+ * already live in `$SIL_DATA_DIR` but stay logically separate (no identity
+ * coupling — creating an expert reads/writes no token).
  *
  * Writes are atomic and all-or-nothing (Product invariant 7): a bad spec
  * writes NOTHING (validate first), and a mid-write failure leaves no partial
@@ -73,11 +79,12 @@ const DIR_MODE = 0o700;
 const AGENTS_SUBDIR = "agents";
 
 /** Artefact filenames (stable — the sil skill resolves them from profile.json,
- * but the names are also documented so a human can find them). */
-const PERSONA_FILE = "persona.md";
+ * but the names are also documented so a human can find them). The three SDS
+ * *specs* carry the `_spec.md` suffix; `playbook.md` (taste) does not. */
+const DOMAIN_SPEC_FILE = "domain_spec.md";
+const INTENT_SPEC_FILE = "intent_spec.md";
+const USER_SPEC_FILE = "user_spec.md";
 const PLAYBOOK_FILE = "playbook.md";
-const DOMAIN_FILE = "domain.md";
-const USER_FILE = "user.md";
 const PROFILE_FILE = "profile.json";
 
 /**
@@ -90,19 +97,25 @@ export interface ProfileSpec {
   agentId: string;
   /** Human-readable expert name (recorded in the manifest). */
   name: string;
-  /** The shopping persona/instructions — non-empty. */
-  persona: string;
-  /** The generated domain sub-skill playbook — optional, non-blank when present. */
-  playbook?: string;
-  /** The SDS domain spec — the niche's researched decision-dimensions and how
-   * they trade off, converged at creation. Optional, non-blank when present
-   * (same discipline as `playbook`): an absent domain spec is a valid state, a
-   * present-but-blank one is rejected. */
-  domainSpec?: string;
-  /** The SDS user spec — this user's standing niche-relevant attributes + hard
-   * constraints, captured on first shop and reused. Optional, non-blank when
-   * present (same discipline as `playbook`). Per-user + per-expert, local. */
+  /** The SDS domain spec — deep researched niche expertise (how to buy well, the
+   * full mechanics), authored at creation and web-refreshed every query. REQUIRED
+   * and non-blank: a created expert always carries a domain spec (SDS is the
+   * operating model, not an optional layer). */
+  domainSpec: string;
+  /** The SDS intent spec — the agent-specific decomposition DIMENSIONS (a
+   * PRD-style schema) a query must resolve, derived from `domainSpec` at creation.
+   * REQUIRED and non-blank. NOTE: this is the *dimension schema only* — the
+   * per-query intent (dimensions filled in for one request) is EPHEMERAL and is
+   * never passed here or persisted. */
+  intentSpec: string;
+  /** The SDS user spec — the user's domain-relevant facts + hard constraints.
+   * LAZY: optional, non-blank when present. Starts absent and fills incrementally
+   * per-query on demand. Per-user + per-expert, local. */
   userSpec?: string;
+  /** The SDS playbook — the user's buying TASTE (price sensitivity, brand,
+   * preferences). LAZY: optional, non-blank when present. Starts absent and fills
+   * incrementally per-query on demand. */
+  playbook?: string;
 }
 
 /** The strictly-typed manifest persisted as `profile.json`. The sil skill reads
@@ -110,17 +123,19 @@ export interface ProfileSpec {
 export interface ProfileManifest {
   agentId: string;
   name: string;
-  /** Absolute path to the persona artefact. */
-  personaPath: string;
-  /** Absolute path to the playbook artefact, when one was materialized. */
-  playbookPath?: string;
-  /** Absolute path to the SDS domain-spec artefact, when one was materialized.
-   * Absent on a pre-SDS expert — a valid state (mirrors `playbookPath`), NOT a
-   * field `readManifestFile` requires. */
-  domainSpecPath?: string;
-  /** Absolute path to the SDS user-spec artefact, when one was materialized.
-   * Absent until first-shop capture — a valid state (mirrors `playbookPath`). */
+  /** Absolute path to the SDS domain-spec artefact. REQUIRED — a created expert
+   * always has a domain spec; `readManifestFile` gates on it. */
+  domainSpecPath: string;
+  /** Absolute path to the SDS intent-spec (dimension schema) artefact. REQUIRED —
+   * a created expert always has an intent spec; `readManifestFile` gates on it. */
+  intentSpecPath: string;
+  /** Absolute path to the SDS user-spec artefact, once one has been captured.
+   * Absent until the first lazy per-query capture — a valid state (LAZY slot),
+   * NOT a field `readManifestFile` requires. */
   userSpecPath?: string;
+  /** Absolute path to the SDS playbook artefact, once a buying taste has been
+   * captured. Absent until the first lazy per-query capture — a valid state. */
+  playbookPath?: string;
   /** ISO 8601 creation timestamp. */
   createdAt: string;
 }
@@ -133,10 +148,10 @@ export type MaterializeResult =
       agentId: string;
       /** The artefact directory ($SIL_DATA_DIR/agents/<agentId>). */
       dir: string;
-      personaPath: string;
-      playbookPath?: string;
-      domainSpecPath?: string;
+      domainSpecPath: string;
+      intentSpecPath: string;
       userSpecPath?: string;
+      playbookPath?: string;
       profilePath: string;
     }
   | {
@@ -207,37 +222,37 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
   if (!nonBlank(spec.name)) {
     return invalid("name", "name is required and must be non-empty.");
   }
-  if (!nonBlank(spec.persona)) {
-    return invalid("persona", "persona is required and must be non-empty.");
+  // domainSpec + intentSpec are REQUIRED at creation — SDS is the operating
+  // model, not an optional layer. A created expert always carries both.
+  if (!nonBlank(spec.domainSpec)) {
+    return invalid("domainSpec", "domainSpec is required and must be non-empty.");
   }
-  // playbook is optional, but if present it must be non-blank (an empty string
-  // would materialize a useless artefact — reject it loudly rather than write it).
-  if (spec.playbook !== undefined && !nonBlank(spec.playbook)) {
-    return invalid("playbook", "playbook, when provided, must be non-empty.");
+  if (!nonBlank(spec.intentSpec)) {
+    return invalid("intentSpec", "intentSpec is required and must be non-empty.");
   }
-  // domainSpec / userSpec are the two SDS slots — optional, but present-but-blank
-  // is rejected exactly like playbook (a blank spec is not a spec; write nothing).
-  if (spec.domainSpec !== undefined && !nonBlank(spec.domainSpec)) {
-    return invalid("domainSpec", "domainSpec, when provided, must be non-empty.");
-  }
+  // userSpec / playbook are the two LAZY slots — optional, but present-but-blank
+  // is rejected (a blank spec is not a spec; write nothing).
   if (spec.userSpec !== undefined && !nonBlank(spec.userSpec)) {
     return invalid("userSpec", "userSpec, when provided, must be non-empty.");
   }
+  if (spec.playbook !== undefined && !nonBlank(spec.playbook)) {
+    return invalid("playbook", "playbook, when provided, must be non-empty.");
+  }
 
   const dir = getAgentArtefactDir(spec.agentId);
-  const personaPath = join(dir, PERSONA_FILE);
+  const domainSpecPath = join(dir, DOMAIN_SPEC_FILE);
+  const intentSpecPath = join(dir, INTENT_SPEC_FILE);
+  const userSpecPath = spec.userSpec !== undefined ? join(dir, USER_SPEC_FILE) : undefined;
   const playbookPath = spec.playbook !== undefined ? join(dir, PLAYBOOK_FILE) : undefined;
-  const domainSpecPath = spec.domainSpec !== undefined ? join(dir, DOMAIN_FILE) : undefined;
-  const userSpecPath = spec.userSpec !== undefined ? join(dir, USER_FILE) : undefined;
   const profilePath = join(dir, PROFILE_FILE);
 
   const manifest: ProfileManifest = {
     agentId: spec.agentId,
     name: spec.name,
-    personaPath,
-    ...(playbookPath ? { playbookPath } : {}),
-    ...(domainSpecPath ? { domainSpecPath } : {}),
+    domainSpecPath,
+    intentSpecPath,
     ...(userSpecPath ? { userSpecPath } : {}),
+    ...(playbookPath ? { playbookPath } : {}),
     createdAt: new Date().toISOString(),
   };
 
@@ -250,15 +265,13 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
 
   try {
     mkdirSync(dir, { recursive: true, mode: DIR_MODE });
-    atomicWrite(personaPath, spec.persona);
-    if (playbookPath && spec.playbook !== undefined) {
-      atomicWrite(playbookPath, spec.playbook);
-    }
-    if (domainSpecPath && spec.domainSpec !== undefined) {
-      atomicWrite(domainSpecPath, spec.domainSpec);
-    }
+    atomicWrite(domainSpecPath, spec.domainSpec);
+    atomicWrite(intentSpecPath, spec.intentSpec);
     if (userSpecPath && spec.userSpec !== undefined) {
       atomicWrite(userSpecPath, spec.userSpec);
+    }
+    if (playbookPath && spec.playbook !== undefined) {
+      atomicWrite(playbookPath, spec.playbook);
     }
     atomicWrite(profilePath, JSON.stringify(manifest, null, 2) + "\n");
   } catch (err) {
@@ -287,10 +300,10 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
     ok: true,
     agentId: spec.agentId,
     dir,
-    personaPath,
-    ...(playbookPath ? { playbookPath } : {}),
-    ...(domainSpecPath ? { domainSpecPath } : {}),
+    domainSpecPath,
+    intentSpecPath,
     ...(userSpecPath ? { userSpecPath } : {}),
+    ...(playbookPath ? { playbookPath } : {}),
     profilePath,
   };
 }
@@ -360,16 +373,16 @@ function invalidAgentId(
 }
 
 /** One listed expert, summarized from its manifest (no body read — list stays
- * cheap). The boolean flags are read straight off the manifest's `*Path` fields
- * (no artefact-body read), so the skill can flag a specialized / SDS-equipped
- * expert at a glance: `hasPlaybook` a domain sub-skill, `hasDomainSpec` a
- * researched domain spec, `hasUserSpec` a captured user spec. */
+ * cheap). Every created expert has a domain spec + intent spec (both required),
+ * so flagging those carries no signal. The boolean flags are read straight off
+ * the manifest's `*Path` fields (no artefact-body read) and report only the two
+ * LAZY slots, so the skill can tell whether this user has shopped the expert yet:
+ * `hasUserSpec` a captured user spec (facts), `hasPlaybook` a captured taste. */
 export interface ListedProfile {
   agentId: string;
   name: string;
-  hasPlaybook: boolean;
-  hasDomainSpec: boolean;
   hasUserSpec: boolean;
+  hasPlaybook: boolean;
   createdAt: string;
 }
 
@@ -397,13 +410,18 @@ export type ReadResult =
       ok: true;
       agentId: string;
       name: string;
-      persona: string;
-      playbook?: string;
-      /** The SDS domain spec body, when one was materialized (optional, like
-       * `playbook` — absent is a valid state, never makes the expert unviewable). */
-      domainSpec?: string;
-      /** The SDS user spec body, when one was captured (optional, like `playbook`). */
+      /** The SDS domain spec body. Always present for a created expert (required);
+       * a referenced-but-missing body fails the read closed (`not_found`). */
+      domainSpec: string;
+      /** The SDS intent spec (dimension schema) body. Always present for a created
+       * expert (required); a referenced-but-missing body fails the read closed. */
+      intentSpec: string;
+      /** The SDS user spec body, once one has been lazily captured (LAZY slot —
+       * absent is a valid state, never makes the expert unviewable). */
       userSpec?: string;
+      /** The SDS playbook (taste) body, once one has been lazily captured (LAZY
+       * slot — absent is a valid state). */
+      playbook?: string;
       profilePath: string;
       createdAt: string;
     }
@@ -437,7 +455,8 @@ function readManifestFile(profilePath: string): ProfileManifest {
     parsed === null ||
     typeof (parsed as { agentId?: unknown }).agentId !== "string" ||
     typeof (parsed as { name?: unknown }).name !== "string" ||
-    typeof (parsed as { personaPath?: unknown }).personaPath !== "string" ||
+    typeof (parsed as { domainSpecPath?: unknown }).domainSpecPath !== "string" ||
+    typeof (parsed as { intentSpecPath?: unknown }).intentSpecPath !== "string" ||
     typeof (parsed as { createdAt?: unknown }).createdAt !== "string"
   ) {
     throw new Error("profile.json is missing required manifest fields");
@@ -493,9 +512,8 @@ export function listAgentProfiles(): ListResult {
       experts.push({
         agentId: manifest.agentId,
         name: manifest.name,
-        hasPlaybook: manifest.playbookPath !== undefined,
-        hasDomainSpec: manifest.domainSpecPath !== undefined,
         hasUserSpec: manifest.userSpecPath !== undefined,
+        hasPlaybook: manifest.playbookPath !== undefined,
         createdAt: manifest.createdAt,
       });
     } catch (err) {
@@ -523,13 +541,15 @@ function createdAtDesc(a: string, b: string): number {
 }
 
 /**
- * Read one expert's full detail — the manifest PLUS the persona/playbook bodies
- * from the files it points at — so the skill can render a complete view.
+ * Read one expert's full detail — the manifest PLUS the SDS artefact bodies from
+ * the files it points at — so the skill can render a complete view.
  *
  * Re-runs the writer's `agentId` gate BEFORE any `join`/read (a traversal-shaped
  * id → `invalid_request`, reading nothing). An unknown id, an absent/unreadable
- * manifest, or an absent persona body → `not_found` (a degraded expert is, from
- * the user's view, not viewable). Never throws across the boundary; reads only.
+ * manifest, or an absent REQUIRED body (`domain_spec.md` / `intent_spec.md`) →
+ * `not_found` (a degraded expert is, from the user's view, not viewable). The two
+ * LAZY bodies (`user_spec.md` / `playbook.md`) degrade to `undefined` and never
+ * make the expert unviewable. Never throws across the boundary; reads only.
  */
 export function readAgentProfile(agentId: string): ReadResult {
   const bad = rejectBadAgentId(agentId);
@@ -551,41 +571,29 @@ export function readAgentProfile(agentId: string): ReadResult {
     return notFoundRead(agentId);
   }
 
-  let persona: string;
+  // The two SDS spec bodies are REQUIRED for a created expert — they gate the
+  // read fail-closed (like the persona body did pre-SDS). A manifest that points
+  // at a domain_spec.md / intent_spec.md whose body is gone (a partial write, a
+  // hand-deleted file) is, to the viewer, an expert that cannot be loaded.
+  let domainSpec: string;
   try {
-    persona = readFileSync(manifest.personaPath, "utf8");
+    domainSpec = readFileSync(manifest.domainSpecPath, "utf8");
   } catch {
-    // Manifest present but its persona body is gone (a partial removal, or a
-    // hand-deleted file) — the expert is not viewable.
     return notFoundRead(agentId);
   }
 
-  let playbook: string | undefined;
-  if (manifest.playbookPath !== undefined) {
-    try {
-      playbook = readFileSync(manifest.playbookPath, "utf8");
-    } catch {
-      // The playbook is optional detail; its absence does not make the expert
-      // unviewable. Render the rest without it.
-      playbook = undefined;
-    }
+  let intentSpec: string;
+  try {
+    intentSpec = readFileSync(manifest.intentSpecPath, "utf8");
+  } catch {
+    return notFoundRead(agentId);
   }
 
-  // The two SDS bodies degrade EXACTLY like playbook: optional, absent-is-fine,
-  // and a referenced-but-missing body never makes the expert unviewable. The
-  // expert remains coherent on persona alone — a half-written domain/user spec
-  // (manifest points at it, file gone) reads back as "no spec", never as a
-  // broken expert. This is the per-file-atomic, NOT-cross-file-transactional
-  // safety boundary: a partial write degrades to absence, it does not brick.
-  let domainSpec: string | undefined;
-  if (manifest.domainSpecPath !== undefined) {
-    try {
-      domainSpec = readFileSync(manifest.domainSpecPath, "utf8");
-    } catch {
-      domainSpec = undefined;
-    }
-  }
-
+  // The two LAZY bodies degrade to absence: optional, absent-is-fine, and a
+  // referenced-but-missing body never makes the expert unviewable. This is the
+  // per-file-atomic, NOT-cross-file-transactional safety boundary for the lazy
+  // slots: a partial lazy write degrades to "no user spec / no taste yet", it
+  // does not brick the expert (which stays coherent on its two required specs).
   let userSpec: string | undefined;
   if (manifest.userSpecPath !== undefined) {
     try {
@@ -595,14 +603,23 @@ export function readAgentProfile(agentId: string): ReadResult {
     }
   }
 
+  let playbook: string | undefined;
+  if (manifest.playbookPath !== undefined) {
+    try {
+      playbook = readFileSync(manifest.playbookPath, "utf8");
+    } catch {
+      playbook = undefined;
+    }
+  }
+
   return {
     ok: true,
     agentId: manifest.agentId,
     name: manifest.name,
-    persona,
-    ...(playbook !== undefined ? { playbook } : {}),
-    ...(domainSpec !== undefined ? { domainSpec } : {}),
+    domainSpec,
+    intentSpec,
     ...(userSpec !== undefined ? { userSpec } : {}),
+    ...(playbook !== undefined ? { playbook } : {}),
     profilePath,
     createdAt: manifest.createdAt,
   };

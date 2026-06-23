@@ -1,6 +1,6 @@
 # Answer→`sil_search`-param mapping (the mapping is real)
 
-Load this while converging interview section 4 (the answer→`sil_search`-param mapping) in [`brainstorm_interview.md`](brainstorm_interview.md). The mapping must target the **real `sil_search` parameters** (the shopping loop's catalog tool, named in `SKILL.md`) and nothing else — never invent a filter.
+Load this at shop time, when an expert's loop maps a decomposed request into a `sil_search` call ([`expert_shopping.md`](expert_shopping.md) Step 4). The mapping must target the **real `sil_search` parameters** (the shopping loop's catalog tool, named in `SKILL.md`) and nothing else — never invent a filter. (Under SDS there is no stored "answer→param mapping" seller artefact — the niche knowledge of *what* to search on lives in the domain spec; this reference is the generic param table the mapping draws on.)
 
 ## The parameters available to map onto
 
@@ -15,15 +15,16 @@ Load this while converging interview section 4 (the answer→`sil_search`-param 
 
 A stated taste with **no matching param** (e.g. "I like bold colours", "prefer eco-friendly brands") does **not** become a new param — fold it into the `query` text or into the recommendation rubric. There is no `color` filter, no `brand` filter; inventing one produces an expert that emits invalid `sil_search` calls at shop time.
 
-## SDS mapping inputs — the domain spec and the user spec, not just the request
+## SDS mapping inputs — the decomposed intent, the user facts, the buying taste, the domain mechanics
 
-Under [Spec-Driven Shopping](expert_shopping.md), the mapping reads three layers, not only the user's words for *this* request:
+Under [Spec-Driven Shopping](expert_shopping.md), the mapping reads several layers, not only the user's words for *this* request:
 
-- The **domain spec** (`domain.md`) supplies the niche's **decision-dimensions** — which attributes are load-bearing for *this* niche (last volume, rim depth, gearing range), so the mapping knows what to map and what matters.
-- The **user spec** (`user.md`) supplies the user's **standing attributes** (the budget band, the foot profile) — these map to params exactly like a freshly-stated answer would, but are **never re-asked**; the stored value fills the param.
-- The **intent spec** (the per-request demand) is the most specific layer and wins for *preferences* (precedence intent > user > domain).
+- The **decomposed per-query intent** (the `intent_spec.md` dimensions filled in for this request — ephemeral) is the most specific layer and wins for *preferences* (precedence **intent > playbook > user_spec > domain_spec**).
+- The **buying taste** (`playbook.md`) supplies the user's standing preferences — budget band, brand likes/dislikes — these map to params (a budget band → `price_min`/`price_max`) exactly like a freshly-stated answer would, but are **never re-asked**.
+- The **user spec** (`user_spec.md`) supplies the user's standing **facts** (a foot profile, a compatibility detail) and the **hard constraints** — facts map to params like any stated answer; the stored value fills the param, never re-asked.
+- The **domain spec** (`domain_spec.md`) supplies the niche's **decision-mechanics** — which attributes are load-bearing for *this* niche (last volume, rim depth, gearing range), so the mapping knows what to map and what matters.
 
-The param table itself is **unchanged** — these layers are inputs to the same answer→param mapping, not new params. A domain dimension or a standing user attribute with **no matching param** folds into `query`/rubric per the no-invented-filter rule above, exactly like any other non-param taste.
+The param table itself is **unchanged** — these layers are inputs to the same mapping, not new params. A domain dimension, a standing user fact, or a taste with **no matching param** folds into `query`/rubric per the no-invented-filter rule above, exactly like any other non-param taste.
 
 ## Hard constraints — route to a real filter AND a reject-at-recommend rule, NEVER only `query` text
 
@@ -40,7 +41,7 @@ Do **not** map the user's location onto `ship_to`, and do **not** instruct the e
 
 ## Worked param examples
 
-A converged mapping translates the user's stated inputs into concrete params the expert will set at shop time. For a road-cycling expert whose user said "budget around €1200, secondhand is fine, I'm in France and want local shops":
+At shop time the mapping translates the decomposed intent + the stored facts/taste into concrete params. For a road-cycling expert whose user said (this request, plus a stored €1200 budget taste) "secondhand is fine, I'm in France and want local shops":
 
 ```
 query:           "<niche descriptors from the answer>"   # e.g. "endurance road bike 105 groupset"

@@ -2,14 +2,16 @@
  * sil shopping-expert profile tools.
  *
  * `sil_profile_materialize` is the plugin's half of the agent-creation engine:
- * it writes the created expert's *behaviour* artefacts (persona + optional
- * domain sub-skill playbook + the optional SDS domain spec + the optional SDS
- * user spec + a typed manifest) into the plugin's own data directory
- * (`$SIL_DATA_DIR`, the disclosed `filesystemScope`). The *wiring*
- * half — the host `agents.list[]` entry, the enabled `sil` plugin, the attached
- * `sil` skill — is the host agent driving its own `openclaw …` CLI under the
- * bundled `skill/SKILL.md` procedure; the plugin never writes `~/.openclaw`
- * (`security.noChildProcess: true`, host config is outside `filesystemScope`).
+ * it writes the created expert's *SDS behaviour* artefacts (the required domain
+ * spec + intent-spec dimension schema, the lazy user spec + playbook taste, and
+ * a typed manifest) into the plugin's own data directory (`$SIL_DATA_DIR`, the
+ * disclosed `filesystemScope`). The persona is NOT written here — the agent's
+ * identity/voice is the host workspace `SOUL.md`, written directly via the host
+ * CLI. The *wiring* half — the host `agents.list[]` entry, the enabled `sil`
+ * plugin, the attached `sil` skill, the `SOUL.md` — is the host agent driving
+ * its own `openclaw …` CLI under the bundled `skill/SKILL.md` procedure; the
+ * plugin never writes `~/.openclaw` (`security.noChildProcess: true`, host
+ * config is outside `filesystemScope`).
  *
  * Why a tool (not skill-driven `write`-tool prose): the host agent's only way
  * to invoke plugin code is a registered tool, and a plugin write buys
@@ -46,20 +48,23 @@ export function registerProfileTools(api: PluginAPI): void {
 function registerMaterialize(api: PluginAPI): void {
   api.registerTool({
     name: "sil_profile_materialize",
-    label: "Materialize a sil shopping-expert's behaviour artefacts",
+    label: "Materialize a sil shopping-expert's SDS behaviour artefacts",
     description:
-      "Write a created sil shopping expert's behaviour artefacts into the sil"
-      + " data directory: the persona/instructions, an optional generated domain"
-      + " sub-skill (playbook), the optional SDS domain spec (the niche's"
-      + " researched decision-dimensions), the optional SDS user spec (this"
-      + " user's standing attributes + hard constraints, captured on first shop),"
-      + " and a typed manifest the sil skill reads at runtime to load them. Re-run"
-      + " it over the SAME agentId to refine an expert in place (it overwrites the"
-      + " bodies atomically). Call this AFTER the host agent has been created"
-      + " (openclaw agents add) and BEFORE openclaw config validate. It does NOT"
-      + " touch the host OpenClaw config — the plugin enable + skill attach are"
-      + " driven by the host CLI, not this tool. Writes are atomic: an invalid"
-      + " spec writes nothing, and a write failure leaves nothing partial.",
+      "Write a created sil shopping expert's SDS behaviour artefacts into the sil"
+      + " data directory: the REQUIRED domain spec (deep researched niche"
+      + " expertise — how to buy well, the full mechanics), the REQUIRED intent"
+      + " spec (the agent-specific decomposition dimensions a query must resolve,"
+      + " derived from the domain spec), the LAZY user spec (the user's"
+      + " domain-relevant facts + hard constraints) and LAZY playbook (the user's"
+      + " buying taste), and a typed manifest the sil skill reads at runtime to"
+      + " load them. The persona is NOT written here — it is the host workspace"
+      + " SOUL.md, written via the host CLI. Re-run it over the SAME agentId to"
+      + " refine an expert in place or lazily capture user spec / taste (it"
+      + " overwrites the bodies atomically). Call this AFTER the host agent has"
+      + " been created (openclaw agents add) and BEFORE openclaw config validate."
+      + " It does NOT touch the host OpenClaw config — the plugin enable + skill"
+      + " attach are driven by the host CLI, not this tool. Writes are atomic: an"
+      + " invalid spec writes nothing, and a write failure leaves nothing partial.",
     parameters: Type.Object({
       agentId: Type.String({
         description:
@@ -69,39 +74,43 @@ function registerMaterialize(api: PluginAPI): void {
       name: Type.String({
         description: "The human-readable expert name (recorded in the manifest).",
       }),
-      persona: Type.String({
+      domainSpec: Type.String({
         description:
-          "The shopping persona/instructions — the expert's expertise, tone, and"
-          + " standing rules. Non-empty. Materialized as persona.md and copied"
-          + " into the agent workspace SOUL.md by the skill.",
+          "The SDS domain spec — deep researched niche expertise: how to buy well"
+          + " in the niche and its full mechanics (for cycling: gearing theory,"
+          + " frame geometry, the complete bike-fit process). Researched by the"
+          + " agent itself (web + knowledge), not interrogated from the user."
+          + " REQUIRED, non-empty. Materialized as domain_spec.md; web-refreshed"
+          + " every query.",
       }),
-      playbook: Type.Optional(
-        Type.String({
-          description:
-            "The generated domain sub-skill: how this expert shops on sil (which"
-            + " sil_* tool for which intent, refinement rules). Materialized as"
-            + " playbook.md and loaded by the sil skill at session start. Omit"
-            + " when the expert needs no domain playbook.",
-        }),
-      ),
-      domainSpec: Type.Optional(
-        Type.String({
-          description:
-            "The SDS domain spec — the niche's researched decision-dimensions and"
-            + " how they trade off (for shoes: last/width/volume, terrain, gait,"
-            + " materials), converged at creation by actively researching the"
-            + " niche. Materialized as domain.md. Omit when the expert has no"
-            + " researched domain spec yet.",
-        }),
-      ),
+      intentSpec: Type.String({
+        description:
+          "The SDS intent spec — the agent-specific decomposition DIMENSIONS (a"
+          + " PRD-style template) a shopping query must resolve, derived from the"
+          + " domain spec (for cycling: use-case, terrain, budget, timeline,"
+          + " compatibility, performance priorities, aesthetics). REQUIRED,"
+          + " non-empty. This is the dimension SCHEMA only — the per-query intent"
+          + " (dimensions filled in) is ephemeral and is never stored. Materialized"
+          + " as intent_spec.md.",
+      }),
       userSpec: Type.Optional(
         Type.String({
           description:
-            "The SDS user spec — this user's standing niche-relevant attributes"
-            + " and hard constraints (their foot profile, climate, the rules they"
-            + " never break), captured ONCE on first shop and reused. Materialized"
-            + " as user.md (per-user, per-expert, local). Omit until first-shop"
-            + " capture or when re-materializing without changing it.",
+            "The SDS user spec — the user's domain-relevant facts + hard"
+            + " constraints (body measurements, climate, the rules they never"
+            + " break). LAZY: starts absent and is captured incrementally"
+            + " per-query on demand. Materialized as user_spec.md (per-user,"
+            + " per-expert, local). Omit at creation and when re-materializing"
+            + " without changing it.",
+        }),
+      ),
+      playbook: Type.Optional(
+        Type.String({
+          description:
+            "The SDS playbook — the user's buying TASTE (price sensitivity, brand"
+            + " preferences, general taste). LAZY: starts absent and is captured"
+            + " incrementally per-query on demand. Materialized as playbook.md."
+            + " Omit at creation and when re-materializing without changing it.",
         }),
       ),
     }),
@@ -112,15 +121,13 @@ function registerMaterialize(api: PluginAPI): void {
       const spec: ProfileSpec = {
         agentId: typeof params["agentId"] === "string" ? params["agentId"] : "",
         name: typeof params["name"] === "string" ? params["name"] : "",
-        persona: typeof params["persona"] === "string" ? params["persona"] : "",
-        ...(typeof params["playbook"] === "string"
-          ? { playbook: params["playbook"] }
-          : {}),
-        ...(typeof params["domainSpec"] === "string"
-          ? { domainSpec: params["domainSpec"] }
-          : {}),
+        domainSpec: typeof params["domainSpec"] === "string" ? params["domainSpec"] : "",
+        intentSpec: typeof params["intentSpec"] === "string" ? params["intentSpec"] : "",
         ...(typeof params["userSpec"] === "string"
           ? { userSpec: params["userSpec"] }
+          : {}),
+        ...(typeof params["playbook"] === "string"
+          ? { playbook: params["playbook"] }
           : {}),
       };
 
@@ -129,18 +136,17 @@ function registerMaterialize(api: PluginAPI): void {
       if (result.ok) {
         api.logger.info("sil_profile_materialized", {
           agent_id: result.agentId,
-          has_playbook: result.playbookPath !== undefined,
-          has_domain_spec: result.domainSpecPath !== undefined,
           has_user_spec: result.userSpecPath !== undefined,
+          has_playbook: result.playbookPath !== undefined,
         });
         return jsonResult({
           status: "ok",
           agentId: result.agentId,
           dir: result.dir,
-          personaPath: result.personaPath,
-          ...(result.playbookPath ? { playbookPath: result.playbookPath } : {}),
-          ...(result.domainSpecPath ? { domainSpecPath: result.domainSpecPath } : {}),
+          domainSpecPath: result.domainSpecPath,
+          intentSpecPath: result.intentSpecPath,
           ...(result.userSpecPath ? { userSpecPath: result.userSpecPath } : {}),
+          ...(result.playbookPath ? { playbookPath: result.playbookPath } : {}),
           profilePath: result.profilePath,
         });
       }
@@ -185,8 +191,9 @@ function registerList(api: PluginAPI): void {
       + " agents/<id>/profile.json is the authoritative \"is a sil expert\""
       + " signal — a bare host agent without one is not listed). Returns the"
       + " experts most-recently-created first, each with its agentId, name,"
-      + " whether it carries a domain playbook, a researched SDS domain spec, a"
-      + " captured SDS user spec, and createdAt. An empty store is"
+      + " whether the user has yet captured a SDS user spec (facts) or a playbook"
+      + " (buying taste) for it, and createdAt. Every expert carries the required"
+      + " domain spec + intent spec, so those are not flagged. An empty store is"
       + " a normal, successful empty listing — not an error. One unreadable or"
       + " corrupt manifest is reported inline in `unreadable` and never aborts"
       + " the listing. Reads no token and writes nothing.",
@@ -210,8 +217,8 @@ function registerList(api: PluginAPI): void {
  * `sil_profile_get` — view one expert's full detail (read-only).
  *
  * Re-runs the writer's `agentId` gate before any read (a traversal-shaped id →
- * `invalid_request`). Returns the manifest plus the persona/playbook bodies so
- * the skill can render a complete view. An unknown or unloadable expert →
+ * `invalid_request`). Returns the manifest plus the SDS artefact bodies so the
+ * skill can render a complete view. An unknown or unloadable expert →
  * `not_found` (the skill lists the healthy experts) — never a stack trace or a
  * raw path. Reads no token and writes nothing.
  */
@@ -221,14 +228,14 @@ function registerGet(api: PluginAPI): void {
     label: "View one sil shopping expert's detail",
     description:
       "Show one sil shopping expert's full detail — read-only. Pass its"
-      + " `agentId`. Returns the expert's name, its persona/instructions, its"
-      + " domain playbook when one exists, its SDS domain spec and user spec when"
-      + " present (each a distinct layer from persona/playbook), the manifest"
-      + " path, and createdAt, read from the artefact store so the agent can"
-      + " summarize the expert. An unknown expert returns `not_found` (list the"
-      + " experts to see which exist) — never a stack trace or a raw path. A"
-      + " malformed/traversal id returns `invalid_request`. Reads no token and"
-      + " writes nothing.",
+      + " `agentId`. Returns the expert's name, its SDS domain spec and intent"
+      + " spec (always present), its user spec (facts) and playbook (buying taste)"
+      + " when the user has captured them, the manifest path, and createdAt, read"
+      + " from the artefact store so the agent can summarize the expert. The"
+      + " persona is not here — it is the host workspace SOUL.md. An unknown"
+      + " expert returns `not_found` (list the experts to see which exist) — never"
+      + " a stack trace or a raw path. A malformed/traversal id returns"
+      + " `invalid_request`. Reads no token and writes nothing.",
     parameters: Type.Object({
       agentId: Type.String({
         description:
@@ -243,18 +250,17 @@ function registerGet(api: PluginAPI): void {
       if (result.ok) {
         api.logger.info("sil_profile_viewed", {
           agent_id: result.agentId,
-          has_playbook: result.playbook !== undefined,
-          has_domain_spec: result.domainSpec !== undefined,
           has_user_spec: result.userSpec !== undefined,
+          has_playbook: result.playbook !== undefined,
         });
         return jsonResult({
           status: "ok",
           agentId: result.agentId,
           name: result.name,
-          persona: result.persona,
-          ...(result.playbook !== undefined ? { playbook: result.playbook } : {}),
-          ...(result.domainSpec !== undefined ? { domainSpec: result.domainSpec } : {}),
+          domainSpec: result.domainSpec,
+          intentSpec: result.intentSpec,
           ...(result.userSpec !== undefined ? { userSpec: result.userSpec } : {}),
+          ...(result.playbook !== undefined ? { playbook: result.playbook } : {}),
           profilePath: result.profilePath,
           createdAt: result.createdAt,
         });

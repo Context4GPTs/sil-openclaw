@@ -12,24 +12,34 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
-- **Spec-Driven Shopping (SDS) for created experts.** A created shopping expert
-  now runs on three layered specs instead of coarse attribute matching. Two are
-  persisted as new first-class artefact slots alongside `persona.md` +
-  `playbook.md` — **`domain.md`** (the niche's *researched* decision-dimensions
-  and trade-offs, converged at creation) and **`user.md`** (this user's standing
-  attributes + **hard constraints**, captured once on first shop and reused,
-  never re-asked) — and one is ephemeral: the per-request **intent spec**, derived
-  from the user's words and never persisted. The shop-time loop layers
-  **intent → user → domain** (intent wins for preferences; a user-spec **hard
+- **Spec-Driven Shopping (SDS) is the operating model for created experts.** A
+  created shopping expert now runs **entirely** on SDS — not coarse attribute
+  matching, and not an optional layer. The persona left the sil store: it is the
+  agent's host workspace **`SOUL.md`** (identity/voice), written by the engine via
+  the host CLI — there is **no `persona.md`**. The sil store holds **four SDS
+  behaviour artefacts**: two **required at creation** — **`domain_spec.md`** (deep
+  *researched* niche expertise — how to buy well, the full mechanics; the agent
+  researches it itself from web + knowledge, and **web-refreshes it on every
+  query**) and **`intent_spec.md`** (the agent-specific **decomposition dimensions**,
+  a PRD-style schema derived from the domain) — and two **lazy** — **`user_spec.md`**
+  (the user's domain-relevant facts + **hard constraints**) and **`playbook.md`**
+  (the user's **buying taste** — price sensitivity, brand, preferences), both filled
+  **incrementally per-query on demand** (replacing first-shop batch capture), never
+  re-asked. The per-query **intent** (the dimensions filled in for one request) is
+  **ephemeral** — only the dimension *schema* is persisted. The shop-time loop
+  web-refreshes the domain, decomposes the request, lazily captures the user side,
+  and layers **intent → playbook → user_spec → domain_spec** (a user-spec **hard
   constraint is inviolable** — routed to a real `sil_search` filter *and* a
-  reject-at-pick rubric rule, never only soft `query` text) and recommends with a
-  "why" that visibly cites all three layers. Both new slots ride the existing
-  **`sil_profile_materialize`** store path — `domainSpec?` / `userSpec?` optional
-  params, surfaced on `sil_profile_get` and flagged on `sil_profile_list` — with
+  reject-at-pick rubric rule, never only soft `query` text), recommending with a
+  "why" that visibly cites the intent + a stored user fact + a domain mechanic.
+  Setup stays **light (≤10 questions)** — the depth comes from the agent's own
+  research. All four artefacts ride the existing **`sil_profile_materialize`** store
+  path (`domainSpec` + `intentSpec` required, `userSpec` + `playbook` optional) with
   **no new tool** (the 8-tool manifest is unchanged) and the same atomic,
-  validate-first, per-file-all-or-nothing discipline as `playbook` (a partial
-  write degrades to absence, never bricks the expert). Refinement can now target a
-  `user.md` attribute or a `domain.md` dimension as a distinct refinable element.
+  validate-first, per-file-all-or-nothing discipline. Refinement can target the
+  domain spec, the intent-spec dimensions, a user-spec fact/hard-constraint, or the
+  buying taste as distinct refinable elements (a persona refinement refreshes
+  `SOUL.md` via the host CLI).
 
 ## [0.3.0] - 2026-06-23
 

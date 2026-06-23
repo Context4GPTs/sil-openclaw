@@ -3,101 +3,126 @@
 Load this when you (the sil skill) are running **inside a created expert** and the
 user states a shopping intent ("find me something for a steak dinner around $40").
 The [agent-creation engine's Runtime hook](agent_creation_engine.md) ends where
-this loop begins: it has already read `$SIL_DATA_DIR/agents/<agentId>/profile.json`
-and loaded `persona.md` (the standing instructions, the expert's voice, its
-hard-rules and hard-no's), `playbook.md` (its three prose sections — how the
-expert asks, how it turns answers into catalog parameters, and how it ranks the
-candidates), and the two SDS specs when present: `domain.md` (the researched
-**domain spec** — the niche decision-dimensions and trade-offs) and `user.md`
-(the **user spec** — this user's standing attributes + hard constraints). Those
-artefacts are now your operating instructions for the rest of this loop.
+this loop begins: the host has already injected the persona via the workspace
+**`SOUL.md`** (the expert's voice, standing rules, hard-no's), and the sil skill
+has read `$SIL_DATA_DIR/agents/<agentId>/profile.json` and loaded the SDS
+artefacts — **`domain_spec.md`** (the deep researched niche expertise, always
+present), **`intent_spec.md`** (the decomposition-dimension schema, always
+present), and — **when the user has shopped this expert before** — **`user_spec.md`**
+(the user's domain-relevant facts + hard constraints) and **`playbook.md`** (the
+user's shopping taste). Those artefacts are now your operating instructions.
 
 This is **shop time**, not create time. The expert behaves like a specialist a
 user trusts, in the persona's voice — never a generic clerk. It consumes the
 existing catalog tools **unchanged**; the rubric is applied by you at reasoning
 time, not by any new tool.
 
-This is **Spec-Driven Shopping (SDS)**: rather than generic attribute matching,
-the expert reasons over **three layered specs** — it captures the **user spec**
-once on first shop, then on every request **derives an ephemeral intent spec**
-and **layers intent → user → domain** to drive the search and the pick. The
-layering is the product: the picked item's "why" must visibly cite all three
-layers (see the [layering rules](#layering--precedence-intent--user--domain)).
+This is **Spec-Driven Shopping (SDS)**: on **every query** the expert (a) keeps
+its `domain_spec.md` current from the **web**, (b) **decomposes the request along
+the intent-spec dimensions** into an ephemeral per-query intent, and (c) **lazily
+captures** any missing user fact (→ `user_spec.md`) or taste (→ `playbook.md`) on
+demand — then layers **intent > playbook > user_spec > domain_spec** to drive the
+search and the pick. The layering is the product: the picked item's "why" must
+visibly cite the layers
+(see the [layering rules](#layering--precedence-intent--playbook--user--domain)).
 
 The router's three always-on rules still hold (act-don't-narrate, follow the
-tool's own `recovery`, re-fetch the chosen item before the user commits) — this
+tool's own `recovery`, re-check the chosen item before the user commits) — this
 loop layers the profile-driven behaviour on top, it does not restate them.
-
-## Step 0 — capture the user spec ONCE, on first shop (then reuse it)
-
-Before the per-request loop, check whether this expert already holds a **user
-spec** (`user.md`, loaded at session start). It carries the user's **standing
-niche-relevant attributes** (their foot profile, climate, the budget band they
-live in) and their **hard constraints** (the rules the expert never breaks).
-
-- **No user spec yet (first shop / onboarding):** before searching, **capture
-  one**. Elicit the user's standing attributes and hard constraints **guided by
-  the domain spec's dimensions** — ask about the dimensions that matter for *this*
-  niche (a running-shoe expert asks foot width / arch / typical terrain, not a
-  generic form), **in the persona's voice**. Mark each captured item as a **soft
-  preference** (bendable) or a **hard constraint** (inviolable — "never leather",
-  "nothing over 8 kg", an allergy, an age gate). Then **persist it** by re-running
-  **`sil_profile_materialize`** for this `agentId` with the new `userSpec` (the
-  in-place re-materialize — same atomic store path the engine and refine use).
-- **User spec already exists:** **reuse it** — do **not** re-capture it, and
-  **never re-ask** any attribute it already holds. Only attributes neither the
-  request nor the user spec supplies are elicited (Step 1).
-- **A request that contradicts a standing attribute:** when the user's words
-  contradict a stored **soft preference**, **update the user spec** to the new
-  value (re-materialize) — visibly, so the user knows it changed — rather than
-  silently ignoring either the stored value or the request. (A **hard constraint**
-  is not overridden by a single request; see precedence below.)
-
-The user spec is **per-user, per-expert, and local** — written only to this
-user's `$SIL_DATA_DIR/agents/<agentId>/`, no server aggregation, no cross-user
-signal (the same privacy posture as [`refine_expert.md`](refine_expert.md)).
 
 ## The loop (the order IS the spec)
 
 Run these steps in order. An attribute the user already stated **or the user spec
-already holds** is never re-asked. On every request, before eliciting, **derive
-the intent spec** and **layer it with the user + domain specs** (the two sections
-below) — the layering drives the whole loop, from eliciting through the pick.
+already holds** is never re-asked.
 
-### Derive the intent spec (per request, ephemeral — NEVER persisted)
+### 1. Refresh the domain spec from the web — keep it current and complete
 
-On each new request, **derive an intent spec**: a short, explicit statement of
-**what *this* request demands** — read from the user's words ("a waterproof trail
-shoe for a wet ultra next month, around €160"). State it back so the layering is
-legible ("so: trail, waterproof, ultra-distance cushioning, ~€160"). The intent
-spec is **ephemeral — it lives only in this conversation and is NEVER persisted**;
-there is no intent artefact file, and `sil_profile_materialize` is never called to store it.
-It exists to be **layered** with the two persisted specs.
+`domain_spec.md` is **not frozen at creation** — on every query, before anything
+else, go to the **web** and **enhance the domain spec** so it stays current and
+complete: new models, new standards, current prices, evolving technique. Fold
+what you learn into the domain spec and **persist** the enhancement by re-running
+**`sil_profile_materialize`** for this `agentId` with the updated `domainSpec`
+(the in-place re-materialize — the same atomic store path the engine and refine
+use). This is a **real web step** — if the host has no web/fetch tool available,
+say so honestly and proceed on the existing domain spec; never pretend the refresh
+happened.
 
-### Layering — precedence intent > user > domain
+### 2. Decompose the request along the intent-spec dimensions (ephemeral — NEVER persisted)
 
-Resolve the three layers in this order to drive the search and the pick:
+Read `intent_spec.md` — the decomposition **dimensions** a good query in this
+niche must resolve — and **fill them in for *this* request** from the user's words
+("a waterproof trail shoe for a wet ultra next month, around €160" → use-case:
+trail/ultra; weather: wet/waterproof; budget: ~€160; timeline: next month). State
+the filled decomposition back so the layering is legible. This filled instance is
+the **per-query intent** — it is **ephemeral**: it lives only in this conversation
+and is **NEVER persisted**. There is no intent artefact file of filled values, and
+`sil_profile_materialize` is never called to store it. Only the `intent_spec.md`
+*schema* is persisted (at creation / refine); the fill is throwaway.
 
-- The **intent spec** narrows the field — what this request demands.
-- The **user spec** fills in the **standing attributes the request left unsaid**
-  (the foot width you kept from before, the budget band) — never re-asked.
-- The **domain spec** supplies the **decision-dimensions and trade-offs** to
-  reason over (for trail running, last volume and lug depth matter more than
-  weight here) — the substrate, not a tiebreaker that overrides the user's wants.
+### 3. Lazily capture the missing user side — facts to `user_spec.md`, taste to `playbook.md`
 
-**Precedence resolves conflicts: intent > user > domain — for *preferences*.** A
-specific request overrides a standing **soft** user preference, which overrides a
-domain default. **Exception — hard constraints are inviolable:** a user-spec
-**hard constraint** is **never** overridden by intent (or by the domain, or by
-the catalog). Intent can override a soft user *preference*; it can **never**
-override a hard *constraint*. A weight bends; a hard constraint does not.
+Resolving the intent dimensions may need a **user fact** the store doesn't yet
+hold (a body measurement, a compatibility detail, a hard constraint) or a
+**shopping taste** (price sensitivity, brand preference). Capture it **lazily** —
+asked in-context for *this* query, in the persona's voice, **only when a dimension
+actually needs it** — then persist it and never re-ask:
+
+- A **fact / measurement / hard constraint** → fold into `user_spec.md` and
+  re-materialize (`sil_profile_materialize` with the updated `userSpec`). Mark each
+  item as a **soft preference** (bendable) or a **hard constraint** (inviolable —
+  "never leather", "nothing over 8 kg", an allergy, an age gate).
+- A **shopping-taste preference** (budget band, brand likes/dislikes, general taste)
+  → fold into `playbook.md` and re-materialize (`sil_profile_materialize` with the
+  updated `playbook`).
+
+This **replaces first-shop batch capture**: the user side fills **incrementally,
+per-query, on demand** — never a big up-front onboarding form. Elicitation is
+**need-driven and load-bearing**: only a dimension that is **missing** from BOTH
+the request AND the stored user side is elicited, and you elicit it in the
+**playbook's priority order** (the highest-priority missing dimension first, then
+the next), in the persona's elicitation style — one or a few questions at a time.
+This is **not a form** and **not a question battery**: you ask like a curious
+expert, and an attribute the **user spec or playbook already holds is never
+re-asked** — the stored value fills it in (never re-ask what the user already
+stated). When the request plus the stored side already carry enough load-bearing
+attributes for a defensible search, do **not** invent an extra battery — proceed
+straight to the map+search steps. A request that contradicts a stored **soft**
+preference **updates** the stored value (re-materialize), visibly, so the user
+knows it changed (a **hard constraint** is not overridden by one request — see
+precedence). The user spec / playbook are **per-user, per-expert, and local** —
+written only to this user's `$SIL_DATA_DIR/agents/<agentId>/`, no server
+aggregation, no cross-user signal (the same privacy posture as
+[`refine_expert.md`](refine_expert.md)).
+
+### Layering — precedence intent > playbook > user_spec > domain_spec
+
+Resolve the layers in this order to drive the search and the pick:
+
+- The **intent** (the per-query decomposition) narrows the field — what this
+  request demands.
+- The **playbook** (shopping taste) shapes preferences — price sensitivity, brand,
+  general taste — within what the intent allows.
+- The **user spec** fills in the standing **facts** the request left unsaid (the
+  body measurement you kept from before, a compatibility constraint) — never
+  re-asked — and carries the **hard constraints**.
+- The **domain spec** supplies the **decision-mechanics and trade-offs** to reason
+  over (for trail running, last volume and lug depth matter more than weight here)
+  — the substrate, not a tiebreaker that overrides the user's wants.
+
+**Precedence resolves conflicts: intent > playbook > user_spec > domain_spec — for
+*preferences*.** A specific request overrides a standing taste, which overrides a
+standing soft fact-preference, which overrides a domain default. **Exception —
+hard constraints are inviolable:** a `user_spec.md` **hard constraint** is
+**never** overridden by intent, taste, the domain, or the catalog. Intent can
+override a soft preference; it can **never** override a hard constraint. A weight
+bends; a hard constraint does not.
 
 **Route every hard constraint to a real enforcement point, never only soft
 `query` text.** A hard constraint must hold at **search-param time** (map it to a
 real `sil_search` filter where one exists — e.g. `condition`, `available` — per
 [`search_param_mapping.md`](search_param_mapping.md)), **in the rubric** (an
-explicit **reject-at-pick** rule: a candidate that violates a hard constraint
-is rejected outright, not merely down-weighted), and **in the final pick**. A
+explicit **reject-at-pick** rule: a candidate that violates a hard constraint is
+rejected outright, not merely down-weighted), and **in the final pick**. A
 constraint carried only as free-text `query` is NOT enforced — the catalog can
 still surface a violating item, and picking it is a **defect**, even if the
 catalog returned it.
@@ -105,38 +130,16 @@ catalog returned it.
 > **Terminology — "reject-at-pick" here = the "reject-at-…-rule" phrasing in
 > [`search_param_mapping.md`](search_param_mapping.md) (same rule, one
 > mechanism).** Both name the **one** rubric rule that discards a
-> hard-constraint-violating candidate outright (a reject, never a down-weight).
-> The two docs differ only in the verb tail; they are not two mechanisms.
+> hard-constraint-violating candidate outright (a reject, never a down-weight),
+> not two mechanisms.
 
-### 1. Elicit the load-bearing missing attributes — in the playbook's priority order
+### 4. Map the answers to well-formed `sil_search` params
 
-A **load-bearing decision attribute** is one the playbook's mapping or rubric — or
-the **domain spec's dimensions** — names as priority-ordered for the niche (e.g.
-budget, serving size, the niche's key descriptors, a domain dimension like last
-volume). **Elicitation is need-driven**: you elicit **only** a load-bearing
-attribute that is **missing** from BOTH the request (the intent spec) AND the
-**user spec**. An attribute the **user spec already holds is never re-asked** —
-the standing value fills it in (the layering's whole point). When the intent spec
-plus the user spec already carry enough load-bearing attributes for a defensible
-search, do **not** invent an extra question battery — proceed straight to the
-map+search steps below.
-
-When something load-bearing IS missing from both layers, ask for it through
-genuine back-and-forth **in the playbook's priority order** — one or a few
-questions at a time, in the playbook's elicitation style. This is **not a fixed
-form-fill** and **not a question battery**: you ask like a curious expert, and you
-**never re-ask** an attribute the user already stated or the user spec holds.
-Elicit the highest-priority missing attribute first, then the next — never a
-single up-front wizard form.
-
-### 2. Map the answers to well-formed `sil_search` params
-
-Translate each elicited or stated answer — **plus the standing user-spec
-attributes and the domain-spec dimensions** the layering brought in — to a **real
-`sil_search` param** per [`search_param_mapping.md`](search_param_mapping.md) —
-that reference owns the full answer→param table and the worked examples; **load
-it, do not re-carry it here.** The load-bearing rules from it that govern this
-step:
+Translate each filled intent dimension — **plus the standing user-spec facts, the
+shopping taste, and the domain-spec mechanics** the layering brought in — to a
+**real `sil_search` param** per [`search_param_mapping.md`](search_param_mapping.md)
+— that reference owns the full answer→param table and the worked examples; **load
+it, do not re-carry it here.** The load-bearing rules from it that govern this step:
 
 - A stated taste with **no matching param** (a colour, a brand) folds into the
   `query` text or into the rubric — you **never invent a filter**. There is no
@@ -145,46 +148,45 @@ step:
 - A user-spec **hard constraint** maps to a **real filter where one exists**
   (`condition`, `available`) so the catalog never returns a violating item in the
   first place; where no param matches, it does NOT collapse to soft `query` text —
-  it becomes an explicit **reject-at-pick** rubric rule (Step 4). A hard
+  it becomes an explicit **reject-at-pick** rubric rule (Step 6). A hard
   constraint left only as `query` free text is unenforced.
 - Leave **`ship_to` empty** by default so the server resolves the user's
-  registered default address. Do **not** call `sil_whoami` to populate it — no
-  `sil_whoami` round-trip.
+  registered default address. Do **not** call `sil_whoami` to populate it.
 
-### 3. Search
+### 5. Search
 
 Call `sil_search` with the mapped params. It returns purchasable variants
 **best-first**.
 
-### 4. Compare the candidates on the playbook's rubric — reject hard-constraint violators outright
+### 6. Compare the candidates on the rubric — reject hard-constraint violators outright
 
-Evaluate the returned candidates against the playbook's **recommendation rubric**,
-**weighted by the user's stated priorities** ("durability over price"), the
-**domain-spec dimensions and trade-offs** (reason over last volume vs. weight, rim
-depth vs. crosswind — the dimensions the domain spec named), plus the persona's
-and user spec's **hard-rules / hard-no's**. A user-spec **hard constraint** is a
-**reject-at-recommend** rule, not a weight: any candidate that violates it is
-**removed from contention outright** — never recommended, even if the catalog
-surfaced it and even if it scores well on every other axis. (A soft preference, by
-contrast, only down-weights.) The rubric informs your *reasoning*, not the list
-order: present results **best-first** as `sil_search` returned them — **never
-re-rank** — but a hard-constraint violator is never the pick.
+The **rubric emerges here, at pick time** — it is not a stored seller artefact.
+Build it from the **domain-spec dimensions and trade-offs** (reason over last
+volume vs. weight, rim depth vs. crosswind — the mechanics the domain spec named)
+**weighted by the shopping taste** (`playbook.md`) and the **user's facts**
+(`user_spec.md`) and the **per-query intent**. A user-spec **hard constraint** is a
+**reject-at-pick** rule, not a weight: any candidate that violates it is **removed
+from contention outright** — never the pick, even if the catalog surfaced it and
+even if it scores well on every other axis. (A soft preference, by contrast, only
+down-weights.) The rubric informs your *reasoning*, not the list order: present
+results **best-first** as `sil_search` returned them — **never re-rank** — but a
+hard-constraint violator is never the pick.
 
-### 5. Recommend — always with the "why" that cites all three layers
+### 7. Recommend — always with the "why" that cites the layers
 
 Recommend with **domain-relevant rationale** in the expert's voice — the **"why"**.
-Under SDS the "why" must make the layering **legible**: cite the **derived intent**
-(what this request demanded), at least one **stored user-spec attribute you did NOT
-re-ask** ("you're a wide D-width, which I kept from before"), and at least one
-**researched domain-spec dimension** ("for trail running, last volume and lug depth
-matter more than weight here") — tied to the user's stated priorities ("so I picked
-this because it holds the 105 groupset you wanted at the top of your budget"). The
-**visible layering is the product**: a "why" that names no researched domain
-dimension and reuses no stored user attribute is generic attribute matching and
-**fails the SDS bar even if the picked product is fine**. Never hand back a bare
-list, and never a rationale that could have come from generic search.
+Under SDS the "why" must make the layering **legible**: cite the **per-query
+intent** (what this request demanded), at least one **stored user-spec fact or
+taste you did NOT re-ask** ("you're a wide D-width, which I kept from before"), and
+at least one **researched domain-spec dimension** ("for trail running, last volume
+and lug depth matter more than weight here") — tied to the user's priorities ("so I
+picked this because it holds the 105 groupset you wanted at the top of your
+budget"). The **visible layering is the product**: a "why" that names no researched
+domain dimension and reuses no stored user attribute is generic attribute matching
+and **fails the SDS bar even if the picked product is fine**. Never hand back a
+bare list, and never a rationale that could have come from generic search.
 
-### 6. Re-fetch with `sil_product_get` before any buy
+### 8. Re-fetch with `sil_product_get` before any buy
 
 Price, availability, and `checkout_url` from `sil_search` are **point-in-time**.
 Before you hand off to **buy / checkout / purchase**, **re-fetch** the chosen item

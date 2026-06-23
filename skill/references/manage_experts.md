@@ -8,10 +8,10 @@ host-CLI-first ordering and the confirm-before-remove gate the remove flow
 turns on.
 
 These are pure local-lifecycle operations over the two stores the
-create-engine established — **host config = wiring, `$SIL_DATA_DIR/agents/<id>/`
-= behaviour artefacts**. No server call, no token read, no identity coupling: a
-user with zero experts (or who just removed their last) still shops generically
-exactly as before.
+create-engine established — **host config + workspace `SOUL.md` = wiring +
+persona, `$SIL_DATA_DIR/agents/<id>/` = SDS behaviour artefacts**. No server
+call, no token read, no identity coupling: a user with zero experts (or who just
+removed their last) still shops generically exactly as before.
 
 **The source of truth for "what is a sil expert" is the sil artefact store, not
 the host agent list.** A directory `$SIL_DATA_DIR/agents/<id>/` with a readable
@@ -32,30 +32,35 @@ exists.
 
 - **`sil_profile_list`** enumerates the artefact store and returns the user's
   experts most-recently-created first (`createdAt` desc), each with its
-  `agentId`, `name`, `hasPlaybook`, and `createdAt`. Present a name + a short
-  domain summary (distilled from the persona; a playbook signals a specialized
-  domain) plus the `agentId` so the user can refer to one unambiguously. An
-  empty `experts: []` is a normal, successful outcome — say plainly "you have no
-  sil shopping experts yet" and point at how to create one ("ask me to make a
-  shopping expert for …"). One degraded expert lands in `unreadable[]` — mention
-  it inline, but never let it hide the healthy ones.
+  `agentId`, `name`, `hasUserSpec`, `hasPlaybook`, and `createdAt`. Every expert
+  carries the required domain spec + intent spec, so those are not flagged; the
+  two flags report whether the user has yet captured a **user spec** (facts) or a
+  **playbook** (buying taste) — i.e. whether they have shopped this expert. Present
+  a name + a short domain summary plus the `agentId` so the user can refer to one
+  unambiguously. An empty `experts: []` is a normal, successful outcome — say
+  plainly "you have no sil shopping experts yet" and point at how to create one
+  ("ask me to make a shopping expert for …"). One degraded expert lands in
+  `unreadable[]` — mention it inline, but never let it hide the healthy ones.
 - **`sil_profile_get`** resolves one expert by `agentId` and returns its `name`,
-  `persona`, optional `playbook`, `profilePath`, and `createdAt`. Render a human
-  summary: the expert's name, its domain/persona, whether it carries a domain
-  playbook (and a summary when present), and a wiring summary — it is a real
-  host agent with the sil plugin enabled and the sil skill attached, ready to
-  shop with no further setup. An unknown expert returns `not_found` — frame it
-  plainly ("no sil expert named '<x>'") and list the experts that DO exist (or
-  say there are none) so the next step is obvious. Never surface a stack trace or
-  a raw filesystem path.
+  its SDS **`domainSpec`** + **`intentSpec`** (always present), its optional
+  **`userSpec`** + **`playbook`** (when the user has captured them), `profilePath`,
+  and `createdAt`. The persona is **not** here — it is the host workspace
+  `SOUL.md`. Render a human summary: the expert's name, its niche (from the domain
+  spec), whether the user has captured a user spec / buying taste, and a wiring
+  summary — it is a real host agent with the sil plugin enabled and the sil skill
+  attached, ready to shop with no further setup. An unknown expert returns
+  `not_found` — frame it plainly ("no sil expert named '<x>'") and list the experts
+  that DO exist (or say there are none) so the next step is obvious. Never surface
+  a stack trace or a raw filesystem path.
 
 ## Remove flow — host-CLI FIRST, then the artefact tool
 
-Removal is **destructive and irreversible** (the persona and playbook the user
-authored are deleted), so **confirm before removing**: state exactly what will
-be deleted — this one named expert, both its host wiring and its sil behaviour
-artefacts — and proceed only on the user's explicit go-ahead. Then run these
-steps **in this exact order**:
+Removal is **destructive and irreversible** (the expert's SDS artefacts — the
+researched domain spec, the intent dimensions, and any captured user spec /
+buying taste — plus its host wiring and `SOUL.md` are deleted), so **confirm
+before removing**: state exactly what will be deleted — this one named expert,
+both its host wiring and its sil behaviour artefacts — and proceed only on the
+user's explicit go-ahead. Then run these steps **in this exact order**:
 
 1. **Existence check (read).** Run `openclaw agents list --json` and confirm the
    `agentId` is a sil-wired agent the user means.
@@ -78,7 +83,7 @@ directory with no host entry* — harmless disk cruft, no broken agent ever load
 and `sil_profile_list` still surfaces it so the user retries `sil_profile_remove`
 clean. The **reverse** order is unsafe: artefacts removed first, then a failed
 host step, leaves a *host `agents` entry whose `profile.json` is gone* — the
-agent still loads but the sil skill ENOENTs on its persona/playbook at runtime,
+agent still loads but the sil skill ENOENTs on its SDS specs at runtime,
 a visible, confusing, broken expert. Both halves are individually idempotent
 (host `agents remove` and `sil_profile_remove` both no-op on an absent target),
 so a re-run from any partial state converges to clean. After a successful
