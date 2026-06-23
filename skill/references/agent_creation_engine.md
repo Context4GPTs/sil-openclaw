@@ -8,7 +8,7 @@ You are the engine. The host config write is **you driving the host's own `openc
 
 ## The profile spec (input)
 
-The endorsed draft from the interview *is* this spec (the persona → `persona`, and the elicitation style + answer→param mapping + rubric → `playbook`):
+The endorsed draft from the interview *is* this spec (the persona → `persona`, the elicitation style + answer→param mapping + rubric → `playbook`, and the researched SDS domain spec → `domainSpec`):
 
 | Field | Meaning | Required? |
 |---|---|---|
@@ -17,6 +17,8 @@ The endorsed draft from the interview *is* this spec (the persona → `persona`,
 | **persona / instructions** | Who this expert is and how it shops — its expertise, tone, standing rules. | Required (non-empty) |
 | **workspace** | The agent's workspace directory (e.g. `~/.openclaw/workspace-gift-buyer`). | Required for the non-interactive add |
 | **playbook (sub-skill)** | An optional generated **domain sub-skill** — a shopping playbook for this expert's niche. | Optional |
+| **domainSpec (SDS domain spec)** | The niche's **researched decision-dimensions** and how they trade off — converged at creation by the interview's domain-spec research pass. A first-class SDS layer, distinct from `playbook`. | Optional |
+| **userSpec (SDS user spec)** | This user's standing niche-relevant attributes + hard constraints. **NOT** set at creation — captured later on first shop ([`expert_shopping.md`](expert_shopping.md)) and persisted via a re-materialize. Listed here for completeness; the creation engine leaves it absent. | Optional |
 
 The **sil plugin** and the **sil skill** are always attached (that is what makes it *sil-wired*). Creating an expert is **local and offline** — it does **not** require or perform sil registration, reads no token, and writes nothing to identity storage. The expert registers the user later, on first shop, via `sil_register`. Do **not** present registration as a prerequisite for creating the profile.
 
@@ -32,11 +34,12 @@ The **sil plugin** and the **sil skill** are always attached (that is what makes
    ```
    This creates the real `agents.list[]` entry and the agent's workspace bootstrap files (`SOUL.md`, `AGENTS.md`, …), inheriting model and tool profile from `agents.defaults`. `--non-interactive --json` is required so you can drive it without a prompt and read the structured result.
 
-4. **Materialize the behaviour artefacts into the sil data directory.** Call **`sil_profile_materialize`** with `{ agentId, name, persona, playbook? }`. It writes the expert's behaviour artefacts atomically into **`$SIL_DATA_DIR`** (the sil data directory — the plugin's own disclosed scope) under `agents/<agentId>/`:
+4. **Materialize the behaviour artefacts into the sil data directory.** Call **`sil_profile_materialize`** with `{ agentId, name, persona, playbook?, domainSpec? }` — pass the researched **`domainSpec`** so the expert ships with its SDS domain spec. It writes the expert's behaviour artefacts atomically into **`$SIL_DATA_DIR`** (the sil data directory — the plugin's own disclosed scope) under `agents/<agentId>/`:
    - **`persona.md`** — the persona/instructions that power the expert's behaviour;
    - **`playbook.md`** — the generated domain **sub-skill**, when supplied;
+   - **`domain.md`** — the **SDS domain spec** (the researched niche decision-dimensions), when supplied;
    - **`profile.json`** — the manifest the sil skill reads at runtime to load them.
-   These behaviour artefacts live in `$SIL_DATA_DIR`, kept **out of** the thin host `agents` wiring entry. The tool's own outcomes are `ok` / `invalid_request` / `persistence_failed` — on `invalid_request` it wrote nothing; on `persistence_failed` it left nothing partial.
+   The **user spec** (`user.md`) is **not** written here — it is captured on first shop, not at creation, so the engine leaves `userSpec` absent. These behaviour artefacts live in `$SIL_DATA_DIR`, kept **out of** the thin host `agents` wiring entry. The tool's own outcomes are `ok` / `invalid_request` / `persistence_failed` — on `invalid_request` it wrote nothing; on `persistence_failed` it left nothing partial.
 
 5. **Make the persona the agent's system framing.** Copy the materialized `persona.md` into the new agent's workspace `SOUL.md` (its persona bootstrap file), so the host injects the persona into the expert's system prompt.
 
@@ -62,4 +65,10 @@ The **sil plugin** and the **sil skill** are always attached (that is what makes
 
 ## Runtime — how a created expert loads its behaviour
 
-When you (the sil skill) start a session inside a created expert, read `$SIL_DATA_DIR/agents/<agentId>/profile.json`, then load the `persona.md` (reaffirm the standing instructions) and `playbook.md` sub-skill (the domain shopping playbook) it points at. That is what lets the expert shop on its niche with no further setup. When the user then states a shopping intent, shop per [`expert_shopping.md`](expert_shopping.md) — the profile-driven shop-time loop. To sharpen a created expert from what it observed in real sessions, see [`refine_expert.md`](refine_expert.md).
+When you (the sil skill) start a session inside a created expert, read `$SIL_DATA_DIR/agents/<agentId>/profile.json`, then load **all four** behaviour artefacts it points at:
+- **`persona.md`** — reaffirm the standing instructions, the voice, the hard-rules;
+- **`playbook.md`** — the domain shopping sub-skill (how it asks, maps, ranks), when present;
+- **`domain.md`** — the **SDS domain spec**: the researched niche decision-dimensions and trade-offs to reason over, when present;
+- **`user.md`** — the **SDS user spec**: this user's standing attributes + hard constraints, when one has been captured.
+
+Each of the latter three is **optional, absent-is-fine** (a pre-SDS expert, or one whose user spec is not yet captured, simply has fewer slots — a missing `domain.md`/`user.md`/`playbook.md` never blocks loading; only the persona is required). Loading the four is what lets the expert shop on its niche with no further setup. When the user then states a shopping intent, shop per [`expert_shopping.md`](expert_shopping.md) — the profile-driven shop-time loop, which **captures the user spec on first shop** (if absent), then **derives the per-request intent spec** and layers intent → user → domain. To sharpen a created expert from what it observed in real sessions — including its domain-spec dimensions or its user-spec attributes — see [`refine_expert.md`](refine_expert.md).

@@ -10,6 +10,27 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **Spec-Driven Shopping (SDS) for created experts.** A created shopping expert
+  now runs on three layered specs instead of coarse attribute matching. Two are
+  persisted as new first-class artefact slots alongside `persona.md` +
+  `playbook.md` — **`domain.md`** (the niche's *researched* decision-dimensions
+  and trade-offs, converged at creation) and **`user.md`** (this user's standing
+  attributes + **hard constraints**, captured once on first shop and reused,
+  never re-asked) — and one is ephemeral: the per-request **intent spec**, derived
+  from the user's words and never persisted. The shop-time loop layers
+  **intent → user → domain** (intent wins for preferences; a user-spec **hard
+  constraint is inviolable** — routed to a real `sil_search` filter *and* a
+  reject-at-pick rubric rule, never only soft `query` text) and recommends with a
+  "why" that visibly cites all three layers. Both new slots ride the existing
+  **`sil_profile_materialize`** store path — `domainSpec?` / `userSpec?` optional
+  params, surfaced on `sil_profile_get` and flagged on `sil_profile_list` — with
+  **no new tool** (the 8-tool manifest is unchanged) and the same atomic,
+  validate-first, per-file-all-or-nothing discipline as `playbook` (a partial
+  write degrades to absence, never bricks the expert). Refinement can now target a
+  `user.md` attribute or a `domain.md` dimension as a distinct refinable element.
+
 ## [0.3.0] - 2026-06-23
 
 ### Added

@@ -15,6 +15,25 @@ Load this while converging interview section 4 (the answer→`sil_search`-param 
 
 A stated taste with **no matching param** (e.g. "I like bold colours", "prefer eco-friendly brands") does **not** become a new param — fold it into the `query` text or into the recommendation rubric. There is no `color` filter, no `brand` filter; inventing one produces an expert that emits invalid `sil_search` calls at shop time.
 
+## SDS mapping inputs — the domain spec and the user spec, not just the request
+
+Under [Spec-Driven Shopping](expert_shopping.md), the mapping reads three layers, not only the user's words for *this* request:
+
+- The **domain spec** (`domain.md`) supplies the niche's **decision-dimensions** — which attributes are load-bearing for *this* niche (last volume, rim depth, gearing range), so the mapping knows what to map and what matters.
+- The **user spec** (`user.md`) supplies the user's **standing attributes** (the budget band, the foot profile) — these map to params exactly like a freshly-stated answer would, but are **never re-asked**; the stored value fills the param.
+- The **intent spec** (the per-request demand) is the most specific layer and wins for *preferences* (precedence intent > user > domain).
+
+The param table itself is **unchanged** — these layers are inputs to the same answer→param mapping, not new params. A domain dimension or a standing user attribute with **no matching param** folds into `query`/rubric per the no-invented-filter rule above, exactly like any other non-param taste.
+
+## Hard constraints — route to a real filter AND a reject-at-recommend rule, NEVER only `query` text
+
+A **user-spec hard constraint** ("never leather", "nothing over 8 kg", an allergy, an age gate) is **inviolable** — the expert never recommends a violating item. A hard constraint carried **only** as soft `query` free text leaks: the catalog can still surface a violating product, and recommending it is a defect. So map every hard constraint to **two** enforcement points, **not merely `query`**:
+
+1. **A real `sil_search` filter where one exists.** "New only" / "secondhand only" → `condition`; "in stock only" → `available` (omit for the in-stock default). Where a param matches the constraint, set it so the catalog never returns the violating item at all.
+2. **An explicit reject-at-recommend rubric rule** (`expert_shopping.md` Step 4). For a constraint with **no matching param** (no `material` filter for "never leather"), the constraint becomes a rubric rule that **rejects** any violating candidate outright — **never recommend** it — rather than down-weighting it. A hard constraint is a reject, not a weight.
+
+A hard constraint that lands **only** in `query` text is **not** enforced — it is a hint, not a filter, and the catalog may ignore it. Route it to a filter and a reject rule; the `query` text is at most an additional nudge, never the sole carrier of an inviolable constraint.
+
 ## `ship_to` stays EMPTY by default — inline rule (do not skip)
 
 Do **not** map the user's location onto `ship_to`, and do **not** instruct the expert to call `sil_whoami` to populate it. When `ship_to` is absent, sil-api resolves the user's **registered default address** server-side. Set `ship_to` (a `{ country, region?, postal_code? }` object of ISO codes) **only** to OVERRIDE the default with a *different* destination than the registered address (e.g. "ship this to my office in Germany"). The expert inherits correct location-aware search by construction — leave `ship_to` out, and never round-trip `sil_whoami` to fill it.
