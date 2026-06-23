@@ -102,6 +102,12 @@ constraint carried only as free-text `query` is NOT enforced — the catalog can
 still surface a violating item, and picking it is a **defect**, even if the
 catalog returned it.
 
+> **Terminology — "reject-at-pick" here = the "reject-at-…-rule" phrasing in
+> [`search_param_mapping.md`](search_param_mapping.md) (same rule, one
+> mechanism).** Both name the **one** rubric rule that discards a
+> hard-constraint-violating candidate outright (a reject, never a down-weight).
+> The two docs differ only in the verb tail; they are not two mechanisms.
+
 ### 1. Elicit the load-bearing missing attributes — in the playbook's priority order
 
 A **load-bearing decision attribute** is one the playbook's mapping or rubric — or
