@@ -1,35 +1,32 @@
 /**
- * INTEGRATION — the refine loop's PERSIST + ROUND-TRIP composition over a real
- * temp $SIL_DATA_DIR (tier: integration — real filesystem artefact interaction,
- * no mock of the store, no network, no host).
+ * INTEGRATION — the refine + lazy-capture loop's PERSIST + ROUND-TRIP composition
+ * over a real temp $SIL_DATA_DIR (tier: integration — real filesystem artefact
+ * interaction, no mock of the store, no network, no host).
  *
- * Card: refine-an-expert-from-observed-sessions-self-reinf (SC6). The architect's
- * verdict is that SC6 adds NO `src/` code — the refine loop COMPOSES the existing
- * `sil_profile_get` (load) + `sil_profile_materialize` (atomic in-place re-write)
- * store paths. So these tests do NOT test new code; they pin the EXISTING
- * profile-store paths the refine loop RELIES ON, in the specific composed shapes
- * the loop exercises that the create-time `profile-store.test.ts` does not cover:
+ * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 1
+ * (PR #33 bounced). The refine loop AND the per-query lazy-capture path both
+ * COMPOSE the existing `sil_profile_get` (load) + `sil_profile_materialize`
+ * (atomic in-place re-write) store paths — no new code. These tests pin the
+ * EXISTING profile-store re-write semantics the loop relies on, in the SDS
+ * five-artefact shape:
  *
  *   (a) re-running materializeProfile over a PRE-EXISTING agents/<id>/ dir
- *       overwrites the artefact bodies IN PLACE (the refinement persists);
+ *       overwrites the artefact bodies IN PLACE (the refinement / lazy capture
+ *       persists);
  *   (b) an injected write failure on a PRE-EXISTING dir leaves the PRIOR
- *       artefacts INTACT — the `dirPreexisted` guard (profile-store.ts:202-219)
- *       never tears down a dir it did not create, so a failed re-write never
- *       half-refines an expert;
+ *       artefacts INTACT — the `dirPreexisted` guard never tears down a dir it
+ *       did not create, so a failed re-write never half-refines an expert;
  *   (c) materialize → re-materialize-with-an-updated-spec → readAgentProfile
- *       returns the UPDATED persona/playbook bodies — the load-then-refine-then-
- *       reload loop closes (the self-reinforcement round-trip).
+ *       returns the UPDATED bodies — the load-then-refine-then-reload loop closes.
  *
- * These are GREEN on arrival (green characterization of the foundation the loop
- * composes), NOT RED — they assert the store already does what SC6 needs. They
- * are deliberately NOT a duplicate of profile-store.test.ts: that file pins the
- * FRESH-dir create (write artefacts, validate-first, atomic-on-failure cleaning
- * up a dir IT created); this file pins the PRE-EXISTING-dir re-write semantics
- * (overwrite-in-place + prior-survives-on-failure + the read round-trip) — the
- * three behaviours the refine path is built on.
+ * After the SDS reframe: NO persona in the store (it is the host SOUL.md);
+ * domain_spec.md + intent_spec.md are REQUIRED; user_spec.md + playbook.md fill
+ * lazily per-query. Refine can target domain_spec / user_spec / playbook /
+ * intent_spec. The per-query INTENT (filled dimensions) is never persisted — only
+ * the intent_spec.md SCHEMA is — so it is never a refine target and never
+ * re-materialized.
  *
- * Hermetic via the SIL_DATA_DIR temp-dir override (the repo's standard knob),
- * mirroring profile-store.test.ts's beforeEach/afterEach.
+ * Hermetic via the SIL_DATA_DIR temp-dir override (the repo's standard knob).
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -74,25 +71,28 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-/** The expert as first created (the working expert the refine loop sharpens). */
+/** The SDS expert as first created — the two REQUIRED specs (a min create; the
+ * lazy slots fill per-query). */
 const CREATED = {
   agentId: "road-cycling-buyer",
   name: "Road Cycling Buyer",
-  persona: "You are a road-cycling buyer. Prefer endurance geometry; flag anything over 8kg.",
-  playbook: "Map budget to price_min/price_max. Rank by ride comfort, then weight.",
+  domainSpec:
+    "# Domain spec (deep)\nFit mechanics (stack/reach, saddle setback, crank"
+    + " length), gearing theory, frame geometry. Trade-offs noted.",
+  intentSpec:
+    "# Intent spec — dimensions\nuse-case, terrain, budget, timeline, compatibility,"
+    + " performance priorities, aesthetics.",
 } as const;
 
-/** The refined spec — the SAME agentId, UPDATED persona + playbook bodies (the
- * confirmed-subset-folded-into-the-full-spec the refine loop re-materializes). */
+/** The refined spec — SAME agentId, the domain spec ENHANCED (a per-query web
+ * refresh persisted in place). The intent spec is unchanged. */
 const REFINED = {
-  agentId: "road-cycling-buyer",
-  name: "Road Cycling Buyer",
-  persona:
-    "You are a road-cycling buyer. Prefer endurance geometry; flag anything over 8kg. "
-    + "HARD-NO on carbon rim brakes (the user rejected every one).",
-  playbook:
-    "Map budget to price_min/price_max. Rank by ride comfort, then weight. "
-    + "Down-weight anything the user called 'too racy'.",
+  ...CREATED,
+  domainSpec:
+    "# Domain spec (deep)\nFit mechanics (stack/reach, saddle setback, crank"
+    + " length), gearing theory, frame geometry. Trade-offs noted.\n"
+    + "## 2026 update (web refresh)\nSRAM Red AXS 2x13 now shipping; UDH/T-Type"
+    + " compatibility matters for new frames.",
 } as const;
 
 /** Every file under `dir`, recursively (relative paths) — to assert no `.tmp`
@@ -109,16 +109,15 @@ function walkFiles(dir: string, base = dir): string[] {
 }
 
 describe("refine persist — re-materialize over a PRE-EXISTING dir overwrites the bodies in place", () => {
-  it("a second materialize with an updated spec overwrites persona.md + playbook.md (the refinement sticks)", () => {
-    // Create the working expert, then refine it: re-run materialize with the
-    // UPDATED spec for the SAME agentId. The artefact bodies must be overwritten
-    // in place — the persisted files now hold the refined content, not the
-    // original. This is the persist half of the refine loop.
+  it("a second materialize with an updated domain spec overwrites domain_spec.md (the web-refresh sticks)", () => {
+    // Create the expert, then web-refresh its domain spec: re-run materialize with
+    // the ENHANCED domainSpec for the SAME agentId. domain_spec.md is overwritten
+    // in place — the persisted file now holds the refreshed content (Correction 5:
+    // the domain spec is web-refreshed per-query and persisted via re-materialize).
     const first = materializeProfile({ ...CREATED });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
-    // sanity: the original content is what landed.
-    expect(readFileSync(first.personaPath, "utf8")).toBe(CREATED.persona);
+    expect(readFileSync(first.domainSpecPath, "utf8")).toBe(CREATED.domainSpec);
 
     const dir = getAgentArtefactDir(CREATED.agentId);
     expect(existsSync(dir)).toBe(true); // the dir pre-exists the re-write
@@ -127,12 +126,10 @@ describe("refine persist — re-materialize over a PRE-EXISTING dir overwrites t
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
-    // The SAME files, now holding the REFINED bodies — overwritten in place.
     expect(second.dir).toBe(dir);
-    expect(readFileSync(second.personaPath, "utf8")).toBe(REFINED.persona);
-    expect(second.playbookPath).toBeDefined();
-    expect(readFileSync(second.playbookPath!, "utf8")).toBe(REFINED.playbook);
-    // The manifest is refreshed and still points at the same artefacts.
+    expect(readFileSync(second.domainSpecPath, "utf8")).toBe(REFINED.domainSpec);
+    // The intent spec is unchanged by a domain-only refresh.
+    expect(readFileSync(second.intentSpecPath, "utf8")).toBe(CREATED.intentSpec);
     const manifest = JSON.parse(
       readFileSync(join(dir, "profile.json"), "utf8"),
     ) as { agentId: string; name: string };
@@ -142,9 +139,6 @@ describe("refine persist — re-materialize over a PRE-EXISTING dir overwrites t
   });
 
   it("re-materialize does NOT create a sibling dir or leak outside agents/<agentId>/ (single-id scope)", () => {
-    // The refine persist keys off the one validated agentId; a re-write must not
-    // spawn a second agent dir. After create + refine, exactly ONE expert dir
-    // exists under agents/.
     materializeProfile({ ...CREATED });
     materializeProfile({ ...REFINED });
     const agentsRoot = join(dataDir, "agents");
@@ -162,15 +156,14 @@ describe("refine persist — a write failure on a PRE-EXISTING dir leaves the PR
   it.skipIf(asRoot)(
     "when the re-write fails (dir made read-only), the original artefacts survive — never a half-refined expert",
     () => {
-      // Create the working expert with its ORIGINAL artefacts.
       const first = materializeProfile({ ...CREATED });
       expect(first.ok).toBe(true);
       if (!first.ok) return;
       const dir = getAgentArtefactDir(CREATED.agentId);
 
       // Make the PRE-EXISTING dir read-only so the refine re-write's tmp-file
-      // write fails EACCES. The `dirPreexisted` guard (profile-store.ts:202-219)
-      // must NOT tear the dir down — it did not create it.
+      // write fails EACCES. The `dirPreexisted` guard must NOT tear the dir down —
+      // it did not create it.
       chmodSync(dir, 0o500);
 
       const second = materializeProfile({ ...REFINED });
@@ -182,13 +175,11 @@ describe("refine persist — a write failure on a PRE-EXISTING dir leaves the PR
       chmodSync(dir, 0o700);
 
       // The PRIOR artefacts survive untouched — the original content, not the
-      // refined content, and not a partial mix. This is the "a persist failure
-      // leaves the prior expert intact, never half-refined" semantics SC6 needs.
-      expect(existsSync(join(dir, "persona.md"))).toBe(true);
-      expect(readFileSync(join(dir, "persona.md"), "utf8")).toBe(CREATED.persona);
-      expect(readFileSync(join(dir, "playbook.md"), "utf8")).toBe(CREATED.playbook);
+      // refined content, and not a partial mix.
+      expect(existsSync(join(dir, "domain_spec.md"))).toBe(true);
+      expect(readFileSync(join(dir, "domain_spec.md"), "utf8")).toBe(CREATED.domainSpec);
+      expect(readFileSync(join(dir, "intent_spec.md"), "utf8")).toBe(CREATED.intentSpec);
       expect(existsSync(join(dir, "profile.json"))).toBe(true);
-      // No tmp leftover from the failed re-write.
       expect(walkFiles(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
     },
   );
@@ -196,21 +187,18 @@ describe("refine persist — a write failure on a PRE-EXISTING dir leaves the PR
   it("a re-write blocked at the manifest stage degrades to not_found on read — never serves a coherent HALF-refined expert (the store's per-file, NOT cross-file, atomicity)", () => {
     // ADVERSARIAL FINDING the developer must know: materializeProfile is per-FILE
     // atomic (tmp → rename, each file is all-or-nothing) but NOT transactional
-    // ACROSS its three files. It writes persona.md → playbook.md → profile.json
-    // in order (profile-store.ts:206-210). A failure at the MANIFEST stage —
-    // AFTER persona+playbook have already been overwritten — does NOT roll the
-    // bodies back. So the "a failed re-write leaves the PRIOR artefacts intact"
-    // guarantee holds STRICTLY for a failure at the FIRST write (the read-only-dir
-    // case above); a mid-sequence failure leaves the bodies updated but the
-    // manifest stale/broken.
+    // ACROSS its files. A failure at the MANIFEST stage — AFTER the bodies have
+    // already been overwritten — does NOT roll the bodies back. So the "a failed
+    // re-write leaves the PRIOR artefacts intact" guarantee holds STRICTLY for a
+    // failure at the FIRST write; a mid-sequence failure leaves the bodies updated
+    // but the manifest stale/broken.
     //
     // What the store DOES still guarantee, and what protects the user, is two
     // things, both asserted here: (1) the `dirPreexisted` guard never tears the
     // expert dir down (the expert is not deleted), and (2) readAgentProfile
     // composes manifest + bodies and degrades to `not_found` when the manifest is
     // unreadable — so the loop NEVER serves a coherent-looking half-refined expert
-    // off a broken manifest; the read fails closed and the skill lists the healthy
-    // experts. THAT is the meaningful safety property at this seam.
+    // off a broken manifest; the read fails closed.
     const first = materializeProfile({ ...CREATED });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
@@ -228,15 +216,13 @@ describe("refine persist — a write failure on a PRE-EXISTING dir leaves the PR
     if (second.ok) return;
     expect(second.kind).toBe("persistence_failed");
 
-    // (1) The expert dir was NOT torn down (dirPreexisted guard) — the expert
-    // still exists on disk; the failure did not destroy it.
+    // (1) The expert dir was NOT torn down (dirPreexisted guard).
     expect(existsSync(dir)).toBe(true);
-    expect(existsSync(join(dir, "persona.md"))).toBe(true);
+    expect(existsSync(join(dir, "domain_spec.md"))).toBe(true);
     expect(statSync(profilePath).isDirectory()).toBe(true); // blocker untouched
 
     // (2) The read fails closed: with the manifest unreadable, readAgentProfile
     // returns not_found rather than serving an expert off a half-written state.
-    // The loop never loads a coherent half-refined expert from a broken manifest.
     const read = readAgentProfile(CREATED.agentId);
     expect(read.ok).toBe(false);
     if (read.ok) return;
@@ -245,11 +231,7 @@ describe("refine persist — a write failure on a PRE-EXISTING dir leaves the PR
 });
 
 describe("refine round-trip — materialize → re-materialize(updated) → readAgentProfile returns the UPDATED bodies", () => {
-  it("a later read inside the refined expert loads the kept refinements (the self-reinforcement loop closes)", () => {
-    // The full loop: create the expert, refine it (re-materialize the updated
-    // spec), then LOAD it back via the same get path a later session uses. The
-    // read must return the UPDATED persona/playbook — proving a later session
-    // reflects the kept refinements, not the original spec.
+  it("a later read inside the refined expert loads the kept domain refresh (the loop closes)", () => {
     expect(materializeProfile({ ...CREATED }).ok).toBe(true);
     expect(materializeProfile({ ...REFINED }).ok).toBe(true);
 
@@ -259,20 +241,14 @@ describe("refine round-trip — materialize → re-materialize(updated) → read
 
     expect(read.agentId).toBe(REFINED.agentId);
     expect(read.name).toBe(REFINED.name);
-    // The kept refinements are what a later session loads — the UPDATED bodies.
-    expect(read.persona).toBe(REFINED.persona);
-    expect(read.playbook).toBe(REFINED.playbook);
-    // And it is NOT the stale original (guards against a read that missed the
-    // overwrite).
-    expect(read.persona).not.toBe(CREATED.persona);
-    expect(read.playbook).not.toBe(CREATED.playbook);
+    // The kept refresh is what a later session loads — the UPDATED domain spec.
+    expect(read.domainSpec).toBe(REFINED.domainSpec);
+    expect(read.domainSpec).not.toBe(CREATED.domainSpec);
+    // The intent spec is unchanged.
+    expect(read.intentSpec).toBe(CREATED.intentSpec);
   });
 
   it("the read after refine carries the refreshed manifest fields (the load path sees the new spec)", () => {
-    // The manifest is re-written on each materialize; the read composes manifest
-    // + bodies. After refine, the read's createdAt is a parseable ISO timestamp
-    // from the re-write and the profilePath still resolves under the one agent
-    // dir — the loop loads a coherent, refreshed expert.
     materializeProfile({ ...CREATED });
     materializeProfile({ ...REFINED });
 
@@ -287,109 +263,147 @@ describe("refine round-trip — materialize → re-materialize(updated) → read
 });
 
 // ===========================================================================
-// SDS LAYERS — refine targets a user.md attribute or a domain.md dimension
+// LAZY CAPTURE + REFINE OF THE SDS LAYERS — domain_spec / intent_spec /
+// user_spec / playbook re-materialize in place
 //
-// Card: spec-driven-shopping-sds-for-created-experts. SDS makes refine able to
-// sharpen the NEW artefact layers too: a user.md standing attribute / hard
-// constraint, or a domain.md decision-dimension. Each is re-materialized
-// IN PLACE through the same `sil_profile_materialize` store path the refine loop
-// already composes — so the same three properties the playbook/persona re-write
-// proved must hold for the new files:
-//   (a) re-materialize over a PRE-EXISTING dir overwrites domain.md / user.md
-//       in place (the kept SDS refinement sticks);
+// Card: spec-driven-shopping-sds-for-created-experts. The per-query lazy-capture
+// path (Correction 5) and the refine path both re-materialize a layer IN PLACE
+// through the same `sil_profile_materialize` store path. The three properties the
+// domain re-write proved above must hold for each layer:
+//   (a) re-materialize over a PRE-EXISTING dir overwrites / adds the layer in
+//       place (the kept capture/refinement sticks);
 //   (b) a failed re-write on a PRE-EXISTING dir leaves the PRIOR SDS artefacts
-//       intact (never a half-refined user spec);
-//   (c) updating ONE SDS layer leaves the OTHER (and persona/playbook) intact —
-//       a user.md update is not a full-expert rewrite that drops domain.md.
+//       intact (never a half-captured user spec);
+//   (c) updating ONE layer leaves the OTHERS intact — a user_spec capture is not
+//       a full-expert rewrite that drops domain_spec/intent_spec.
 //
-// The intent spec is deliberately ABSENT here: it is ephemeral and never
-// persisted, so it is never a refine target and never re-materialized.
+// The per-query INTENT (filled dimensions) is deliberately ABSENT here: it is
+// ephemeral and never persisted, so it is never a refine target and never
+// re-materialized. Only the intent_spec.md SCHEMA is persisted.
 // ===========================================================================
 
-/** The SDS expert as first created — persona + playbook + the two new layers. */
+/** The SDS expert as first created — required specs only. */
 const SDS_CREATED = {
   agentId: "road-cycling-buyer",
   name: "Road Cycling Buyer",
-  persona: "You are a road-cycling buyer. Prefer endurance geometry.",
-  playbook: "Map budget to price params. Rank by comfort, then weight.",
-  domainSpec:
-    "# Domain spec\nDimensions: fit (stack/reach), groupset tier, rim depth vs"
-    + " crosswind, gearing range. Trade-offs noted.",
+  domainSpec: "# Domain spec\nFit mechanics, gearing theory, frame geometry.",
+  intentSpec: "# Intent spec — dimensions\nuse-case, terrain, budget, compatibility.",
+} as const;
+
+/** Same expert, a lazily-captured user_spec ADDED (a hard constraint the user
+ * surfaced mid-query) — domain/intent unchanged. */
+const SDS_USER_CAPTURED = {
+  ...SDS_CREATED,
   userSpec:
-    "# User spec\n## Soft preferences\n- Endurance geometry, ~€1500.\n"
+    "# User spec\n## Domain-relevant facts (soft)\n- Endurance geometry, inseam 81cm.\n"
     + "## Hard constraints (INVIOLABLE)\n- HARD-NO: rim brakes.",
 } as const;
 
-/** Same expert, the USER SPEC sharpened (a refine that targets a user.md hard
- * constraint) — domain.md/persona/playbook unchanged. */
+/** Same expert, the user_spec then SHARPENED (a refine that targets a user_spec
+ * hard constraint) PLUS a lazily-captured playbook taste. */
 const SDS_USER_REFINED = {
-  ...SDS_CREATED,
+  ...SDS_USER_CAPTURED,
   userSpec:
-    "# User spec\n## Soft preferences\n- Endurance geometry, ~€1500.\n"
+    "# User spec\n## Domain-relevant facts (soft)\n- Endurance geometry, inseam 81cm.\n"
     + "## Hard constraints (INVIOLABLE)\n- HARD-NO: rim brakes.\n"
     + "- HARD-NO: anything over 9kg (the user said it three times).",
+  playbook: "# Buying taste\nBudget ~€1500; brand-agnostic.",
 } as const;
 
-describe("refine SDS layers — re-materialize a user.md attribute in place (the kept refinement sticks)", () => {
-  it("a second materialize with an updated userSpec overwrites user.md in place; domain.md + persona survive", () => {
+describe("lazy capture — re-materialize ADDS a user_spec/playbook in place (the kept capture sticks)", () => {
+  it("a second materialize with a new userSpec adds user_spec.md; domain/intent survive untouched", () => {
     const first = materializeProfile({ ...SDS_CREATED });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     const dir = getAgentArtefactDir(SDS_CREATED.agentId);
-    expect(readFileSync(join(dir, "user.md"), "utf8")).toBe(SDS_CREATED.userSpec);
+    expect(existsSync(join(dir, "user_spec.md"))).toBe(false); // not captured yet
 
-    const second = materializeProfile({ ...SDS_USER_REFINED });
+    const second = materializeProfile({ ...SDS_USER_CAPTURED });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
-    // user.md now holds the sharpened spec…
-    expect(readFileSync(join(dir, "user.md"), "utf8")).toBe(SDS_USER_REFINED.userSpec);
-    expect(readFileSync(join(dir, "user.md"), "utf8")).toContain("over 9kg");
-    // …and the OTHER layers are untouched by a user-spec-only refine.
-    expect(readFileSync(join(dir, "domain.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
-    expect(readFileSync(join(dir, "persona.md"), "utf8")).toBe(SDS_CREATED.persona);
-    expect(readFileSync(join(dir, "playbook.md"), "utf8")).toBe(SDS_CREATED.playbook);
-    // No tmp leftover from the atomic re-write.
+    // user_spec.md now exists with the captured fact + hard constraint…
+    expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(SDS_USER_CAPTURED.userSpec);
+    // …and the required specs are untouched by a user-side lazy capture.
+    expect(readFileSync(join(dir, "domain_spec.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
+    expect(readFileSync(join(dir, "intent_spec.md"), "utf8")).toBe(SDS_CREATED.intentSpec);
     expect(walkFiles(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
   });
 
-  it("the round-trip closes: read after a user.md refine returns the UPDATED user spec, not the stale one", () => {
+  it("a later refine sharpens user_spec AND adds a playbook taste; domain/intent still survive", () => {
     materializeProfile({ ...SDS_CREATED });
+    materializeProfile({ ...SDS_USER_CAPTURED });
+    const dir = getAgentArtefactDir(SDS_CREATED.agentId);
+
+    const third = materializeProfile({ ...SDS_USER_REFINED });
+    expect(third.ok).toBe(true);
+    if (!third.ok) return;
+
+    expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(SDS_USER_REFINED.userSpec);
+    expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toContain("over 9kg");
+    // The buying taste (playbook) is now captured too…
+    expect(readFileSync(join(dir, "playbook.md"), "utf8")).toBe(SDS_USER_REFINED.playbook);
+    // …and the required specs survive.
+    expect(readFileSync(join(dir, "domain_spec.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
+    expect(readFileSync(join(dir, "intent_spec.md"), "utf8")).toBe(SDS_CREATED.intentSpec);
+  });
+
+  it("the round-trip closes: read after a user_spec refine returns the UPDATED user spec, not the stale one", () => {
+    materializeProfile({ ...SDS_CREATED });
+    materializeProfile({ ...SDS_USER_CAPTURED });
     materializeProfile({ ...SDS_USER_REFINED });
     const read = readAgentProfile(SDS_CREATED.agentId);
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     expect(read.userSpec).toBe(SDS_USER_REFINED.userSpec);
-    expect(read.userSpec).not.toBe(SDS_CREATED.userSpec);
-    // The domain spec is unchanged — a user-spec refine is not a domain rewrite.
-    expect(read.domainSpec).toBe(SDS_CREATED.domainSpec);
+    expect(read.userSpec).not.toBe(SDS_USER_CAPTURED.userSpec);
+    // The intent spec (the persisted dimension schema) is unchanged — a user-spec
+    // refine is not an intent-spec rewrite.
+    expect(read.intentSpec).toBe(SDS_CREATED.intentSpec);
+  });
+
+  it("refine can target the intent_spec.md SCHEMA in place (re-derived dimensions persist; the per-query intent is never persisted)", () => {
+    // Correction 4: intent_spec.md is refine-mutable (the persisted dimension
+    // schema). A re-materialize with an updated intentSpec overwrites the schema in
+    // place — but NO intent.md of filled per-query values is ever written.
+    materializeProfile({ ...SDS_CREATED });
+    const dir = getAgentArtefactDir(SDS_CREATED.agentId);
+    const newIntentSchema =
+      "# Intent spec — dimensions (v2)\nuse-case, terrain, budget, timeline,"
+      + " compatibility, performance priorities, aesthetics, weight-weenie-ness.";
+    const refined = materializeProfile({ ...SDS_CREATED, intentSpec: newIntentSchema });
+    expect(refined.ok).toBe(true);
+    if (!refined.ok) return;
+    expect(readFileSync(join(dir, "intent_spec.md"), "utf8")).toBe(newIntentSchema);
+    // The schema overwrote in place; no intent.md instance file appears.
+    expect(existsSync(join(dir, "intent.md"))).toBe(false);
   });
 });
 
-describe("refine SDS layers — a failed re-write leaves the PRIOR user.md/domain.md intact", () => {
+describe("refine SDS layers — a failed re-write leaves the PRIOR layers intact", () => {
   const asRoot = typeof process.getuid === "function" && process.getuid() === 0;
 
   it.skipIf(asRoot)(
-    "when the re-write fails (dir read-only), the original user.md + domain.md survive — never a half-refined SDS expert",
+    "when the re-write fails (dir read-only), the original user_spec + domain_spec survive — never a half-refined SDS expert",
     () => {
-      const first = materializeProfile({ ...SDS_CREATED });
-      expect(first.ok).toBe(true);
-      if (!first.ok) return;
+      materializeProfile({ ...SDS_CREATED });
+      materializeProfile({ ...SDS_USER_CAPTURED });
       const dir = getAgentArtefactDir(SDS_CREATED.agentId);
 
       // Block the re-write: make the PRE-EXISTING dir read-only so the tmp write
       // fails EACCES. The dirPreexisted guard must NOT tear the expert down.
       chmodSync(dir, 0o500);
-      const second = materializeProfile({ ...SDS_USER_REFINED });
-      expect(second.ok).toBe(false);
-      if (second.ok) return;
-      expect(second.kind).toBe("persistence_failed");
+      const refined = materializeProfile({ ...SDS_USER_REFINED });
+      expect(refined.ok).toBe(false);
+      if (refined.ok) return;
+      expect(refined.kind).toBe("persistence_failed");
       chmodSync(dir, 0o700);
 
-      // The PRIOR SDS artefacts survive untouched — the original bodies, not the
+      // The PRIOR SDS artefacts survive untouched — the captured bodies, not the
       // refined ones, and not a partial mix.
-      expect(readFileSync(join(dir, "user.md"), "utf8")).toBe(SDS_CREATED.userSpec);
-      expect(readFileSync(join(dir, "domain.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
+      expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(SDS_USER_CAPTURED.userSpec);
+      expect(readFileSync(join(dir, "domain_spec.md"), "utf8")).toBe(SDS_CREATED.domainSpec);
+      expect(readFileSync(join(dir, "intent_spec.md"), "utf8")).toBe(SDS_CREATED.intentSpec);
       expect(walkFiles(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
     },
   );

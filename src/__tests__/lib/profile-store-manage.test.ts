@@ -6,7 +6,7 @@
  * (`materializeProfile`) wrote the artefact store; this card adds the three
  * primitives that MANAGE it:
  *   - listAgentProfiles()        — enumerate $SIL_DATA_DIR/agents/*\/profile.json
- *   - readAgentProfile(agentId)  — manifest + persona/playbook bodies for one
+ *   - readAgentProfile(agentId)  — manifest + the SDS spec bodies for one
  *   - removeAgentArtefacts(id)   — delete exactly one validated agent's dir
  *
  * Each returns a discriminated result that NEVER throws across the boundary
@@ -22,8 +22,8 @@
  *     4. one corrupt/unreadable profile.json among healthy ones → that one in
  *        unreadable[], the rest still listed (the list never aborts/throws).
  *   READ   (Flow 2, AC View):
- *     5. ok → manifest + persona body (+ playbook body when present) read from
- *        the files the manifest points at.
+ *     5. ok → manifest + the required spec bodies (+ the lazy user/playbook bodies
+ *        when present) read from the files the manifest points at.
  *     6. unknown id → not_found (a normal outcome, never a throw).
  *     7. traversal-shaped id (../x, a/b, .., a/../b, main, Mixed-Case) →
  *        invalid_request via AGENT_ID_RE, rejected BEFORE any join/read.
@@ -46,7 +46,8 @@
  *     ok variant: { ok:true, experts: {agentId,name,hasPlaybook,createdAt}[]
  *     (createdAt DESC), unreadable: {agentId,error}[] }.
  *   - readAgentProfile(agentId): ReadProfileResult — discriminated, never throws.
- *     ok: { ok:true, agentId, name, persona, playbook?, profilePath, createdAt };
+ *     ok: { ok:true, agentId, name, domainSpec, intentSpec, userSpec?, playbook?,
+ *     profilePath, createdAt } (NO persona);
  *     not_found: { ok:false, kind:"not_found", agentId, message };
  *     bad id: { ok:false, kind:"invalid_request", field:"agentId", message }.
  *   - removeAgentArtefacts(agentId): RemoveProfileResult — discriminated, never
@@ -122,15 +123,28 @@ afterEach(() => {
 /** Materialize an expert and (optionally) backdate its manifest createdAt so
  * ordering is deterministic regardless of wall-clock resolution. The store's
  * own writer is used (never a hand-rolled fixture) so the test exercises the
- * real on-disk shape readAgentProfile/listAgentProfiles must parse. */
+ * real on-disk shape readAgentProfile/listAgentProfiles must parse.
+ *
+ * After the SDS reframe the store holds NO persona; domainSpec + intentSpec are
+ * REQUIRED, userSpec + playbook are lazy. The fixture always supplies the two
+ * required specs (a real create) and surfaces the lazy slots via opts. */
 function makeExpert(
   agentId: string,
-  opts: { name?: string; persona?: string; playbook?: string; createdAt?: string } = {},
+  opts: {
+    name?: string;
+    domainSpec?: string;
+    intentSpec?: string;
+    userSpec?: string;
+    playbook?: string;
+    createdAt?: string;
+  } = {},
 ): void {
   const result = materializeProfile({
     agentId,
     name: opts.name ?? `Expert ${agentId}`,
-    persona: opts.persona ?? `Persona for ${agentId} — shops carefully.`,
+    domainSpec: opts.domainSpec ?? `# Domain spec for ${agentId}\nResearched dimensions.`,
+    intentSpec: opts.intentSpec ?? `# Intent spec for ${agentId}\nDecomposition dimensions.`,
+    ...(opts.userSpec !== undefined ? { userSpec: opts.userSpec } : {}),
     ...(opts.playbook !== undefined ? { playbook: opts.playbook } : {}),
   });
   if (!result.ok) {
@@ -187,8 +201,8 @@ describe("listAgentProfiles — empty/absent store is a normal, successful empty
 
 describe("listAgentProfiles — multiple experts: all present, sourced from profile.json", () => {
   it("lists every materialized expert with name + hasPlaybook + agentId from its manifest", () => {
-    makeExpert("gift-buyer", { name: "Gift Buyer", playbook: "Browse with sil_search." });
-    makeExpert("grocery-agent", { name: "Grocery Agent" }); // no playbook
+    makeExpert("gift-buyer", { name: "Gift Buyer", playbook: "# Buying taste\nValue-conscious." });
+    makeExpert("grocery-agent", { name: "Grocery Agent" }); // no lazy playbook
 
     const result = listAgentProfiles();
     expect(result.unreadable).toEqual([]);
@@ -200,6 +214,7 @@ describe("listAgentProfiles — multiple experts: all present, sourced from prof
     expect(gift).toBeDefined();
     // name comes from the manifest, NOT from the directory name.
     expect(gift!.name).toBe("Gift Buyer");
+    // hasPlaybook flags the LAZY buying-taste slot (the required specs always exist).
     expect(gift!.hasPlaybook).toBe(true);
     expect(typeof gift!.createdAt).toBe("string");
 
@@ -263,7 +278,7 @@ describe("listAgentProfiles — one corrupt manifest never blinds the user to th
     // Create an agent subdir with NO profile.json (an interrupted create).
     const orphanDir = getAgentArtefactDir("orphaned");
     mkdirSync(orphanDir, { recursive: true });
-    writeFileSync(join(orphanDir, "persona.md"), "persona but no manifest");
+    writeFileSync(join(orphanDir, "domain_spec.md"), "a spec but no manifest");
 
     const result = listAgentProfiles();
     expect(result.experts.map((e) => e.agentId)).toEqual(["intact"]);
@@ -276,11 +291,13 @@ describe("listAgentProfiles — one corrupt manifest never blinds the user to th
 // ===========================================================================
 
 describe("readAgentProfile — ok: manifest + artefact bodies for one expert", () => {
-  it("returns name, persona body, playbook body, profilePath, createdAt from the files the manifest points at", () => {
+  it("returns name, the required spec bodies, the lazy bodies, profilePath, createdAt — and NO persona", () => {
     makeExpert("gift-buyer", {
       name: "Gift Buyer",
-      persona: "You specialise in gifts under €50; always check stock first.",
-      playbook: "Use sil_search to browse; sil_product_get to re-check stock.",
+      domainSpec: "# Gift-buying domain spec\nRecipient, occasion, budget, taste dimensions.",
+      intentSpec: "# Intent spec\nrecipient, occasion, budget, timeline.",
+      userSpec: "# User spec\nBuys for partner.\nHARD-NO: nothing over €50.",
+      playbook: "# Buying taste\nValue-conscious.",
     });
 
     const result = readAgentProfile("gift-buyer");
@@ -290,12 +307,14 @@ describe("readAgentProfile — ok: manifest + artefact bodies for one expert", (
     expect(result.name).toBe("Gift Buyer");
     // The BODIES are read from disk (the files the manifest points at), not the
     // manifest paths alone — the skill renders detail from these.
-    expect(result.persona).toBe(
-      "You specialise in gifts under €50; always check stock first.",
+    expect(result.domainSpec).toBe(
+      "# Gift-buying domain spec\nRecipient, occasion, budget, taste dimensions.",
     );
-    expect(result.playbook).toBe(
-      "Use sil_search to browse; sil_product_get to re-check stock.",
-    );
+    expect(result.intentSpec).toBe("# Intent spec\nrecipient, occasion, budget, timeline.");
+    expect(result.userSpec).toBe("# User spec\nBuys for partner.\nHARD-NO: nothing over €50.");
+    expect(result.playbook).toBe("# Buying taste\nValue-conscious.");
+    // Persona left the store — the read result carries none.
+    expect("persona" in result).toBe(false);
     expect(result.profilePath).toBe(
       join(getAgentArtefactDir("gift-buyer"), "profile.json"),
     );
@@ -303,14 +322,18 @@ describe("readAgentProfile — ok: manifest + artefact bodies for one expert", (
     expect(Number.isNaN(Date.parse(result.createdAt))).toBe(false);
   });
 
-  it("omits the playbook body when the expert has no playbook", () => {
-    makeExpert("grocery-agent", { name: "Grocery Agent" }); // no playbook
+  it("omits the lazy bodies (userSpec / playbook) when the expert is a min create", () => {
+    makeExpert("grocery-agent", { name: "Grocery Agent" }); // required specs only
     const result = readAgentProfile("grocery-agent");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.playbook).toBeUndefined();
-    expect(typeof result.persona).toBe("string");
-    expect(result.persona.length).toBeGreaterThan(0);
+    expect(result.userSpec).toBeUndefined();
+    // The required specs are always present.
+    expect(typeof result.domainSpec).toBe("string");
+    expect(result.domainSpec.length).toBeGreaterThan(0);
+    expect(typeof result.intentSpec).toBe("string");
+    expect(result.intentSpec.length).toBeGreaterThan(0);
   });
 });
 

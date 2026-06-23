@@ -26,8 +26,9 @@
  *   - registers sil_profile_list (Type.Object({})), sil_profile_get and
  *     sil_profile_remove (Type.Object({agentId})) — agentId required;
  *   - list  → jsonResult({status:"ok", experts, unreadable}), createdAt DESC;
- *   - get   → {status:"ok", agentId, name, persona, playbook?, profilePath,
- *     createdAt} / {status:"not_found", agentId, …recovery} /
+ *   - get   → {status:"ok", agentId, name, domainSpec, intentSpec, userSpec?,
+ *     playbook?, profilePath, createdAt} (NO persona) /
+ *     {status:"not_found", agentId, …recovery} /
  *     {status:"invalid_request", field, message};
  *   - remove→ {status:"removed", agentId} / {status:"not_found", agentId} /
  *     {status:"invalid_request", field} / {status:"persistence_failed", error,
@@ -80,15 +81,28 @@ function payloadOf(result: { content: { text?: string }[] }): Record<string, unk
 }
 
 /** Materialize an expert via the real store writer (never a hand fixture), so
- * the tools read the genuine on-disk shape. Optionally pin createdAt. */
+ * the tools read the genuine on-disk shape. Optionally pin createdAt.
+ *
+ * After the SDS reframe the store holds NO persona; domainSpec + intentSpec are
+ * REQUIRED, userSpec + playbook are lazy. The fixture always supplies the two
+ * required specs and surfaces the lazy slots via opts. */
 function makeExpert(
   agentId: string,
-  opts: { name?: string; persona?: string; playbook?: string; createdAt?: string } = {},
+  opts: {
+    name?: string;
+    domainSpec?: string;
+    intentSpec?: string;
+    userSpec?: string;
+    playbook?: string;
+    createdAt?: string;
+  } = {},
 ): void {
   const result = materializeProfile({
     agentId,
     name: opts.name ?? `Expert ${agentId}`,
-    persona: opts.persona ?? `Persona for ${agentId}.`,
+    domainSpec: opts.domainSpec ?? `# Domain spec for ${agentId}\nResearched dimensions.`,
+    intentSpec: opts.intentSpec ?? `# Intent spec for ${agentId}\nDecomposition dimensions.`,
+    ...(opts.userSpec !== undefined ? { userSpec: opts.userSpec } : {}),
     ...(opts.playbook !== undefined ? { playbook: opts.playbook } : {}),
   });
   if (!result.ok) throw new Error(`fixture setup failed: ${JSON.stringify(result)}`);
@@ -211,32 +225,43 @@ describe("sil_profile_list — ok envelope", () => {
 // ===========================================================================
 
 describe("sil_profile_get — ok envelope (full detail from artefacts)", () => {
-  it("returns status ok with name, persona, playbook, profilePath, createdAt", async () => {
+  it("returns status ok with name, the spec bodies, the lazy bodies, profilePath, createdAt — NO persona", async () => {
     makeExpert("gift-buyer", {
       name: "Gift Buyer",
-      persona: "Gifts under €50; check stock.",
-      playbook: "Use sil_search then sil_product_get.",
+      domainSpec: "# Gift-buying domain spec\nRecipient, occasion, budget dimensions.",
+      intentSpec: "# Intent spec\nrecipient, occasion, budget.",
+      userSpec: "# User spec\nHARD-NO: nothing over €50.",
+      playbook: "# Buying taste\nValue-conscious.",
     });
     const tool = getTool(api, GET);
     const payload = payloadOf(await tool.execute("c-4", { agentId: "gift-buyer" }));
     expect(payload["status"]).toBe("ok");
     expect(payload["agentId"]).toBe("gift-buyer");
     expect(payload["name"]).toBe("Gift Buyer");
-    expect(payload["persona"]).toBe("Gifts under €50; check stock.");
-    expect(payload["playbook"]).toBe("Use sil_search then sil_product_get.");
+    expect(payload["domainSpec"]).toBe(
+      "# Gift-buying domain spec\nRecipient, occasion, budget dimensions.",
+    );
+    expect(payload["intentSpec"]).toBe("# Intent spec\nrecipient, occasion, budget.");
+    expect(payload["userSpec"]).toBe("# User spec\nHARD-NO: nothing over €50.");
+    expect(payload["playbook"]).toBe("# Buying taste\nValue-conscious.");
+    // Persona left the store — the envelope carries none.
+    expect(payload["persona"]).toBeUndefined();
     expect(payload["profilePath"]).toBe(
       join(getAgentArtefactDir("gift-buyer"), "profile.json"),
     );
     expect(typeof payload["createdAt"]).toBe("string");
   });
 
-  it("omits playbook in the envelope when the expert has none", async () => {
+  it("omits the lazy bodies (userSpec / playbook) when the expert is a min create", async () => {
     makeExpert("grocery", { name: "Grocery" });
     const tool = getTool(api, GET);
     const payload = payloadOf(await tool.execute("c-5", { agentId: "grocery" }));
     expect(payload["status"]).toBe("ok");
     expect(payload["playbook"]).toBeUndefined();
-    expect(typeof payload["persona"]).toBe("string");
+    expect(payload["userSpec"]).toBeUndefined();
+    // The required specs are always present.
+    expect(typeof payload["domainSpec"]).toBe("string");
+    expect(typeof payload["intentSpec"]).toBe("string");
   });
 });
 
