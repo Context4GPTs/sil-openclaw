@@ -12,6 +12,24 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
+- **Create a tailored, sil-wired shopping expert — a real OpenClaw agent that
+  shops its niche with no further setup.** A new agent-creation engine (the `sil`
+  skill drives the host's own `openclaw` CLI — the plugin never writes the host
+  config) materializes a dedicated shopping expert: a real `agents.list[]` entry
+  with the **sil plugin enabled and the sil skill attached**, the persona injected
+  as the agent's `SOUL.md` system framing, and the behaviour artefacts written by
+  the new **`sil_profile_materialize`** tool into `$SIL_DATA_DIR/agents/<agentId>/`
+  (`persona.md`, an optional `playbook.md` domain sub-skill, and a `profile.json`
+  manifest the skill reads at runtime). The engine is validate-first and
+  fail-closed: it checks the spec before any write (`invalid_request` — nothing
+  written), refuses to clobber an existing agent (`collision` — never overwrites a
+  persona or its wiring), and declares `created` only after the host's **own**
+  `openclaw config validate` returns `valid: true` (any failed step is
+  `persistence_failed` carrying the path + cause, nothing partial left behind).
+  Creating an expert is **local and offline** — no registration, no token read,
+  no network call; the expert registers the user later, on first shop. Host-CLI
+  shapes are pinned to **`alpine/openclaw:2026.6.9`** (the sil-stage host). (#27,
+  #30)
 - **The `sil` skill now runs a brainstorm interview before creating a shopping
   expert.** An open, back-and-forth interview converges five sections *with* the
   user — domain framing, persona, elicitation style, answer→`sil_search`-param
@@ -25,6 +43,22 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   `sil_search` params (budget → `price_min`/`price_max` in minor units, "prefer
   secondhand" → `condition`, niche → `query`/`category`) and leaves `ship_to`
   empty so sil resolves the registered default server-side.
+- **A created expert shops its niche like a trusted specialist, not a generic
+  clerk.** When a session opens inside a created expert, the skill loads its
+  `profile.json` → `persona.md` + `playbook.md` and runs a profile-driven
+  shop-time loop: elicit **only the missing** load-bearing attributes in the
+  playbook's priority order (never a fixed question battery, never re-asking what
+  the user already stated), map answers to real `sil_search` params (`ship_to`
+  left empty so the server resolves the registered default; a taste with no
+  matching param folds into `query`/the rubric, never an invented filter), search,
+  then reason over the candidates with the playbook's rubric and the persona's
+  hard-rules / hard-no's — presenting results **best-first as `sil_search`
+  returned them (never re-ranked)** and always with the domain "why". An
+  empty-but-servable result relaxes a constraint and explains the change; a
+  genuinely unservable domain gets an honest "no", never padded with junk; a
+  non-`ok` status follows the tool's own `recovery`, never the empty-match path.
+  Consumes the catalog tools **unchanged** — no new tool; the rubric is applied at
+  reasoning time. (#31)
 - **Local expert lifecycle — list, view, and remove the shopping experts you
   create.** Three new tools manage the artefact store the create-engine writes
   (`$SIL_DATA_DIR/agents/<id>/`): `sil_profile_list` enumerates your experts
@@ -45,6 +79,25 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   never a thrown error across the tool boundary. The list/view/remove flow lives
   in its own progressive-disclosure reference, `references/manage_experts.md`,
   which the router routes the manage intents to.
+- **Refine an existing expert from what it observed in real sessions
+  (self-reinforcement).** A targeted-amend loop sharpens a *named* expert without
+  re-brainstorming it from scratch: load it with **`sil_profile_get`**, propose
+  concrete refinements **grounded in observed evidence** from the just-run
+  shopping session (a mapping that surfaced irrelevant items, a constraint the
+  user volunteered but the playbook never captured, a candidate they rejected —
+  never a generic, ungrounded "improvement"), let the user **confirm a subset**
+  (per-proposal accept/reject — never inferred from silence or an off-topic
+  answer), and persist **only** the confirmed subset by re-running
+  **`sil_profile_materialize`** over that one `agentId`. The re-write is per-file
+  atomic and dir-preserving — a failed persist leaves the prior expert intact and
+  never serves a half-refined one (a torn manifest reads back as not-found,
+  fail-closed). The improvement is **per-user and local** (written only to this
+  user's `$SIL_DATA_DIR` — no server endpoint, no shared or cross-user signal, no
+  identity round-trip) and **isolated** (touches only the named
+  `agents/<agentId>/`; sibling experts and generic profile-less shopping are
+  untouched). Adds **no new tool** — it composes the existing `sil_profile_get` +
+  `sil_profile_materialize`; when no observed session is available it falls back
+  to a guided amend and never fabricates observations. (#32)
 
 ### Changed
 
