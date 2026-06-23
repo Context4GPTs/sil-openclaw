@@ -35,6 +35,10 @@ function readJson<T>(rel: string): T {
   return JSON.parse(readFileSync(join(REPO_ROOT, rel), "utf8")) as T;
 }
 
+function readText(rel: string): string {
+  return readFileSync(join(REPO_ROOT, rel), "utf8");
+}
+
 interface PackageJson {
   type?: string;
   main?: string;
@@ -55,6 +59,7 @@ interface Manifest {
   activation?: { onCapabilities?: string[] };
   contracts?: { tools?: string[] };
   configSchema?: { type?: string; properties?: Record<string, unknown> };
+  security?: { packagingNote?: string; filesystemScope?: string[] };
 }
 
 describe("package.json — OpenClaw ESM plugin shape", () => {
@@ -160,5 +165,92 @@ describe("version parity — package.json ↔ openclaw.plugin.json", () => {
 
   it("package.json#version is plain semver", () => {
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(?:-[\w.]+)?$/);
+  });
+});
+
+describe("SDS artefact contract — shipped prose matches the code (all four required)", () => {
+  // REGRESSION GUARD (Founder review round 2). The code enforces a FIVE-artefact
+  // SDS model where ALL FOUR sil behaviour artefacts are REQUIRED + present at
+  // creation: materializeProfile validates domainSpec + intentSpec + userSpec +
+  // playbook non-blank (profile-store.ts), and readManifestFile's required gate
+  // carries all four spec paths (no degrade-to-undefined for user_spec/playbook).
+  //
+  // The round-1 refactor described user_spec.md / playbook.md as "lazy"/"optional"
+  // slots. The founder OVERTURNED that in review round 2 — they are required,
+  // present from creation, augmented every query ("we keep learning"). The code was
+  // corrected; the SHIPPED prose was not, and drifted out of agreement with the
+  // contract precisely because no test guarded these published surfaces. Two of them
+  // ship in the npm/ClawHub tarball as user-facing security disclosure.
+  //
+  // This guard pins the shipped artefacts to the code's contract: the manifest
+  // security block, the README sil_profile_materialize row, and the CHANGELOG
+  // [Unreleased] entry must NOT describe user_spec/playbook as a "lazy" or
+  // "optional" slot. It says nothing about the (correct + intended) "augmented
+  // every query / we keep learning" nuance — only the required-vs-lazy claim.
+  //
+  // Adversarial intent: the drift reached a SHIPPED security-disclosure field
+  // (security.filesystemScope) with nothing watching it. A green run here is the
+  // proof the published contract no longer contradicts the code it describes.
+
+  const manifest = readJson<Manifest>("openclaw.plugin.json");
+
+  // Match "lazy"/"optional" only when it qualifies the user_spec/playbook slots —
+  // i.e. the two words appear in the same sentence/clause as user_spec or playbook.
+  // (A stray "optional" elsewhere — e.g. "optional filters" — must NOT trip this.)
+  const LAZY_SLOT_RE =
+    /\b(?:lazy|optional)\b[^.]*\b(?:user[_ ]?spec|playbook)\b|\b(?:user[_ ]?spec|playbook)\b[^.]*\b(?:lazy|optional)\b/i;
+
+  it("security.packagingNote does NOT call user_spec/playbook lazy or optional", () => {
+    const note = manifest.security?.packagingNote ?? "";
+    expect(note.length).toBeGreaterThan(0);
+    // It must still name all four artefacts (the disclosure stays complete)…
+    for (const slot of ["domain_spec.md", "intent_spec.md", "user_spec.md", "playbook.md"]) {
+      expect(note).toContain(slot);
+    }
+    // …but must not frame user_spec/playbook as a lazy/optional slot (round-2 overturned this).
+    expect(LAZY_SLOT_RE.test(note)).toBe(false);
+  });
+
+  it("security.filesystemScope (shipped disclosure) does NOT call user_spec/playbook lazy or optional", () => {
+    // This is a user-facing security disclosure that ships in the tarball — accuracy
+    // is load-bearing. It is exactly the surface the round-3 review found still drifted.
+    const scope = (manifest.security?.filesystemScope ?? []).join(" ");
+    expect(scope.length).toBeGreaterThan(0);
+    expect(scope).toContain("user_spec.md");
+    expect(scope).toContain("playbook.md");
+    expect(LAZY_SLOT_RE.test(scope)).toBe(false);
+  });
+
+  it("README.md sil_profile_materialize row does NOT call user_spec/playbook lazy or optional", () => {
+    const readme = readText("README.md");
+    // Pin the materialize row by its anchor cell so a "lazy"/"optional" elsewhere
+    // (e.g. sil_search's "optional filters") is out of scope.
+    const row =
+      readme.split("\n").find((l) => l.includes("`sil_profile_materialize`")) ?? "";
+    expect(row).toContain("user_spec.md");
+    expect(row).toContain("playbook.md");
+    expect(LAZY_SLOT_RE.test(row)).toBe(false);
+  });
+
+  it("CHANGELOG.md [Unreleased] does NOT call user_spec/playbook lazy or optional (and stops self-contradicting)", () => {
+    // The [Unreleased] entry opens with "not an optional layer" then describes the
+    // very same artefacts as "two lazy" / "userSpec + playbook optional" — a
+    // self-contradiction that ships as release notes. The SDS-describing slice of
+    // the entry (between the [Unreleased] heading and the first dated release) must
+    // not frame user_spec/playbook as lazy/optional slots.
+    const changelog = readText("CHANGELOG.md");
+    const unreleasedStart = changelog.indexOf("## [Unreleased]");
+    expect(unreleasedStart).toBeGreaterThanOrEqual(0);
+    const afterHeading = changelog.slice(unreleasedStart + "## [Unreleased]".length);
+    // The next dated release heading bounds the [Unreleased] section.
+    const nextRelease = afterHeading.search(/\n## \[\d/);
+    const unreleased =
+      nextRelease >= 0 ? afterHeading.slice(0, nextRelease) : afterHeading;
+    expect(unreleased).toContain("user_spec.md");
+    expect(unreleased).toContain("playbook.md");
+    // Scan per-line so the regex's same-clause heuristic isn't defeated by the
+    // entry's hard wraps splitting "lazy" and "playbook" across lines.
+    const flat = unreleased.replace(/\s+/g, " ");
+    expect(LAZY_SLOT_RE.test(flat)).toBe(false);
   });
 });
