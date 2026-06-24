@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-24
+
 ### Added
 
 - **Spec-Driven Shopping (SDS) is the operating model for created experts.** A
