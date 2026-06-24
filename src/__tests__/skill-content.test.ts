@@ -1145,138 +1145,256 @@ describe("references/brainstorm_interview.md — brainstorm conducts an open, tw
     expect(namesPersonalTastes).toBe(true);
   });
 
-  it("LIGHT setup (≤10 questions) — the deep domain_spec comes from the AGENT'S OWN research, not user interrogation (Correction 2 / rule B)", () => {
-    // Cross-cutting rule B: setup is LIGHT — at most ~10 questions; the user is not
-    // over-burdened. The DEEP domain_spec.md is the agent's own job — researched
-    // from the WEB + the model's knowledge — NOT extracted by interrogating the
-    // user. The body must name the light/≤10-question bar AND that the deep domain
-    // expertise comes from the agent's own research, not from grilling the user.
+  it("CADENCE: at least ONE TOUCHPOINT PER DOCUMENT (Round 3 Correction 2) — the retired '≤10 questions' budget is GONE", () => {
+    // Round 3 Correction 2: the round-1/2 "≤10 questions" budget is RETIRED. The
+    // cadence rule is now "AT LEAST ONE TOUCHPOINT PER DOCUMENT" — the creation
+    // walks the five artefacts, one user touchpoint each, in order (domain is the
+    // exception: agent-researched, ZERO questions). The brainstorm doc owns this
+    // rule. It must:
+    //   (1) NAME the one-touchpoint-per-document cadence, AND
+    //   (2) NO LONGER carry the superseded "≤10 questions" / "at most 10" budget
+    //       framing (round 3 explicitly says "retire the ≤10 questions budget").
     const body = brainstormBodyLower();
-    const namesLightSetup =
-      body.includes("≤10") ||
-      body.includes("<=10") ||
-      body.includes("ten question") ||
-      body.includes("10 question") ||
-      body.includes("at most 10") ||
-      body.includes("no more than 10") ||
-      body.includes("light setup") ||
-      body.includes("light-setup") ||
-      body.includes("don't over-burden") ||
-      body.includes("do not over-burden") ||
-      body.includes("not over-burden");
+    const namesOneTouchpointPerDoc =
+      body.includes("one touchpoint per document") ||
+      body.includes("one touchpoint per doc") ||
+      body.includes("a touchpoint per document") ||
+      body.includes("touchpoint per document") ||
+      body.includes("one touchpoint each") ||
+      body.includes("at least one touchpoint per") ||
+      (body.includes("touchpoint") && body.includes("per document")) ||
+      (body.includes("one touchpoint") && body.includes("each"));
+    expect(namesOneTouchpointPerDoc).toBe(true);
+    // The retired ≤10-question budget MUST be gone — a lingering "≤10" beside the
+    // new touchpoint rule is the one-sided-pass / false-green the content-seam
+    // tests warn against (round 3: "retire the round-1 '≤10 questions' budget …
+    // update every place rule B's '≤10 questions' framing appears").
+    expect(body).not.toContain("≤10");
+    expect(body).not.toContain("<=10");
+    expect(body).not.toContain("10 question");
+    expect(body).not.toContain("ten question");
+    expect(body).not.toContain("at most 10");
+    expect(body).not.toContain("no more than 10");
+  });
+
+  it("the deep domain_spec comes from the AGENT'S OWN research, not user interrogation (Correction 2 / domain = ZERO questions)", () => {
+    // Round 3 Correction 1 step 2: the domain artefact is researched by the AGENT
+    // (web + knowledge) with NO user question in between — it is the explicit
+    // zero-question exception to the one-touchpoint-per-document rule. The DEEP
+    // domain_spec.md is the agent's own job, NOT extracted by interrogating the
+    // user. The body must name that the deep domain expertise comes from the
+    // agent's own research, not from grilling the user.
+    const body = brainstormBodyLower();
     const namesOwnResearch =
       body.includes("own research") ||
       body.includes("agent's own research") ||
       body.includes("researches the niche") ||
       body.includes("research the niche") ||
+      body.includes("researches the web") ||
+      body.includes("research the web") ||
       (body.includes("research") && body.includes("web")) ||
       (body.includes("research") && body.includes("not") && body.includes("interrog"));
-    expect(namesLightSetup).toBe(true);
+    // Domain is the zero-question artefact — no user question for it.
+    const namesDomainZeroQuestion =
+      body.includes("no question") ||
+      body.includes("no user question") ||
+      body.includes("zero question") ||
+      body.includes("without a question") ||
+      body.includes("without asking") ||
+      (body.includes("domain") && body.includes("no question"));
     expect(namesOwnResearch).toBe(true);
+    expect(namesDomainZeroQuestion).toBe(true);
   });
 
-  it("setup CONVERGES the corrected artefacts: narrowed niche, persona (→ SOUL.md), researched domain_spec, derived intent_spec (rule B)", () => {
-    // Cross-cutting rule B: light setup converges a narrowed niche, the persona
-    // (written to the host SOUL.md), the researched domain_spec.md, and the derived
-    // intent_spec.md decomposition dimensions. The OLD seller-method "elicitation
-    // style + answer→param mapping + rubric" as DISTINCT converged sections is
-    // dissolved (Correction 3): elicitation folds into the persona, the mapping
-    // lives in domain_spec + the generic mapping ref, the rubric emerges at
-    // recommend time. The body must name the corrected convergence targets.
+  it("setup SEEDS the FIVE corrected artefacts at creation: persona (→ SOUL.md), domain_spec, user_spec, playbook, intent_spec (Round 3 Correction 1)", () => {
+    // Round 3 Correction 1: creation walks the five artefacts, one touchpoint
+    // each. The OLD seller-method "elicitation style + answer→param mapping +
+    // rubric" as DISTINCT converged sections is dissolved (Correction 3):
+    // elicitation folds into the persona, the mapping lives in domain_spec + the
+    // generic mapping ref, the rubric emerges at recommend time. The brainstorm
+    // doc must name all five corrected artefacts as creation targets — the
+    // persona (→ SOUL.md) AND all four sil specs. (The niche is no longer a
+    // separately-CONVERGED target: it FALLS OUT of the persona answer — pinned by
+    // the persona-first ordering block below.)
     const body = brainstormBodyLower();
-    const namesNarrowedNiche =
-      body.includes("narrow") || body.includes("niche");
     const namesPersona = body.includes("persona");
     const namesDomainSpec =
       body.includes("domain spec") ||
       body.includes("domain-spec") ||
       body.includes("domain_spec") ||
       body.includes("domainspec");
+    const namesUserSpec =
+      body.includes("user spec") ||
+      body.includes("user-spec") ||
+      body.includes("user_spec") ||
+      body.includes("userspec");
+    const namesPlaybook = body.includes("playbook");
     const namesIntentSpec =
       body.includes("intent spec") ||
       body.includes("intent-spec") ||
       body.includes("intent_spec") ||
       body.includes("intentspec");
     const missing: string[] = [];
-    if (!namesNarrowedNiche) missing.push("narrowed niche");
     if (!namesPersona) missing.push("persona (→ SOUL.md)");
     if (!namesDomainSpec) missing.push("researched domain_spec");
+    if (!namesUserSpec) missing.push("seeded user_spec");
+    if (!namesPlaybook) missing.push("seeded playbook");
     if (!namesIntentSpec) missing.push("derived intent_spec");
     expect(missing).toEqual([]);
   });
 });
 
-describe("references/brainstorm_interview.md — vague domain is narrowed WITH the user FIRST (narrow-first gate)", () => {
-  it("names the narrow-a-vague-domain-first gate", () => {
-    // Business rule 6: never build persona/mapping/rubric on an un-narrowed
-    // niche. The body must name the gate — a vague/over-broad/ambiguous domain
-    // is narrowed (with narrowing questions, reflecting a concrete niche back)
-    // before the other sections.
+describe("references/brainstorm_interview.md — creation ASKS the PERSONA FIRST; the niche FALLS OUT of that answer (Round 3 Correction 1)", () => {
+  it("the FIRST creation touchpoint is the PERSONA/identity question (NOT niche-narrowing)", () => {
+    // Round 3 Correction 1 step 1: creation leads with the SOUL.md / persona
+    // question — "what kind of expert do you want, and how should it behave?" —
+    // the persona / identity question, NOT niche-narrowing. The separate
+    // "narrow the niche FIRST" step is DROPPED (round 3: "drop any separate
+    // 'narrow the niche' step"). The body must:
+    //   (1) NAME the persona/identity ask-first touchpoint, and
+    //   (2) frame it as identity/behaviour, not niche-narrowing.
     const body = brainstormBodyLower();
-    const namesVague =
-      body.includes("vague") ||
-      body.includes("over-broad") ||
-      body.includes("overbroad") ||
-      body.includes("too broad") ||
-      body.includes("too-broad") ||
-      body.includes("ambiguous") ||
-      body.includes("broad or ambiguous");
-    const namesNarrow =
-      body.includes("narrow") ||
-      body.includes("narrowing");
-    expect(namesVague).toBe(true);
-    expect(namesNarrow).toBe(true);
+    const namesPersonaAsk =
+      body.includes("what kind of expert") ||
+      body.includes("how should it behave") ||
+      body.includes("ask first") || body.includes("ask-first") ||
+      body.includes("asked first") ||
+      (body.includes("persona") && body.includes("first")) ||
+      (body.includes("soul.md") && body.includes("first"));
+    const framesIdentityNotNiche =
+      body.includes("identity") || body.includes("behave") ||
+      body.includes("how it behaves") || body.includes("how it should behave") ||
+      body.includes("kind of expert") ||
+      (body.includes("persona") && body.includes("voice"));
+    expect(namesPersonaAsk).toBe(true);
+    expect(framesIdentityNotNiche).toBe(true);
   });
 
-  it("orders the narrow-domain STEP before the persona/playbook CONVERGENCE steps", () => {
-    // Ordering anchor (mirrors the engine's validate-first / list-before-add):
-    // the executable narrow-domain step must come BEFORE the executable steps
-    // that converge persona / the mapping / the rubric, so an agent following
-    // top-to-bottom narrows first and never builds those sections on an
-    // un-narrowed niche.
-    //
-    // Adversarial precision — anchor on the EXECUTABLE STEP verb, NOT the raw
-    // first occurrence of `persona`/`rubric`. The procedure legitimately opens
-    // with a five-section AGENDA table that NAMES persona (section 2) and the
-    // rubric (section 5) up front, so `indexOf("persona")` / `indexOf("rubric")`
-    // land in that overview, ABOVE the narrow step — a raw-token anchor would
-    // FALSELY fail even on correctly-ordered prose. The anchor is the
-    // narrow-the-domain step token, required to precede the FIRST downstream
-    // CONVERGENCE step.
+  it("the NICHE FALLS OUT of the persona answer — there is NO separate niche-narrowing step that PRECEDES the persona ask (Round 3 Correction 1)", () => {
+    // Round 3 Correction 1 step 1: "The niche FALLS OUT of the answer; drop any
+    // separate 'narrow the niche' step." The doc must state the niche is derived
+    // from / falls out of the persona answer — niche-narrowing is no longer the
+    // lead-off gate.
     const body = brainstormBodyLower();
-    // The narrow-domain gate step: "narrow a vague domain … first / before any
-    // other section" — the executable step, not the agenda cell.
-    const narrowStepIdx = (() => {
-      for (const anchor of [
-        "narrow a vague domain",
-        "narrow the domain together",
-        "narrow a vague or",
-        "narrow the niche first",
-      ]) {
-        const i = body.indexOf(anchor);
-        if (i >= 0) return i;
+    const nicheFallsOut =
+      body.includes("falls out") || body.includes("fall out") ||
+      body.includes("falls out of") ||
+      body.includes("derived from the persona") ||
+      body.includes("from the persona answer") ||
+      body.includes("from that answer") ||
+      (body.includes("niche") && body.includes("persona") && body.includes("answer"));
+    expect(nicheFallsOut).toBe(true);
+  });
+
+  it("the creation FLOW walks the FIVE artefacts in ORDER: persona/SOUL → domain → user_spec → playbook → intent_spec (Round 3 Correction 1)", () => {
+    // Round 3 Correction 1: the creation walks the five artefacts, one touchpoint
+    // each, in this exact order:
+    //   1. SOUL.md (persona, ask-first)
+    //   2. domain_spec.md (agent web-research, no question)
+    //   3. user_spec.md (one basic niche fact — shoes→foot length+width, bike→
+    //      height+leg length)
+    //   4. playbook.md (one question: compare a set of options)
+    //   5. intent_spec.md (present PRD dimensions, ask to sign off)
+    // Adversarial precision — anchor on each artefact's STEP HEADING (the `### `
+    // markdown heading that NAMES the artefact's `.md` file), NOT the raw first
+    // mention. The doc legitimately opens with a five-artefact OVERVIEW TABLE + a
+    // principles list that NAME all five artefacts up front, so
+    // `indexOf("playbook")` / `indexOf("user_spec")` land in that overview ABOVE
+    // the steps — a raw-mention anchor FALSELY fails even on correctly-ordered
+    // prose (the agenda-table trap the old narrow-first test guarded against). A
+    // step heading is a line that BOTH starts with `### ` AND carries the artefact
+    // filename — that combination occurs only at the artefact's actual step (the
+    // overview is a `|` table, the principles are bullets, the rules are an ordered
+    // list — none are `### ` headings). The developer keeps full latitude over the
+    // heading's wording and step number; we pin only that the five step headings
+    // appear in this order.
+    const body = brainstormBodyLower();
+    /** Index of the first `### ` heading line that mentions the given artefact
+     * token (e.g. `soul.md`, `domain_spec`). Returns -1 if no such heading. */
+    const stepHeadingIdx = (token: string): number => {
+      const lines = body.split("\n");
+      let offset = 0;
+      for (const line of lines) {
+        if (line.startsWith("### ") && line.includes(token)) return offset;
+        offset += line.length + 1; // +1 for the stripped "\n"
       }
       return -1;
-    })();
-    // The first DOWNSTREAM convergence step: converging the persona, or the
-    // playbook sections (the mapping + rubric live there). Anchor on the
-    // converge verb so the agenda table's section NAMES don't match.
-    const convergeDownstreamIdx = (() => {
-      const candidates = [
-        "converge the persona",
-        "converge persona",
-        "converge the three playbook",
-        "converge the playbook",
-      ]
-        .map((a) => body.indexOf(a))
-        .filter((i) => i >= 0);
-      return candidates.length ? Math.min(...candidates) : -1;
-    })();
-    expect(narrowStepIdx).toBeGreaterThanOrEqual(0);
-    expect(convergeDownstreamIdx).toBeGreaterThanOrEqual(0);
-    // The narrow-domain step precedes the first downstream convergence step —
-    // an agent reaching persona/mapping/rubric convergence has already narrowed.
-    expect(narrowStepIdx).toBeLessThan(convergeDownstreamIdx);
+    };
+    const personaIdx = stepHeadingIdx("soul.md");
+    const domainIdx = stepHeadingIdx("domain_spec");
+    const userIdx = stepHeadingIdx("user_spec");
+    const playbookIdx = stepHeadingIdx("playbook");
+    const intentIdx = stepHeadingIdx("intent_spec");
+    for (const [name, idx] of [
+      ["SOUL.md (ask-first) step heading", personaIdx],
+      ["domain_spec step heading", domainIdx],
+      ["user_spec step heading", userIdx],
+      ["playbook step heading", playbookIdx],
+      ["intent_spec step heading", intentIdx],
+    ] as const) {
+      expect(idx, `${name} not found in brainstorm_interview.md`).toBeGreaterThanOrEqual(0);
+    }
+    // The chain is in order — persona FIRST, intent_spec LAST.
+    expect(personaIdx).toBeLessThan(domainIdx);
+    expect(domainIdx).toBeLessThan(userIdx);
+    expect(userIdx).toBeLessThan(playbookIdx);
+    expect(playbookIdx).toBeLessThan(intentIdx);
+  });
+
+  it("user_spec is ONE BASIC niche-fact question (shoes→foot length+width, bike→height+leg length) — Round 3 Correction 1 step 3", () => {
+    // Round 3 Correction 1 step 3: the user_spec touchpoint is ONE basic question
+    // — the single most-basic niche fact. The founder's two examples (shoes →
+    // foot length + width; bike → height + leg length) are the canonical shape;
+    // the doc must name the one-basic-fact touchpoint with a concrete niche
+    // example so the agent asks the right single thing, not a questionnaire.
+    const body = brainstormBodyLower();
+    const namesOneBasicFact =
+      body.includes("one basic") || body.includes("a basic") ||
+      body.includes("most-basic") || body.includes("most basic") ||
+      body.includes("single most-basic") || body.includes("one question") ||
+      (body.includes("basic") && body.includes("fact"));
+    const namesConcreteExample =
+      body.includes("foot length") || body.includes("foot width") ||
+      body.includes("height") || body.includes("leg length") ||
+      body.includes("inseam") ||
+      (body.includes("shoe") && body.includes("foot")) ||
+      (body.includes("bike") && body.includes("height"));
+    expect(namesOneBasicFact).toBe(true);
+    expect(namesConcreteExample).toBe(true);
+  });
+
+  it("playbook is ONE question that surfaces buying taste by asking to COMPARE a set of options — Round 3 Correction 1 step 4", () => {
+    // Round 3 Correction 1 step 4: the playbook touchpoint is ONE question that
+    // surfaces buying taste by asking the user to COMPARE a set of options
+    // (preference). The doc must name the compare-a-set-of-options touchpoint.
+    const body = brainstormBodyLower();
+    const namesCompareOptions =
+      body.includes("compare a set of options") ||
+      body.includes("compare a set") ||
+      body.includes("compare options") ||
+      body.includes("compare a few options") ||
+      body.includes("set of options") ||
+      (body.includes("compare") && body.includes("option") && body.includes("playbook")) ||
+      (body.includes("compare") && body.includes("preference"));
+    expect(namesCompareOptions).toBe(true);
+  });
+
+  it("intent_spec is a SIGN-OFF touchpoint — present the PRD dimensions and ask the user to sign off — Round 3 Correction 1 step 5", () => {
+    // Round 3 Correction 1 step 5: the intent_spec touchpoint PRESENTS the PRD
+    // decomposition dimensions and asks the user to SIGN OFF. The doc must name
+    // presenting the dimensions + the sign-off ask.
+    const body = brainstormBodyLower();
+    const namesSignOff =
+      body.includes("sign off") || body.includes("sign-off") ||
+      body.includes("signs off") || body.includes("signoff") ||
+      body.includes("ask the user to sign") ||
+      (body.includes("present") && body.includes("dimension") && body.includes("intent"));
+    const namesPrdDimensions =
+      body.includes("prd") || body.includes("decomposition dimension") ||
+      body.includes("decomposition-dimension") ||
+      (body.includes("dimension") && body.includes("intent"));
+    expect(namesSignOff).toBe(true);
+    expect(namesPrdDimensions).toBe(true);
   });
 });
 
@@ -1670,6 +1788,176 @@ describe("examples/ — a worked end-to-end example exists and demonstrates the 
     expect(endorseIdx).toBeGreaterThanOrEqual(0);
     expect(addIdx).toBeGreaterThanOrEqual(0);
     expect(endorseIdx).toBeLessThan(addIdx);
+  });
+});
+
+/* ===========================================================================
+ * ROUND 3 — the worked example is a SHORT, GENERAL-COUNSEL walkthrough that
+ * walks the FIVE-artefact creation FLOW from a create-expert request (NOT a
+ * single-query optimizer), per the card's "## Founder review round 3" Corrections
+ * 1 + 3 + 4.
+ *
+ * tier: integration (reads the real skill/examples/road_cycling_expert_walkthrough.md
+ * from disk). These pins target the FOUR things round 3 changes about the example:
+ *   (Correction 1) it starts from a create-expert request and walks the five
+ *     artefacts one touchpoint each, in order;
+ *   (Correction 3) it frames the expert as GENERAL COUNSEL / an ongoing buyer
+ *     advisor, NOT a single-query optimizer (its main flaw);
+ *   (Correction 2/4) the "≤10 questions" budget is GONE, and the doc is much
+ *     shorter (context-window budget).
+ * ========================================================================= */
+
+describe("examples/road_cycling_expert_walkthrough.md — ROUND 3: short, general-counsel, five-artefact creation flow", () => {
+  /** Lower-cased example body, and a raw line-count for the length budget. */
+  function exampleLower(): string {
+    return readBody(EXAMPLE_PATH).toLowerCase();
+  }
+  function exampleLineCount(): number {
+    return readBody(EXAMPLE_PATH).split("\n").length;
+  }
+
+  it("starts from a CREATE-EXPERT request and walks the FIVE-artefact creation flow (Correction 1)", () => {
+    // Round 3 Correction 3: the example must START FROM THE CREATE-EXPERT REQUEST
+    // and walk the five-artefact flow of Correction 1 — not open mid-shop. The
+    // body must name a create-an-expert opening AND all five artefacts so the
+    // walkthrough demonstrates the full creation walk.
+    const body = exampleLower();
+    const startsFromCreateRequest =
+      body.includes("create an expert") || body.includes("create a shopping expert") ||
+      body.includes("an expert that shops") || body.includes("expert that shops for") ||
+      body.includes("i want an expert") || body.includes("build me an expert") ||
+      (body.includes("create") && body.includes("expert") && body.includes("request"));
+    expect(startsFromCreateRequest).toBe(true);
+    // All five artefacts walked: persona/SOUL + the four sil specs.
+    const namesSoul = body.includes("soul.md") || body.includes("persona");
+    const namesDomain =
+      body.includes("domain_spec") || body.includes("domain spec") ||
+      body.includes("domain-spec");
+    const namesUser =
+      body.includes("user_spec") || body.includes("user spec") ||
+      body.includes("user-spec");
+    const namesPlaybook = body.includes("playbook");
+    const namesIntent =
+      body.includes("intent_spec") || body.includes("intent spec") ||
+      body.includes("intent-spec");
+    const missing: string[] = [];
+    if (!namesSoul) missing.push("persona/SOUL.md");
+    if (!namesDomain) missing.push("domain_spec");
+    if (!namesUser) missing.push("user_spec");
+    if (!namesPlaybook) missing.push("playbook");
+    if (!namesIntent) missing.push("intent_spec");
+    expect(missing).toEqual([]);
+  });
+
+  it("walks the five artefacts in the Correction-1 ORDER: persona/SOUL → domain → user_spec → playbook → intent_spec", () => {
+    // Round 3 Correction 1: the creation walks the five artefacts, one touchpoint
+    // each, in this order. The example demonstrates the flow, so its narrative
+    // must hit the artefacts in the same monotonic order an agent would.
+    //
+    // Adversarial precision — anchor on each artefact's STEP-MARKER line, NOT the
+    // raw first mention. The example re-names every artefact filename inside the
+    // assembled JSONC spec block AND in the prose, so a raw `indexOf(filename)`
+    // can land outside the walk. The interview steps are bold-numbered markers
+    // (`**1. \`SOUL.md\` …`, `**2. \`domain_spec.md\` …`): a line that starts with a
+    // bold-step marker AND carries the artefact filename occurs only at that
+    // artefact's step. The developer keeps latitude over wording; we pin only the
+    // five step markers' order.
+    const body = exampleLower();
+    /** Index of the first bold-numbered step-marker line (`**<n>. … <token>`) that
+     * mentions the given artefact token. Falls back to the first heading line
+     * (`#`/`##`/`###`) that mentions it, so a heading-based example still anchors. */
+    const stepMarkerIdx = (token: string): number => {
+      const lines = body.split("\n");
+      let offset = 0;
+      for (const line of lines) {
+        const isStepMarker = /^\*\*\d/.test(line) || line.startsWith("#");
+        if (isStepMarker && line.includes(token)) return offset;
+        offset += line.length + 1;
+      }
+      return -1;
+    };
+    const personaIdx = stepMarkerIdx("soul.md");
+    const domainIdx = stepMarkerIdx("domain_spec");
+    const userIdx = stepMarkerIdx("user_spec");
+    const playbookIdx = stepMarkerIdx("playbook");
+    const intentIdx = stepMarkerIdx("intent_spec");
+    for (const [name, idx] of [
+      ["persona/SOUL step marker", personaIdx],
+      ["domain_spec step marker", domainIdx],
+      ["user_spec step marker", userIdx],
+      ["playbook step marker", playbookIdx],
+      ["intent_spec step marker", intentIdx],
+    ] as const) {
+      expect(idx, `${name} not found in the example`).toBeGreaterThanOrEqual(0);
+    }
+    expect(personaIdx).toBeLessThan(domainIdx);
+    expect(domainIdx).toBeLessThan(userIdx);
+    expect(userIdx).toBeLessThan(playbookIdx);
+    expect(playbookIdx).toBeLessThan(intentIdx);
+  });
+
+  it("frames the expert as GENERAL COUNSEL / an ongoing buyer advisor — NOT a single-query optimizer (Correction 3, the example's main flaw)", () => {
+    // Round 3 Correction 3: frame the expert as GENERAL COUNSEL to the buyer (an
+    // ongoing advisor across the buyer's needs), NOT a single-query optimizer —
+    // that single-query fixation is named as the example's MAIN FLAW. The body
+    // must carry the general-counsel / ongoing-advisor framing.
+    const body = exampleLower();
+    const framesGeneralCounsel =
+      body.includes("general counsel") || body.includes("general-counsel") ||
+      body.includes("ongoing advisor") || body.includes("ongoing buyer advisor") ||
+      body.includes("ongoing buying advisor") ||
+      body.includes("standing advisor") ||
+      body.includes("advisor across") || body.includes("counsel to the buyer") ||
+      body.includes("over time") && body.includes("advisor") ||
+      (body.includes("ongoing") && body.includes("advisor"));
+    expect(framesGeneralCounsel).toBe(true);
+  });
+
+  it("the example is NOT FIXATED on a single shopping query — it does NOT carry the deep per-query map/search/rubric machinery (Correction 3)", () => {
+    // Round 3 Correction 3: the single-query fixation is the example's MAIN FLAW.
+    // The rewritten example demonstrates the CREATION FLOW + the general-counsel
+    // posture — it must NOT re-descend into a full single-query optimization (the
+    // map→search-params→rubric machinery that belongs in expert_shopping.md, not
+    // a creation walkthrough). We pin the ABSENCE of the single-query-optimizer
+    // tell: a literal sil_search param block (`price_max:` / `category:` with
+    // `condition:`) is the single-query machinery the example should no longer
+    // carry. (The example may MENTION shopping happens later — but not re-run a
+    // full param-mapped query as its centrepiece.)
+    const body = exampleLower();
+    const carriesFullParamQueryBlock =
+      (body.includes("price_max:") && body.includes("category:")) ||
+      (body.includes("price_max:") && body.includes("condition:")) ||
+      body.includes("# €1500 → minor units") ||
+      body.includes("→ minor units (cents)");
+    expect(carriesFullParamQueryBlock).toBe(false);
+  });
+
+  it("the retired '≤10 questions' budget is GONE from the example (Correction 2)", () => {
+    // Round 3 Correction 2: "≤10 questions" is retired everywhere. The example
+    // currently states "Setup is light (≤10 questions)" and tallies a running
+    // question budget ("Questions so far: ~2", "Well under 10") — all of that
+    // must be gone. The cadence is one-touchpoint-per-document now.
+    const body = exampleLower();
+    expect(body).not.toContain("≤10");
+    expect(body).not.toContain("<=10");
+    expect(body).not.toContain("10 question");
+    expect(body).not.toContain("under 10");
+    expect(body).not.toContain("question budget");
+    expect(body).not.toContain("questions so far");
+  });
+
+  it("the example is MUCH SHORTER — within the context-window budget ceiling (Correction 4)", () => {
+    // Round 3 Correction 4: the example (286 lines) is too long — the agent's
+    // context window is a hard budget. It must be cut MUCH shorter. Dropping the
+    // single-query-optimizer sections (the map/search/rubric/second-query blocks)
+    // and trimming restatement brings the five-artefact creation walk well under
+    // a 180-line ceiling (a ~37%+ cut from 286). The ceiling forces a real trim
+    // without being so tight it costs the five-artefact walk.
+    const lines = exampleLineCount();
+    expect(
+      lines,
+      `example is ${lines} lines — round 3 requires a much shorter general-counsel walkthrough (ceiling 180)`,
+    ).toBeLessThanOrEqual(180);
   });
 });
 
@@ -2728,11 +3016,12 @@ describe("skill bundle — the expert-shopping path is ADDITIVE: the generic pro
  *                                                 web-refreshed every query;
  *   - intent_spec.md (sil data dir, REQUIRED)   — the agent-specific decomposition
  *                                                 DIMENSIONS (PRD-style) for a query;
- *   - user_spec.md   (sil data dir, LAZY)       — the user's domain-relevant facts
+ *   - user_spec.md   (sil data dir, REQUIRED)   — the user's domain-relevant facts
  *                                                 + hard constraints;
- *   - playbook.md    (sil data dir, LAZY)       — the user's buying TASTE.
- * The per-query INTENT (the dimensions filled in for one request) is EPHEMERAL —
- * never persisted; only the intent_spec.md SCHEMA is.
+ *   - playbook.md    (sil data dir, REQUIRED)   — the user's buying TASTE.
+ * All four sil docs are REQUIRED + present-at-creation (round-2), augmented every
+ * query (we keep learning). The per-query INTENT (the dimensions filled in for one
+ * request) is EPHEMERAL — never persisted; only the intent_spec.md SCHEMA is.
  *
  * tier: integration. The SDS behaviour is SKILL PROSE the host agent follows —
  * NO new plugin tool (the 8-tool manifest is frozen; manifest-contract stays
@@ -2746,11 +3035,16 @@ describe("skill bundle — the expert-shopping path is ADDITIVE: the generic pro
  * What this block pins (the doc-pinnable SDS invariants, corrected):
  *   - the FIVE-artefact framing REPLACES the old two-slot / "no third slot"
  *     framing — and the persona is the host SOUL.md (no persona.md, no copy step);
- *   - LIGHT setup (≤10 q); the deep domain_spec is the agent's OWN research;
+ *   - creation walks the five artefacts ONE TOUCHPOINT PER DOCUMENT in order
+ *     (round-3 Correction 1/2: persona ask-first → domain agent-researched/zero-q →
+ *     user_spec one basic fact → playbook one compare-options → intent_spec
+ *     sign-off; the "≤10 questions" budget is RETIRED); the deep domain_spec is the
+ *     agent's OWN research;
  *   - intent_spec.md = persisted decomposition DIMENSIONS (the per-query intent is
  *     ephemeral); per-query WEB REFRESH of domain_spec.md;
- *   - LAZY capture of facts→user_spec.md / taste→playbook.md (replacing first-shop
- *     batch capture); playbook = the user's buying taste, not the seller's method;
+ *   - per-query AUGMENT of facts→user_spec.md / taste→playbook.md (all four present
+ *     from creation, augmented every query — we keep learning); playbook = the
+ *     user's buying taste, not the seller's method;
  *   - precedence intent > playbook > user_spec > domain_spec; hard-constraint
  *     inviolability (routed to a real filter AND a reject-at-recommend rule);
  *   - refine targets domain_spec / user_spec / playbook / intent_spec;
@@ -3279,25 +3573,31 @@ describe("SDS — all four specs are the REQUIRED materialize inputs, seeded at 
     expect(seedsUserSide).toBe(true);
   });
 
-  it("the interview seeds all four sil docs under the ≤10-question LIGHT setup — the user side is present from creation, NOT 'filled lazily later' (round-2)", () => {
-    // Round-2 cross-cutting rule B: setup is light (≤10 questions) and seeds ALL
-    // FOUR sil docs (partial) at creation. The brainstorm doc owns the ≤10-question
-    // bound. It must (1) keep the ≤10-question light-setup bound, (2) seed the user
-    // side at creation, and (3) NOT carry the bounced round-1 "user spec / buying
-    // taste fill lazily later" framing (the user side is present from creation now).
+  it("the interview seeds all four sil docs under the ONE-TOUCHPOINT-PER-DOCUMENT setup — the user side is present from creation, NOT 'filled lazily later' (Round 3 cadence + round-2 present-at-creation)", () => {
+    // Round-2 structure STANDS: setup seeds ALL FOUR sil docs (partial) at
+    // creation. Round 3 changes only the CADENCE rule — the budget is now
+    // "one touchpoint per document" (domain = zero questions), NOT "≤10 questions".
+    // The brainstorm doc must (1) name the one-touchpoint-per-document cadence,
+    // (2) seed the user side at creation, and (3) NOT carry the bounced round-1
+    // "user spec / buying taste fill lazily later" framing (the user side is
+    // present from creation now).
     const body = brainstormBodyLower();
-    const namesLightSetup =
-      body.includes("≤10") || body.includes("<=10") ||
-      body.includes("10 question") || body.includes("ten question") ||
-      body.includes("at most 10") || body.includes("light setup") ||
-      body.includes("no more than 10");
+    const namesTouchpointCadence =
+      body.includes("one touchpoint per document") ||
+      body.includes("one touchpoint per doc") ||
+      body.includes("a touchpoint per document") ||
+      body.includes("touchpoint per document") ||
+      body.includes("one touchpoint each") ||
+      body.includes("at least one touchpoint per") ||
+      (body.includes("touchpoint") && body.includes("per document")) ||
+      (body.includes("one touchpoint") && body.includes("each"));
     const seedsUserSideAtCreation =
       ((body.includes("seed") || body.includes("seeded") || body.includes("initial")) &&
         (body.includes("user spec") || body.includes("user_spec") ||
           body.includes("playbook") || body.includes("buying taste"))) ||
       (body.includes("all four") && body.includes("present")) ||
       (body.includes("present") && body.includes("creation"));
-    expect(namesLightSetup).toBe(true);
+    expect(namesTouchpointCadence).toBe(true);
     expect(seedsUserSideAtCreation).toBe(true);
     // The bounced round-1 "fill lazily later" / "start empty" framing for the user
     // side must be GONE — all four are present from creation now.
@@ -3305,6 +3605,13 @@ describe("SDS — all four specs are the REQUIRED materialize inputs, seeded at 
     expect(body).not.toContain("fill later");
     expect(body).not.toContain("starts empty");
     expect(body).not.toContain("start empty");
+    // Round 3: the retired ≤10-question budget must NOT survive in the brainstorm
+    // doc (the cadence is one-touchpoint-per-document now).
+    expect(body).not.toContain("≤10");
+    expect(body).not.toContain("<=10");
+    expect(body).not.toContain("10 question");
+    expect(body).not.toContain("ten question");
+    expect(body).not.toContain("at most 10");
   });
 
   it("the engine's Runtime hook loads the FOUR sil-store artefacts (domain_spec + intent_spec + user_spec + playbook); the persona is the host SOUL.md", () => {
