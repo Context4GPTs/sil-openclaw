@@ -1,82 +1,76 @@
 # Create a sil-wired shopping expert — the agent-creation engine
 
-**Precondition: read and run this reference ONLY after the user has explicitly endorsed the assembled draft from [`brainstorm_interview.md`](brainstorm_interview.md).** Running any step below before that explicit endorsement is forbidden — the interview owns the endorsement gate.
+**Precondition: run this ONLY after the user has explicitly endorsed the assembled draft from [`brainstorm_interview.md`](brainstorm_interview.md).** Any step below before that endorsement is forbidden — the interview owns the gate.
 
-When the user wants a **dedicated shopping expert** — "make me a shopping expert for buying gifts", "set up a grocery re-order agent", "create a sil shopping agent" — author and persist a **valid OpenClaw agent profile**: a real new agent under the host `agents` config, with the **sil plugin enabled**, the **sil skill attached**, its persona written into the workspace **`SOUL.md`**, plus the expert's SDS behaviour artefacts in the sil data directory — so the created agent can shop with **no further setup**.
+When the user wants a **dedicated shopping expert**, author and persist a **valid OpenClaw agent profile**: a real new agent under the host `agents` config, with the **sil plugin enabled**, the **sil skill attached**, its persona written into the workspace **`SOUL.md`**, plus the expert's SDS behaviour artefacts in the sil data directory — so it shops with **no further setup**.
 
-Every created expert runs **entirely on Spec-Driven Shopping (SDS)** — it is the operating model, not an optional layer. At creation the engine persists **all four** SDS specs, each **required and non-blank**: the deep researched `domainSpec`, the derived `intentSpec` dimension schema, and an **initial** `userSpec` (the user's standing facts + hard constraints) and `playbook` (their buying taste) — the last two seeded *partial* by the interview's ≤10-question setup. All four are present from creation, then **augmented / reinforced on every query** ([`expert_shopping.md`](expert_shopping.md)) — we keep learning.
+Every created expert runs **entirely on Spec-Driven Shopping (SDS)** — the operating model, not an optional layer. The engine persists **all four** SDS specs, each **required and non-blank**: the deep researched `domainSpec`, the derived `intentSpec` schema, and an **initial** `userSpec` + `playbook` (seeded *partial* by the interview's one-touchpoint-per-document setup). All four are present from creation, then **augmented every query** ([`expert_shopping.md`](expert_shopping.md)) — we keep learning.
 
-You are the engine. The host config write (and the `SOUL.md` write) is **you driving the host's own `openclaw …` CLI** — the sil plugin never writes the host config itself. Run these steps **in order, top to bottom** — the order is the spec.
+You are the engine: the host config write (and the `SOUL.md` write) is **you driving the host's own `openclaw …` CLI** — the sil plugin never writes the host config. Run the steps **in order, top to bottom** — the order is the spec.
 
 ## The profile spec (input)
 
-The endorsed draft from the interview feeds two stores. The **persona** becomes the agent's host workspace **`SOUL.md`** (its identity / voice / standing rules — written via the host CLI, **not** a sil artefact). The **four SDS specs** become the sil data-dir artefacts (`domainSpec` → `domain_spec.md`, `intentSpec` → `intent_spec.md`, `userSpec` → `user_spec.md`, `playbook` → `playbook.md`):
+The endorsed draft feeds two stores. The **persona** becomes the host workspace **`SOUL.md`** (its identity / voice / standing rules — via the host CLI, **not** a sil artefact). The **four SDS specs** become the sil data-dir artefacts:
 
 | Field | Meaning | Goes to | Required? |
 |---|---|---|---|
-| **agentId** | The new agent's id (lower-kebab, e.g. `gift-buyer`). Becomes `agents.list[].id`. Must be **unique** and is never `main` (host-reserved). | host | Required |
-| **name** | Human-readable expert name ("Gift Buyer"). | sil manifest | Required |
-| **persona / instructions** | Who this expert is and how it shops — its expertise, tone, standing rules. | host workspace **`SOUL.md`** (via the host CLI — **not** a sil artefact, no `persona.md`) | Required (non-empty) |
+| **agentId** | Lower-kebab id (e.g. `gift-buyer`) → `agents.list[].id`. Unique, never `main`. | host | Required |
+| **name** | Human-readable name ("Gift Buyer"). | sil manifest | Required |
+| **persona** | Who this expert is and how it shops. | host **`SOUL.md`** (via host CLI — no `persona.md`) | Required (non-empty) |
 | **workspace** | The agent's workspace directory (e.g. `~/.openclaw/workspace-gift-buyer`). | host | Required for the non-interactive add |
-| **domainSpec (SDS domain spec)** | The niche's **deep researched expertise** — how to buy well and the full mechanics — converged at creation by the interview's domain-research pass. Web-refreshed every query at shop time. | sil `domain_spec.md` | **Required (non-empty)** |
-| **intentSpec (SDS intent spec)** | The agent-specific **decomposition dimensions** (a PRD-style schema) a query must resolve, **derived from `domainSpec`** at creation. | sil `intent_spec.md` | **Required (non-empty)** |
-| **userSpec (SDS user spec)** | The user's domain-relevant facts + hard constraints. **Seeded partial at creation** from the interview's ≤10 answers, then augmented per-query ([`expert_shopping.md`](expert_shopping.md)). | sil `user_spec.md` | **Required (non-empty)** |
-| **playbook (SDS buying taste)** | The user's **buying taste** (price sensitivity, brand, preferences). **Seeded partial at creation** from the interview's ≤10 answers, then augmented per-query. | sil `playbook.md` | **Required (non-empty)** |
+| **domainSpec** | The niche's **deep researched expertise** — how to buy well, the full mechanics — from the interview's §2 research pass. Web-refreshed every query. | sil `domain_spec.md` | **Required (non-empty)** |
+| **intentSpec** | The agent-specific **decomposition dimensions** (PRD-style schema) **derived from `domainSpec`**, signed off in §5. | sil `intent_spec.md` | **Required (non-empty)** |
+| **userSpec** | The user's domain-relevant facts + hard constraints. **Seeded partial** from §3 (the one basic fact), then augmented per-query. | sil `user_spec.md` | **Required (non-empty)** |
+| **playbook** | The user's **buying taste**. **Seeded partial** from §4 (the compare-options answer), then augmented per-query. | sil `playbook.md` | **Required (non-empty)** |
 
-The **sil plugin** and the **sil skill** are always attached (that is what makes it *sil-wired*). Creating an expert is **local and offline** — it does **not** require or perform sil registration, reads no token, and writes nothing to identity storage. The expert registers the user later, on first shop, via `sil_register`. Do **not** present registration as a prerequisite for creating the profile.
+The **sil plugin** and **sil skill** are always attached (that is what makes it *sil-wired*). Creation is **local and offline** — it does **not** require or perform sil registration, reads no token, and writes nothing to identity storage. The expert registers the user later, on first shop, via `sil_register`. Do **not** present registration as a prerequisite.
 
 ## The created expert needs WEB tools
 
-SDS at shop time **web-refreshes the domain spec on every query** and the domain-research pass at creation also reaches the web ([`expert_shopping.md`](expert_shopping.md), Correction 5). So the created agent must have **web/fetch tools in its tool profile**. The agent inherits its tool profile from `agents.defaults` when its shell is created (the agent-shell step below): confirm that profile grants a web-fetch/browse capability and **do not deny it** in the agent's tool profile (alongside not denying the `sil_*` tools). If the host's `agents.defaults` does **not** grant a web tool, the created expert cannot keep its domain spec current — surface that to the user as a host-capability gap (and the orchestrator signal in the card records the dependency); do **not** pretend the refresh happened. The ordered steps follow.
+SDS **web-refreshes the domain spec on every query** and the §2 research pass also reaches the web. So the created agent must have **web/fetch tools in its tool profile** — inherited from `agents.defaults` when its shell is created (step 3). Confirm that profile grants a web-fetch/browse capability and **do not deny it** (alongside not denying the `sil_*` tools). If `agents.defaults` does **not** grant a web tool, the expert cannot keep its domain spec current — surface that to the user as a host-capability gap; do **not** pretend the refresh happened.
 
 ## Engine steps (run in this exact order)
 
-1. **Validate the spec FIRST — before anything is written.** Check `agentId` is present, lower-kebab, unique-looking, and not `main`; `name` is present; `persona`/instructions is non-empty; `workspace` is present; the **four SDS specs — `domainSpec`, `intentSpec`, `userSpec`, `playbook` — are all present and non-blank** (SDS is the operating model — a created expert is built with all four from the start, none is an "absent-is-fine" slot; the user side is seeded *partial* by the interview, never omitted). If any check fails, stop with the **`invalid_request`** outcome naming the offending field and **write nothing** — no agent, no artefacts. Nothing partial. This validation runs ahead of every host command, so a bad spec never reaches the host.
+1. **Validate the spec FIRST — before anything is written.** Check `agentId` (present, lower-kebab, unique-looking, ≠ `main`), `name`, `persona`, `workspace`, and the **four SDS specs — `domainSpec`, `intentSpec`, `userSpec`, `playbook` — all present and non-blank** (none is an "absent-is-fine" slot; the user side is seeded *partial* by the interview, never omitted). On any failure, stop with **`invalid_request`** naming the field and **write nothing**. This runs ahead of every host command, so a bad spec never reaches the host.
 
-2. **Collision check — read before write.** Run `openclaw agents list --json` and confirm no existing agent already uses `agentId`. If one does, stop with the **`collision`** outcome and **do not** run `openclaw agents add` — never overwrite or clobber an existing agent's persona or wiring. Surface the collision so the user can rename. (This list-check precedes the add, so a same-name agent is caught before any change.)
+2. **Collision check — read before write.** Run `openclaw agents list --json`; if `agentId` already exists, stop with **`collision`** and **do not** run `openclaw agents add` — never overwrite an existing agent's persona or wiring. Surface it so the user can rename.
 
 3. **Create the agent shell (host CLI).** Run:
    ```
    openclaw agents add <agentId> --workspace <workspace> --non-interactive --json
    ```
-   This creates the real `agents.list[]` entry and the agent's workspace bootstrap files (`SOUL.md`, `AGENTS.md`, …), inheriting model and **tool profile** (which must grant a **web/fetch** capability — see above) from `agents.defaults`. `--non-interactive --json` is required so you can drive it without a prompt and read the structured result.
+   This creates the real `agents.list[]` entry and the workspace bootstrap files (`SOUL.md`, `AGENTS.md`, …), inheriting model and **tool profile** (which must grant **web/fetch** — see above) from `agents.defaults`. `--non-interactive --json` lets you drive it without a prompt and read the result.
 
-4. **Write the persona DIRECTLY into the workspace `SOUL.md` (host CLI).** The persona is the agent's soul / system framing — that is the host's `SOUL.md`, **not** a sil behaviour artefact. Write the endorsed persona text straight into the new agent's workspace `SOUL.md` via the host CLI. There is **no** intermediate `persona.md` in the sil store and **no** copy step — the persona lives in exactly one place, the host workspace.
+4. **Write the persona into the workspace `SOUL.md` (host CLI).** The persona is the agent's soul / system framing — the host's `SOUL.md`, **not** a sil artefact. Write the endorsed persona text straight into the new agent's `SOUL.md` via the host CLI. There is **no** `persona.md` in the sil store and **no** copy step — the persona lives in exactly one place.
 
-5. **Materialize the SDS behaviour artefacts into the sil data directory.** Call **`sil_profile_materialize`** with `{ agentId, name, domainSpec, intentSpec, userSpec, playbook }` — pass the **deep researched `domainSpec`**, the **derived `intentSpec`** (the decomposition-dimension schema), and the **initial `userSpec` + `playbook`** seeded from the interview's ≤10 answers (partial, to be augmented per-query). All four are **required and non-blank**. It writes the expert's SDS behaviour artefacts atomically into **`$SIL_DATA_DIR`** (the sil data directory — the plugin's own disclosed scope) under `agents/<agentId>/`:
-   - **`domain_spec.md`** — the **SDS domain spec** (deep researched niche expertise — how to buy well, the full mechanics); **required**;
-   - **`intent_spec.md`** — the **SDS intent spec** (the decomposition-dimension schema derived from the domain spec); **required**;
-   - **`user_spec.md`** — the **SDS user spec** (the user's standing facts + hard constraints, seeded partial); **required**;
-   - **`playbook.md`** — the **SDS playbook** (the user's buying taste, seeded partial); **required**;
-   - **`profile.json`** — the manifest the sil skill reads at runtime to load them.
-   All four are seeded at creation — none is deferred. The user spec and playbook are seeded *partial* (the interview keeps setup light) and then **augmented per-query** at shop time. There is **no `persona.md`** here (the persona is the workspace `SOUL.md`). These behaviour artefacts live in `$SIL_DATA_DIR`, kept **out of** the thin host `agents` wiring entry. The tool's own outcomes are `ok` / `invalid_request` / `persistence_failed` — on `invalid_request` it wrote nothing; on `persistence_failed` it left nothing partial.
+5. **Materialize the SDS behaviour artefacts.** Call **`sil_profile_materialize`** with `{ agentId, name, domainSpec, intentSpec, userSpec, playbook }` — the deep `domainSpec`, the derived `intentSpec` schema, and the initial `userSpec` + `playbook` seeded by the interview (partial, augmented per-query). All four are **required and non-blank**. It writes atomically into **`$SIL_DATA_DIR/agents/<agentId>/`**: `domain_spec.md`, `intent_spec.md`, `user_spec.md`, `playbook.md`, plus `profile.json` (the manifest the sil skill reads at runtime). All four are seeded at creation — none deferred. There is **no `persona.md`** here. The tool's outcomes are `ok` / `invalid_request` / `persistence_failed` — on `invalid_request` it wrote nothing; on `persistence_failed` it left nothing partial.
 
-6. **Wire the sil skill and plugin into the agent (host CLI).** Attach the sil skill and enable the sil plugin for the created agent. These shapes are asserted against the host the sil-stage round pins — **`alpine/openclaw:2026.6.9`** — where both are value-mode sets driven with `--strict-json` (the only set mode this image accepts):
+6. **Wire the sil skill + plugin (host CLI).** Asserted against the pinned host — **`alpine/openclaw:2026.6.9`** — both value-mode sets with `--strict-json` (the only set mode this image accepts):
    ```
    openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json
    openclaw config set plugins.entries.sil.enabled true --strict-json
    ```
-   The skill attach makes the agent **know how** to drive the tools; the plugin enable makes the four `sil_*` tools available to it (they come for free once the `sil` plugin is enabled). Keep `sil` in the agent's skill list and do not deny the `sil_*` tools in its tool profile.
+   The skill attach makes the agent **know how** to drive the tools; the plugin enable makes the four `sil_*` tools available. Keep `sil` in the agent's skill list and do not deny the `sil_*` tools.
 
-7. **Validate with the host's OWN check, THEN declare created.** Run `openclaw config validate --json`. On `alpine/openclaw:2026.6.9` the verdict shape is `{ valid, path, issues? }` — success keys off **`.valid`**, never an `ok` field. "Valid" means *the host says yes* — never assert it yourself. Only when the verdict reads `valid: true` do you report the **`created`** outcome. If `openclaw config validate` returns `valid: false` (or any CLI step failed), report **`persistence_failed`** with the failing **path** and **cause** (the `issues?` the verdict reports), and leave nothing partial behind. This validate-after-add step is what guarantees the host will load the profile.
+7. **Validate with the host's OWN check, THEN declare created.** Run `openclaw config validate --json`. On `alpine/openclaw:2026.6.9` the verdict is `{ valid, path, issues? }` — success keys off **`.valid`**, never an `ok` field. Only when `valid: true` do you report **`created`**. If `valid: false` (or any CLI step failed), report **`persistence_failed`** with the failing **path** + **cause** (the `issues?`), leaving nothing partial.
 
-8. **Tell the user it is ready.** On `created`, tell the user the expert exists and how to open it. When they open the new agent, the host loads it: the sil plugin is enabled, the sil skill is attached, `SOUL.md` carries the persona, and the sil skill reads `$SIL_DATA_DIR/agents/<agentId>/profile.json` to load all four SDS specs — domain spec, intent spec, user spec, and buying taste (all present from creation) — the expert calls `sil_search` / `sil_product_get` (and `sil_register` / `sil_whoami` as needed) on the user's intent with **no further setup**.
+8. **Tell the user it is ready.** On `created`, tell them the expert exists and how to open it. Opening it loads the persona (`SOUL.md`) and all four SDS specs (`profile.json`), and the expert calls `sil_search` / `sil_product_get` (and `sil_register` / `sil_whoami` as needed) on the user's intent with **no further setup**.
 
 ## Status taxonomy (agent-creation engine)
 
 | `status` | Meaning | What to do |
 |---|---|---|
-| `created` | The agent was added, the behaviour artefacts materialized, the sil plugin + skill wired, and `openclaw config validate` accepted it. | Tell the user the expert is ready and how to open it. |
-| `invalid_request` | The spec failed validation (missing/blank field). **Nothing was written.** | Name the field, fix it, run again. Do NOT proceed to `openclaw agents add`. |
-| `collision` | An agent with that id already exists (from `openclaw agents list`). | Surface it; pick a different id. **Never overwrite / clobber** the existing agent. |
-| `persistence_failed` | A write or `openclaw config validate` step failed. The reported **path** + **cause** name what to fix. **Nothing partial** was left behind. | Fix the path/cause (writable config, valid spec), then create the expert again. |
+| `created` | Agent added, artefacts materialized, sil plugin + skill wired, `openclaw config validate` accepted it. | Tell the user it's ready and how to open it. |
+| `invalid_request` | Spec failed validation (missing/blank field). **Nothing written.** | Name the field, fix it, run again — do NOT proceed to `openclaw agents add`. |
+| `collision` | An agent with that id already exists. | Surface it; pick a different id. **Never overwrite.** |
+| `persistence_failed` | A write or `openclaw config validate` step failed. **Nothing partial** left. | Fix the reported path/cause, create again. |
 
 ## Runtime — how a created expert loads its behaviour
 
-When you (the sil skill) start a session inside a created expert, the host has already injected the persona via the workspace **`SOUL.md`** (the agent's standing instructions, voice, hard-rules). Then read `$SIL_DATA_DIR/agents/<agentId>/profile.json` and load the **SDS behaviour artefacts** it points at:
-- **`domain_spec.md`** — the **SDS domain spec**: deep researched niche expertise (how to buy well, the full mechanics) to reason over. **Always present** (required at creation);
-- **`intent_spec.md`** — the **SDS intent spec**: the decomposition-dimension schema a query must resolve. **Always present** (required at creation);
-- **`user_spec.md`** — the **SDS user spec**: the user's domain-relevant facts + hard constraints. **Always present** (seeded partial at creation, augmented per-query);
-- **`playbook.md`** — the **SDS buying taste** (price sensitivity, brand, preferences). **Always present** (seeded partial at creation, augmented per-query).
+When you (the sil skill) start a session inside a created expert, the host has already injected the persona via the workspace **`SOUL.md`**. Then read `$SIL_DATA_DIR/agents/<agentId>/profile.json` and load the four **SDS behaviour artefacts** it points at — all **always present** (required at creation):
+- **`domain_spec.md`** — deep researched niche expertise (how to buy well, the full mechanics) to reason over;
+- **`intent_spec.md`** — the decomposition-dimension schema a query must resolve;
+- **`user_spec.md`** — the user's domain-relevant facts + hard constraints (seeded partial, augmented per-query);
+- **`playbook.md`** — the user's buying taste (seeded partial, augmented per-query).
 
-All four SDS specs are **required** — a created expert always carries them, present from creation (the user side seeded *partial* by the interview, then augmented per query). Loading these is what lets the expert shop on its niche with no further setup. When the user then states a shopping intent, shop per [`expert_shopping.md`](expert_shopping.md) — the profile-driven shop-time loop, which on **every query web-refreshes the domain spec**, **decomposes the request along the intent-spec dimensions** (the per-query intent, ephemeral), and **augments the already-present** `user_spec.md` (new facts) and `playbook.md` (observed taste) — we keep learning. To sharpen a created expert from what it observed in real sessions — including its domain-spec, intent-spec dimensions, user-spec facts, or buying taste — see [`refine_expert.md`](refine_expert.md).
+Loading these is what lets the expert shop on its niche with no further setup. When the user states a shopping intent, shop per [`expert_shopping.md`](expert_shopping.md) — the loop that on **every query** web-refreshes the domain spec, decomposes the request along the intent-spec dimensions (the ephemeral per-query intent), and **augments** the already-present `user_spec.md` + `playbook.md` — we keep learning. To sharpen an expert from observed sessions, see [`refine_expert.md`](refine_expert.md).

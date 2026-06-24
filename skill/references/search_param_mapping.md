@@ -52,4 +52,4 @@ local_merchants: true             # "want local shops" → ranking bias; issue q
 # ship_to: OMITTED — server resolves the registered default address; no sil_whoami round-trip
 ```
 
-The stated budget became `price_max` (in cents), "secondhand is fine" became `condition`, "want local shops" became `local_merchants: true` — and `ship_to` was deliberately left out so the server resolves the registered default. A non-param taste ("I like understated colours") would fold into `query` text or the rubric, never a new filter.
+Budget → `price_max` (cents), "secondhand is fine" → `condition`, "want local shops" → `local_merchants: true`; `ship_to` left out so the server resolves the registered default. A non-param taste ("understated colours") folds into `query` or the rubric, never a new filter.

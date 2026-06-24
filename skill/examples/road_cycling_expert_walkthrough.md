@@ -1,286 +1,150 @@
-# Worked example — a road-cycling shopping expert, end to end
+# Worked example — a road-cycling shopping expert as general counsel
 
-A complete walkthrough from a free-form request through the **light** interview
+A short walkthrough from a **create-expert request** through the interview
 ([`../references/brainstorm_interview.md`](../references/brainstorm_interview.md))
 to a created expert via the engine
 ([`../references/agent_creation_engine.md`](../references/agent_creation_engine.md)),
-then on to its **Spec-Driven Shopping (SDS)** sessions: a **deep** domain spec
-researched at creation, the **intent-spec dimensions** derived from it, an
-**initial user spec + buying taste seeded (partial) at creation**, then a
-**per-query web refresh** of the domain plus a **per-query augment** of the
-already-present user spec (a new measurement) and playbook (a taste), and a
-layered recommendation whose "why" cites the intent + a stored user fact + a
-domain mechanic. **All four sil docs are present from creation and grow every
-query — we keep learning.** The transcript is illustrative — a real interview
-adapts to the user; this shows the *shape*, the gates, and the SDS layering.
-**Setup is light (≤10 questions); the depth comes from the agent's own research.**
+then how it acts as **general counsel to the buyer** — an ongoing advisor across
+the buyer's cycling needs, not a one-query optimizer. The interview walks the
+**five artefacts, one touchpoint each, in order**; the deep domain work is the
+agent's own research. The transcript is illustrative — it shows the *shape*, the
+gates, and the SDS layering.
 
-## 1. The free-form request
+## The interview — one touchpoint per document
 
 > **User:** "I want an expert that shops for road-cycling gear for me."
 
-Reflect the request back and open with one orienting question — not a form:
+**1. `SOUL.md` — ask first (persona; the niche falls out).** No separate
+narrow-the-niche step:
 
-> **Expert:** "A shopping expert for road-cycling gear — let's shape it together,
-> lightly. We can revise anything. To start: are you after a complete bike, or kit
-> and components (wheels, groupsets, apparel)?"
+> **Expert:** "Let's shape it. What kind of expert do you want, and how should it
+> behave?"
+> **User:** "A patient guide — I'm buying my first proper road bike and I'm new to
+> this. Always explain fit. And no carbon-fibre handlebars, a friend cracked one."
 
-## 2. Narrow the (vague) domain FIRST
+→ Persona (→ host **`SOUL.md`**): *a patient first-bike advisor who always explains
+fit; standing rule — never recommend carbon handlebars.* The niche — **a complete
+first road bike** — fell out of the answer.
 
-"Road-cycling gear" is broad. Narrow it before researching anything:
+**2. `domain_spec.md` — no question (the agent researches the web).** The agent
+researches how to buy a first road bike well, then reflects the shape back:
 
-> **User:** "A complete road bike, actually — my first proper one."
-> **Expert:** "Got it — the niche is **a complete road bike for a first proper
-> buyer**, not components or apparel. Does that capture it?"
-> **User:** "Yes."
+> **Expert:** "I've done the homework. The short version: **the fit is everything** —
+> frame size from height *and* inseam, stack/reach set torso angle, saddle setback
+> from KOPS, crank length scales with inseam. Then endurance-vs-race geometry,
+> groupset/gearing theory (gear-inches, compact vs mid-compact for your terrain),
+> and alloy-vs-carbon + wheel/tyre trade-offs. For a first bike I'd weight fit and
+> comfort over outright speed. Track?"
+> **User:** "Yes — I want to actually enjoy riding it."
 
-The concrete, confirmed niche is locked before the research — the narrow-first gate
-is satisfied. *(Questions so far: ~2.)*
+→ Deep **`domainSpec`** (→ `domain_spec.md`): the full how-to-buy-well — the
+complete fit process, geometry, gearing theory, material/wheel trade-offs — the
+layer a coarse "size 56, black" request never names. *(If the agent had no web tool,
+it would say so, then write the domain spec from its own knowledge — never fake it.)*
 
-## 3. Research the niche DEEPLY → the domain spec (the agent's own research)
+**3. `user_spec.md` — one basic question.** The single most-basic niche fact:
 
-With the niche concrete, the agent **researches it itself** (web + knowledge) —
-pulling *everything* about how to buy a road bike well. It does **not** interrogate
-the user for this; it reflects the depth back briefly and confirms the shape:
+> **Expert:** "One basic thing I'll keep: your **height** and **inseam**?"
+> **User:** "178 cm, 81 cm inseam."
 
-> **Expert:** "I've done the homework on how to buy a first road bike well. The
-> short version of what drives a good buy:
-> - **Fit is everything** — the full fitting process: frame size from your
->   height *and* inseam (not height alone); **stack & reach** set torso angle;
->   **saddle setback** from KOPS (knee-over-pedal-spindle); **crank length** scales
->   with inseam; **bar reach + drop** set hand position. A bike that doesn't fit is
->   the #1 reason first bikes get abandoned.
-> - **Frame geometry** — endurance vs. race: head-tube angle + trail govern
->   handling; chainstay length trades stiffness against comfort; endurance geo
->   (taller stack, slacker) suits a first buyer better than aggressive race geo.
-> - **Groupset & gearing theory** — 105 vs Ultegra vs Dura-Ace (tier = shift
->   quality + weight, not capability); **gear-inches = chainring/cog × wheel
->   diameter**; compact (50/34) vs mid-compact (52/36) vs 1x trade total range for
->   step size — pick range for your terrain, not bragging rights.
-> - **Frame material & wheels** — alloy vs carbon (ride feel, price, repairability);
->   rim depth vs. crosswind stability (deeper = more aero, worse in gusts); tyre
->   clearance bounds how wide/comfortable you can go.
->
-> The big trade-offs: a stiffer frame buys power transfer but costs all-day
-> comfort; deeper wheels buy aero but punish you in crosswinds; a higher groupset
-> tier buys shift quality + weight but costs budget. For a first bike I'd weight
-> **fit and comfort over outright speed**. Does that track?"
-> **User:** "Yes — comfort matters, I want to actually enjoy riding it."
+→ Seeded partial **`userSpec`** (→ `user_spec.md`): *height 178 / inseam 81 (soft
+facts); HARD-NO: carbon-fibre handlebars (inviolable).* The rest is augmented per
+query.
 
-→ Converged **domain spec** (lands in `domainSpec` → `domain_spec.md`): the full
-**how-to-buy-well** of a first road bike — the complete fitting process (size,
-stack/reach, saddle setback, crank length, bar reach), endurance-vs-race geometry,
-gearing theory, material and wheel trade-offs, and the trade-offs that drive the
-buy. This is deep researched substance — exactly the layer a coarse "size 56,
-black" request never names. *(No question budget spent — the agent researched it.)*
+**4. `playbook.md` — one question: compare a set of options (buying taste).**
 
-## 4. Derive the intent-spec dimensions FROM the domain spec
+> **Expert:** "Of these three — a value alloy build, a mid-range carbon, a premium
+> race bike — which appeals, and why?"
+> **User:** "The value alloy, around €1500. I don't chase brands."
 
-From what it learned, the agent derives the **decomposition dimensions** every road-
-bike query must resolve — a PRD-style schema, not a filled-in request:
+→ Seeded partial **`playbook`** (→ `playbook.md`): *value-conscious, ~€1500 feel,
+brand-agnostic; comfort over outright speed.*
 
-> **Expert:** "So every time you ask me to find a bike, I'll decompose it along:
-> **use-case** (commute / fitness / racing / touring), **terrain** (flat / hilly /
-> mixed), **budget band**, **fit envelope** (your body measurements), **timeline**,
-> **compatibility** (anything you're keeping — pedals, etc.), **performance
-> priorities** (comfort vs. speed vs. weight), and **aesthetics**. That's my
-> checklist for a good buy. Sound right?"
+**5. `intent_spec.md` — sign-off.** The decomposition dimensions, derived from the
+domain spec:
+
+> **Expert:** "Every time you ask me to find something, I'll decompose along:
+> use-case, terrain, budget, fit envelope, timeline, compatibility, performance
+> priorities, aesthetics. Sign off?"
 > **User:** "Yep."
 
-→ Converged **intent spec** (lands in `intentSpec` → `intent_spec.md`): those
-dimensions, derived from *this* niche's domain spec. It is the **schema** of what to
-resolve, never the values for one request (those are the ephemeral per-query intent).
-*(Question budget: ~3 total so far.)*
+→ **`intentSpec`** (→ `intent_spec.md`): that schema (the dimensions to resolve),
+never a filled-in request.
 
-## 5. Converge the persona
+## Assemble + endorse — the gate
 
-> **Expert:** "How should this expert come across — a terse spec-checker, or a
-> patient guide for a first buyer? Any standing rules?"
-> **User:** "Patient and clear, I'm new to this. Always explain fit. No carbon-fibre
-> handlebars — a friend cracked one and it scared me."
-> **Expert:** "Persona: a patient, clear first-bike advisor who always explains fit;
-> standing rule — never recommend carbon handlebars. Good?"
-> **User:** "Perfect."
-
-→ becomes the host workspace **`SOUL.md`** (the persona is the agent's system
-framing — not a sil artefact). *(Question budget: ~5 total. Well under 10.)*
-
-## 5b. Seed the user side — an initial user spec + buying taste (partial)
-
-From what the user already said (no deep questionnaire — setup stays light), the
-agent seeds a *partial* user spec and buying taste so all four sil docs are present
-from creation. It reflects what it captured and confirms:
-
-> **Expert:** "I'll start your profile with what you've told me: you want **comfort
-> and enjoyment over outright speed** (a standing preference), and a **hard no on
-> carbon-fibre handlebars**. On budget/brand — any rough feel, or shall I learn it
-> as we shop?"
-> **User:** "Around €1500-ish to start, no strong brand feelings."
-
-→ seeds an initial **`userSpec`** (→ `user_spec.md`): *comfort-first preference
-(soft); HARD-NO: carbon-fibre handlebars (inviolable)* — and an initial
-**`playbook`** (→ `playbook.md`): *budget feel ~€1500; brand-agnostic.* Both are
-**partial** — body measurements and finer taste fill in per-query as the user
-shops — but **present from creation**, never absent. *(Question budget: ~6 total.)*
-
-## 6. Derive + confirm the identity
-
-> **Expert:** "I'll call it **Road-Cycling Buyer** (`road-cycling-buyer`). Good?"
-> **User:** "Yes."
-
-→ `agentId: road-cycling-buyer` (lower-kebab, ≠ `main`), `name: "Road-Cycling Buyer"`.
-
-## 7. Assemble the draft and present it back
-
-The assembled spec — a valid `sil_profile_materialize` input. The persona goes to
-`SOUL.md` (host); **all four** SDS specs go to the sil store, **all present from
-creation** (the user spec + buying taste seeded *partial*, to grow per-query):
+Identity confirmed (`road-cycling-buyer` / "Road-Cycling Buyer"), the assembled
+draft is a valid `sil_profile_materialize` input — persona → `SOUL.md`, all four
+SDS specs to the sil store, all present from creation (user side seeded *partial*):
 
 ```jsonc
 {
   "agentId": "road-cycling-buyer",
   "name": "Road-Cycling Buyer",
-  "persona": "A patient, clear first-road-bike advisor. Always explains fit. Standing rule: never recommend carbon-fibre handlebars.",
-  "domainSpec": "## First road bike — how to buy well (deep)\n### Fit (the full process)\nFrame size from height AND inseam; stack/reach set torso angle; saddle setback from KOPS; crank length scales with inseam; bar reach + drop set hand position. Bad fit is the #1 reason first bikes get abandoned.\n### Geometry\nEndurance (taller stack, slacker, longer chainstays — comfort) vs race (aggressive — speed). Head-tube angle + trail govern handling.\n### Groupset & gearing theory\n105/Ultegra/Dura-Ace = shift quality + weight, not capability. gear-inches = chainring/cog × wheel diameter. Compact vs mid-compact vs 1x trade range for step size — pick for terrain.\n### Material & wheels\nAlloy vs carbon (feel/price/repairability); rim depth vs crosswind stability; tyre clearance bounds comfort.\n### Trade-offs\nStiffness vs comfort; aero (deep wheels) vs crosswind handling; groupset tier vs budget. For a first bike: weight fit + comfort over outright speed.",
-  "intentSpec": "## Decomposition dimensions for a road-bike query (schema)\nuse-case (commute/fitness/racing/touring); terrain (flat/hilly/mixed); budget band; fit envelope (body measurements); timeline; compatibility (kept parts); performance priorities (comfort/speed/weight); aesthetics.\nEach is a dimension the per-query intent fills in — the fill is ephemeral; this schema is persisted.",
-  "userSpec": "## User spec (seeded partial)\n### Domain-relevant facts (soft preferences)\n- Comfort + enjoyment over outright speed (first proper bike).\n### Hard constraints (INVIOLABLE — never recommend a violating item)\n- HARD-NO: carbon-fibre handlebars.\n_(Body measurements to be captured per-query as they're needed.)_",
-  "playbook": "## Buying taste (seeded partial)\n- Budget feel ~€1500 to start.\n- Brand-agnostic; no strong brand feelings yet.\n_(Finer taste — secondhand tolerance, brand likes — fills in per-query.)_"
+  "persona": "A patient first-road-bike advisor. Always explains fit. Standing rule: never recommend carbon-fibre handlebars.",
+  "domainSpec": "## First road bike — how to buy well (deep)\n**Fit is everything**: size from height AND inseam; stack/reach set torso angle; saddle setback from KOPS; crank length scales with inseam; bar reach/drop set hands. Bad fit is the #1 reason first bikes get abandoned.\n## Geometry: endurance (comfort) vs race (speed); head-tube angle + trail govern handling.\n## Groupset & gearing: tier = shift quality + weight, not capability; gear-inches = chainring/cog × wheel; compact vs mid-compact vs 1x trade range for step size — pick for terrain.\n## Material & wheels: alloy vs carbon (feel/price/repairability); rim depth vs crosswind; tyre clearance bounds comfort.\n## Trade-offs: stiffness vs comfort; aero vs crosswind; tier vs budget. First bike: weight fit + comfort over speed.",
+  "intentSpec": "## Decomposition dimensions (schema)\nuse-case; terrain; budget band; fit envelope; timeline; compatibility; performance priorities; aesthetics. The per-query fill is ephemeral; this schema is persisted.",
+  "userSpec": "## User spec (seeded partial)\n### Soft facts/preferences\n- Height 178 cm, inseam 81 cm.\n- Comfort + enjoyment over outright speed.\n### Hard constraints (INVIOLABLE)\n- HARD-NO: carbon-fibre handlebars.",
+  "playbook": "## Buying taste (seeded partial)\n- Value-conscious; budget feel ~€1500.\n- Brand-agnostic. (Finer taste fills in per-query.)"
 }
 ```
 
-> **Expert:** "Here's the expert: a patient first-bike advisor that knows the full
-> fit process, geometry, gearing theory, and the comfort-vs-speed trade-offs;
-> decomposes every request along use-case, terrain, budget, fit, timeline,
-> compatibility, priorities, and looks; and already holds your comfort-first
-> preference, your no-carbon-bars hard rule, and a ~€1500 budget feel to grow from.
-> Shall I create it?"
-
-## 8. Explicit endorsement — the gate
-
+> **Expert:** "Here's the expert — shall I create it?"
 > **User:** "Yes, create it."
 
-**This affirmative act is the gate.** Up to this point, **zero engine steps have
-run** — nothing was written. Only now does the engine proceed.
-
-## 9. Run the engine (after endorsement)
-
-Following [`../references/agent_creation_engine.md`](../references/agent_creation_engine.md) in order:
-
-1. **Validate the spec FIRST** — `agentId` lower-kebab & ≠ `main` ✓, `name` ✓,
-   `persona` ✓, `workspace` ✓, **all four SDS specs non-blank ✓** (`domainSpec`,
-   `intentSpec`, `userSpec`, `playbook` — the user side seeded partial, never blank).
-2. **Collision check** — `openclaw agents list --json`; no existing
-   `road-cycling-buyer` → proceed.
-3. **Create the shell** — `openclaw agents add road-cycling-buyer --workspace
-   ~/.openclaw/workspace-road-cycling-buyer --non-interactive --json`; confirm the
-   inherited tool profile grants a **web/fetch** tool (SDS needs it for the per-query
-   domain refresh).
-4. **Persona → `SOUL.md` (host CLI)** — write the persona text directly into the
-   agent's workspace `SOUL.md`. No `persona.md`, no copy step.
-5. **Materialize SDS artefacts** — `sil_profile_materialize { agentId, name,
-   domainSpec, intentSpec, userSpec, playbook }` writes all four bodies
-   (`domain_spec.md`, `intent_spec.md`, `user_spec.md`, `playbook.md`) and
-   `profile.json` into `$SIL_DATA_DIR/agents/road-cycling-buyer/`. All four are
-   present from creation — the user spec + playbook seeded *partial*, then augmented
-   per-query.
-6. **Wire sil** — `openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json` and `openclaw config set plugins.entries.sil.enabled true --strict-json`.
-7. **Validate with the host's OWN check, THEN declare created** — `openclaw config
-   validate --json` returns valid → outcome **`created`**.
-8. **Tell the user** — the expert exists; opening it loads all four SDS specs
-   (domain, intent, the seeded user spec + buying taste) and it shops on its niche
-   with **no further setup**.
-
-## 10. First query — web-refresh the domain, decompose, augment the already-present user side
-
-Later the user opens the expert and shops
-([`../references/expert_shopping.md`](../references/expert_shopping.md)). All four
-sil docs are **already present** (seeded at creation). On **every query** the expert
-refreshes the domain, decomposes the request, and **augments** the already-present
-user spec / playbook with whatever new fact a dimension needs — **we keep
-learning**, not an up-front form, and not a one-time capture from empty:
-
-> **User:** "Find me a road bike, budget around €1500."
-
-**(1) Web-refresh the domain spec.** The expert hits the web to keep the domain
-current — this season's 105 groupset revision, current alloy-vs-carbon price
-crossover at the €1500 band — and re-materializes the enhanced `domain_spec.md`.
-
-**(2) Decompose along the intent dimensions (ephemeral).** "So: **use-case** fitness
-(your words earlier), **budget** ~€1500, **performance priority** comfort (from your
-profile). Missing for a good fit: your **fit envelope**." The filled decomposition is
-the per-query intent — it is never persisted.
-
-**(3) Augment the already-present user side with the one missing fact.** The seeded
-`user_spec.md` already holds the comfort-first preference and the no-carbon-bars hard
-rule; a defensible pick now needs the fit envelope, so the expert asks for it **in
-context** (not a wizard form) and **augments** the existing user spec:
-
-> **Expert:** "Before I search — for fit I need two numbers I'll keep so I never
-> re-ask: your **height** and **inseam**. And to sharpen your budget profile: is
-> secondhand fine if it saves money?"
-> **User:** "178 cm, 81 cm inseam. No strong brand feelings, but secondhand is fine."
-
-→ The fit facts **augment** the already-present **`user_spec.md`** (re-materialize:
-add height 178 cm, inseam 81 cm — soft facts, alongside the seeded comfort-first
-preference + carbon-bars hard rule) and the secondhand tolerance **reinforces** the
-already-present **`playbook.md`** (re-materialize: ~€1500, secondhand acceptable,
-brand-agnostic). Each is now sharper than it was, and **never re-asked**.
-
-**(4–6) Map → search → compare.** Mapping the decomposition + the stored facts/taste:
+**This affirmative act is the gate** — up to here, **zero engine steps ran**. Only
+now does the engine proceed
+([`../references/agent_creation_engine.md`](../references/agent_creation_engine.md)):
+validate-first → collision check → `openclaw agents add road-cycling-buyer
+--workspace ~/.openclaw/workspace-road-cycling-buyer --non-interactive --json`
+(confirm the inherited profile grants a web tool) → write the persona into
+`SOUL.md` → `sil_profile_materialize { agentId, name, domainSpec, intentSpec,
+userSpec, playbook }` → wire sil:
 
 ```
-query:      "endurance road bike 105 groupset 54cm"   # fit envelope → size band
-category:   "road-bikes"
-price_max:  150000        # €1500 → minor units (cents)
-condition:  ["secondhand"]   # taste: secondhand is fine
-# ship_to: OMITTED — server resolves the registered default; no sil_whoami round-trip
+openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json
+openclaw config set plugins.entries.sil.enabled true --strict-json
 ```
 
-The recommendation **rubric emerges here**: rank on the domain-spec mechanics (fit +
-comfort first for a first bike), weighted by the taste (value-conscious, ~€1500) and
-the intent (fitness use). No hard constraints to reject on this query.
+→ `openclaw config validate --json` returns valid → **`created`**.
 
-## 11. A layered recommendation — the "why" cites the layers
+## As general counsel — an ongoing advisor, not a one-query optimizer
 
-> **Expert (intent):** "This request: a **fitness road bike**, ~€1500, comfort-first."
-> **Expert (pick + why):** "Top pick: the [alloy endurance road bike, 54 cm, 105
-> groupset] at €1420 secondhand.
-> **Why:** for your **178 cm / 81 cm inseam** (your stored fit envelope — I didn't
-> re-ask) a **54 cm endurance frame** puts the stack/reach where a first buyer wants
-> it — a domain mechanic: **fit and comfort outrank outright speed on a first bike**,
-> so I passed over a stiffer race-geo bike that was lighter on paper. It runs a
-> compact 50/34 — the gearing range that suits mixed terrain — and lands under your
-> €1500 with room, matching your value-conscious taste."
+The expert is now standing counsel for this buyer's cycling life. Across requests it
+**reuses** what it knows (the 178/81 fit envelope, the no-carbon-bars hard rule, the
+value-conscious taste — **never re-asked**), and on **every query** web-refreshes the
+domain spec, decomposes the request along the intent dimensions, and **augments** the
+already-present user spec + playbook — we keep learning.
 
-That "why" cites the **per-query intent** (a ~€1500 fitness bike), a **stored
-user-spec fact it did not re-ask** (the 178/81 fit envelope), and a **researched
-domain-spec mechanic** (fit/comfort over speed; the compact-gearing-for-terrain
-reasoning) — visible layered reasoning, not generic attribute matching. A pick
-rationale that named none of those would **fail the SDS bar** even if the bike were
-fine.
+> **User:** "Find me a first road bike, ~€1500."
 
-## 12. A second query — facts reused, taste honoured, hard constraint respected
+This is one request, not the point of the expert. It runs the shop-time loop
+([`../references/expert_shopping.md`](../references/expert_shopping.md) owns the
+map→search→compare→recommend machinery — not repeated here): web-refresh the domain,
+decompose the intent, augment the playbook with a taste it surfaces in context, then
+recommend with a "why" that **cites the layers** — "for your **178/81 fit envelope**
+(kept from before) a 54 cm endurance frame sits right, and **fit/comfort outrank
+outright speed on a first bike** (a domain mechanic), so I passed a lighter race-geo
+bike, all within your value budget." A rationale naming no domain mechanic and reusing
+no stored fact would **fail the SDS bar** even if the bike were fine.
 
-> **User (weeks later):** "Now find me a winter bike for the same budget."
+Weeks later the *same* counsel handles new needs without re-onboarding:
 
-The expert **reuses** the stored fit envelope (178/81 — never re-asked) and taste
-(~€1500, secondhand ok), web-refreshes the domain, decomposes the new intent
-(use-case: winter/all-weather → mudguard clearance, durability), and recommends —
-citing the kept fit fact + a domain mechanic (tyre clearance for winter tyres +
-guards). If the user now says "actually bump my budget to €2000," that **updates**
-the stored taste (a soft preference → re-materialize, visibly). But if they ever say
-"find me a carbon-handlebar bike," the persona's standing **hard rule** holds — intent
-never overrides a hard constraint.
+> **User:** "Now a winter bike, same budget."
+
+It reuses the fit envelope and taste, decomposes the new intent (all-weather →
+mudguard clearance, tyre durability), and recommends citing the kept fit fact + a
+winter domain mechanic. A "bump my budget to €2000" **updates** the stored taste
+(visibly); but "find me a carbon-handlebar bike" hits the standing **hard rule** —
+intent never overrides a hard constraint.
 
 ## Edge cases this example would have handled
 
-- **Collision** (a `road-cycling-buyer` already exists): the engine returns
-  `collision`, writes nothing, and the conversation offers **refine-or-rename** —
-  never clobbers.
-- **Abandon before step 8** of the interview (user walks away pre-endorsement):
-  nothing was created, nothing to tear down — the draft lived only in the conversation.
-- **No web tool available**: the expert says so honestly and proceeds on the
-  existing domain spec — it never pretends the refresh happened.
-- **Creation is local + offline** (for the user's identity): no sil registration was
-  needed to create the expert; the user registers later, on first shop, via
-  `sil_register`.
+- **Collision** (`road-cycling-buyer` exists): the engine returns `collision`, writes
+  nothing, the conversation offers **refine-or-rename** — never clobbers.
+- **Abandon before endorsement**: nothing created, nothing to tear down — the draft
+  lived only in the conversation.
+- **No web tool**: the expert says so honestly and proceeds on the existing domain
+  spec — never pretends the refresh happened.
+- **Creation is local + offline** (for identity): no sil registration to create; the
+  user registers later, on first shop, via `sil_register`.
