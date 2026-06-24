@@ -26,8 +26,9 @@
  *   - registers sil_profile_list (Type.Object({})), sil_profile_get and
  *     sil_profile_remove (Type.Object({agentId})) — agentId required;
  *   - list  → jsonResult({status:"ok", experts, unreadable}), createdAt DESC;
- *   - get   → {status:"ok", agentId, name, persona, playbook?, profilePath,
- *     createdAt} / {status:"not_found", agentId, …recovery} /
+ *   - get   → {status:"ok", agentId, name, domainSpec, intentSpec, userSpec,
+ *     playbook, profilePath, createdAt} (NO persona; all four present) /
+ *     {status:"not_found", agentId, …recovery} /
  *     {status:"invalid_request", field, message};
  *   - remove→ {status:"removed", agentId} / {status:"not_found", agentId} /
  *     {status:"invalid_request", field} / {status:"persistence_failed", error,
@@ -80,16 +81,29 @@ function payloadOf(result: { content: { text?: string }[] }): Record<string, unk
 }
 
 /** Materialize an expert via the real store writer (never a hand fixture), so
- * the tools read the genuine on-disk shape. Optionally pin createdAt. */
+ * the tools read the genuine on-disk shape. Optionally pin createdAt.
+ *
+ * After the SDS reframe the store holds NO persona. Round-2: ALL FOUR specs are
+ * REQUIRED and present from creation, so the fixture ALWAYS supplies all four.
+ * Callers may override any of the four via opts. */
 function makeExpert(
   agentId: string,
-  opts: { name?: string; persona?: string; playbook?: string; createdAt?: string } = {},
+  opts: {
+    name?: string;
+    domainSpec?: string;
+    intentSpec?: string;
+    userSpec?: string;
+    playbook?: string;
+    createdAt?: string;
+  } = {},
 ): void {
   const result = materializeProfile({
     agentId,
     name: opts.name ?? `Expert ${agentId}`,
-    persona: opts.persona ?? `Persona for ${agentId}.`,
-    ...(opts.playbook !== undefined ? { playbook: opts.playbook } : {}),
+    domainSpec: opts.domainSpec ?? `# Domain spec for ${agentId}\nResearched dimensions.`,
+    intentSpec: opts.intentSpec ?? `# Intent spec for ${agentId}\nDecomposition dimensions.`,
+    userSpec: opts.userSpec ?? `# User spec for ${agentId}\nFacts + hard constraints.`,
+    playbook: opts.playbook ?? `# Buying taste for ${agentId}\nSeeded preferences.`,
   });
   if (!result.ok) throw new Error(`fixture setup failed: ${JSON.stringify(result)}`);
   if (opts.createdAt !== undefined) {
@@ -172,13 +186,13 @@ describe("sil_profile_list — ok envelope", () => {
     expect(payload["unreadable"]).toEqual([]);
   });
 
-  it("lists every expert (name + hasPlaybook + agentId from the manifest), createdAt DESC", async () => {
+  it("lists every expert (name + agentId from the manifest), createdAt DESC", async () => {
+    // Round-2: with all four specs required+present, a hasPlaybook flag is trivially
+    // true for every expert and carries no discriminating signal — so we do NOT
+    // assert it. The durable behaviour is enumeration + createdAt-DESC ordering +
+    // the manifest name.
     makeExpert("oldest", { name: "Oldest", createdAt: "2026-01-01T00:00:00.000Z" });
-    makeExpert("newest", {
-      name: "Newest",
-      playbook: "pb",
-      createdAt: "2026-06-22T00:00:00.000Z",
-    });
+    makeExpert("newest", { name: "Newest", createdAt: "2026-06-22T00:00:00.000Z" });
 
     const tool = getTool(api, LIST);
     const payload = payloadOf(await tool.execute("c-2", {}));
@@ -187,8 +201,7 @@ describe("sil_profile_list — ok envelope", () => {
     // Most-recently-created first.
     expect(experts.map((e) => e["agentId"])).toEqual(["newest", "oldest"]);
     expect(experts[0]!["name"]).toBe("Newest");
-    expect(experts[0]!["hasPlaybook"]).toBe(true);
-    expect(experts[1]!["hasPlaybook"]).toBe(false);
+    expect(experts[1]!["name"]).toBe("Oldest");
   });
 
   it("one corrupt manifest → healthy experts still list, broken one in unreadable[]", async () => {
@@ -211,32 +224,43 @@ describe("sil_profile_list — ok envelope", () => {
 // ===========================================================================
 
 describe("sil_profile_get — ok envelope (full detail from artefacts)", () => {
-  it("returns status ok with name, persona, playbook, profilePath, createdAt", async () => {
+  it("returns status ok with name, the spec bodies, the lazy bodies, profilePath, createdAt — NO persona", async () => {
     makeExpert("gift-buyer", {
       name: "Gift Buyer",
-      persona: "Gifts under €50; check stock.",
-      playbook: "Use sil_search then sil_product_get.",
+      domainSpec: "# Gift-buying domain spec\nRecipient, occasion, budget dimensions.",
+      intentSpec: "# Intent spec\nrecipient, occasion, budget.",
+      userSpec: "# User spec\nHARD-NO: nothing over €50.",
+      playbook: "# Buying taste\nValue-conscious.",
     });
     const tool = getTool(api, GET);
     const payload = payloadOf(await tool.execute("c-4", { agentId: "gift-buyer" }));
     expect(payload["status"]).toBe("ok");
     expect(payload["agentId"]).toBe("gift-buyer");
     expect(payload["name"]).toBe("Gift Buyer");
-    expect(payload["persona"]).toBe("Gifts under €50; check stock.");
-    expect(payload["playbook"]).toBe("Use sil_search then sil_product_get.");
+    expect(payload["domainSpec"]).toBe(
+      "# Gift-buying domain spec\nRecipient, occasion, budget dimensions.",
+    );
+    expect(payload["intentSpec"]).toBe("# Intent spec\nrecipient, occasion, budget.");
+    expect(payload["userSpec"]).toBe("# User spec\nHARD-NO: nothing over €50.");
+    expect(payload["playbook"]).toBe("# Buying taste\nValue-conscious.");
+    // Persona left the store — the envelope carries none.
+    expect(payload["persona"]).toBeUndefined();
     expect(payload["profilePath"]).toBe(
       join(getAgentArtefactDir("gift-buyer"), "profile.json"),
     );
     expect(typeof payload["createdAt"]).toBe("string");
   });
 
-  it("omits playbook in the envelope when the expert has none", async () => {
-    makeExpert("grocery", { name: "Grocery" });
+  it("returns ALL FOUR spec bodies for a created expert (round-2: none is absent at creation)", async () => {
+    makeExpert("grocery", { name: "Grocery" }); // all four seeded by default
     const tool = getTool(api, GET);
     const payload = payloadOf(await tool.execute("c-5", { agentId: "grocery" }));
     expect(payload["status"]).toBe("ok");
-    expect(payload["playbook"]).toBeUndefined();
-    expect(typeof payload["persona"]).toBe("string");
+    // All four specs are present from creation now.
+    expect(typeof payload["domainSpec"]).toBe("string");
+    expect(typeof payload["intentSpec"]).toBe("string");
+    expect(typeof payload["userSpec"]).toBe("string");
+    expect(typeof payload["playbook"]).toBe("string");
   });
 });
 

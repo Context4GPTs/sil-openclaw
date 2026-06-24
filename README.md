@@ -96,27 +96,28 @@ agent  done — here's your checkout link, ready to pay:
 
 ## Turn your OpenClaw into a shopping expert
 
-So far your *general* agent did the shopping. Go one step further: mint a **dedicated** OpenClaw agent that shops a single niche like a specialist — its taste, budget, and hard rules baked in once, then reused on every visit.
+So far your *general* agent did the shopping. Go one step further: mint a **dedicated** OpenClaw agent that shops a single niche like a true specialist — it **researches how to buy well in that niche itself**, then fits *you* the way an expert would.
 
-**TL;DR** — say *"make me a shopping expert for road-cycling gear"* and the plugin **interviews you** (the niche, your taste, your budget, the rules it must never break), then creates a real OpenClaw agent wired to sil with that persona and playbook. Open it later and it already knows your niche: it asks only what's still missing, searches sil with your constraints pre-set, and ranks results your way. **Nothing is created until you say "create it"** — and building one is local and offline, no sign-in required.
+**TL;DR — Spec-Driven Shopping (SDS).** Say *"make me a shopping expert for road-cycling gear"* and the plugin runs a **light** interview (≤10 questions) to narrow the niche and shape the persona — then **researches the niche deeply on its own** (the full how-to-buy-well: fit, gearing, geometry, the trade-offs) and derives the **dimensions** every request should be decomposed along. Open it later and on **every query** it refreshes that knowledge from the web, decomposes what you asked, and **learns your facts and taste as it goes** (your measurements, your budget, the rules it must never break) — captured once, never re-asked. It recommends with a "why" that cites *what you asked*, *a fact it remembered*, and *a niche mechanic you'd never have named*. **Nothing is created until you say "create it"** — and building one is local and offline, no sign-in required.
 
-**1 — One conversation builds the expert:**
+**1 — One light conversation builds the expert (it does the deep research itself):**
 
 ```text
 you    make me a shopping expert for road-cycling gear
 
-agent  Love it — let's shape it together. Components and apparel,
-       or complete bikes too?
+agent  Love it — let's shape it lightly. A complete bike, or
+       components and apparel?
 
-you    components and apparel, I've got the frame. ~€1200 budget,
-       secondhand is fine, and I'm in France
+you    a complete road bike, my first proper one
 
-agent  Here's the expert I'll build:
+agent  Got it. I've researched how to buy a first road bike well —
+       fit (size from height AND inseam, stack/reach, saddle setback),
+       endurance-vs-race geometry, gearing theory, the comfort/speed
+       trade-offs. I'll decompose every request along use-case, terrain,
+       budget, your fit envelope, timeline, and priorities.
 
-         Road-Cycling Buyer — a concise components advisor
-         · always flags groupset compatibility · never carbon bars
-         · searches secondhand to ~€1200, French shops first
-         · ranks compatibility → value → weight
+         Road-Cycling Buyer — a patient first-bike advisor
+         · always explains fit · never carbon bars
 
        shall I create it?
 
@@ -126,25 +127,27 @@ agent  done — "Road-Cycling Buyer" is live. Open it anytime;
        it shops your niche with no further setup.
 ```
 
-**2 — The expert shops like a specialist, not a clerk:**
+**2 — The expert shops like a specialist, learning you as it goes:**
 
 ```text
-you    (inside Road-Cycling Buyer)  I need new wheels
+you    (inside Road-Cycling Buyer)  find me a road bike, ~€1500
 
-agent  what groupset are you running? — so I only show compatible builds
+agent  Before I search — two numbers I'll keep so I never re-ask:
+       your height and inseam. Any brand you won't touch?
 
-you    Shimano 105
+you    178cm, 81cm inseam. No strong feelings, secondhand is fine
 
-agent  searched sil — secondhand, France-first, 105-compatible:
+agent  searched sil — endurance, 54cm for your fit, ~€1500:
 
-         1. Fulcrum Racing 4 (used)    €420   Shimano HG ✓ · 1560 g
-         2. DT Swiss P1800 (used)      €505   Shimano HG ✓ · 1700 g
+         1. Alloy endurance bike, 54cm, 105 (used)   €1420
+         2. Carbon endurance bike, 54cm, 105 (used)  €1610
 
-       ranked compatibility → value → weight, the way you set it up.
-       want detail or a checkout link on either?
+       Why #1: for your 178/81 fit a 54cm endurance frame sits where a
+       first buyer wants it — fit and comfort outrank outright speed on a
+       first bike — and it's inside your budget. Want detail or a link?
 ```
 
-> **You teach it once; it stays an expert.** List the experts you've made, look at how one is set up, retire one you're done with — or **refine** one from what it watched you reject, so it gets sharper every session.
+> **You teach it once; it stays an expert.** It keeps your facts and taste, web-refreshes its niche knowledge each visit, and never re-asks what it already knows. List the experts you've made, look at how one is set up, retire one you're done with — or **refine** one from what it watched you reject, so it gets sharper every session.
 
 ---
 
@@ -178,9 +181,9 @@ Namespaced `sil_*` so they never collide with other plugins. Your agent calls th
 
 | Tool | What it does |
 |---|---|
-| `sil_profile_materialize` | Persist a created expert's behaviour artefacts — `persona.md`, an optional `playbook.md` domain sub-skill, and a `profile.json` manifest — under `$SIL_DATA_DIR/agents/<id>/`. Driven by the skill's creation engine once you endorse the draft; validate-first and fail-closed, it never clobbers an existing expert. |
+| `sil_profile_materialize` | Persist a created expert's SDS behaviour artefacts — `domain_spec.md` (deep researched niche expertise) + `intent_spec.md` (the decomposition-dimension schema) + `user_spec.md` (your facts + hard constraints) + `playbook.md` (your buying taste), all four required and present from creation, plus a `profile.json` manifest — under `$SIL_DATA_DIR/agents/<id>/`. (The persona is the agent's host workspace `SOUL.md`, not a sil artefact.) Driven by the skill's creation engine once you endorse the draft, and again per-query to web-refresh the domain and augment your facts/taste; validate-first and fail-closed, it never clobbers an existing expert. |
 | `sil_profile_list` | List the experts you've created, most-recently-made first. Takes no arguments. |
-| `sil_profile_get` | Show one expert in full — `name`, `persona`, optional `playbook`, manifest path, and `createdAt`. |
+| `sil_profile_get` | Show one expert in full — `name`, its `domainSpec` + `intentSpec` + `userSpec` + `playbook` (all four present), manifest path, and `createdAt`. |
 | `sil_profile_remove` | Delete one expert's behaviour artefacts. Scoped and idempotent; the agent confirms with you before removing. |
 
 ---
@@ -190,7 +193,7 @@ Namespaced `sil_*` so they never collide with other plugins. Your agent calls th
 The plugin ships one bundled skill — **`sil`** 🛒 — that your agent loads automatically the first time you express a shopping intent. You don't invoke it; it's the playbook that makes the tools work well together:
 
 - **Routes intent to the right tool.** *"find me a keyboard"* → `sil_search`, *"look these up"* → `sil_product_get`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`, *"make me an expert for X"* → the create flow, *"list / show / remove my experts"* → the `sil_profile_*` tools.
-- **Interviews before it builds.** Asked for a shopping expert, it runs an open interview to shape the niche, persona, and rules *with* you — and creates nothing until you explicitly endorse the assembled draft.
+- **Interviews lightly, then researches deeply.** Asked for a shopping expert, it runs a light interview (≤10 questions) to shape the niche and persona *with* you, then researches the niche itself and derives how to decompose every request — and creates nothing until you explicitly endorse the assembled draft.
 - **Recovers the right way.** Every tool reports a status; the skill follows that tool's own recovery hint — re-register, fix the query, or retry — instead of guessing a fix that won't work.
 - **Keeps prices honest.** It treats price, availability, and checkout links as point-in-time and re-checks an item right before you buy, so the link you get is the link you pay.
 

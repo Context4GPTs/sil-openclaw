@@ -39,7 +39,7 @@ Confirm the `sil_*` tools are exposed. If they are missing from the available to
 
 [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) holds the per-tool behaviour for the four core tools and the shared status taxonomy. Basic shopping needs only that one reference.
 
-When the session is running **inside a created expert** (a loaded profile under `$SIL_DATA_DIR/agents/<agentId>/`) and the user states a shopping intent, follow [`references/expert_shopping.md`](references/expert_shopping.md) — the profile-driven shop-time loop. It is additive: a plain, profile-less session keeps shopping via the "find X" → `sil_search` row above, unchanged.
+When the session is running **inside a created expert** (a loaded profile under `$SIL_DATA_DIR/agents/<agentId>/`) and the user states a shopping intent, follow [`references/expert_shopping.md`](references/expert_shopping.md) — the profile-driven, **Spec-Driven Shopping (SDS)** shop-time loop that web-refreshes the domain spec, decomposes the request along the intent spec, and augments the already-present user spec + buying taste every query. A created expert runs entirely on SDS; a plain, profile-less session keeps shopping via the "find X" → `sil_search` row above, unchanged.
 
 [`references/manage_experts.md`](references/manage_experts.md) holds the list / view / remove flow for the experts the user has created — including the host-CLI-first remove ordering and the confirm-before-remove gate. Load it the moment the user wants to see or remove an existing expert.
 

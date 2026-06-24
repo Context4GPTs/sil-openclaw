@@ -10,6 +10,38 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **Spec-Driven Shopping (SDS) is the operating model for created experts.** A
+  created shopping expert now runs **entirely** on SDS — not coarse attribute
+  matching, and not an optional layer. The persona left the sil store: it is the
+  agent's host workspace **`SOUL.md`** (identity/voice), written by the engine via
+  the host CLI — there is **no `persona.md`**. The sil store holds **four SDS
+  behaviour artefacts**: two **required at creation** — **`domain_spec.md`** (deep
+  *researched* niche expertise — how to buy well, the full mechanics; the agent
+  researches it itself from web + knowledge, and **web-refreshes it on every
+  query**) and **`intent_spec.md`** (the agent-specific **decomposition dimensions**,
+  a PRD-style schema derived from the domain) — and **`user_spec.md`** (the user's
+  domain-relevant facts + **hard constraints**) and **`playbook.md`** (the user's
+  **buying taste** — price sensitivity, brand, preferences). **All four are required
+  and present from creation** — seeded *partial* by the light setup, then **augmented
+  every query** (we keep learning), never re-asked. The per-query **intent** (the
+  dimensions filled in for one request) is
+  **ephemeral** — only the dimension *schema* is persisted. The shop-time loop
+  web-refreshes the domain, decomposes the request, lazily captures the user side,
+  and layers **intent → playbook → user_spec → domain_spec** (a user-spec **hard
+  constraint is inviolable** — routed to a real `sil_search` filter *and* a
+  reject-at-pick rubric rule, never only soft `query` text), recommending with a
+  "why" that visibly cites the intent + a stored user fact + a domain mechanic.
+  Setup stays **light (≤10 questions)** — the depth comes from the agent's own
+  research. All four artefacts ride the existing **`sil_profile_materialize`** store
+  path (`domainSpec` + `intentSpec` + `userSpec` + `playbook` all required) with
+  **no new tool** (the 8-tool manifest is unchanged) and the same atomic,
+  validate-first, per-file-all-or-nothing discipline. Refinement can target the
+  domain spec, the intent-spec dimensions, a user-spec fact/hard-constraint, or the
+  buying taste as distinct refinable elements (a persona refinement refreshes
+  `SOUL.md` via the host CLI).
+
 ## [0.3.0] - 2026-06-23
 
 ### Added
