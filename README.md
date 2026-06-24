@@ -6,13 +6,12 @@
 ███████║██║███████╗
 ╚══════╝╚═╝╚══════╝
 
-        commerce, handled by your agent
+        Shop like you code
 ```
 
 **The shopping layer your agent runs for you.**
 
-*You say what you want. Your agent searches the catalog, compares, and hands you a ready-to-buy link.*
-*No store. No tabs. No forms.*
+*Introducing Spec Driven Shopping: the way Agents should be shopping.*
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/Context4GPTs/sil-openclaw/blob/main/LICENSE)
 [![npm](https://img.shields.io/npm/v/sil-openclaw?logo=npm&logoColor=white&color=cb3837)](https://www.npmjs.com/package/sil-openclaw)
@@ -58,7 +57,7 @@ The agent loads the bundled skill on first commerce intent and takes it from the
 
 sil is a [UCP](https://github.com/universal-commerce-protocol/ucp) (Universal Commerce Protocol) commerce service, and `sil-openclaw` wires it into your OpenClaw agent — so it can find products, compare prices and availability, pull up full detail, and surface a checkout link the moment you say *buy*. Powered by [4GPTs](https://4gpts.com).
 
-Today the plugin covers **identity, catalog, and dedicated shopping experts** — registration, catalog search and product lookup, plus a one-conversation flow that mints a new OpenClaw agent pre-wired to shop a single niche for you. The rest of the UCP journey (cart, checkout, order, fulfillment) lands as those domains ship, and the same plugin grows with them.
+Today the plugin covers **identity, catalog, and dedicated shopping experts**. The rest of the UCP journey (cart, checkout, order, fulfillment) lands as those domains ship, and the same plugin grows with them.
 
 ---
 
@@ -98,7 +97,7 @@ agent  done — here's your checkout link, ready to pay:
 
 So far your *general* agent did the shopping. Go one step further: mint a **dedicated** OpenClaw agent that shops a single niche like a true specialist — it **researches how to buy well in that niche itself**, then fits *you* the way an expert would.
 
-**TL;DR — Spec-Driven Shopping (SDS).** Say *"make me a shopping expert for road-cycling gear"* and the plugin runs a **light** interview (≤10 questions) to narrow the niche and shape the persona — then **researches the niche deeply on its own** (the full how-to-buy-well: fit, gearing, geometry, the trade-offs) and derives the **dimensions** every request should be decomposed along. Open it later and on **every query** it refreshes that knowledge from the web, decomposes what you asked, and **learns your facts and taste as it goes** (your measurements, your budget, the rules it must never break) — captured once, never re-asked. It recommends with a "why" that cites *what you asked*, *a fact it remembered*, and *a niche mechanic you'd never have named*. **Nothing is created until you say "create it"** — and building one is local and offline, no sign-in required.
+**Spec-Driven Shopping (SDS).** Say *"make me a shopping expert for road-cycling gear"* and the plugin runs a **light** interview (≤10 questions) to narrow the niche and shape the persona — then **researches the niche deeply on its own** (the full how-to-buy-well: fit, gearing, geometry, the trade-offs) and derives the **dimensions** every request should be decomposed along. Open it later and on **every query** it refreshes that knowledge from the web, decomposes what you asked, and **learns your facts and taste as it goes** (your measurements, your budget, the rules it must never break) — captured once, never re-asked. It recommends with a "why" that cites *what you asked*, *a fact it remembered*, and *a niche mechanic you'd never have named*. **Nothing is created until you say "create it"** — and building one is local and offline, no sign-in required.
 
 **1 — One light conversation builds the expert (it does the deep research itself):**
 
@@ -148,14 +147,6 @@ agent  searched sil — endurance, 54cm for your fit, ~€1500:
 ```
 
 > **You teach it once; it stays an expert.** It keeps your facts and taste, web-refreshes its niche knowledge each visit, and never re-asks what it already knows. List the experts you've made, look at how one is set up, retire one you're done with — or **refine** one from what it watched you reject, so it gets sharper every session.
-
----
-
-## Identity & authentication
-
-**sil gives your agent an identity — and the capability to use it.** One browser sign-in links your OpenClaw agent to a sil identity it holds on your behalf — your name, your saved addresses. That identity is what lets the agent *transact*: it can search, compare, and surface checkout links with any merchant that speaks [UCP](https://github.com/universal-commerce-protocol/ucp) (the Universal Commerce Protocol), all under your account, without you ever touching a store login.
-
-Registering is the only manual step. After that the agent carries your identity for you — ask *"who am I on sil?"* anytime to see exactly what it's holding.
 
 ---
 
