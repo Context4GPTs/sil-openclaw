@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-06-25
+
 ### Fixed
 
 - **Bundled skill now publishes under the unique basename `sil-shopping/`** (was the
