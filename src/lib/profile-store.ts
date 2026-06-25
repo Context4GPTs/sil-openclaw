@@ -79,11 +79,12 @@ import {
 import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 
-import { getDataDir } from "./credentials.js";
+import { DIR_MODE, ensureDataDir, getDataDir } from "./credentials.js";
 
-/** Owner-only file/dir modes — the artefacts are user-scoped, like tokens. */
+/** Owner-only file mode — the artefacts are user-scoped, like tokens. The dir
+ * mode (`DIR_MODE`, `0o700`) is owned by `credentials.ts` (the data-dir owner)
+ * and imported, so the data-home permission lives in exactly one place. */
 const FILE_MODE = 0o600;
-const DIR_MODE = 0o700;
 
 /** The sub-tree under `$SIL_DATA_DIR` that holds per-agent behaviour artefacts. */
 const AGENTS_SUBDIR = "agents";
@@ -278,6 +279,11 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
   const dirPreexisted = existsSync(dir);
 
   try {
+    // Ensure the data home (`$SIL_DATA_DIR`, 0700) exists first — its creation
+    // and mode are owned by credentials.ts (the data-dir owner), and this also
+    // re-heals it if it was deleted mid-session. Then create the per-agent leaf
+    // (`agents/<id>`), which is profile-store's own concern.
+    ensureDataDir();
     mkdirSync(dir, { recursive: true, mode: DIR_MODE });
     atomicWrite(domainSpecPath, spec.domainSpec);
     atomicWrite(intentSpecPath, spec.intentSpec);
