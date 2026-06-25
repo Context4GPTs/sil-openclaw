@@ -24,7 +24,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -91,12 +91,20 @@ describe("package.json — OpenClaw ESM plugin shape", () => {
     expect(compat!.minGatewayVersion!.length).toBeGreaterThan(0);
   });
 
-  it("ships the skill dir and the manifest via `files`", () => {
-    // If `skill` or the manifest is missing from `files`, the packed
+  it("ships the skill dir (under its sil-unique basename) and the manifest via `files`", () => {
+    // If the skill dir or the manifest is missing from `files`, the packed
     // artifact won't carry the playbook/manifest and the host can't
     // discover the skill — the architect's skill-not-discoverable risk.
+    //
+    // The skill ships under the sil-unique basename `sil-shopping` (NOT the
+    // generic `skill`) so the host's basename-derived publish name cannot
+    // collide with another co-installed plugin's `skill/` (the klodi collision
+    // this card fixes). A stale `"skill"` in `files` would pack the tree under
+    // a colliding name — so we assert the new name is present AND the old one
+    // is gone (the dominant failure mode: a half-done rename).
     expect(Array.isArray(pkg.files)).toBe(true);
-    expect(pkg.files).toContain("skill");
+    expect(pkg.files).toContain("sil-shopping");
+    expect(pkg.files).not.toContain("skill");
     expect(pkg.files).toContain("openclaw.plugin.json");
   });
 
@@ -122,10 +130,17 @@ describe("openclaw.plugin.json — manifest shape", () => {
     expect(manifest.version!.length).toBeGreaterThan(0);
   });
 
-  it("declares a non-empty skills array pointing at ./skill", () => {
+  it("declares a non-empty skills array pointing at ./sil-shopping (the sil-unique basename)", () => {
+    // The manifest `skills` entry and `package.json#files` must reference the
+    // IDENTICAL sil-unique directory name. The host publishes the skill under
+    // its directory basename, so this entry must point at `./sil-shopping` —
+    // a stale `./skill` makes the host look for a dir the rename removed, and
+    // re-opens the klodi name collision. Assert the new pointer is present AND
+    // no stale `./skill` survives (R1, the dominant failure mode).
     expect(Array.isArray(manifest.skills)).toBe(true);
     expect(manifest.skills!.length).toBeGreaterThan(0);
-    expect(manifest.skills).toContain("./skill");
+    expect(manifest.skills).toContain("./sil-shopping");
+    expect(manifest.skills).not.toContain("./skill");
   });
 
   it("declares a contracts.tools array", () => {
@@ -255,5 +270,96 @@ describe("SDS artefact contract — shipped prose matches the code (all four req
     // contradict — there is nothing to guard, so pass vacuously.
     if (!flat.includes("user_spec.md") && !flat.includes("playbook.md")) return;
     expect(LAZY_SLOT_RE.test(flat)).toBe(false);
+  });
+});
+
+/* ===========================================================================
+ * COLLISION-FREE SKILL BASENAME — no stale `./skill` / top-level `skill`
+ * literal survives, and the skill ships under `sil-shopping/`
+ * (card: rename-bundled-skill-to-fix-klodi-name-collision)
+ *
+ * tier: integration (AC3 + AC4 + AC8 in-repo proxy). The true two-plugin
+ * co-install collision (AC1/AC2) is `[e2e — DEFERRED]` (no host-load gate in
+ * this repo). The in-repo proxy the architect's tier reconciliation fixes is:
+ * "cannot collide BECAUSE the basename is sil-unique and no stale `./skill`
+ * survives anywhere shipped." That is exactly what this block pins.
+ *
+ * R1 (the dominant failure mode): any ONE stale `./skill` literal left behind
+ * silently breaks the fix — a stale `package.json#files` packs nothing under
+ * the new name; a stale `openclaw.plugin.json#skills` points the host at a
+ * removed dir; a stale test constant reads a missing path. The per-field
+ * assertions above bite each individually; THIS block is the cross-file sweep
+ * that proves NO stale skill literal survives in the publish-path surfaces +
+ * the on-disk shape that gets packed.
+ *
+ * Adversarial: for the rename we assert presence-of-new AND absence-of-old on
+ * BOTH the manifest `skills` and `package.json#files`, and on the FILESYSTEM —
+ * a one-sided presence check passes while a stray `skill/` dir or `"skill"`
+ * literal lingers beside the new `sil-shopping`.
+ * ========================================================================= */
+
+describe("skill basename is sil-unique — no stale `./skill` literal, ships under sil-shopping/ (AC3/AC4/AC8)", () => {
+  const pkg = readJson<PackageJson>("package.json");
+  const manifest = readJson<Manifest>("openclaw.plugin.json");
+
+  it("package.json#files lists `sil-shopping` and NO `skill` entry (publish allowlist)", () => {
+    // The tarball allowlist is what determines which dirs ship. It must carry
+    // the sil-unique `sil-shopping` and must NOT carry the generic `skill` —
+    // a residual `skill` would pack the tree under the colliding basename.
+    expect(pkg.files).toContain("sil-shopping");
+    expect(pkg.files).not.toContain("skill");
+  });
+
+  it("openclaw.plugin.json#skills points at `./sil-shopping` and NO `./skill`", () => {
+    // The manifest skills pointer the host reads. Identical sil-unique string
+    // to `files` (R2 — a basename mismatch ships a tarball whose manifest
+    // points at a dir the tarball lacks); no stale `./skill` survives.
+    expect(manifest.skills).toContain("./sil-shopping");
+    expect(manifest.skills).not.toContain("./skill");
+  });
+
+  it("the `sil-shopping/` directory + SKILL.md exist on disk, and the old `skill/` is GONE", () => {
+    // The on-disk shape that gets packed (the `files` allowlist only ships dirs
+    // that EXIST). The rename must have happened — `sil-shopping/SKILL.md`
+    // present — and the old basename deleted outright (no backwards-compat dir,
+    // per production-grade-first.md: a surviving `skill/` is exactly the
+    // colliding basename this card removes).
+    expect(existsSync(join(REPO_ROOT, "sil-shopping", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(REPO_ROOT, "skill"))).toBe(false);
+  });
+
+  it("the skill subtree (references + example) moved under sil-shopping/ intact", () => {
+    // AC7 precondition: the whole 9-file tree moved together. Spot-check the
+    // load-bearing reference + the worked example are reachable under the new
+    // basename, so the rename did not drop part of the bundle. (skill-content
+    // .test.ts re-asserts the full content seam against SKILL_DIR = sil-shopping.)
+    const root = join(REPO_ROOT, "sil-shopping");
+    expect(
+      existsSync(join(root, "references", "catalog_tools_reference.md")),
+    ).toBe(true);
+    expect(
+      existsSync(join(root, "references", "agent_creation_engine.md")),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(root, "examples", "road_cycling_expert_walkthrough.md"),
+      ),
+    ).toBe(true);
+  });
+
+  it("no stale `./skill` / top-level `skill` literal survives in the publish-path config (AC8 sweep)", () => {
+    // AC8 in-repo proxy: a single cross-file sweep over the two config surfaces
+    // the host + npm read for the skill path. No element may equal the bare
+    // `skill` / `./skill` literal. Anchor on EXACT element equality (not a
+    // substring) so `sil-shopping` — which contains neither token as a whole
+    // element — is never a false hit, while a residual `skill` / `./skill` trips.
+    const fileEntries = pkg.files ?? [];
+    const skillEntries = manifest.skills ?? [];
+    const stale = [
+      ...fileEntries.filter((e) => e === "skill" || e === "./skill"),
+      ...skillEntries.filter((e) => e === "skill" || e === "./skill"),
+    ];
+    // Report the offending literals so a missed reference is named, not opaque.
+    expect(stale).toEqual([]);
   });
 });

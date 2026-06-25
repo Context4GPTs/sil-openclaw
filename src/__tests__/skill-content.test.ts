@@ -55,7 +55,11 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..");
-const SKILL_DIR = join(REPO_ROOT, "skill");
+// The bundled skill ships under a sil-unique directory basename so the host's
+// basename-derived publish name cannot collide with another plugin's generic
+// `skill/` (the klodi collision this card fixes). See card
+// rename-bundled-skill-to-fix-klodi-name-collision.
+const SKILL_DIR = join(REPO_ROOT, "sil-shopping");
 const SKILL_PATH = join(SKILL_DIR, "SKILL.md");
 
 // The progressive-disclosure reference + example files that now own the
@@ -186,6 +190,107 @@ describe("skill/SKILL.md — discoverability", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     expect(fm.fields["description"]).toBeDefined();
     expect((fm.fields["description"] ?? "").length).toBeGreaterThan(0);
+  });
+});
+
+/* ===========================================================================
+ * COLLISION-FIX FRONTMATTER — name == published basename + description routes
+ * every intent family (card: rename-bundled-skill-to-fix-klodi-name-collision)
+ *
+ * tier: integration. The host derives the PUBLISHED skill name from the
+ * directory basename, not the frontmatter `name` (verified by the architect:
+ * the collision warning reports `"skill"`, the dir, not `sil`, the old `name`).
+ * So the load-bearing fix is the basename `sil-shopping` (pinned by SKILL_DIR
+ * above + the package-manifest tarball/manifest gate). These pin the second,
+ * equally-load-bearing half: the model-facing frontmatter.
+ *
+ *   - AC6: frontmatter `name` EQUALS `sil-shopping` (== the basename). The old
+ *     `name: sil` shadowed the plugin id `sil`; aligning name to the basename
+ *     disambiguates skill from plugin AND keeps the host's two resolution paths
+ *     (frontmatter-name lookup, basename fallback) agreeing. An exact-equality
+ *     check — not "non-empty" — is what bites a stale `name: sil`.
+ *   - AC5: the `description` carries an explicit trigger phrase for EACH of the
+ *     three intent families the product-owner's routing rule fixes — (a) shop,
+ *     (b) identity, (c) shopping-expert lifecycle — plus the standalone
+ *     model-selection line. These are the product-marketer's LOCKED literal
+ *     substrings; a paraphrase that drops any one fails (the words ARE the
+ *     routing signal the host surfaces to the model, so they are pinned exactly).
+ *
+ * True model-selection across co-installed skills is `[e2e — DEFERRED]` (no
+ * host-load gate in this repo); the description-substring assertions are the
+ * in-repo content proxy the architect's tier reconciliation calls for.
+ * ========================================================================= */
+
+describe("sil-shopping/SKILL.md — collision-fix frontmatter (name == basename, description routes every family)", () => {
+  /** The marketer's LOCKED literal trigger substrings — one (or more) per
+   * intent family. A paraphrase that drops any of these fails: the exact words
+   * are the routing signal the host surfaces to the model. Pinned as a named
+   * set so a missing trigger is reported BY ITS TEXT, not an opaque false. */
+  const REQUIRED_DESCRIPTION_TRIGGERS = [
+    // (a) shop family — the catalog/search trigger.
+    "shop on sil",
+    // (c) shopping-expert lifecycle — the create trigger, echoing the literal
+    // user phrase the router rows carry.
+    "make me a shopping expert",
+    // the standalone model-selection line that spans all three families — the
+    // single sentence the model selects on (front-loaded, per the marketer copy).
+    "Route here for any shopping, identity, or shopping-expert intent on sil",
+  ] as const;
+
+  it("frontmatter `name` equals the published basename `sil-shopping` (AC6 — not the stale `sil`)", () => {
+    // Exact equality, NOT non-empty: the old value `sil` is non-empty too, and
+    // it shadows the plugin id `sil`. Only `name: sil-shopping` (== SKILL_DIR's
+    // basename) satisfies the host's name/basename agreement and disambiguates
+    // the skill from the plugin.
+    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+    expect(fm.fields["name"]).toBe("sil-shopping");
+  });
+
+  it("frontmatter `description` carries the locked trigger phrase for every intent family (AC5)", () => {
+    // The description is the ONLY field (beside name) the host surfaces for
+    // model skill-selection. It must carry an explicit trigger per family so a
+    // model reading only the frontmatter — with klodi's + other plugins' skills
+    // also present — routes shop / identity / shopping-expert intents to sil.
+    // Match the RAW (case-sensitive) frontmatter value: the marketer's copy is
+    // a locked literal, so a case-drifted near-miss is a real regression here.
+    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+    const description = fm.fields["description"] ?? "";
+    expect(description.length).toBeGreaterThan(0);
+    const missing = REQUIRED_DESCRIPTION_TRIGGERS.filter(
+      (t) => !description.includes(t),
+    );
+    // Report by text: a forgotten/ paraphrased trigger is named, not hidden
+    // behind a bare false.
+    expect(missing).toEqual([]);
+  });
+
+  it("frontmatter `description` enumerates the eight sil_* tools it drives (reference tail, not trigger)", () => {
+    // The marketer copy front-loads the triggers and lists the tools LAST. Pin
+    // that the full tool surface the skill owns is named in the description, so
+    // the model knows which tools back the routed intents — every sil_* the
+    // router/ references drive must appear.
+    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+    const description = fm.fields["description"] ?? "";
+    const missing = [
+      "sil_register",
+      "sil_whoami",
+      "sil_search",
+      "sil_product_get",
+      "sil_profile_materialize",
+      "sil_profile_list",
+      "sil_profile_get",
+      "sil_profile_remove",
+    ].filter((t) => !description.includes(t));
+    expect(missing).toEqual([]);
+  });
+
+  it("frontmatter `name` no longer carries the bare plugin id `sil` (the pre-fix value)", () => {
+    // Adversarial regression guard distinct from the equality check above: even
+    // if a future edit set `name` to something OTHER than `sil-shopping`, it
+    // must not regress to the bare `sil` that shadowed the plugin id and caused
+    // the name/basename divergence this card closes.
+    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+    expect(fm.fields["name"]).not.toBe("sil");
   });
 });
 

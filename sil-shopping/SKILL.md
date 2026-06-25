@@ -1,12 +1,12 @@
 ---
-name: sil
-description: This skill should be used when the user wants to shop on sil — register an identity, see who they are, search the catalog for purchasable products, or look up specific products by id — or when they want to create a dedicated sil-wired shopping expert (a new OpenClaw agent profile) and then list, view, or remove the experts they have created. The plugin exposes sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_list, sil_profile_get, and sil_profile_remove.
+name: sil-shopping
+description: This skill should be used whenever the user wants to shop on sil or run a sil shopping expert: register or sign in to sil, check who they are, search the sil catalog for purchasable products, or look up specific products by id — and for the full shopping-expert lifecycle: "make me a shopping expert" / "set up an agent that shops for me" (interview, then create), list the experts they have created, view or remove one, refine an existing expert, or — inside a created expert — run a profile-driven Spec-Driven Shopping query on its niche. Route here for any shopping, identity, or shopping-expert intent on sil. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_list, sil_profile_get, and sil_profile_remove.
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
 ---
 
-# sil
+# sil-shopping
 
 Drive the sil plugin's tools on the user's behalf: register them on sil, read their identity, help them find purchasable products in the sil catalog — and, when asked, create a dedicated sil-wired shopping expert, then list, view, or remove the experts they have created. Read user intent, route to the matching tool (loading its reference on demand), call it, and report what came back.
 

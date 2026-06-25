@@ -183,7 +183,7 @@ Namespaced `sil_*` so they never collide with other plugins. Your agent calls th
 
 ## Skills
 
-The plugin ships one bundled skill — **`sil`** 🛒 — that your agent loads automatically the first time you express a shopping intent. You don't invoke it; it's the playbook that makes the tools work well together:
+The plugin ships one bundled skill — **`sil-shopping`** 🛒 — that your agent loads automatically the first time you express a shopping intent. You don't invoke it; it's the playbook that makes the tools work well together:
 
 - **Routes intent to the right tool.** *"find me a keyboard"* → `sil_search`, *"look these up"* → `sil_product_get`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`, *"make me an expert for X"* → the create flow, *"list / show / remove my experts"* → the `sil_profile_*` tools.
 - **Interviews lightly, then researches deeply.** Asked for a shopping expert, it runs a light interview (≤10 questions) to shape the niche and persona *with* you, then researches the niche itself and derives how to decompose every request — and creates nothing until you explicitly endorse the assembled draft.

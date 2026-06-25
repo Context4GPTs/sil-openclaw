@@ -28,7 +28,7 @@
   "main": "./dist/index.js",
   "files": [
     "dist",
-    "skill",
+    "sil-shopping",
     "openclaw.plugin.json",
     "README.md",
     "CHANGELOG.md",

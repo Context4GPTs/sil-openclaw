@@ -3,7 +3,7 @@
   "name": "sil",
   "description": "sil commerce plugin for OpenClaw — register on sil, read your identity, and search and look up products in the sil catalog.",
   "version": "0.3.3",
-  "skills": ["./skill"],
+  "skills": ["./sil-shopping"],
   "activation": {
     "onCapabilities": ["tool"]
   },
