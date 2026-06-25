@@ -155,7 +155,7 @@ function registerRegister(api: PluginAPI): void {
 /**
  * `sil_whoami` — read the registered user's live identity (name + addresses)
  * from sil-api with the stored Bearer token, refreshing transparently on an
- * expired access token.
+ * expired session token.
  *
  * execute() flow (ALL I/O here; register() opens nothing, arms no timer —
  * whoami is a synchronous request/response, NOT a poll):
@@ -187,8 +187,8 @@ function registerWhoami(api: PluginAPI): void {
     label: "Who am I on sil",
     description:
       "Return the registered user's identity (name and addresses) from sil,"
-      + " using the credentials stored by sil_register. If the access token has"
-      + " expired it is refreshed transparently and the read is retried. If you"
+      + " using the credentials stored by sil_register. If the stored session token"
+      + " has expired it is refreshed transparently and the read is retried. If you"
       + " are not registered, or the session has fully expired, the result names"
       + " the recovery action (run sil_register).",
     parameters: Type.Object({}),

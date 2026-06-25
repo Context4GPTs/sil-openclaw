@@ -72,8 +72,8 @@ const TOOL_CONTRACT = {
     label: "Who am I on sil",
     description:
       "Return the registered user's identity (name and addresses) from sil,"
-      + " using the credentials stored by sil_register. If the access token has"
-      + " expired it is refreshed transparently and the read is retried. If you"
+      + " using the credentials stored by sil_register. If the stored session token"
+      + " has expired it is refreshed transparently and the read is retried. If you"
       + " are not registered, or the session has fully expired, the result names"
       + " the recovery action (run sil_register).",
     parameters: EMPTY_OBJECT_SCHEMA,

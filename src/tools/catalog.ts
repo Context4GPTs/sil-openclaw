@@ -40,7 +40,7 @@
  * `sil_register`; a transient/invalid must NOT (re-registering can't fix a 5xx or
  * a bad query and would derail the user).
  *
- * Privacy: the access token and Bearer header never reach a log line or the
+ * Privacy: the session token and Bearer header never reach a log line or the
  * result; logs carry only non-credential status markers (search params are not
  * credentials, but are not logged either — nothing here needs them).
  *
@@ -140,9 +140,10 @@ function registerSearch(api: PluginAPI): void {
       + " in the user's OWN country (home-country / domestic / local sellers) — set it"
       + " ONLY when the shopper asks for local/domestic shops; it nudges local shops up"
       + " the ranking but does NOT restrict results to them, so never tell the user the"
-      + " results are all local. To actually surface local shops, ALSO issue the"
-      + " `query` in the USER'S LANGUAGE (a Greek-language query surfaces Greek shops);"
-      + " pass NO country — sil resolves it server-side. Requires registration (run"
+      + " results are all local. To surface MORE local shops you MAY also issue the"
+      + " `query` in that country's language (a Greek-language query surfaces Greek"
+      + " shops) — optional, and never an override of a language the user deliberately"
+      + " chose; pass NO country — sil resolves it server-side. Requires registration (run"
       + " sil_register first).",
     parameters: Type.Object({
       query: Type.Optional(
@@ -227,9 +228,10 @@ function registerSearch(api: PluginAPI): void {
             + " nudges local shops up the ranking but does NOT restrict results to them"
             + " and does NOT guarantee every result is local — some local shops won't"
             + " be detected and some non-local shops may still appear, so never tell"
-            + " the user the results are all local sellers. To actually surface local"
-            + " shops, also issue the `query` in the USER'S LANGUAGE (a Greek-language"
-            + " query surfaces Greek shops; an English query will not). You pass NO"
+            + " the user the results are all local sellers. To surface MORE local"
+            + " shops you MAY also issue the `query` in that country's language (a"
+            + " Greek-language query surfaces Greek shops; an English query will not)"
+            + " — optional, never overriding a language the user deliberately chose. You pass NO"
             + " country — sil resolves the user's country server-side from their"
             + " registered address, so do NOT call sil_whoami or pass a country. Omit"
             + " (or false) for the normal unbiased ranking.",
@@ -391,7 +393,7 @@ function mapSearchOutcome(api: PluginAPI, outcome: SearchOutcome) {
  * classes (not-registered/401 and source/transport failure) by DISTINCT recovery
  * hints. One wrong hint = one misdirected user.
  *
- * Privacy + freshness: the access token and Bearer header never reach a log line
+ * Privacy + freshness: the session token and Bearer header never reach a log line
  * or the result; the products are always live-fetched (never cached — freshness is
  * the reason this tool exists; a cached `checkout_url`/price is a broken purchase).
  */

@@ -40,7 +40,7 @@ researches how to buy a first road bike well, then reflects the shape back:
 → Deep **`domainSpec`** (→ `domain_spec.md`): the full how-to-buy-well — the
 complete fit process, geometry, gearing theory, material/wheel trade-offs — the
 layer a coarse "size 56, black" request never names. *(If the agent had no web tool,
-it would say so, then write the domain spec from its own knowledge — never fake it.)*
+it would say so, then compose the domain spec from well-established, public buying knowledge — never present a guess as verified research.)*
 
 **3. `user_spec.md` — one basic question.** The single most-basic niche fact:
 

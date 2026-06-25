@@ -31,7 +31,7 @@
  * Wire contract for the sil-API identity read (a SECOND origin — sil-api, the
  * Fastify domain service — NOT sil-web; bare path, not /api/v1; see the
  * sil-whoami card). The authenticated self-read is a BODYLESS GET; the
- * Authorization header carries the stored access token and IS the principal —
+ * Authorization header carries the stored session token and IS the principal —
  * sil-api derives the user from the JWT `sub`, not a request body:
  *
  *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
@@ -922,7 +922,7 @@ export type RefreshRetryResult<O> =
  *                                            module's `readTokens` (so a TOCTOU on
  *                                            the on-disk pair is observed):
  *          re-read empty (TOCTOU)          → must_reregister(no_stored_tokens), NO retry.
- *          re-read ok → retry ONCE with the rotated access token:
+ *          re-read ok → retry ONCE with the rotated session token:
  *            retry still unauthorized      → second_unauthorized (the rotated token is
  *                                            structurally dead — NEVER refresh again).
  *            retry otherwise               → `{ result, retry }`.

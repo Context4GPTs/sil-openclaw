@@ -11,7 +11,7 @@ Load this at shop time, when an expert's loop maps a decomposed request into a `
 | "New only" | `condition: ["new"]` |
 | The narrowed niche + key descriptors | `query` (free text) and/or `category` |
 | "In stock only" (the default) / "show me out-of-stock too" | `available` (omit for in-stock default; `false` to include unavailable) |
-| "Buy from a local/domestic shop" | `local_merchants: true` (a best-effort ranking *bias*, not a hard filter — also issue the `query` in the user's language to actually surface local shops) |
+| "Buy from a local/domestic shop" | `local_merchants: true` (a best-effort ranking *bias*, not a hard filter — and *optionally*, to surface more local shops, issue the `query` in that country's language; a tactic, never an override of a language the user deliberately chose) |
 
 A stated taste with **no matching param** (e.g. "I like bold colours", "prefer eco-friendly brands") does **not** become a new param — fold it into the `query` text or into the recommendation rubric. There is no `color` filter, no `brand` filter; inventing one produces an expert that emits invalid `sil_search` calls at shop time.
 
@@ -48,7 +48,7 @@ query:           "<niche descriptors from the answer>"   # e.g. "endurance road 
 category:        "<the narrowed niche category>"
 price_max:       120000        # €1200 → minor units (cents)
 condition:       ["secondhand"]   # "secondhand is fine"
-local_merchants: true             # "want local shops" → ranking bias; issue query in French
+local_merchants: true             # "want local shops" → ranking bias; optionally query in the local language (e.g. French) to surface more of them
 # ship_to: OMITTED — server resolves the registered default address; no sil_whoami round-trip
 ```
 

@@ -549,13 +549,15 @@ describe("sil_search — schema exposes `local_merchants` as an optional boolean
     expect(d).toMatch(/not a filter|does not restrict|do not restrict|doesn't restrict|not.*guarantee|no guarantee|not exclusiv|may still appear|won't be detected|will not be detected/);
   });
 
-  it("fact (b): the description tells the agent to issue the `query` in the USER'S LANGUAGE to surface local shops", () => {
+  it("fact (b): the description offers issuing the `query` in the local/country's language as an OPTIONAL tactic to surface local shops", () => {
     const d = localMerchantsDesc().toLowerCase();
     expect(d).toMatch(/language/);
     expect(d).toMatch(/query/);
-    // The concrete steer: a same-language query surfaces local shops (the example
-    // makes the instruction unambiguous to the agent).
-    expect(d).toMatch(/user'?s (own )?language|same.language|their (own )?language|in the user'?s language/);
+    // The concrete steer: a country-language query surfaces local shops — but framed
+    // as an OPTIONAL tactic, never a forced override of a language the user
+    // deliberately chose (the reframe that answers the locale-forcing concern).
+    expect(d).toMatch(/that country'?s language|the local language|country'?s language/);
+    expect(d).toMatch(/optional|may also|you may|never overriding|deliberately chose/);
   });
 
   it("fact (c): the description says the agent passes NO country and must NOT call sil_whoami (sil resolves it server-side)", () => {

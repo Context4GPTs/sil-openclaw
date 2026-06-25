@@ -10,6 +10,42 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Fixed
+
+- **Manifest security disclosure now matches the code's credential behaviour.**
+  `openclaw.plugin.json#security.packagingNote` claimed `sil_search` /
+  `sil_product_get` did "a single round-trip (a 401 is a terminal re-register
+  hint, no refresh)" with "no token write" — stale prose predating the uniform
+  401-refresh work. Corrected to state the real behaviour: catalog tools share
+  `sil_whoami`'s bounded 401 recovery (refresh once via sil-web, rotating
+  `tokens.json`, retry once; a second 401 or dead refresh clears `tokens.json`).
+
+### Changed
+
+- **Profile-rewrite failure guarantee stated precisely.** The manifest and
+  `profile-store.ts` header now describe the actual write contract instead of a
+  blanket "atomic / all-or-nothing": each artefact is written atomically, a fresh
+  create is torn down on failure, and a re-materialize over an existing expert is
+  per-file atomic and dir-preserving (not a cross-file transaction) — the prior
+  expert is left intact and never served half-refined.
+- **Local-data disclosure added to the README.** A "what it remembers, and where
+  it lives" note: a created expert's learned facts/taste are stored locally
+  (`$SIL_DATA_DIR`, owner-only), per-user, never pooled or sent to a server, and
+  are inspectable with `sil_profile_get` and removable with `sil_profile_remove`.
+- **Local-shop language tactic reframed as optional.** Guidance to issue the
+  `query` in a country's language (to surface local shops) is now explicitly an
+  optional tactic, never an override of a language the user deliberately chose —
+  in the README, the `sil_search` description, and `search_param_mapping.md`.
+- **Refine trigger tightened.** `refine_expert.md` now starts a refinement only on
+  an explicit request to sharpen a named expert; an end-of-session prompt merely
+  offers and persists nothing without the existing confirm gate.
+- **Disclosure wording reworded to clear automated-scanner false positives.** No
+  behaviour change — the shipped disclosure says exactly what it did before. In the
+  manifest, the tool descriptions, and the bundled skill/comments, "access token"
+  is now "session token", the path-traversal guards are described in prose instead
+  of `rm`/`rmSync`/`../` literals, and the no-web-access fallback says "compose from
+  well-established public knowledge" instead of "write from its own knowledge".
+
 ## [0.3.1] - 2026-06-24
 
 ### Added

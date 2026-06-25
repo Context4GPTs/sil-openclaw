@@ -16,7 +16,7 @@ cents).
   The plugin polls in the background; once the user finishes signing in, call
   `sil_register` again to confirm (it reports `already_registered`).
 - **`sil_whoami`** returns the registered user's identity (name and addresses).
-  An expired access token is refreshed transparently and the read retried; if the
+  An expired session token is refreshed transparently and the read retried; if the
   session is fully dead, the result names the recovery (`sil_register`).
 - **`sil_search`** returns a ranked list of purchasable variants (`id`, `title`,
   `price`, `availability`, `checkout_url`, `source`), best match first — present

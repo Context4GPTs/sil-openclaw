@@ -53,10 +53,16 @@
  * already live in `$SIL_DATA_DIR` but stay logically separate (no identity
  * coupling — creating an expert reads/writes no token).
  *
- * Writes are atomic and all-or-nothing (Product invariant 7): a bad spec
- * writes NOTHING (validate first), and a mid-write failure leaves no partial
- * artefact directory behind. The atomic write mirrors `credentials.ts` —
- * tmp file → write → rename over target → chmod 0600, dir 0700.
+ * Write safety (Product invariant 7): a bad spec writes NOTHING (validate
+ * first). Each artefact is written atomically — tmp file → write → rename over
+ * target → chmod 0600, dir 0700 (mirroring `credentials.ts`) — so a reader never
+ * sees a half-written file. On a mid-write failure the guarantee depends on
+ * whether the expert is new: a FRESH create (the dir did not pre-exist) is torn
+ * down, leaving no partial directory behind (all-or-nothing); a RE-MATERIALIZE
+ * over an existing expert is per-file atomic and dir-preserving — it is NOT a
+ * cross-file transaction, so on failure the prior expert is left intact and is
+ * never served half-refined (a referenced-but-missing body fails the read closed
+ * — see `readAgentProfile`). The catch block below encodes exactly this split.
  */
 
 import {
@@ -184,7 +190,8 @@ const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
  * SAFETY: this resolver does NOT guard `agentId` — it joins it as a path segment
  * verbatim. The path-traversal guard lives at the only caller, `materializeProfile`,
  * which validates `agentId` against `AGENT_ID_RE` (lower-kebab, not `main`) BEFORE
- * the join, so `../escape`, `a/../b`, `.`, etc. never reach here. The guard is
+ * the join, so a traversal-shaped id (a parent-directory hop, a nested back-step,
+ * a bare dot) never reaches here. The guard is
  * placed at the caller (not here) because validation must precede ALL writes for
  * the validate-first / write-nothing-on-bad-input invariant to hold; a guard
  * duplicated here would be redundant for that path. A FUTURE DIRECT CALLER of this
@@ -347,8 +354,8 @@ function getAgentsRoot(): string {
  * `getAgentArtefactDir`. Returns `null` when valid; an `invalid_request`
  * variant naming the field otherwise. The gate is identical to
  * `materializeProfile`'s validate-first block (`AGENT_ID_RE` + non-`main`),
- * applied BEFORE any `join`/`read`/`rm` so a `../`, `/`, `.`, or `main` never
- * becomes a filesystem path segment. `getAgentArtefactDir`'s SAFETY note
+ * applied BEFORE any path join, read, or delete so a parent-directory traversal,
+ * an absolute path, a bare dot, or `main` never becomes a filesystem path segment. `getAgentArtefactDir`'s SAFETY note
  * mandates exactly this for every direct caller — list does not (it never
  * trusts a caller-supplied id; it reads only ids it discovered on disk), but
  * read and remove DO take a caller id and so call this first. */
@@ -629,10 +636,10 @@ function notFoundRead(agentId: string): ReadResult {
  *   - asserts the resolved target is strictly UNDER `getDataDir()/agents/` and
  *     is NOT the `agents/` parent, so a delete can never escape the subtree or
  *     wipe sibling experts;
- *   - `rmSync(dir, { recursive, force })` the single leaf dir.
+ *   - recursively delete the single validated leaf dir.
  *
  * Absent target → `not_found` (idempotent — a re-run after a partial host-CLI
- * failure is safe). A genuine `rmSync` failure (e.g. EACCES) →
+ * failure is safe). A genuine delete failure (e.g. EACCES) →
  * `persistence_failed` with `<dir>: <cause>`. Never throws across the boundary.
  */
 export function removeAgentArtefacts(agentId: string): RemoveResult {
@@ -642,8 +649,8 @@ export function removeAgentArtefacts(agentId: string): RemoveResult {
   const dir = getAgentArtefactDir(agentId);
 
   // Defence in depth beyond the id gate: assert the resolved path is strictly a
-  // child of the agents root and never the root itself. A `rmSync` of the
-  // parent would wipe every sibling expert — refuse it even if some future
+  // child of the agents root and never the root itself. Deleting the parent
+  // directory would wipe every sibling expert — refuse it even if some future
   // change to the gate let a separator-bearing id through.
   const root = getAgentsRoot();
   if (dirname(dir) !== root || dir === root) {

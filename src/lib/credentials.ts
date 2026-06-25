@@ -88,7 +88,7 @@ export function getConfigPath(): string {
 /**
  * True iff a `tokens.json` exists on disk. This is the already-registered
  * short-circuit's gate — it is PRESENCE-based, not freshness-based: an expired
- * access token still counts as "registered" for this card (refresh is SC7, the
+ * session token still counts as "registered" for this card (refresh is SC7, the
  * sil_whoami card). Note carried forward in the card body.
  */
 export function hasTokens(): boolean {

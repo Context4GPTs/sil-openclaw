@@ -246,11 +246,14 @@ describe("SDS artefact contract — shipped prose matches the code (all four req
     const nextRelease = afterHeading.search(/\n## \[\d/);
     const unreleased =
       nextRelease >= 0 ? afterHeading.slice(0, nextRelease) : afterHeading;
-    expect(unreleased).toContain("user_spec.md");
-    expect(unreleased).toContain("playbook.md");
     // Scan per-line so the regex's same-clause heuristic isn't defeated by the
     // entry's hard wraps splitting "lazy" and "playbook" across lines.
     const flat = unreleased.replace(/\s+/g, " ");
+    // The guard applies only when [Unreleased] actually describes the SDS artefacts.
+    // An empty or unrelated [Unreleased] (the normal state right after a release
+    // promotes the SDS entry into a dated section) has no lazy/optional framing to
+    // contradict — there is nothing to guard, so pass vacuously.
+    if (!flat.includes("user_spec.md") && !flat.includes("playbook.md")) return;
     expect(LAZY_SLOT_RE.test(flat)).toBe(false);
   });
 });
