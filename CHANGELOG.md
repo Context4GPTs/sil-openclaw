@@ -10,6 +10,19 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Fixed
+
+- **Bundled skill now publishes under the unique basename `sil-shopping/`** (was the
+  generic `skill/`). The OpenClaw host derives a skill's published name from its
+  directory basename, so the old `skill/` collided with klodi's identically-named
+  `skill/` when both plugins were co-installed — the host logged a
+  `"skill" resolves to both` collision warning and silently dropped sil's skill
+  (only the first basename wins), leaving the model with no skill to drive the
+  `sil_*` tools. Renaming the directory to `sil-shopping/` makes the published name
+  sil-unique and collision-free. The skill's frontmatter `name` is realigned to
+  `sil-shopping` and its `description` sharpened so the model reliably routes every
+  shopping / identity / shopping-expert intent to it.
+
 ## [0.3.3] - 2026-06-25
 
 ### Fixed

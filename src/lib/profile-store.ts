@@ -1,7 +1,7 @@
 /**
  * sil shopping-expert behaviour-artefact store.
  *
- * The agent-creation engine (the bundled `skill/SKILL.md` procedure driving
+ * The agent-creation engine (the bundled `sil-shopping/SKILL.md` procedure driving
  * the OpenClaw host CLI) registers the *wiring* of a new sil-wired agent into
  * the host's own config — the `agents.list[]` entry, the enabled `sil` plugin,
  * the attached `sil` skill. That host-config write is the host agent driving

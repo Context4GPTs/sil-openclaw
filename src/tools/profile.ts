@@ -10,7 +10,7 @@
  * identity/voice is the host workspace `SOUL.md`, written directly via the host
  * CLI. The *wiring* half — the host `agents.list[]` entry, the enabled `sil`
  * plugin, the attached `sil` skill, the `SOUL.md` — is the host agent driving
- * its own `openclaw …` CLI under the bundled `skill/SKILL.md` procedure; the
+ * its own `openclaw …` CLI under the bundled `sil-shopping/SKILL.md` procedure; the
  * plugin never writes `~/.openclaw` (`security.noChildProcess: true`, host
  * config is outside `filesystemScope`).
  *

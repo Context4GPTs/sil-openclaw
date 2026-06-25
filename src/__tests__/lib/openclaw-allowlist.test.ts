@@ -64,7 +64,7 @@ const SIL: SilAllowlistFacts = {
     "sil_search",
     "sil_whoami",
   ],
-  skill: "./skill",
+  skill: "./sil-shopping",
 };
 
 /** A different plugin's facts — used to prove the core is sil-agnostic in the

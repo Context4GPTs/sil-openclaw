@@ -48,7 +48,7 @@ export interface SilAllowlistFacts {
   readonly id: string;
   /** The plugin's tool names, for the operator log's `tools_added` count. */
   readonly tools: readonly string[];
-  /** The plugin's skill ref (e.g. `"./skill"`), for the operator log. */
+  /** The plugin's skill ref (e.g. `"./sil-shopping"`), for the operator log. */
   readonly skill: string;
 }
 

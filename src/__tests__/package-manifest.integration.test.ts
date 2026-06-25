@@ -24,7 +24,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -91,12 +91,13 @@ describe("package.json — OpenClaw ESM plugin shape", () => {
     expect(compat!.minGatewayVersion!.length).toBeGreaterThan(0);
   });
 
-  it("ships the skill dir and the manifest via `files`", () => {
-    // If `skill` or the manifest is missing from `files`, the packed
+  it("ships the skill dir (under its sil-unique basename) and the manifest via `files`", () => {
+    // If the skill dir or the manifest is missing from `files`, the packed
     // artifact won't carry the playbook/manifest and the host can't
     // discover the skill — the architect's skill-not-discoverable risk.
     expect(Array.isArray(pkg.files)).toBe(true);
-    expect(pkg.files).toContain("skill");
+    expect(pkg.files).toContain("sil-shopping");
+    expect(pkg.files).not.toContain("skill");
     expect(pkg.files).toContain("openclaw.plugin.json");
   });
 
@@ -122,10 +123,11 @@ describe("openclaw.plugin.json — manifest shape", () => {
     expect(manifest.version!.length).toBeGreaterThan(0);
   });
 
-  it("declares a non-empty skills array pointing at ./skill", () => {
+  it("declares a non-empty skills array pointing at ./sil-shopping (the sil-unique basename)", () => {
     expect(Array.isArray(manifest.skills)).toBe(true);
     expect(manifest.skills!.length).toBeGreaterThan(0);
-    expect(manifest.skills).toContain("./skill");
+    expect(manifest.skills).toContain("./sil-shopping");
+    expect(manifest.skills).not.toContain("./skill");
   });
 
   it("declares a contracts.tools array", () => {
@@ -255,5 +257,50 @@ describe("SDS artefact contract — shipped prose matches the code (all four req
     // contradict — there is nothing to guard, so pass vacuously.
     if (!flat.includes("user_spec.md") && !flat.includes("playbook.md")) return;
     expect(LAZY_SLOT_RE.test(flat)).toBe(false);
+  });
+});
+
+describe("skill basename is sil-unique — no stale `./skill` literal, ships under sil-shopping/ (AC3/AC4/AC8)", () => {
+  const pkg = readJson<PackageJson>("package.json");
+  const manifest = readJson<Manifest>("openclaw.plugin.json");
+
+  it("package.json#files lists `sil-shopping` and NO `skill` entry (publish allowlist)", () => {
+    expect(pkg.files).toContain("sil-shopping");
+    expect(pkg.files).not.toContain("skill");
+  });
+
+  it("openclaw.plugin.json#skills points at `./sil-shopping` and NO `./skill`", () => {
+    expect(manifest.skills).toContain("./sil-shopping");
+    expect(manifest.skills).not.toContain("./skill");
+  });
+
+  it("the `sil-shopping/` directory + SKILL.md exist on disk, and the old `skill/` is GONE", () => {
+    expect(existsSync(join(REPO_ROOT, "sil-shopping", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(REPO_ROOT, "skill"))).toBe(false);
+  });
+
+  it("the skill subtree (references + example) moved under sil-shopping/ intact", () => {
+    const root = join(REPO_ROOT, "sil-shopping");
+    expect(
+      existsSync(join(root, "references", "catalog_tools_reference.md")),
+    ).toBe(true);
+    expect(
+      existsSync(join(root, "references", "agent_creation_engine.md")),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(root, "examples", "road_cycling_expert_walkthrough.md"),
+      ),
+    ).toBe(true);
+  });
+
+  it("no stale `./skill` / top-level `skill` literal survives in the publish-path config (AC8 sweep)", () => {
+    const fileEntries = pkg.files ?? [];
+    const skillEntries = manifest.skills ?? [];
+    const stale = [
+      ...fileEntries.filter((e) => e === "skill" || e === "./skill"),
+      ...skillEntries.filter((e) => e === "skill" || e === "./skill"),
+    ];
+    expect(stale).toEqual([]);
   });
 });

@@ -55,7 +55,7 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..");
-const SKILL_DIR = join(REPO_ROOT, "skill");
+const SKILL_DIR = join(REPO_ROOT, "sil-shopping");
 const SKILL_PATH = join(SKILL_DIR, "SKILL.md");
 
 // The progressive-disclosure reference + example files that now own the
@@ -186,6 +186,50 @@ describe("skill/SKILL.md — discoverability", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     expect(fm.fields["description"]).toBeDefined();
     expect((fm.fields["description"] ?? "").length).toBeGreaterThan(0);
+  });
+});
+
+describe("sil-shopping/SKILL.md — collision-fix frontmatter (name == basename, description routes every family)", () => {
+  const REQUIRED_DESCRIPTION_TRIGGERS = [
+    "shop on sil",
+    "make me a shopping expert",
+    "Route here for any shopping, identity, or shopping-expert intent on sil",
+  ] as const;
+
+  it("frontmatter `name` equals the published basename `sil-shopping` (AC6 — not the stale `sil`)", () => {
+    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+    expect(fm.fields["name"]).toBe("sil-shopping");
+  });
+
+  it("frontmatter `description` carries the locked trigger phrase for every intent family (AC5)", () => {
+    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+    const description = fm.fields["description"] ?? "";
+    expect(description.length).toBeGreaterThan(0);
+    const missing = REQUIRED_DESCRIPTION_TRIGGERS.filter(
+      (t) => !description.includes(t),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("frontmatter `description` enumerates the eight sil_* tools it drives (reference tail, not trigger)", () => {
+    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+    const description = fm.fields["description"] ?? "";
+    const missing = [
+      "sil_register",
+      "sil_whoami",
+      "sil_search",
+      "sil_product_get",
+      "sil_profile_materialize",
+      "sil_profile_list",
+      "sil_profile_get",
+      "sil_profile_remove",
+    ].filter((t) => !description.includes(t));
+    expect(missing).toEqual([]);
+  });
+
+  it("frontmatter `name` no longer carries the bare plugin id `sil` (the pre-fix value)", () => {
+    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+    expect(fm.fields["name"]).not.toBe("sil");
   });
 });
 
