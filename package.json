@@ -26,8 +26,12 @@
     "node": ">=22"
   },
   "main": "./dist/index.js",
+  "bin": {
+    "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs"
+  },
   "files": [
     "dist",
+    "scripts",
     "sil-shopping",
     "openclaw.plugin.json",
     "README.md",
@@ -79,6 +83,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "sync-version": "node scripts/sync-version.mjs",
+    "openclaw:allowlist": "node scripts/allowlist-openclaw.mjs",
     "preversion": "pnpm typecheck && pnpm test",
     "version": "pnpm sync-version && node scripts/changelog.mjs cut && git add openclaw.plugin.json CHANGELOG.md",
     "postversion": "git push --follow-tags",

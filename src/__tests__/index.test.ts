@@ -32,6 +32,17 @@
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  existsSync,
+  statSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { PluginAPI } from "openclaw/plugin-sdk";
 
 interface CapturedEntry {
@@ -64,6 +75,7 @@ import {
   setWebUrl,
 } from "../lib/config.js";
 import { jsonResult } from "../lib/tool-result.js";
+import { getDataDir, writeTokens } from "../lib/credentials.js";
 import { createMockPluginApi } from "./helpers/mock-plugin-api.js";
 
 beforeAll(async () => {
@@ -71,11 +83,29 @@ beforeAll(async () => {
   await import("../index.js");
 });
 
+// File-scoped hermetic data dir. After register() starts creating the data
+// dir (this card's change), every register() call in this file would touch
+// the real $SIL_DATA_DIR / ~/.local/share/sil. Point all of them at a
+// throwaway temp dir so no test pollutes the real filesystem. The dedicated
+// "data dir is guaranteed at registration time" describe sets its OWN
+// $SIL_DATA_DIR in its nested beforeEach (which runs after this one).
+let fileTempDataDir: string;
+let filePriorSilDataDir: string | undefined;
+
 beforeEach(() => {
   vi.clearAllMocks();
   // Reset module-level config state so each test starts at "default".
   setWebUrl("");
   delete process.env["SIL_WEB_URL"];
+  fileTempDataDir = mkdtempSync(join(tmpdir(), "sil-index-file-"));
+  filePriorSilDataDir = process.env["SIL_DATA_DIR"];
+  process.env["SIL_DATA_DIR"] = fileTempDataDir;
+});
+
+afterEach(() => {
+  if (filePriorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
+  else process.env["SIL_DATA_DIR"] = filePriorSilDataDir;
+  rmSync(fileTempDataDir, { recursive: true, force: true });
 });
 
 describe("plugin entry — registration contract", () => {
@@ -190,6 +220,112 @@ describe("plugin entry — opens no long-lived resource (install-hang guard)", (
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+});
+
+describe("plugin entry — data dir is guaranteed at registration time", () => {
+  // The card's product rule: from the instant register() returns, the
+  // resolved sil data dir exists as a 0700 directory — unconditionally,
+  // BEFORE any tool has executed. Hermetic per-test $SIL_DATA_DIR (real
+  // temp dir, no fs mocking — the established credentials.test.ts pattern).
+  // These tests share the captured register fn with the suite above; they
+  // own their own data-dir env so they never leak into the config tests.
+  let parentDir: string;
+  let priorSilDataDir: string | undefined;
+  let priorXdg: string | undefined;
+
+  /** The low 9 permission bits (owner/group/other rwx) of a path. */
+  function modeBits(path: string): number {
+    // eslint-disable-next-line no-bitwise
+    return statSync(path).mode & 0o777;
+  }
+
+  beforeEach(() => {
+    // A brand-new, EMPTY parent per test. The data dir we point at is a
+    // not-yet-existing CHILD of it, so "register creates it" is a real
+    // creation, never a pre-existing no-op — except where a test seeds it.
+    parentDir = mkdtempSync(join(tmpdir(), "sil-regdir-test-"));
+    priorSilDataDir = process.env["SIL_DATA_DIR"];
+    priorXdg = process.env["XDG_DATA_HOME"];
+    process.env["SIL_DATA_DIR"] = join(parentDir, "data");
+  });
+
+  afterEach(() => {
+    if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
+    else process.env["SIL_DATA_DIR"] = priorSilDataDir;
+    if (priorXdg === undefined) delete process.env["XDG_DATA_HOME"];
+    else process.env["XDG_DATA_HOME"] = priorXdg;
+    rmSync(parentDir, { recursive: true, force: true });
+  });
+
+  it("AC1 — the data dir exists the moment register() returns (before any tool ran)", () => {
+    const target = getDataDir();
+    // Precondition: the resolved dir does NOT exist before register().
+    // If this fails the test is not proving creation — it would false-green.
+    expect(existsSync(target)).toBe(false);
+
+    const api = createMockPluginApi();
+    capturedRegisterFn!(api);
+
+    // The dir is a directory on disk, AND no tool executed to make it so:
+    // register() only registered tool definitions; none of their execute()
+    // bodies ran. The mock records registrations, not invocations.
+    expect(existsSync(target)).toBe(true);
+    expect(statSync(target).isDirectory()).toBe(true);
+  });
+
+  it("AC2 — the freshly-created dir has mode 0o700 (owner-only)", () => {
+    const target = getDataDir();
+    const api = createMockPluginApi();
+    capturedRegisterFn!(api);
+    // 0700 = owner rwx, group/other none. A group/world-accessible data
+    // home leaks the credential store's container perms.
+    expect(modeBits(target)).toBe(0o700);
+  });
+
+  it("AC4 — a pre-existing dir (with contents) is a clean no-op; nothing is destroyed", () => {
+    const target = getDataDir();
+    // Pre-create the dir and seed a token-like file with known bytes +
+    // owner-only perms, simulating an already-registered user re-loading
+    // the plugin.
+    mkdirSync(target, { recursive: true, mode: 0o700 });
+    const seeded = join(target, "tokens.json");
+    writeFileSync(seeded, '{"access_token":"keep-me"}', { mode: 0o600 });
+
+    const api = createMockPluginApi();
+    // Re-loading the plugin must never throw and never clobber state.
+    expect(() => capturedRegisterFn!(api)).not.toThrow();
+
+    // The seeded file's BYTES are intact (not truncated/overwritten)...
+    expect(readFileSync(seeded, "utf8")).toBe('{"access_token":"keep-me"}');
+    // ...and its 0600 perms were not disturbed by a re-permission pass.
+    expect(modeBits(seeded)).toBe(0o600);
+    expect(modeBits(target)).toBe(0o700);
+  });
+
+  it("AC7 — the home is re-ensured at point-of-need after a mid-session delete", async () => {
+    const target = getDataDir();
+    const api = createMockPluginApi();
+    capturedRegisterFn!(api);
+    expect(existsSync(target)).toBe(true);
+
+    // Simulate the dir being deleted out from under a running session
+    // AFTER registration (the founder's "deleted out from under us" case).
+    rmSync(target, { recursive: true, force: true });
+    expect(existsSync(target)).toBe(false);
+
+    // The next write path must re-ensure the home (same path, same 0700)
+    // BEFORE the write — so a read/write after a mid-session delete is not
+    // wedged. writeTokens is the canonical write site.
+    await writeTokens({ access_token: "at-recover", refresh_token: "rt-recover" });
+
+    expect(existsSync(target)).toBe(true);
+    expect(modeBits(target)).toBe(0o700);
+    // And the write actually landed under the re-ensured home.
+    const tok = JSON.parse(
+      readFileSync(join(target, "tokens.json"), "utf8"),
+    ) as { access_token: string };
+    expect(tok.access_token).toBe("at-recover");
   });
 });
 
