@@ -52,6 +52,14 @@ import {
 
 // sil's real facts (single source of truth in prod is openclaw.plugin.json; the
 // unit core takes them as an argument so the test pins behaviour, not wiring).
+// `skill` mirrors the real manifest value `openclaw.plugin.json#skills[0]` —
+// the bundled skill ships under the sil-unique basename `./sil-shopping` (NOT
+// the generic `./skill`) so the host's basename-derived publish name cannot
+// collide with another co-installed plugin's `skill/` (the klodi collision the
+// rename-bundled-skill card fixes). The merge core never reads `skill` (it is
+// an operator-log field only), so the value is inert to behaviour here — but it
+// is kept truthful to the shipped manifest so the "real facts" claim holds and
+// no stale `./skill` literal survives anywhere in source/test.
 const SIL: SilAllowlistFacts = {
   id: "sil",
   tools: [
@@ -64,7 +72,7 @@ const SIL: SilAllowlistFacts = {
     "sil_search",
     "sil_whoami",
   ],
-  skill: "./skill",
+  skill: "./sil-shopping",
 };
 
 /** A different plugin's facts — used to prove the core is sil-agnostic in the
