@@ -35,13 +35,16 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 
 /** Owner read/write only. The bearer pair must never be group/world-readable. */
 const FILE_MODE = 0o600;
-/** Owner read/write/execute only on the data dir itself. */
-const DIR_MODE = 0o700;
+/** Owner read/write/execute only on the data dir itself. Exported so the one
+ * other writer of a `$SIL_DATA_DIR` sub-tree (`profile-store.ts`, the SDS
+ * artefact store) shares this single source of truth for the data-home mode
+ * rather than duplicating the literal. */
+export const DIR_MODE = 0o700;
 
 const TOKENS_FILE = "tokens.json";
 const CONFIG_FILE = "config.json";
@@ -75,6 +78,24 @@ export function getDataDir(): string {
   if (xdg !== undefined && xdg !== "") return join(xdg, "sil");
 
   return join(homedir(), ".local", "share", "sil");
+}
+
+/**
+ * Create the resolved data dir (`0700`) if absent and return its path. The SOLE
+ * creator of the data dir — `register()` calls it at load (so the home exists
+ * from the moment the plugin registers, not lazily on first write), and the
+ * write paths call it before every write, which doubles as the guard against the
+ * dir being deleted out from under a running session.
+ *
+ * Idempotent: `mkdirSync(..., { recursive: true })` is a clean no-op when the dir
+ * already exists, never re-permissioning or disturbing existing contents. Throws
+ * the raw fs error (ENOTDIR/EACCES/ENOSPC…) on a genuinely uncreatable path —
+ * callers surface it (fail-closed), never swallow it.
+ */
+export function ensureDataDir(): string {
+  const dir = getDataDir();
+  mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+  return dir;
 }
 
 export function getTokensPath(): string {
@@ -150,13 +171,16 @@ export function clearTokens(): void {
  * The temp file is created `0600` and the final file is re-`chmod`'d to `0600`
  * in case the rename inherited a different mode on some filesystems.
  *
- * Creating the dir first (recursive, `0700`) makes first-run on a clean machine
- * a non-error. The temp name carries random bytes so two concurrent writers (a
- * pathological double-register sharing a data dir) don't collide on the temp.
+ * Ensuring the data dir first (recursive, `0700`, via `ensureDataDir()`) makes
+ * first-run on a clean machine a non-error AND re-heals the home if it was
+ * deleted out from under a running session before this write. The token/config
+ * paths are always direct children of `getDataDir()`, so the dir ensured here is
+ * exactly the one the write lands in. The temp name carries random bytes so two
+ * concurrent writers (a pathological double-register sharing a data dir) don't
+ * collide on the temp.
  */
 function writeJsonAtomic(path: string, data: unknown): void {
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+  ensureDataDir();
 
   const tmp = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
   writeFileSync(tmp, JSON.stringify(data, null, 2), {
