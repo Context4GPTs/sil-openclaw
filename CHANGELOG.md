@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-06-25
+
 ### Fixed
 
 - **Manifest security disclosure now matches the code's credential behaviour.**
