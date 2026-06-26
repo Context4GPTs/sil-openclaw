@@ -1,7 +1,7 @@
 {
   "name": "sil-openclaw",
   "version": "0.3.4",
-  "description": "OpenClaw plugin for sil — register an identity and search and look up products in the sil commerce catalog from an agent.",
+  "description": "Turn your OpenClaw into an expert shopping agent.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

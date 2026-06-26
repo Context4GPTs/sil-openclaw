@@ -10,6 +10,15 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Changed
+
+- **Catalog description rewritten to "Turn your OpenClaw into an expert shopping
+  agent."** — the same line now in both `package.json#description` and
+  `openclaw.plugin.json#description`. ClawHub crops the catalog card at 10 words, and
+  the old opener ("OpenClaw plugin for sil — …") spent those words on what the listing
+  already shows (the package is `@4gpts/sil`). The new line is benefit-led and names the
+  shopping-expert headline feature within the visible crop.
+
 ## [0.3.4] - 2026-06-25
 
 ### Fixed
