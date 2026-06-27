@@ -20,7 +20,7 @@ These three principles hold on every path, before any reference is loaded:
 
 ## Session start
 
-Confirm the `sil_*` tools are exposed. If they are missing from the available tool list, the host runtime is filtering them out — tell the user to consult the host's tool-allowlist docs and stop. Most flows need an identity: if the user has not registered this session, the catalog tools return an unregistered status whose `recovery` points at `sil_register` (the [catalog tools reference](references/catalog_tools_reference.md) has the full taxonomy) — so calling a catalog tool first lets that outcome route, or run `sil_register` up front when the user's intent clearly requires it.
+Confirm the `sil_*` tools are exposed. If they are missing from the available tool list, the host runtime is filtering them out because sil is not admitted at the host allow surfaces — run the shipped admission helper `sil-openclaw-allowlist` (it additively admits sil at `plugins.allow` + `tools.alsoAllow`, leaving any other trusted plugin untouched), then reopen the session so the tools load. Most flows need an identity: if the user has not registered this session, the catalog tools return an unregistered status whose `recovery` points at `sil_register` (the [catalog tools reference](references/catalog_tools_reference.md) has the full taxonomy) — so calling a catalog tool first lets that outcome route, or run `sil_register` up front when the user's intent clearly requires it.
 
 ## Routing — match intent to a tool, load its reference on demand
 
