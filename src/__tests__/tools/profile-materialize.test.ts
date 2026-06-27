@@ -1,24 +1,24 @@
 /**
  * UNIT — sil_profile_materialize tool: registration shape + the structured
- * envelope it maps each store outcome to (tier: unit, mock api + temp data dir,
- * no network, no host).
+ * envelope it maps each store outcome to, after the single-multi-domain shopper
+ * reshape (tier: unit, mock api + temp data dir, no network, no host).
  *
- * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 2
- * (PR #33 bounced a SECOND time). After the SDS reframe the tool no longer carries
- * `persona` (the persona is the host SOUL.md, written by the engine via the host
- * CLI). Round-2: it REQUIRES ALL FOUR specs — domainSpec + intentSpec + userSpec +
- * playbook (present non-blank from creation, seeded partial then augmented
- * per-query). The pure artefact-writer invariants live in `lib/profile-store.test.ts`
- * / `lib/profile-store-sds.test.ts`; here we pin the TOOL boundary:
- *   - the tool registers as `sil_profile_materialize` with a TypeBox object
- *     schema carrying agentId / name / domainSpec / intentSpec / userSpec /
- *     playbook — all required — and NO persona;
- *   - a valid spec returns the `ok` envelope with the artefact paths and the
- *     artefacts actually land under $SIL_DATA_DIR/agents/<agentId>/;
- *   - an invalid field returns the `invalid_request` envelope naming the field
- *     and writes nothing;
- *   - the tool makes NO host-config write and reads NO token (no coupling) —
- *     it is the behaviour-artefact half only.
+ * Card: single-multi-domain-sil-shopper — Slice 1. The tool stays ONE tool
+ * (`sil_profile_materialize`) with an OPTIONAL `domain` object — the 8-tool
+ * manifest is FROZEN, so no tool is added/renamed (manifest-contract stays green).
+ * The flat four-spec-per-expert shape is GONE. The params are now agent-level +
+ * an optional domain pack:
+ *
+ *   { agentId, name, userSpec, domain?: { slug, name, domainSpec, intentSpec, playbook } }
+ *
+ *   - NO domain  ⇒ create the shopper (shared user_spec + `domains: {}`);
+ *   - WITH domain ⇒ lazily mint domains/<slug>/* + a shared-user_spec rewrite +
+ *     an upsert into `domains[slug]`, one atomic call.
+ *
+ * The pure store invariants live in lib/profile-store*.test.ts; here we pin the
+ * TOOL boundary: the schema (agentId/name/userSpec required; domain optional;
+ * NO top-level domainSpec/intentSpec/playbook), and the ok / invalid_request
+ * envelopes for both a create and a mint.
  *
  * Hermetic via the SIL_DATA_DIR temp-dir override.
  */
@@ -30,7 +30,7 @@ import {
   beforeEach,
   afterEach,
 } from "vitest";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -56,22 +56,34 @@ function payloadOf(result: { content: { text?: string }[] }): Record<string, unk
   return JSON.parse(text) as Record<string, unknown>;
 }
 
-const GOOD_PARAMS = {
-  agentId: "gift-buyer",
-  name: "Gift Buyer",
-  domainSpec: "# Gift-buying domain spec\nDimensions: recipient, occasion, budget, taste.",
-  intentSpec: "# Intent spec — dimensions\nrecipient, occasion, budget, timeline, taste.",
-  userSpec: "# User spec\nBuys for partner.\nHARD-NO: nothing over €50.",
-  playbook: "# Buying taste\nValue-conscious.",
+const USER_SPEC = "# User spec (shared)\n- Ships to Berlin.\nHARD-NO: leather (ethics).";
+
+/** Create the shopper (no domain). */
+const CREATE = {
+  agentId: "sil-shopper",
+  name: "sil shopper",
+  userSpec: USER_SPEC,
 };
 
-/** The minimum valid create. After Founder review round 2, all four sil specs are
- * REQUIRED + present from creation — so the minimum create IS the full four-spec
- * create. Kept as a named alias for call-site legibility. */
-const MIN_PARAMS = GOOD_PARAMS;
+const DOMAIN = {
+  slug: "road-cycling",
+  name: "Road cycling",
+  domainSpec: "# Domain spec — road cycling\nFit, gearing, geometry.",
+  intentSpec: "# Intent spec — cycling\nuse-case, terrain, budget, timeline.",
+  playbook: "# Taste — cycling\n~€1500; Shimano over SRAM.",
+};
+
+/** Mint a niche onto the shopper. */
+const MINT = { ...CREATE, domain: DOMAIN };
+
+function readManifest(agentId: string): Record<string, unknown> {
+  return JSON.parse(
+    readFileSync(join(getDataDir(), "agents", agentId, "profile.json"), "utf8"),
+  ) as Record<string, unknown>;
+}
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "sil-profile-tool-"));
+  dataDir = mkdtempSync(join(tmpdir(), "sil-materialize-tool-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
   api = createMockPluginApi();
@@ -84,132 +96,141 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe("sil_profile_materialize — registration shape", () => {
-  it("registers a sil_profile_materialize tool with a TypeBox object schema (no persona; ALL FOUR specs required — round-2)", () => {
+describe("sil_profile_materialize — registration shape (agent-level + an optional domain pack)", () => {
+  it("requires agentId/name/userSpec; domain is OPTIONAL; NO top-level domainSpec/intentSpec/playbook", () => {
     const tool = getTool(api, TOOL);
     expect(tool.name).toBe(TOOL);
     const schema = tool.parameters as unknown as {
       type?: string;
-      properties?: Record<string, unknown>;
+      properties?: Record<string, { type?: string; properties?: Record<string, unknown> }>;
       required?: string[];
     };
     expect(schema.type).toBe("object");
-    expect(Object.keys(schema.properties ?? {})).toEqual(
-      expect.arrayContaining(["agentId", "name", "domainSpec", "intentSpec", "userSpec", "playbook"]),
-    );
-    // Persona left the store — it is not a tool param.
-    expect(Object.keys(schema.properties ?? {})).not.toContain("persona");
-    // Round-2: agentId, name, AND all four specs are required (userSpec + playbook
-    // are no longer optional — they are present from creation).
+
+    const props = Object.keys(schema.properties ?? {});
+    expect(props).toEqual(expect.arrayContaining(["agentId", "name", "userSpec", "domain"]));
+    // The flat per-niche specs left the top level — they live inside `domain` now.
+    expect(props).not.toContain("domainSpec");
+    expect(props).not.toContain("intentSpec");
+    expect(props).not.toContain("playbook");
+    expect(props).not.toContain("persona");
+
+    // Only the three agent-level fields are required — domain is optional.
     expect(schema.required).toEqual(
-      expect.arrayContaining([
-        "agentId",
-        "name",
-        "domainSpec",
-        "intentSpec",
-        "userSpec",
-        "playbook",
-      ]),
+      expect.arrayContaining(["agentId", "name", "userSpec"]),
     );
-    expect(schema.required ?? []).not.toContain("persona");
+    expect(schema.required ?? []).not.toContain("domain");
+  });
+
+  it("the optional `domain` object declares slug/name/domainSpec/intentSpec/playbook", () => {
+    const tool = getTool(api, TOOL);
+    const schema = tool.parameters as unknown as {
+      properties?: Record<string, { type?: string; properties?: Record<string, unknown> }>;
+    };
+    const domain = schema.properties?.["domain"];
+    expect(domain?.type).toBe("object");
+    const nested = Object.keys(domain?.properties ?? {});
+    expect(nested).toEqual(
+      expect.arrayContaining(["slug", "name", "domainSpec", "intentSpec", "playbook"]),
+    );
   });
 });
 
-describe("sil_profile_materialize — valid spec materializes the artefacts (ok envelope)", () => {
-  it("returns status ok with the artefact paths, and the artefacts land under $SIL_DATA_DIR/agents/<id>/", async () => {
+describe("sil_profile_materialize — create the shopper (no domain): ok envelope + agent-level files", () => {
+  it("returns status ok and writes ONLY user_spec.md + profile.json (domains:{}), no domains/ dir", async () => {
     const tool = getTool(api, TOOL);
-    const payload = payloadOf(await tool.execute("call-1", { ...GOOD_PARAMS }));
-
+    const payload = payloadOf(await tool.execute("c-1", { ...CREATE }));
     expect(payload["status"]).toBe("ok");
-    expect(payload["agentId"]).toBe(GOOD_PARAMS.agentId);
+    expect(payload["agentId"]).toBe(CREATE.agentId);
 
-    const expectedDir = join(getDataDir(), "agents", GOOD_PARAMS.agentId);
-    expect(payload["dir"]).toBe(expectedDir);
-    expect(payload["domainSpecPath"]).toBe(join(expectedDir, "domain_spec.md"));
-    expect(payload["intentSpecPath"]).toBe(join(expectedDir, "intent_spec.md"));
-    expect(payload["profilePath"]).toBe(join(expectedDir, "profile.json"));
-    // Persona is no longer materialized into the store.
-    expect(payload["personaPath"]).toBeUndefined();
-
-    expect(existsSync(join(expectedDir, "domain_spec.md"))).toBe(true);
-    expect(existsSync(join(expectedDir, "intent_spec.md"))).toBe(true);
-    expect(existsSync(join(expectedDir, "profile.json"))).toBe(true);
-    expect(existsSync(join(expectedDir, "persona.md"))).toBe(false);
+    const dir = join(getDataDir(), "agents", CREATE.agentId);
+    expect(payload["userSpecPath"]).toBe(join(dir, "user_spec.md"));
+    expect(payload["profilePath"]).toBe(join(dir, "profile.json"));
+    expect(existsSync(join(dir, "user_spec.md"))).toBe(true);
+    expect(existsSync(join(dir, "domains"))).toBe(false);
+    // The flat per-niche artefacts never appear at the agent level.
+    expect(existsSync(join(dir, "domain_spec.md"))).toBe(false);
+    expect(readManifest(CREATE.agentId)["domains"]).toEqual({});
   });
 
-  it("returns ALL FOUR spec paths and lands all four files for a create (round-2: none is lazily absent)", async () => {
+  it("reads no token (behaviour-artefact half only)", async () => {
     const tool = getTool(api, TOOL);
-    const payload = payloadOf(await tool.execute("call-2", { ...MIN_PARAMS }));
-
-    expect(payload["status"]).toBe("ok");
-    expect(payload["userSpecPath"]).toBeDefined();
-    expect(payload["playbookPath"]).toBeDefined();
-    const expectedDir = join(getDataDir(), "agents", GOOD_PARAMS.agentId);
-    expect(existsSync(join(expectedDir, "user_spec.md"))).toBe(true);
-    expect(existsSync(join(expectedDir, "playbook.md"))).toBe(true);
-  });
-
-  it("makes no host-config write and reads no token (behaviour-artefact half only)", async () => {
-    const tool = getTool(api, TOOL);
-    await tool.execute("call-3", { ...GOOD_PARAMS });
-    // No token side effect — creation is identity-decoupled.
+    await tool.execute("c-2", { ...CREATE });
     expect(existsSync(getTokensPath())).toBe(false);
   });
 });
 
-describe("sil_profile_materialize — invalid spec returns invalid_request, writes nothing", () => {
-  it("missing domainSpec (required) → invalid_request naming the field, no artefact dir", async () => {
+describe("sil_profile_materialize — mint a niche (with domain): ok envelope + the pack lands under domains/<slug>/", () => {
+  it("returns status ok with the minted domain echo, and writes the pack + upserts domains[slug]", async () => {
     const tool = getTool(api, TOOL);
-    const { domainSpec: _d, ...noDomain } = GOOD_PARAMS;
-    const payload = payloadOf(await tool.execute("call-4", { ...noDomain }));
-    expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("domainSpec");
-    expect(typeof payload["message"]).toBe("string");
-    expect(existsSync(join(getDataDir(), "agents", GOOD_PARAMS.agentId))).toBe(false);
-  });
+    // Create the shopper first, then mint.
+    await tool.execute("c-3", { ...CREATE });
+    const payload = payloadOf(await tool.execute("c-4", { ...MINT }));
+    expect(payload["status"]).toBe("ok");
 
-  it("missing intentSpec (required) → invalid_request naming the field, no artefact dir", async () => {
-    const tool = getTool(api, TOOL);
-    const { intentSpec: _i, ...noIntent } = GOOD_PARAMS;
-    const payload = payloadOf(await tool.execute("call-5", { ...noIntent }));
-    expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("intentSpec");
-    expect(existsSync(join(getDataDir(), "agents", GOOD_PARAMS.agentId))).toBe(false);
-  });
+    const domainDir = join(getDataDir(), "agents", CREATE.agentId, "domains", DOMAIN.slug);
+    expect(existsSync(join(domainDir, "domain_spec.md"))).toBe(true);
+    expect(existsSync(join(domainDir, "intent_spec.md"))).toBe(true);
+    expect(existsSync(join(domainDir, "playbook.md"))).toBe(true);
+    expect(readFileSync(join(domainDir, "domain_spec.md"), "utf8")).toBe(DOMAIN.domainSpec);
 
-  it("missing userSpec (required, round-2) → invalid_request naming the field, no artefact dir", async () => {
+    // The envelope echoes the minted domain entry (slug + the three per-domain paths).
+    const domain = payload["domain"] as Record<string, unknown> | undefined;
+    expect(domain).toBeDefined();
+    expect(domain!["slug"]).toBe(DOMAIN.slug);
+    expect(domain!["domainSpecPath"]).toBe(join(domainDir, "domain_spec.md"));
+
+    // The manifest's domains map registers it.
+    const domains = (readManifest(CREATE.agentId)["domains"] ?? {}) as Record<string, unknown>;
+    expect(Object.keys(domains)).toEqual([DOMAIN.slug]);
+  });
+});
+
+describe("sil_profile_materialize — invalid spec → invalid_request envelope, writes nothing", () => {
+  it("missing userSpec → invalid_request(field=userSpec), no artefact dir", async () => {
     const tool = getTool(api, TOOL);
-    const { userSpec: _u, ...noUser } = GOOD_PARAMS;
-    const payload = payloadOf(await tool.execute("call-5u", { ...noUser }));
+    const { userSpec: _u, ...noUser } = CREATE;
+    const payload = payloadOf(await tool.execute("c-5", { ...noUser }));
     expect(payload["status"]).toBe("invalid_request");
     expect(payload["field"]).toBe("userSpec");
-    expect(existsSync(join(getDataDir(), "agents", GOOD_PARAMS.agentId))).toBe(false);
-  });
-
-  it("missing playbook (required, round-2) → invalid_request naming the field, no artefact dir", async () => {
-    const tool = getTool(api, TOOL);
-    const { playbook: _p, ...noPlaybook } = GOOD_PARAMS;
-    const payload = payloadOf(await tool.execute("call-5p", { ...noPlaybook }));
-    expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("playbook");
-    expect(existsSync(join(getDataDir(), "agents", GOOD_PARAMS.agentId))).toBe(false);
+    expect(existsSync(join(getDataDir(), "agents", CREATE.agentId))).toBe(false);
   });
 
   it("missing agentId → invalid_request(field=agentId), no write", async () => {
     const tool = getTool(api, TOOL);
-    const { agentId: _drop, ...noId } = GOOD_PARAMS;
-    const payload = payloadOf(await tool.execute("call-6", { ...noId }));
+    const { agentId: _a, ...noId } = CREATE;
+    const payload = payloadOf(await tool.execute("c-6", { ...noId }));
     expect(payload["status"]).toBe("invalid_request");
     expect(payload["field"]).toBe("agentId");
   });
 
   it('reserved "main" agentId → invalid_request(field=agentId), no write', async () => {
     const tool = getTool(api, TOOL);
-    const payload = payloadOf(
-      await tool.execute("call-7", { ...GOOD_PARAMS, agentId: "main" }),
-    );
+    const payload = payloadOf(await tool.execute("c-7", { ...CREATE, agentId: "main" }));
     expect(payload["status"]).toBe("invalid_request");
     expect(payload["field"]).toBe("agentId");
     expect(existsSync(join(getDataDir(), "agents", "main"))).toBe(false);
+  });
+
+  it("a traversal-shaped domain.slug → invalid_request(field=domain.slug), no domain pack", async () => {
+    const tool = getTool(api, TOOL);
+    await tool.execute("c-8", { ...CREATE }); // shopper exists
+    const payload = payloadOf(
+      await tool.execute("c-9", { ...MINT, domain: { ...DOMAIN, slug: "../escape" } }),
+    );
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("domain.slug");
+    expect(existsSync(join(getDataDir(), "agents", CREATE.agentId, "domains"))).toBe(false);
+  });
+
+  it("a blank domain.domainSpec → invalid_request(field=domain.domainSpec), no domain pack", async () => {
+    const tool = getTool(api, TOOL);
+    await tool.execute("c-10", { ...CREATE });
+    const payload = payloadOf(
+      await tool.execute("c-11", { ...MINT, domain: { ...DOMAIN, domainSpec: "   " } }),
+    );
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("domain.domainSpec");
+    expect(existsSync(join(getDataDir(), "agents", CREATE.agentId, "domains"))).toBe(false);
   });
 });
