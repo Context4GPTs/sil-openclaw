@@ -1,30 +1,28 @@
 /**
- * sil shopping-expert profile tools.
+ * sil shopper profile tools — the single multi-domain shopper seam.
  *
- * `sil_profile_materialize` is the plugin's half of the agent-creation engine:
- * it writes the created expert's *SDS behaviour* artefacts (all four required —
- * domain spec + intent-spec dimension schema + user spec + playbook taste,
- * present from creation and augmented every query — and a typed manifest) into
- * the plugin's own data directory (`$SIL_DATA_DIR`, the
- * disclosed `filesystemScope`). The persona is NOT written here — the agent's
- * identity/voice is the host workspace `SOUL.md`, written directly via the host
- * CLI. The *wiring* half — the host `agents.list[]` entry, the enabled `sil`
- * plugin, the attached `sil` skill, the `SOUL.md` — is the host agent driving
- * its own `openclaw …` CLI under the bundled `sil-shopping/SKILL.md` procedure; the
- * plugin never writes `~/.openclaw` (`security.noChildProcess: true`, host
- * config is outside `filesystemScope`).
+ * `sil_profile_materialize` is the plugin's half of the agent-creation engine and
+ * the lazy domain-mint path: it writes the SHARED, agent-level user spec and, when
+ * a `domain` pack is supplied, that niche's SDS artefacts
+ * (`domains/<slug>/{domain_spec,intent_spec,playbook}.md`) into the plugin's own
+ * data directory (`$SIL_DATA_DIR`, the disclosed `filesystemScope`). It stays ONE
+ * tool with an OPTIONAL `domain`: no `domain` ⇒ create the one shopper; with
+ * `domain` ⇒ lazily mint/refresh a niche AND persist any cross-niche fact captured
+ * into the shared user spec — one atomic call. The persona is NOT written here —
+ * the shopper's identity/voice is the host workspace `SOUL.md`. The wiring half
+ * (the host `agents.list[]` entry, the enabled `sil` plugin, the attached skill,
+ * the `SOUL.md`) is the host agent driving its own `openclaw …` CLI; the plugin
+ * never writes `~/.openclaw` (`security.noChildProcess: true`).
  *
- * Why a tool (not skill-driven `write`-tool prose): the host agent's only way
- * to invoke plugin code is a registered tool, and a plugin write buys
- * host-validated typed inputs, the structured-error envelope, and ATOMIC
- * all-or-nothing writes — all of which serve the goal's primary correctness
- * bar (a created expert that actually shops). The artefact write lives here;
- * the host-config write stays host-CLI.
+ * Domain classification / routing at shop time stays SKILL-REASONING — there is no
+ * routing tool. The surface is the same four profile tools; the skill reads
+ * `profile.json.domains` (via `sil_profile_list` / `sil_profile_get`) to pick or
+ * lazily mint a niche.
  *
  * This follows `identity.ts` (the reference group): a `registerXTools(api)`
  * function, a `Type.Object` schema the host validates inputs against, the
- * `jsonResult` success/structured-error envelope, and ALL I/O inside
- * `execute()` (register() opens nothing).
+ * `jsonResult` success/structured-error envelope, and ALL I/O inside `execute()`
+ * (register() opens nothing).
  */
 
 import type { PluginAPI } from "openclaw/plugin-sdk";
@@ -39,6 +37,12 @@ import {
 } from "../lib/profile-store.js";
 import { jsonResult } from "../lib/tool-result.js";
 
+/** Narrow a host-validated param to a string, defaulting to "" so the store does
+ * the real, structured-error validation (validate-first / write-nothing). */
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 export function registerProfileTools(api: PluginAPI): void {
   registerMaterialize(api);
   registerList(api);
@@ -49,98 +53,126 @@ export function registerProfileTools(api: PluginAPI): void {
 function registerMaterialize(api: PluginAPI): void {
   api.registerTool({
     name: "sil_profile_materialize",
-    label: "Materialize a sil shopping-expert's SDS behaviour artefacts",
+    label: "Materialize the sil shopper / mint a domain pack",
     description:
-      "Write a created sil shopping expert's SDS behaviour artefacts into the sil"
-      + " data directory — ALL FOUR are REQUIRED and present from creation (seeded"
-      + " partial by the light ≤10-question setup + an initial research pass, then"
-      + " augmented every query): the domain spec (deep researched niche expertise"
-      + " — how to buy well, the full mechanics), the intent spec (the"
-      + " agent-specific decomposition dimensions a query must resolve, derived"
-      + " from the domain spec), the user spec (the user's domain-relevant facts +"
-      + " hard constraints) and the playbook (the user's buying taste), plus a"
-      + " typed manifest the sil skill reads at runtime to load them. The persona"
-      + " is NOT written here — it is the host workspace SOUL.md, written via the"
-      + " host CLI. Re-run it over the SAME agentId to refine an expert in place or"
-      + " augment a spec from a query (pass the full updated body — it overwrites"
-      + " atomically). Call this AFTER the host agent has been created (openclaw"
-      + " agents add) and BEFORE openclaw config validate. It does NOT touch the"
-      + " host OpenClaw config — the plugin enable + skill attach are driven by the"
-      + " host CLI, not this tool. Writes are atomic: an invalid spec writes"
-      + " nothing, and a write failure leaves nothing partial.",
+      "Write the one sil shopper's behaviour artefacts into the sil data directory."
+      + " ONE tool, two modes. WITHOUT a `domain`: create the shopper — write the"
+      + " SHARED, agent-level user spec (the one person's standing facts + hard"
+      + " constraints that carry across every niche) and a manifest with an empty"
+      + " domains map. WITH a `domain`: lazily mint or refresh that niche on first"
+      + " shop — write its domain spec (deep researched niche expertise), intent"
+      + " spec (the decomposition dimensions a query must resolve) and playbook (the"
+      + " niche buying taste) under domains/<slug>/, AND overwrite the shared user"
+      + " spec (so a cross-niche fact surfaced in the same query is persisted) — all"
+      + " in one atomic call that upserts domains[slug]. `userSpec` is REQUIRED on"
+      + " every call (pass the full updated body — it overwrites atomically). The"
+      + " persona is NOT written here — it is the host workspace SOUL.md. Re-run with"
+      + " the SAME { agentId, domain.slug } to refresh a niche in place. Does NOT"
+      + " touch the host OpenClaw config. Writes are atomic: an invalid spec writes"
+      + " nothing, and a write failure leaves nothing partial (a failed new-domain"
+      + " mint tears down only that fresh leaf; the shopper and siblings survive).",
     parameters: Type.Object({
       agentId: Type.String({
         description:
-          "The host agent id the expert was created under (agents.list[].id),"
-          + " lower-kebab; not \"main\" (host-reserved). Keys the artefact dir.",
+          "The host agent id of the shopper (agents.list[].id), lower-kebab; not"
+          + " \"main\" (host-reserved). Keys the artefact dir.",
       }),
       name: Type.String({
-        description: "The human-readable expert name (recorded in the manifest).",
-      }),
-      domainSpec: Type.String({
-        description:
-          "The SDS domain spec — deep researched niche expertise: how to buy well"
-          + " in the niche and its full mechanics (for cycling: gearing theory,"
-          + " frame geometry, the complete bike-fit process). Researched by the"
-          + " agent itself (web + knowledge), not interrogated from the user."
-          + " REQUIRED, non-empty. Materialized as domain_spec.md; web-refreshed"
-          + " every query.",
-      }),
-      intentSpec: Type.String({
-        description:
-          "The SDS intent spec — the agent-specific decomposition DIMENSIONS (a"
-          + " PRD-style template) a shopping query must resolve, derived from the"
-          + " domain spec (for cycling: use-case, terrain, budget, timeline,"
-          + " compatibility, performance priorities, aesthetics). REQUIRED,"
-          + " non-empty. This is the dimension SCHEMA only — the per-query intent"
-          + " (dimensions filled in) is ephemeral and is never stored. Materialized"
-          + " as intent_spec.md.",
+        description: "The human-readable shopper name (recorded in the manifest).",
       }),
       userSpec: Type.String({
         description:
-          "The SDS user spec — the user's domain-relevant facts + hard"
-          + " constraints (body measurements, climate, the rules they never"
-          + " break). REQUIRED, non-empty: present from creation (seeded partial"
-          + " by the light ≤10-question setup), then augmented every query."
-          + " Materialized as user_spec.md (per-user, per-expert, local). On a"
-          + " per-query augment / refine, pass the full updated body.",
+          "The SHARED, agent-level user spec — the one person's domain-relevant"
+          + " facts + hard constraints (addresses, sizes, allergy/ethics rules they"
+          + " never break, budget psychology) that carry across EVERY niche."
+          + " REQUIRED, non-empty on every call. Materialized as user_spec.md and"
+          + " read by every domain's shop loop, so a fact captured while shopping one"
+          + " niche is reused in another without being re-asked. On any augment, pass"
+          + " the full updated body — it overwrites atomically.",
       }),
-      playbook: Type.String({
-        description:
-          "The SDS playbook — the user's buying TASTE (price sensitivity, brand"
-          + " preferences, general taste). REQUIRED, non-empty: present from"
-          + " creation (seeded partial), then augmented every query. Materialized"
-          + " as playbook.md. On a per-query augment / refine, pass the full"
-          + " updated body.",
-      }),
+      domain: Type.Optional(
+        Type.Object(
+          {
+            slug: Type.String({
+              description:
+                "The domain slug, lower-kebab; not \"main\". Keys domains/<slug>/."
+                + " Reuse the slug of an existing matching niche before minting a new"
+                + " one (the skill dedups; the store enforces only shape).",
+            }),
+            name: Type.String({
+              description: "The human-readable domain name (e.g. \"Road cycling\").",
+            }),
+            domainSpec: Type.String({
+              description:
+                "The SDS domain spec — deep researched niche expertise: how to buy"
+                + " well in the niche and its full mechanics. REQUIRED, non-empty."
+                + " Materialized as domains/<slug>/domain_spec.md; web-refreshed every"
+                + " query.",
+            }),
+            intentSpec: Type.String({
+              description:
+                "The SDS intent spec — the decomposition DIMENSIONS a shopping query"
+                + " in this niche must resolve (use-case, budget, compatibility…),"
+                + " derived from the domain spec. REQUIRED, non-empty. The dimension"
+                + " SCHEMA only — the per-query intent is ephemeral. Materialized as"
+                + " domains/<slug>/intent_spec.md.",
+            }),
+            playbook: Type.String({
+              description:
+                "The SDS playbook — the user's buying TASTE for THIS niche (price"
+                + " band, brand leanings, niche-mechanical preferences). REQUIRED,"
+                + " non-empty. Materialized as domains/<slug>/playbook.md. On a"
+                + " per-query augment, pass the full updated body.",
+            }),
+          },
+          {
+            description:
+              "OPTIONAL per-domain pack. Omit to create/refresh the shopper only;"
+              + " include to lazily mint or refresh a niche.",
+          },
+        ),
+      ),
     }),
     async execute(_callId, params) {
       // The host validates `params` against the schema above before we run, but
       // narrow at the read site (the SDK types params as Record<string,unknown>)
       // and let the store do the real, structured-error validation.
+      const rawDomain = params["domain"];
+      let domain: ProfileSpec["domain"];
+      if (typeof rawDomain === "object" && rawDomain !== null) {
+        const d = rawDomain as Record<string, unknown>;
+        domain = {
+          slug: asString(d["slug"]),
+          name: asString(d["name"]),
+          domainSpec: asString(d["domainSpec"]),
+          intentSpec: asString(d["intentSpec"]),
+          playbook: asString(d["playbook"]),
+        };
+      }
+
       const spec: ProfileSpec = {
-        agentId: typeof params["agentId"] === "string" ? params["agentId"] : "",
-        name: typeof params["name"] === "string" ? params["name"] : "",
-        domainSpec: typeof params["domainSpec"] === "string" ? params["domainSpec"] : "",
-        intentSpec: typeof params["intentSpec"] === "string" ? params["intentSpec"] : "",
-        userSpec: typeof params["userSpec"] === "string" ? params["userSpec"] : "",
-        playbook: typeof params["playbook"] === "string" ? params["playbook"] : "",
+        agentId: asString(params["agentId"]),
+        name: asString(params["name"]),
+        userSpec: asString(params["userSpec"]),
+        ...(domain ? { domain } : {}),
       };
 
       const result = materializeProfile(spec);
 
       if (result.ok) {
-        api.logger.info("sil_profile_materialized", { agent_id: result.agentId });
-        return jsonResult({
+        api.logger.info("sil_profile_materialized", {
+          agent_id: result.agentId,
+          domain_slug: result.domain?.slug,
+        });
+        const payload: Record<string, unknown> = {
           status: "ok",
           agentId: result.agentId,
           dir: result.dir,
-          domainSpecPath: result.domainSpecPath,
-          intentSpecPath: result.intentSpecPath,
           userSpecPath: result.userSpecPath,
-          playbookPath: result.playbookPath,
           profilePath: result.profilePath,
-        });
+        };
+        if (result.domain) payload["domain"] = result.domain;
+        return jsonResult(payload);
       }
 
       if (result.kind === "invalid_request") {
@@ -165,90 +197,112 @@ function registerMaterialize(api: PluginAPI): void {
 }
 
 /**
- * `sil_profile_list` — enumerate the user's sil shopping experts (read-only).
- *
- * The artefact store is the source of truth for "what is a sil expert" (a
- * readable `agents/<id>/profile.json`), not the host agent list. Returns each
- * expert summarized from its manifest, most-recently-created first, plus an
- * `unreadable[]` bucket so one corrupt manifest never blinds the user to the
- * rest. An empty store is a normal `ok` outcome (like an empty `sil_search`).
+ * `sil_profile_list` — enumerate the shopper(s) and each one's domain index
+ * (read-only, no args). The artefact store is the source of truth (a readable
+ * `agents/<id>/profile.json`). An empty store, or a shopper with `domains: {}`, is
+ * a normal `ok` outcome (a shopper that has not shopped yet). One corrupt manifest
+ * lands in `unreadable[]` and never aborts the listing.
  */
 function registerList(api: PluginAPI): void {
   api.registerTool({
     name: "sil_profile_list",
-    label: "List the user's sil shopping experts",
+    label: "List the sil shopper's domains",
     description:
-      "List the sil shopping experts the user has created — read-only, no"
-      + " arguments. Sourced from the sil data directory's artefact store (each"
-      + " agents/<id>/profile.json is the authoritative \"is a sil expert\""
-      + " signal — a bare host agent without one is not listed). Returns the"
-      + " experts most-recently-created first, each with its agentId, name, and"
-      + " createdAt. Every expert carries all four SDS specs (domain + intent +"
-      + " user + playbook, all required and present from creation), so per-slot"
-      + " presence is not flagged. An empty store is a normal, successful empty"
-      + " listing — not an error. One unreadable or corrupt manifest is reported"
-      + " inline in `unreadable` and never aborts the listing. Reads no token and"
-      + " writes nothing.",
+      "List the sil shopper(s) and each one's domains — read-only, no arguments."
+      + " Sourced from the sil data directory's artefact store (each"
+      + " agents/<id>/profile.json is the authoritative shopper signal; its domains"
+      + " map is the niche index). Returns each shopper's agentId, name and createdAt"
+      + " plus its domains (slug, name, createdAt, updatedAt). A shopper with no"
+      + " domains yet still lists, with an empty domain list — that is healthy, not"
+      + " an error; so is an empty store. One unreadable or corrupt manifest is"
+      + " reported inline in `unreadable` and never aborts the listing. Reads no"
+      + " token and writes nothing.",
     parameters: Type.Object({}),
     async execute(_callId, _params) {
-      const { experts, unreadable } = listAgentProfiles();
+      const { shoppers, unreadable } = listAgentProfiles();
       api.logger.info("sil_profile_listed", {
-        expert_count: experts.length,
+        shopper_count: shoppers.length,
         unreadable_count: unreadable.length,
       });
-      return jsonResult({
-        status: "ok",
-        experts,
-        unreadable,
-      });
+      return jsonResult({ status: "ok", shoppers, unreadable });
     },
   });
 }
 
 /**
- * `sil_profile_get` — view one expert's full detail (read-only).
+ * `sil_profile_get` — view the shopper overview OR one domain's pack (read-only).
  *
- * Re-runs the writer's `agentId` gate before any read (a traversal-shaped id →
- * `invalid_request`). Returns the manifest plus the SDS artefact bodies so the
- * skill can render a complete view. An unknown or unloadable expert →
- * `not_found` (the skill lists the healthy experts) — never a stack trace or a
- * raw path. Reads no token and writes nothing.
+ * With no `domainSlug`: the shopper overview (identity + the SHARED user spec + the
+ * domain index, no bodies). With a `domainSlug`: that domain's three bodies + the
+ * SHARED user spec. Re-runs the `agentId` gate (and a slug gate) before any read.
+ * An unknown/unloadable shopper or domain → `not_found`; a malformed/traversal id
+ * or slug → `invalid_request`. Reads no token and writes nothing.
  */
 function registerGet(api: PluginAPI): void {
   api.registerTool({
     name: "sil_profile_get",
-    label: "View one sil shopping expert's detail",
+    label: "View the sil shopper overview or one domain",
     description:
-      "Show one sil shopping expert's full detail — read-only. Pass its"
-      + " `agentId`. Returns the expert's name, its four SDS specs (domain, intent,"
-      + " user spec / facts, and playbook / buying taste — all present), the"
-      + " manifest path, and createdAt, read from the artefact store so the agent"
-      + " can summarize the expert. The persona is not here — it is the host"
-      + " workspace SOUL.md. An unknown expert returns `not_found` (list the"
-      + " experts to see which exist) — never a stack trace or a raw path. A"
-      + " malformed/traversal id returns `invalid_request`. Reads no token and"
-      + " writes nothing.",
+      "Show the sil shopper's detail — read-only. Pass `agentId`. WITHOUT a"
+      + " `domainSlug`: the shopper overview — its name, the SHARED user spec (the"
+      + " one person's facts + hard constraints) and the domain index (each niche's"
+      + " slug/name/timestamps), no per-domain bodies. WITH a `domainSlug`: that"
+      + " one domain's pack — its domain spec, intent spec and playbook (buying"
+      + " taste) PLUS the SHARED user spec. The persona is not here — it is the host"
+      + " workspace SOUL.md. A freshly-created shopper with no domains is healthy"
+      + " (the overview returns ok with an empty domain index). An unknown shopper"
+      + " or an unminted/unloadable domain returns `not_found` (list to see what"
+      + " exists). A malformed/traversal id or slug returns `invalid_request`. Reads"
+      + " no token and writes nothing.",
     parameters: Type.Object({
       agentId: Type.String({
         description:
-          "The expert's host agent id (lower-kebab, e.g. \"gift-buyer\"; not"
-          + " \"main\"). Keys the artefact directory the detail is read from.",
+          "The shopper's host agent id (lower-kebab; not \"main\"). Keys the"
+          + " artefact directory the detail is read from.",
       }),
+      domainSlug: Type.Optional(
+        Type.String({
+          description:
+            "OPTIONAL. A domain slug to view that niche's pack; omit for the shopper"
+            + " overview (identity + shared user spec + domain index).",
+        }),
+      ),
     }),
     async execute(_callId, params) {
-      const agentId = typeof params["agentId"] === "string" ? params["agentId"] : "";
-      const result = readAgentProfile(agentId);
+      const agentId = asString(params["agentId"]);
+      const rawSlug = params["domainSlug"];
+      const domainSlug = typeof rawSlug === "string" ? rawSlug : undefined;
+      const result = readAgentProfile(agentId, domainSlug);
 
       if (result.ok) {
+        if (result.slug !== undefined) {
+          // Per-domain read — the niche's three bodies + the shared user spec.
+          api.logger.info("sil_profile_viewed", {
+            agent_id: result.agentId,
+            domain_slug: result.slug,
+          });
+          return jsonResult({
+            status: "ok",
+            agentId: result.agentId,
+            name: result.name,
+            slug: result.slug,
+            userSpec: result.userSpec,
+            domainSpec: result.domainSpec,
+            intentSpec: result.intentSpec,
+            playbook: result.playbook,
+            profilePath: result.profilePath,
+            createdAt: result.createdAt,
+            updatedAt: result.updatedAt,
+          });
+        }
+        // Overview — identity + shared user spec + the domain index (no bodies).
         api.logger.info("sil_profile_viewed", { agent_id: result.agentId });
         return jsonResult({
           status: "ok",
           agentId: result.agentId,
           name: result.name,
-          domainSpec: result.domainSpec,
-          intentSpec: result.intentSpec,
           userSpec: result.userSpec,
-          playbook: result.playbook,
+          domains: result.domains,
           profilePath: result.profilePath,
           createdAt: result.createdAt,
         });
@@ -276,50 +330,56 @@ function registerGet(api: PluginAPI): void {
 }
 
 /**
- * `sil_profile_remove` — remove one expert's behaviour artefacts (the sil-side
- * half of a clean removal).
+ * `sil_profile_remove` — remove ONE of the shopper's domain packs (artefact half).
  *
- * This is the ARTEFACT half ONLY. The host-wiring half (the `agents.list[]`
- * entry) is the skill's `openclaw agents remove <agentId>` CLI step, which the
- * skill runs FIRST — the plugin cannot write `~/.openclaw` (`noChildProcess`).
- *
- * Fail-closed: re-runs the `agentId` gate itself, deletes only the single
- * validated leaf directory under `agents/`, and deletes NOTHING on a bad id.
- * Absent target → `not_found` (idempotent — safe to re-run after a partial host
- * failure). A genuine `rmSync` failure → `persistence_failed`. Reads no token.
+ * `domainSlug` is REQUIRED — there is no omit-deletes-everything trap; removing the
+ * whole shopper is a host concern, not this tool. Removes exactly the one
+ * `domains/<slug>/` leaf and de-registers it from the manifest; the shopper and the
+ * SHARED user spec survive. Re-runs the gates itself, deletes NOTHING on a bad/
+ * missing slug. Absent (unregistered) slug → `not_found` (idempotent). A genuine
+ * `rmSync`/rewrite failure → `persistence_failed`. Reads no token.
  */
 function registerRemove(api: PluginAPI): void {
   api.registerTool({
     name: "sil_profile_remove",
-    label: "Remove a sil shopping expert's behaviour artefacts",
+    label: "Remove one of the sil shopper's domains",
     description:
-      "Remove one sil shopping expert's behaviour artefacts from the sil data"
-      + " directory (its agents/<id>/ directory). This is the SIL-SIDE half of"
-      + " removal only — the host wiring (the agents.list[] entry) is removed"
-      + " separately by the host CLI, which the skill runs FIRST (this plugin"
-      + " cannot write the host config). Pass the `agentId`. Scoped to exactly"
-      + " that one expert: a malformed/traversal/\"main\" id returns"
-      + " `invalid_request` and deletes nothing; an unknown id returns"
-      + " `not_found` (idempotent — safe to re-run after a partial failure); a"
-      + " genuine filesystem failure returns `persistence_failed`. Confirm with"
-      + " the user before removing — it is destructive and irreversible.",
+      "Remove ONE of the sil shopper's domain packs from the sil data directory"
+      + " (its domains/<slug>/ directory) — the SIL-SIDE artefact half only. Pass"
+      + " BOTH `agentId` and `domainSlug`; `domainSlug` is REQUIRED — this never"
+      + " deletes the whole shopper (decommissioning the shopper is a host concern)."
+      + " Scoped to exactly that one domain: the shopper, the SHARED user spec, and"
+      + " every sibling domain survive. A malformed/traversal/\"main\" or missing"
+      + " slug returns `invalid_request` and deletes nothing; an unregistered slug"
+      + " returns `not_found` (idempotent — safe to re-run after a partial failure);"
+      + " a genuine filesystem failure returns `persistence_failed`. Confirm with the"
+      + " user before removing — it is destructive and irreversible.",
     parameters: Type.Object({
       agentId: Type.String({
         description:
-          "The expert's host agent id (lower-kebab, e.g. \"gift-buyer\"; not"
-          + " \"main\"). Keys the artefact directory to remove. Exactly one"
-          + " expert is affected.",
+          "The shopper's host agent id (lower-kebab; not \"main\"). Keys the"
+          + " artefact directory the domain is removed from.",
+      }),
+      domainSlug: Type.String({
+        description:
+          "The domain slug to remove (lower-kebab; not \"main\"). REQUIRED —"
+          + " exactly one domain pack is affected; the shopper itself is not.",
       }),
     }),
     async execute(_callId, params) {
-      const agentId = typeof params["agentId"] === "string" ? params["agentId"] : "";
-      const result = removeAgentArtefacts(agentId);
+      const agentId = asString(params["agentId"]);
+      const domainSlug = asString(params["domainSlug"]);
+      const result = removeAgentArtefacts(agentId, domainSlug);
 
       if (result.ok) {
-        api.logger.info("sil_profile_removed", { agent_id: result.agentId });
+        api.logger.info("sil_profile_removed", {
+          agent_id: result.agentId,
+          domain_slug: result.domainSlug,
+        });
         return jsonResult({
           status: "removed",
           agentId: result.agentId,
+          domainSlug: result.domainSlug,
         });
       }
 

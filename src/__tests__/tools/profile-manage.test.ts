@@ -1,38 +1,24 @@
 /**
- * UNIT — sil_profile_list / sil_profile_get / sil_profile_remove tools:
- * registration shape + the structured envelope each maps the store outcome to
- * (tier: unit, mock api + temp data dir, no network, no host).
+ * UNIT — sil_profile_list / sil_profile_get / sil_profile_remove tools after the
+ * single-multi-domain shopper reshape (tier: unit, mock api + temp data dir, no
+ * network, no host).
  *
- * Card: list-view-and-remove-local-expert-agents. The pure store-primitive
- * invariants live in `lib/profile-store-manage.test.ts`; here we pin the TOOL
- * boundary — the three management tools that wrap list/read/remove:
+ * Card: single-multi-domain-sil-shopper — Slice 1. The lifecycle tools shift from
+ * "experts" to "DOMAINS" semantics (same 4 tool NAMES — manifest-contract stays
+ * green untouched):
  *
- *   sil_profile_list   (no args)      → { status:"ok", experts[], unreadable[] }
- *   sil_profile_get    (agentId)      → ok | not_found | invalid_request
- *   sil_profile_remove (agentId)      → removed | not_found | invalid_request
- *                                       | persistence_failed
+ *   sil_profile_list   (no args)              → { status:"ok", shoppers[], unreadable[] }
+ *   sil_profile_get    ({ agentId, domainSlug? })
+ *        - no slug ⇒ shopper overview (identity + shared user_spec + domain index)
+ *        - slug    ⇒ that domain's 3 bodies + the shared user_spec
+ *   sil_profile_remove ({ agentId, domainSlug })  — domainSlug REQUIRED: remove ONE
+ *        domain pack (artefact-only), NOT the shopper. No omit-deletes-everything.
  *
- * Adversarial, behaviour-first: the tools must map every store variant to the
- * agreed envelope, and the destructive one (remove) must clear EXACTLY the named
- * expert's dir while a sibling expert's dir survives (the scoped-delete +
- * non-destructiveness criteria at the tool seam). Reads no token (generic
- * shopping is identity-decoupled).
+ * The pure store-primitive invariants live in lib/profile-store-manage.test.ts;
+ * here we pin the TOOL boundary — registration shapes + the structured envelopes,
+ * and that remove clears exactly the named domain leaf while a sibling survives.
  *
- * Hermetic via the SIL_DATA_DIR temp-dir override (mirrors
- * profile-materialize.test.ts:68-80).
- *
- * Contract this file pins for the implementation (expert-developer),
- * `src/tools/profile.ts#registerProfileTools(api)`:
- *   - registers sil_profile_list (Type.Object({})), sil_profile_get and
- *     sil_profile_remove (Type.Object({agentId})) — agentId required;
- *   - list  → jsonResult({status:"ok", experts, unreadable}), createdAt DESC;
- *   - get   → {status:"ok", agentId, name, domainSpec, intentSpec, userSpec,
- *     playbook, profilePath, createdAt} (NO persona; all four present) /
- *     {status:"not_found", agentId, …recovery} /
- *     {status:"invalid_request", field, message};
- *   - remove→ {status:"removed", agentId} / {status:"not_found", agentId} /
- *     {status:"invalid_request", field} / {status:"persistence_failed", error,
- *     recovery} — and clears only the named expert's dir.
+ * Hermetic via the SIL_DATA_DIR temp-dir override.
  */
 
 import {
@@ -56,6 +42,7 @@ import { registerProfileTools } from "../../tools/profile.js";
 import {
   materializeProfile,
   getAgentArtefactDir,
+  type ProfileSpec,
 } from "../../lib/profile-store.js";
 import { getTokensPath } from "../../lib/credentials.js";
 import {
@@ -80,42 +67,43 @@ function payloadOf(result: { content: { text?: string }[] }): Record<string, unk
   return JSON.parse(text) as Record<string, unknown>;
 }
 
-/** Materialize an expert via the real store writer (never a hand fixture), so
- * the tools read the genuine on-disk shape. Optionally pin createdAt.
- *
- * After the SDS reframe the store holds NO persona. Round-2: ALL FOUR specs are
- * REQUIRED and present from creation, so the fixture ALWAYS supplies all four.
- * Callers may override any of the four via opts. */
-function makeExpert(
+const SHOPPER = "sil-shopper";
+const USER_SPEC = "# User spec (shared)\n- Ships to Berlin.\nHARD-NO: leather.";
+
+function pack(slug: string, name: string): NonNullable<ProfileSpec["domain"]> {
+  return {
+    slug,
+    name,
+    domainSpec: `# Domain spec — ${name}\nResearched mechanics.`,
+    intentSpec: `# Intent spec — ${name}\nDecomposition dimensions.`,
+    playbook: `# Taste — ${name}\nSeeded preferences.`,
+  };
+}
+
+/** Create the shopper, then mint each (slug → name) domain via the real store. */
+function makeShopper(
   agentId: string,
-  opts: {
-    name?: string;
-    domainSpec?: string;
-    intentSpec?: string;
-    userSpec?: string;
-    playbook?: string;
-    createdAt?: string;
-  } = {},
+  domains: ReadonlyArray<readonly [string, string]> = [],
 ): void {
-  const result = materializeProfile({
-    agentId,
-    name: opts.name ?? `Expert ${agentId}`,
-    domainSpec: opts.domainSpec ?? `# Domain spec for ${agentId}\nResearched dimensions.`,
-    intentSpec: opts.intentSpec ?? `# Intent spec for ${agentId}\nDecomposition dimensions.`,
-    userSpec: opts.userSpec ?? `# User spec for ${agentId}\nFacts + hard constraints.`,
-    playbook: opts.playbook ?? `# Buying taste for ${agentId}\nSeeded preferences.`,
-  });
-  if (!result.ok) throw new Error(`fixture setup failed: ${JSON.stringify(result)}`);
-  if (opts.createdAt !== undefined) {
-    const manifestPath = join(getAgentArtefactDir(agentId), "profile.json");
-    const m = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
-    m["createdAt"] = opts.createdAt;
-    writeFileSync(manifestPath, JSON.stringify(m, null, 2) + "\n");
+  const created = materializeProfile({ agentId, name: `Shopper ${agentId}`, userSpec: USER_SPEC });
+  if (!created.ok) throw new Error(`create failed: ${JSON.stringify(created)}`);
+  for (const [slug, name] of domains) {
+    const r = materializeProfile({
+      agentId,
+      name: `Shopper ${agentId}`,
+      userSpec: USER_SPEC,
+      domain: pack(slug, name),
+    });
+    if (!r.ok) throw new Error(`mint ${slug} failed: ${JSON.stringify(r)}`);
   }
 }
 
+function domainDir(slug: string, agentId = SHOPPER): string {
+  return join(getAgentArtefactDir(agentId), "domains", slug);
+}
+
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "sil-profile-manage-tool-"));
+  dataDir = mkdtempSync(join(tmpdir(), "sil-manage-tool-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
   api = createMockPluginApi();
@@ -136,17 +124,12 @@ describe("management tools — registration shape", () => {
   it("registers sil_profile_list with a no-arg TypeBox object schema", () => {
     const tool = getTool(api, LIST);
     expect(tool.name).toBe(LIST);
-    const schema = tool.parameters as unknown as {
-      type?: string;
-      properties?: Record<string, unknown>;
-      required?: string[];
-    };
+    const schema = tool.parameters as unknown as { type?: string; required?: string[] };
     expect(schema.type).toBe("object");
-    // No required args — list takes nothing.
     expect(schema.required ?? []).toEqual([]);
   });
 
-  it("registers sil_profile_get with a required agentId string param", () => {
+  it("registers sil_profile_get with a required agentId + an OPTIONAL domainSlug", () => {
     const tool = getTool(api, GET);
     expect(tool.name).toBe(GET);
     const schema = tool.parameters as unknown as {
@@ -156,10 +139,13 @@ describe("management tools — registration shape", () => {
     };
     expect(schema.type).toBe("object");
     expect(schema.properties?.["agentId"]?.type).toBe("string");
+    expect(schema.properties?.["domainSlug"]?.type).toBe("string");
     expect(schema.required ?? []).toContain("agentId");
+    // domainSlug is optional — get with no slug returns the shopper overview.
+    expect(schema.required ?? []).not.toContain("domainSlug");
   });
 
-  it("registers sil_profile_remove with a required agentId string param", () => {
+  it("registers sil_profile_remove with BOTH agentId and domainSlug required (no omit-deletes-everything)", () => {
     const tool = getTool(api, REMOVE);
     expect(tool.name).toBe(REMOVE);
     const schema = tool.parameters as unknown as {
@@ -169,7 +155,9 @@ describe("management tools — registration shape", () => {
     };
     expect(schema.type).toBe("object");
     expect(schema.properties?.["agentId"]?.type).toBe("string");
+    expect(schema.properties?.["domainSlug"]?.type).toBe("string");
     expect(schema.required ?? []).toContain("agentId");
+    expect(schema.required ?? []).toContain("domainSlug");
   });
 });
 
@@ -178,180 +166,172 @@ describe("management tools — registration shape", () => {
 // ===========================================================================
 
 describe("sil_profile_list — ok envelope", () => {
-  it("empty store → status ok with empty experts (a normal outcome)", async () => {
-    const tool = getTool(api, LIST);
-    const payload = payloadOf(await tool.execute("c-1", {}));
+  it("empty store → status ok with empty shoppers (a normal outcome)", async () => {
+    const payload = payloadOf(await getTool(api, LIST).execute("c-1", {}));
     expect(payload["status"]).toBe("ok");
-    expect(payload["experts"]).toEqual([]);
+    expect(payload["shoppers"]).toEqual([]);
     expect(payload["unreadable"]).toEqual([]);
   });
 
-  it("lists every expert (name + agentId from the manifest), createdAt DESC", async () => {
-    // Round-2: with all four specs required+present, a hasPlaybook flag is trivially
-    // true for every expert and carries no discriminating signal — so we do NOT
-    // assert it. The durable behaviour is enumeration + createdAt-DESC ordering +
-    // the manifest name.
-    makeExpert("oldest", { name: "Oldest", createdAt: "2026-01-01T00:00:00.000Z" });
-    makeExpert("newest", { name: "Newest", createdAt: "2026-06-22T00:00:00.000Z" });
-
-    const tool = getTool(api, LIST);
-    const payload = payloadOf(await tool.execute("c-2", {}));
+  it("a shopper with N domains → its identity + domain index (slug/name) from the map", async () => {
+    makeShopper(SHOPPER, [
+      ["road-cycling", "Road cycling"],
+      ["running-shoes", "Running shoes"],
+    ]);
+    const payload = payloadOf(await getTool(api, LIST).execute("c-2", {}));
     expect(payload["status"]).toBe("ok");
-    const experts = payload["experts"] as Array<Record<string, unknown>>;
-    // Most-recently-created first.
-    expect(experts.map((e) => e["agentId"])).toEqual(["newest", "oldest"]);
-    expect(experts[0]!["name"]).toBe("Newest");
-    expect(experts[1]!["name"]).toBe("Oldest");
+    const shoppers = payload["shoppers"] as Array<Record<string, unknown>>;
+    const shopper = shoppers.find((s) => s["agentId"] === SHOPPER);
+    expect(shopper).toBeDefined();
+    const domains = shopper!["domains"] as Array<Record<string, unknown>>;
+    expect(domains.map((d) => d["slug"]).sort()).toEqual(["road-cycling", "running-shoes"]);
   });
 
-  it("one corrupt manifest → healthy experts still list, broken one in unreadable[]", async () => {
-    makeExpert("healthy", { name: "Healthy" });
-    makeExpert("broken", { name: "Broken" });
+  it("an empty-`domains` shopper still lists (status ok, empty domain list — NOT not_found)", async () => {
+    makeShopper(SHOPPER, []);
+    const payload = payloadOf(await getTool(api, LIST).execute("c-3", {}));
+    expect(payload["status"]).toBe("ok");
+    const shoppers = payload["shoppers"] as Array<Record<string, unknown>>;
+    const shopper = shoppers.find((s) => s["agentId"] === SHOPPER);
+    expect(shopper).toBeDefined();
+    expect(shopper!["domains"]).toEqual([]);
+  });
+
+  it("one corrupt manifest → healthy shopper still lists, broken one in unreadable[]", async () => {
+    makeShopper("healthy", [["a-niche", "A niche"]]);
+    makeShopper("broken", []);
     writeFileSync(join(getAgentArtefactDir("broken"), "profile.json"), "not json {{{");
 
-    const tool = getTool(api, LIST);
-    const payload = payloadOf(await tool.execute("c-3", {}));
+    const payload = payloadOf(await getTool(api, LIST).execute("c-4", {}));
     expect(payload["status"]).toBe("ok");
-    const experts = payload["experts"] as Array<Record<string, unknown>>;
+    const shoppers = payload["shoppers"] as Array<Record<string, unknown>>;
     const unreadable = payload["unreadable"] as Array<Record<string, unknown>>;
-    expect(experts.map((e) => e["agentId"])).toEqual(["healthy"]);
+    expect(shoppers.map((s) => s["agentId"])).toEqual(["healthy"]);
     expect(unreadable.map((u) => u["agentId"])).toContain("broken");
   });
 });
 
 // ===========================================================================
-// sil_profile_get
+// sil_profile_get — overview vs per-domain
 // ===========================================================================
 
-describe("sil_profile_get — ok envelope (full detail from artefacts)", () => {
-  it("returns status ok with name, the spec bodies, the lazy bodies, profilePath, createdAt — NO persona", async () => {
-    makeExpert("gift-buyer", {
-      name: "Gift Buyer",
-      domainSpec: "# Gift-buying domain spec\nRecipient, occasion, budget dimensions.",
-      intentSpec: "# Intent spec\nrecipient, occasion, budget.",
-      userSpec: "# User spec\nHARD-NO: nothing over €50.",
-      playbook: "# Buying taste\nValue-conscious.",
-    });
-    const tool = getTool(api, GET);
-    const payload = payloadOf(await tool.execute("c-4", { agentId: "gift-buyer" }));
+describe("sil_profile_get — overview (no domainSlug): identity + shared user_spec + domain index", () => {
+  it("returns status ok with the identity, the shared user_spec, and the domain index", async () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    const payload = payloadOf(await getTool(api, GET).execute("c-5", { agentId: SHOPPER }));
     expect(payload["status"]).toBe("ok");
-    expect(payload["agentId"]).toBe("gift-buyer");
-    expect(payload["name"]).toBe("Gift Buyer");
-    expect(payload["domainSpec"]).toBe(
-      "# Gift-buying domain spec\nRecipient, occasion, budget dimensions.",
-    );
-    expect(payload["intentSpec"]).toBe("# Intent spec\nrecipient, occasion, budget.");
-    expect(payload["userSpec"]).toBe("# User spec\nHARD-NO: nothing over €50.");
-    expect(payload["playbook"]).toBe("# Buying taste\nValue-conscious.");
-    // Persona left the store — the envelope carries none.
-    expect(payload["persona"]).toBeUndefined();
-    expect(payload["profilePath"]).toBe(
-      join(getAgentArtefactDir("gift-buyer"), "profile.json"),
-    );
-    expect(typeof payload["createdAt"]).toBe("string");
+    expect(payload["agentId"]).toBe(SHOPPER);
+    expect(payload["userSpec"]).toBe(USER_SPEC);
+    const domains = payload["domains"] as Array<Record<string, unknown>>;
+    expect(domains.map((d) => d["slug"])).toEqual(["road-cycling"]);
   });
+});
 
-  it("returns ALL FOUR spec bodies for a created expert (round-2: none is absent at creation)", async () => {
-    makeExpert("grocery", { name: "Grocery" }); // all four seeded by default
-    const tool = getTool(api, GET);
-    const payload = payloadOf(await tool.execute("c-5", { agentId: "grocery" }));
+describe("sil_profile_get — per-domain (domainSlug): the 3 bodies + the shared user_spec", () => {
+  it("returns status ok with domainSpec + intentSpec + playbook AND the shared user_spec", async () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    const payload = payloadOf(
+      await getTool(api, GET).execute("c-6", { agentId: SHOPPER, domainSlug: "road-cycling" }),
+    );
     expect(payload["status"]).toBe("ok");
-    // All four specs are present from creation now.
-    expect(typeof payload["domainSpec"]).toBe("string");
-    expect(typeof payload["intentSpec"]).toBe("string");
-    expect(typeof payload["userSpec"]).toBe("string");
-    expect(typeof payload["playbook"]).toBe("string");
+    expect(payload["slug"]).toBe("road-cycling");
+    expect(payload["domainSpec"]).toBe("# Domain spec — Road cycling\nResearched mechanics.");
+    expect(payload["intentSpec"]).toBe("# Intent spec — Road cycling\nDecomposition dimensions.");
+    expect(payload["playbook"]).toBe("# Taste — Road cycling\nSeeded preferences.");
+    expect(payload["userSpec"]).toBe(USER_SPEC);
   });
 });
 
 describe("sil_profile_get — graceful failures", () => {
-  it("unknown id → status not_found naming the agentId, with a list-then-retry recovery hint", async () => {
-    makeExpert("exists", {}); // a neighbour, to prove get is scoped
-    const tool = getTool(api, GET);
-    const payload = payloadOf(await tool.execute("c-6", { agentId: "ghost" }));
+  it("unknown agentId → status not_found with a list-then-retry recovery hint", async () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    const payload = payloadOf(await getTool(api, GET).execute("c-7", { agentId: "ghost" }));
     expect(payload["status"]).toBe("not_found");
     expect(payload["agentId"]).toBe("ghost");
-    // The recovery hint steers the agent to list, not to re-register.
     expect(payload["recovery"]).toBe("sil_profile_list");
-    // No stack trace / raw path leaked — the message is a plain string.
-    expect(typeof payload["message"]).toBe("string");
   });
 
-  it.each(["../escape", "gift/buyer", "..", "main", "Gift-Buyer"])(
-    "traversal/main/malformed id %j → status invalid_request(field=agentId), reads nothing",
+  it.each(["../escape", "shop/per", "..", "main", "Sil-Shopper"])(
+    "a traversal/main agentId %j → status invalid_request(field=agentId)",
     async (bad) => {
-      const tool = getTool(api, GET);
-      const payload = payloadOf(await tool.execute("c-7", { agentId: bad }));
+      const payload = payloadOf(await getTool(api, GET).execute("c-8", { agentId: bad }));
       expect(payload["status"]).toBe("invalid_request");
       expect(payload["field"]).toBe("agentId");
-      expect(typeof payload["message"]).toBe("string");
     },
   );
-});
 
-// ===========================================================================
-// sil_profile_remove
-// ===========================================================================
-
-describe("sil_profile_remove — clears the target dir, sibling survives (scoped)", () => {
-  it("removed → status removed and the target dir is gone; a sibling expert's dir survives", async () => {
-    makeExpert("target", { name: "Target", playbook: "doomed" });
-    makeExpert("survivor", { name: "Survivor", playbook: "keep me" });
-    const targetDir = getAgentArtefactDir("target");
-    const survivorDir = getAgentArtefactDir("survivor");
-    expect(existsSync(targetDir)).toBe(true);
-
-    const tool = getTool(api, REMOVE);
-    const payload = payloadOf(await tool.execute("c-8", { agentId: "target" }));
-    expect(payload["status"]).toBe("removed");
-    expect(payload["agentId"]).toBe("target");
-
-    // Scoped: target gone, sibling untouched.
-    expect(existsSync(targetDir)).toBe(false);
-    expect(existsSync(survivorDir)).toBe(true);
-    expect(existsSync(join(survivorDir, "profile.json"))).toBe(true);
-    expect(existsSync(join(survivorDir, "playbook.md"))).toBe(true);
+  it("a traversal domainSlug → status invalid_request(field=domainSlug)", async () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    const payload = payloadOf(
+      await getTool(api, GET).execute("c-9", { agentId: SHOPPER, domainSlug: "../escape" }),
+    );
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("domainSlug");
   });
 });
 
-describe("sil_profile_remove — graceful + fail-closed", () => {
-  it("unknown id → status not_found (idempotent: a re-run is also not_found), deletes nothing", async () => {
-    makeExpert("neighbour", { name: "Neighbour" });
-    const tool = getTool(api, REMOVE);
+// ===========================================================================
+// sil_profile_remove — one domain pack, scoped
+// ===========================================================================
 
-    const first = payloadOf(await tool.execute("c-9", { agentId: "ghost" }));
+describe("sil_profile_remove — clears one domain leaf, sibling + shopper survive (scoped)", () => {
+  it("removed → status removed; the target leaf is gone; a sibling domain + the shopper survive", async () => {
+    makeShopper(SHOPPER, [
+      ["road-cycling", "Road cycling"],
+      ["running-shoes", "Running shoes"],
+    ]);
+    expect(existsSync(domainDir("road-cycling"))).toBe(true);
+
+    const payload = payloadOf(
+      await getTool(api, REMOVE).execute("c-10", { agentId: SHOPPER, domainSlug: "road-cycling" }),
+    );
+    expect(payload["status"]).toBe("removed");
+    expect(payload["domainSlug"]).toBe("road-cycling");
+
+    expect(existsSync(domainDir("road-cycling"))).toBe(false);
+    expect(existsSync(domainDir("running-shoes"))).toBe(true);
+    // The shopper + the shared user_spec survive (artefact-only removal).
+    expect(existsSync(join(getAgentArtefactDir(SHOPPER), "user_spec.md"))).toBe(true);
+  });
+});
+
+describe("sil_profile_remove — required slug, idempotent, fail-closed", () => {
+  it("a MISSING domainSlug → status invalid_request(field=domainSlug), deletes nothing", async () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    // Omit domainSlug entirely — the tool must refuse, never fall through to a
+    // whole-shopper delete.
+    const payload = payloadOf(await getTool(api, REMOVE).execute("c-11", { agentId: SHOPPER }));
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("domainSlug");
+    expect(existsSync(domainDir("road-cycling"))).toBe(true);
+    expect(existsSync(getAgentArtefactDir(SHOPPER))).toBe(true);
+  });
+
+  it("absent slug → status not_found (idempotent: a re-run is also not_found), deletes nothing", async () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    const first = payloadOf(
+      await getTool(api, REMOVE).execute("c-12", { agentId: SHOPPER, domainSlug: "never-minted" }),
+    );
     expect(first["status"]).toBe("not_found");
-    expect(first["agentId"]).toBe("ghost");
-    expect(existsSync(getAgentArtefactDir("neighbour"))).toBe(true);
-
-    // Idempotent re-run.
-    const second = payloadOf(await tool.execute("c-10", { agentId: "ghost" }));
+    expect(existsSync(domainDir("road-cycling"))).toBe(true);
+    const second = payloadOf(
+      await getTool(api, REMOVE).execute("c-13", { agentId: SHOPPER, domainSlug: "never-minted" }),
+    );
     expect(second["status"]).toBe("not_found");
   });
 
-  it.each(["../escape", "gift/buyer", "..", "main", "Gift-Buyer"])(
-    "traversal/main/malformed id %j → status invalid_request(field=agentId), deletes nothing",
+  it.each(["../escape", "road/cycling", "..", "main", "Road-Cycling"])(
+    "a traversal/main domainSlug %j → status invalid_request(field=domainSlug), deletes nothing",
     async (bad) => {
-      makeExpert("alpha", { name: "Alpha", playbook: "keep" });
-      const tool = getTool(api, REMOVE);
-      const payload = payloadOf(await tool.execute("c-11", { agentId: bad }));
+      makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+      const payload = payloadOf(
+        await getTool(api, REMOVE).execute("c-14", { agentId: SHOPPER, domainSlug: bad }),
+      );
       expect(payload["status"]).toBe("invalid_request");
-      expect(payload["field"]).toBe("agentId");
-      // The real expert is untouched — the bad id deleted nothing.
-      expect(existsSync(getAgentArtefactDir("alpha"))).toBe(true);
+      expect(payload["field"]).toBe("domainSlug");
+      expect(existsSync(domainDir("road-cycling"))).toBe(true);
     },
   );
-
-  it("removed → re-remove of the same id returns not_found (full removed→not_found cycle)", async () => {
-    makeExpert("transient", { name: "Transient" });
-    const tool = getTool(api, REMOVE);
-    expect(payloadOf(await tool.execute("c-12", { agentId: "transient" }))["status"]).toBe(
-      "removed",
-    );
-    expect(payloadOf(await tool.execute("c-13", { agentId: "transient" }))["status"]).toBe(
-      "not_found",
-    );
-  });
 });
 
 // ===========================================================================
@@ -360,10 +340,10 @@ describe("sil_profile_remove — graceful + fail-closed", () => {
 
 describe("management tools — no identity coupling (no token side effect)", () => {
   it("list, get, and remove read/write no token across a full cycle", async () => {
-    makeExpert("cycle", { name: "Cycle", playbook: "pb" });
-    await getTool(api, LIST).execute("c-14", {});
-    await getTool(api, GET).execute("c-15", { agentId: "cycle" });
-    await getTool(api, REMOVE).execute("c-16", { agentId: "cycle" });
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    await getTool(api, LIST).execute("c-15", {});
+    await getTool(api, GET).execute("c-16", { agentId: SHOPPER, domainSlug: "road-cycling" });
+    await getTool(api, REMOVE).execute("c-17", { agentId: SHOPPER, domainSlug: "road-cycling" });
     expect(existsSync(getTokensPath())).toBe(false);
   });
 });

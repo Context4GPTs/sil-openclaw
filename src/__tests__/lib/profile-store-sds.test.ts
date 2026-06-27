@@ -1,50 +1,37 @@
 /**
- * UNIT — the SDS artefact store after the five-artefact reframe (tier: unit,
- * real temp dir via the SIL_DATA_DIR override, no network, no host).
+ * UNIT — the single-multi-domain shopper layout, the DEEP store semantics (tier:
+ * unit, real temp dir via the SIL_DATA_DIR override, no network, no host).
  *
- * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 2
- * (PR #33 bounced a SECOND time). SDS is the operating model for EVERY created
- * expert. The sil store holds FOUR behaviour artefacts (the persona left the
- * store — it is the host SOUL.md, written by the engine via the host CLI, never a
- * sil-side file). The ROUND-2 correction: all four sil docs are PRESENT, non-blank,
- * from creation — seeded *partial* (the ≤10-question setup + a quick initial
- * research pass), then lazily AUGMENTED/reinforced on every query. None is
- * "absent-is-fine"; none "starts empty". All four are REQUIRED:
+ * Card: single-multi-domain-sil-shopper — Slice 1. The per-niche flat layout is
+ * DELETED. ONE shopper dir holds a SHARED agent-level user_spec.md + profile.json
+ * (with a slug-keyed `domains` MAP), and niche packs live under
+ * domains/<slug>/{domain_spec,intent_spec,playbook}.md, minted LAZILY on first
+ * shop. `sil_profile_materialize` stays ONE tool with an OPTIONAL `domain`:
+ *   - no domain  ⇒ create the shopper (shared user_spec + `domains: {}`);
+ *   - with domain ⇒ ATOMIC lazy mint of domains/<slug>/* + a shared-user_spec
+ *     full-body rewrite + an upsert into `domains[slug]`.
  *
- *   domain_spec.md  — REQUIRED. The deep, researched niche expertise (how to buy
- *                     well, the full mechanics) — web-refreshed every query.
- *   intent_spec.md  — REQUIRED. The agent-specific decomposition DIMENSIONS
- *                     (PRD-style) a good query must resolve, derived from the
- *                     domain at creation.
- *   user_spec.md    — REQUIRED. The user's domain-relevant facts + hard
- *                     constraints, seeded partial at creation, AUGMENTED per-query.
- *   playbook.md     — REQUIRED. The user's buying TASTE (price sensitivity, brand,
- *                     preferences) — seeded partial at creation, AUGMENTED per-query.
- *
- * The store-layer contract this file pins for the implementation
- * (`src/lib/profile-store.ts`):
- *   1. NO PERSONA in the store. `ProfileSpec` has no `persona`; `materializeProfile`
- *      writes no persona.md; `ProfileManifest` has no personaPath;
- *      `readManifestFile`'s required gate is agentId/name/createdAt + ALL FOUR spec
- *      paths (NOT personaPath); `readAgentProfile` returns no persona.
- *   2. ALL FOUR specs are REQUIRED on materialize (Founder review round 2). A
- *      present-but-blank OR omitted domainSpec / intentSpec / userSpec / playbook →
- *      invalid_request naming the field, and WRITES NOTHING (whole-spec
- *      validate-first — not even the other good files). A min create IS a full
- *      create: there is no two-spec-only valid create any more.
- *   3. The manifest carries ALL FOUR path keys (domainSpecPath + intentSpecPath +
- *      userSpecPath + playbookPath), all REQUIRED in `readManifestFile`'s gate. A
- *      manifest missing ANY of the four path keys is corrupt (not_found).
- *   4. `readAgentProfile` is fail-closed on ANY of the four bodies missing — a
- *      referenced-but-missing domain/intent/user/playbook body → not_found (all
- *      four always exist; there is no degrade-to-undefined path any more).
- *   5. The store carries `intentSpec` (the persisted decomposition-dimension
- *      SCHEMA). The prior @ts-expect-error that blocked an intent store field is
- *      REVERSED — intentSpec is a real, required field. The per-query intent (the
- *      filled dimensions) is STILL never persisted: no intent.md of filled values
- *      is ever written; only the intent_spec.md schema is.
- *   6. Bodies round-trip VERBATIM (so hard-constraint vs soft-preference in the
- *      user spec stays distinguishable); 0600 files in a 0700 dir; no .tmp survivor.
+ * This file pins the layout-specific contract for `src/lib/profile-store.ts`:
+ *   1. SHARED vs PER-DOMAIN placement — user_spec is agent-level (read by every
+ *      domain's loop, so a fact stored in niche A is reused in niche B without
+ *      re-asking); the playbook/domain_spec/intent_spec are per-domain. A domain
+ *      mint NEVER touches a sibling domain's pack.
+ *   2. The `domains` map is the source of truth — slug-keyed, each entry carrying
+ *      { slug, name, domainSpecPath, intentSpecPath, playbookPath, createdAt,
+ *      updatedAt }. `domains: {}` is the HEALTHY freshly-created state.
+ *   3. The slug is a NEW filesystem path segment → it MUST be validated exactly
+ *      like agentId (AGENT_ID_RE + non-"main") BEFORE any join. A traversal /
+ *      "main" / empty / non-kebab slug → invalid_request(field=domain.slug),
+ *      writing NOTHING (validate-first). Every one of the five `domain` fields is
+ *      REQUIRED non-blank.
+ *   4. ATOMICITY one level deeper — write order: domains/<slug>/* → shared
+ *      user_spec → profile.json LAST. A failed FIRST mint of a NEW domain tears
+ *      down ONLY that leaf (the agent dir, shared user_spec, and sibling domains
+ *      survive). A crash before the profile.json write leaves an ORPHANED,
+ *      unreferenced leaf — invisible to readers (manifest-gated, fail-closed).
+ *   5. FAIL-CLOSED reads — readAgentProfile(agentId, slug) returns not_found when
+ *      the shared user_spec OR ANY of the 3 referenced domain bodies is missing
+ *      (never a partial pack).
  *
  * Hermetic via the SIL_DATA_DIR temp-dir override (mirrors profile-store.test.ts).
  */
@@ -65,6 +52,7 @@ import {
   statSync,
   chmodSync,
   writeFileSync,
+  mkdirSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -72,8 +60,8 @@ import { join } from "node:path";
 import {
   materializeProfile,
   readAgentProfile,
+  listAgentProfiles,
   getAgentArtefactDir,
-  type ProfileManifest,
   type ProfileSpec,
 } from "../../lib/profile-store.js";
 import { getDataDir } from "../../lib/credentials.js";
@@ -82,7 +70,7 @@ let dataDir: string;
 let priorSilDataDir: string | undefined;
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "sil-profile-sds-"));
+  dataDir = mkdtempSync(join(tmpdir(), "sil-shopper-sds-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
 });
@@ -90,7 +78,6 @@ beforeEach(() => {
 afterEach(() => {
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
-  // Restore perms so rmSync can clean a dir a cleanup test chmod'd read-only.
   try {
     chmodSync(dataDir, 0o700);
   } catch {
@@ -99,68 +86,54 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-/** A deep, research-grade domain spec — niche-concrete mechanics a layperson
- * couldn't enumerate (the store never validates THIS; it preserves the body). */
-const DOMAIN_SPEC =
-  "# Road-cycling domain spec (deep)\n"
-  + "Fit mechanics: stack/reach drive torso angle; saddle setback from KOPS;"
-  + " crank length scales with inseam; bar reach + drop set hand position.\n"
-  + "Gearing theory: gear-inches = chainring/cog × wheel diameter; compact vs"
-  + " mid-compact vs 1x trade range for steps. Frame geometry: head-tube angle +"
-  + " trail govern handling; chainstay length governs stiffness vs comfort.\n"
-  + "Trade-offs: deeper rims buy aero but cost crosswind handling; a stiffer frame"
-  + " buys power transfer but costs all-day comfort.";
+const AGENT_ID = "sil-shopper";
 
-/** The persisted decomposition-DIMENSION schema (PRD-style) — the dimensions a
- * good query must resolve, derived from the domain. NOT a filled-in instance. */
-const INTENT_SPEC =
-  "# Intent spec — decomposition dimensions (schema, not a fill)\n"
-  + "A road-cycling purchase query must resolve: use-case (commute/race/endurance),"
-  + " terrain, budget band, timeline, compatibility-with-existing-setup,"
-  + " performance priorities, aesthetics. Each is a dimension the per-query intent"
-  + " fills in — the fill is ephemeral, this schema is persisted.";
+const USER_SPEC_V1 =
+  "# User spec (shared)\n## Standing facts\n- Ships to Berlin 10115.\n"
+  + "## Hard constraints\n- HARD-NO: leather (ethics).";
 
-/** A user spec carrying a SOFT preference AND a HARD constraint — the two must
- * round-trip distinguishably so downstream reasoning treats them differently. */
-const USER_SPEC =
-  "# User spec — road-cycling buyer\n"
-  + "## Domain-relevant facts (soft preferences)\n"
-  + "- Prefers endurance geometry over race geometry.\n"
-  + "- Inseam 81cm, height 178cm.\n"
-  + "## Hard constraints (INVIOLABLE — never recommend a violating item)\n"
-  + "- HARD-NO: rim brakes (disc only).\n"
-  + "- HARD-NO: anything over 9 kg.";
+/** A cross-niche fact added while shopping niche A — must be reusable in niche B. */
+const USER_SPEC_V2 =
+  USER_SPEC_V1 + "\n- Allergic to wool (added while shopping cycling kit).";
 
-/** The user's buying TASTE (the new playbook meaning) — price sensitivity /
- * brand / preference, NOT a seller's method. */
-const PLAYBOOK =
-  "# Buying taste\nBudget comfort zone around €1500; will stretch 10% for the"
-  + " right frame. Brand-agnostic but distrusts house-brand groupsets.";
-
-/** A complete create: ALL FOUR REQUIRED specs (Founder review round 2 — none is
- * lazy/optional; all four are present non-blank from creation). */
-const GOOD = {
-  agentId: "road-cycling-buyer",
-  name: "Road Cycling Buyer",
-  domainSpec: DOMAIN_SPEC,
-  intentSpec: INTENT_SPEC,
-  userSpec: USER_SPEC,
-  playbook: PLAYBOOK,
+const CYCLING = {
+  slug: "road-cycling",
+  name: "Road cycling",
+  domainSpec: "# Road-cycling domain spec\nFit, gearing, geometry.",
+  intentSpec: "# Intent spec — cycling\nuse-case, terrain, budget, timeline.",
+  playbook: "# Taste — cycling\n~€1500; Shimano over SRAM.",
 } as const;
 
-/** The minimum valid create. After Founder review round 2, ALL FOUR sil docs are
- * REQUIRED and present (seeded partial at creation), so the minimum create IS the
- * full four-spec create — there is no two-spec-only valid create any more. Kept as
- * a named alias so the intent ("the smallest thing that creates an expert") stays
- * legible at each call site. */
-const MIN_CREATE = GOOD;
+const RUNNING = {
+  slug: "running-shoes",
+  name: "Running shoes",
+  domainSpec: "# Running-shoe domain spec\nLast shape, stack, drop, foam.",
+  intentSpec: "# Intent spec — running\nsurface, distance, gait, budget.",
+  playbook: "# Taste — running\nUnder €160; neutral foam; no carbon plate.",
+} as const;
 
-function readManifest(agentId: string): ProfileManifest {
-  const path = join(getAgentArtefactDir(agentId), "profile.json");
-  return JSON.parse(readFileSync(path, "utf8")) as ProfileManifest;
+/** Create the shopper (no domain). */
+function createShopper(userSpec = USER_SPEC_V1): void {
+  const r = materializeProfile({ agentId: AGENT_ID, name: "sil shopper", userSpec });
+  if (!r.ok) throw new Error(`createShopper failed: ${JSON.stringify(r)}`);
 }
 
-/** Every file under `dir`, recursively (relative paths). */
+/** Mint a domain pack onto the shopper, carrying a (possibly augmented) shared spec. */
+function mint(domain: ProfileSpec["domain"], userSpec = USER_SPEC_V1): void {
+  const r = materializeProfile({ agentId: AGENT_ID, name: "sil shopper", userSpec, domain });
+  if (!r.ok) throw new Error(`mint failed: ${JSON.stringify(r)}`);
+}
+
+function readManifest(agentId = AGENT_ID): Record<string, unknown> {
+  return JSON.parse(
+    readFileSync(join(getAgentArtefactDir(agentId), "profile.json"), "utf8"),
+  ) as Record<string, unknown>;
+}
+
+function domainDir(slug: string, agentId = AGENT_ID): string {
+  return join(getAgentArtefactDir(agentId), "domains", slug);
+}
+
 function walkFiles(dir: string, base = dir): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];
@@ -172,414 +145,295 @@ function walkFiles(dir: string, base = dir): string[] {
   return out;
 }
 
-describe("materializeProfile — persona is GONE from the store (it is the host SOUL.md)", () => {
-  it("writes NO persona.md and records NO personaPath — persona left the sil store entirely", () => {
-    // Correction 1: the persona is the agent's soul/system framing — the host's
-    // SOUL.md, written by the engine via the host CLI, never a sil-side file. The
-    // store holds only behaviour artefacts (domain/intent/user/playbook).
-    const result = materializeProfile({ ...GOOD });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
+// ===========================================================================
+// 1 — shared user_spec is agent-level; per-domain packs are isolated
+// ===========================================================================
 
-    expect(existsSync(join(result.dir, "persona.md"))).toBe(false);
-    const manifest = readManifest(GOOD.agentId);
-    expect("personaPath" in manifest).toBe(false);
-    // Only the four behaviour artefacts + manifest exist — never persona.md.
-    const files = walkFiles(result.dir).sort();
-    expect(files).toEqual(
-      ["domain_spec.md", "intent_spec.md", "playbook.md", "profile.json", "user_spec.md"].sort(),
-    );
+describe("layout — the shared user_spec is agent-level; a domain mint never touches a sibling", () => {
+  it("a fact written to the shared user_spec while minting niche A is read back when viewing niche B (no re-ask)", () => {
+    createShopper(USER_SPEC_V1);
+    mint(CYCLING, USER_SPEC_V1);
+    // While shopping running, a NEW standing fact (wool allergy) is captured into
+    // the SHARED user_spec — minted alongside the running pack in one call.
+    mint(RUNNING, USER_SPEC_V2);
+
+    // Viewing niche A (cycling) surfaces the LATEST shared user_spec — the fact
+    // added during niche B is already there. This is the cross-niche signal as a
+    // native property of the agent-level user_spec, not a feature to build.
+    const cycling = readAgentProfile(AGENT_ID, CYCLING.slug);
+    expect(cycling.ok).toBe(true);
+    if (!cycling.ok) return;
+    expect(cycling.userSpec).toBe(USER_SPEC_V2);
+    expect(cycling.userSpec).toContain("Allergic to wool");
+    // There is ONE shared user_spec.md at the agent level — never one per domain.
+    expect(existsSync(join(getAgentArtefactDir(AGENT_ID), "user_spec.md"))).toBe(true);
+    expect(existsSync(join(domainDir(CYCLING.slug), "user_spec.md"))).toBe(false);
+    expect(existsSync(join(domainDir(RUNNING.slug), "user_spec.md"))).toBe(false);
   });
 
-  it("a ProfileSpec carrying a `persona` field is a type error (the store has no persona slot)", () => {
+  it("minting a SECOND domain leaves the FIRST domain's pack byte-for-byte untouched", () => {
+    createShopper();
+    mint(CYCLING);
+    const cyclingBefore = walkFiles(domainDir(CYCLING.slug)).sort().map((rel) =>
+      readFileSync(join(domainDir(CYCLING.slug), rel), "utf8"),
+    );
+
+    mint(RUNNING, USER_SPEC_V2);
+
+    // The cycling pack is identical — a running mint touches only domains/running-shoes/.
+    const cyclingAfter = walkFiles(domainDir(CYCLING.slug)).sort().map((rel) =>
+      readFileSync(join(domainDir(CYCLING.slug), rel), "utf8"),
+    );
+    expect(cyclingAfter).toEqual(cyclingBefore);
+    expect(readFileSync(join(domainDir(CYCLING.slug), "domain_spec.md"), "utf8")).toBe(
+      CYCLING.domainSpec,
+    );
+    // Both domains are registered in the map.
+    const domains = (readManifest()["domains"] ?? {}) as Record<string, unknown>;
+    expect(Object.keys(domains).sort()).toEqual([CYCLING.slug, RUNNING.slug].sort());
+  });
+
+  it("re-minting an EXISTING domain upserts its entry (updatedAt advances) without adding a sibling", () => {
+    createShopper();
+    mint(CYCLING);
+    const first = (readManifest()["domains"] as Record<string, Record<string, unknown>>)[
+      CYCLING.slug
+    ]!;
+
+    // Re-mint the same slug with a refreshed domain_spec (a per-query web refresh).
+    mint({ ...CYCLING, domainSpec: CYCLING.domainSpec + "\n(refreshed this query)" });
+
+    const domains = readManifest()["domains"] as Record<string, Record<string, unknown>>;
+    // Still exactly one domain — an upsert by key, not a duplicate.
+    expect(Object.keys(domains)).toEqual([CYCLING.slug]);
+    // createdAt is preserved; the body is overwritten in place.
+    expect(domains[CYCLING.slug]!["createdAt"]).toBe(first["createdAt"]);
+    expect(readFileSync(join(domainDir(CYCLING.slug), "domain_spec.md"), "utf8")).toContain(
+      "(refreshed this query)",
+    );
+  });
+});
+
+// ===========================================================================
+// 2 — slug is a path segment: guarded exactly like agentId
+// ===========================================================================
+
+describe("mint — the slug is a path segment, validated BEFORE any join (write-nothing on a bad slug)", () => {
+  it.each(["../escape", "road/cycling", "..", ".", "a/../b", "main", "Road-Cycling", ""])(
+    "rejects slug %j with invalid_request(field=domain.slug) and writes NO domain pack",
+    (badSlug) => {
+      createShopper();
+      const before = walkFiles(getAgentArtefactDir(AGENT_ID)).sort();
+      const result = materializeProfile({
+        agentId: AGENT_ID,
+        name: "sil shopper",
+        userSpec: USER_SPEC_V1,
+        domain: { ...CYCLING, slug: badSlug },
+      });
+      expect(result.ok, `expected reject for ${JSON.stringify(badSlug)}`).toBe(false);
+      if (result.ok) return;
+      expect(result.kind).toBe("invalid_request");
+      if (result.kind !== "invalid_request") return;
+      expect(result.field).toBe("domain.slug");
+      // Nothing minted — the shopper's tree is unchanged, no domains/ leaf appeared.
+      expect(walkFiles(getAgentArtefactDir(AGENT_ID)).sort()).toEqual(before);
+      expect(existsSync(join(getAgentArtefactDir(AGENT_ID), "domains"))).toBe(false);
+    },
+  );
+
+  it.each([
+    ["name", { ...CYCLING, name: "   " }, "domain.name"],
+    ["domainSpec", { ...CYCLING, domainSpec: "" }, "domain.domainSpec"],
+    ["intentSpec", { ...CYCLING, intentSpec: "\t\n" }, "domain.intentSpec"],
+    ["playbook", { ...CYCLING, playbook: "  " }, "domain.playbook"],
+  ] as const)(
+    "a blank domain field (%s) → invalid_request naming it, writes NO domain pack",
+    (_label, badDomain, field) => {
+      createShopper();
+      const result = materializeProfile({
+        agentId: AGENT_ID,
+        name: "sil shopper",
+        userSpec: USER_SPEC_V1,
+        domain: badDomain,
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.kind).toBe("invalid_request");
+      if (result.kind !== "invalid_request") return;
+      expect(result.field).toBe(field);
+      expect(existsSync(join(getAgentArtefactDir(AGENT_ID), "domains"))).toBe(false);
+    },
+  );
+});
+
+// ===========================================================================
+// 3 — atomicity one level deeper: fresh-leaf teardown + orphan invisibility
+// ===========================================================================
+
+describe("mint atomicity — a failed FIRST mint of a NEW domain tears down ONLY that leaf", () => {
+  it("the agent dir, shared user_spec, and sibling domains all survive a failed new-domain mint", () => {
+    createShopper(USER_SPEC_V1);
+    mint(CYCLING); // a sibling that must survive
+
+    // Force a failure AFTER the new domain's pack is written but BEFORE the
+    // profile.json upsert: replace the shared user_spec.md with a DIRECTORY, so
+    // the store's atomic rewrite of it fails (rename-over-a-dir → EISDIR). This is
+    // perm-independent (works as root), unlike a chmod-based block.
+    const userSpecPath = join(getAgentArtefactDir(AGENT_ID), "user_spec.md");
+    rmSync(userSpecPath, { force: true });
+    mkdirSync(userSpecPath);
+    writeFileSync(join(userSpecPath, "occupant"), "make it non-empty");
+
     const result = materializeProfile({
-      ...MIN_CREATE,
-      // @ts-expect-error — `persona` is NOT a ProfileSpec field after the reframe;
-      // the persona lives only in the host SOUL.md. The compile error IS part of
-      // the assertion: the store must NOT carry a persona slot.
-      persona: "You are a road-cycling buyer.",
+      agentId: AGENT_ID,
+      name: "sil shopper",
+      userSpec: USER_SPEC_V2,
+      domain: RUNNING, // a NEW domain (not yet in the map)
     });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    // Even if a caller smuggles it, no persona.md is written.
-    expect(existsSync(join(result.dir, "persona.md"))).toBe(false);
-  });
-});
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.kind).toBe("persistence_failed");
 
-describe("materializeProfile — all four SDS specs are REQUIRED and land at creation (round-2: none lazy)", () => {
-  it("writes domain_spec.md, intent_spec.md, user_spec.md, playbook.md under agents/<id>/ for a create", () => {
-    const result = materializeProfile({ ...GOOD });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    const dir = join(getDataDir(), "agents", GOOD.agentId);
-    expect(existsSync(join(dir, "domain_spec.md"))).toBe(true);
-    expect(existsSync(join(dir, "intent_spec.md"))).toBe(true);
-    expect(existsSync(join(dir, "user_spec.md"))).toBe(true);
-    expect(existsSync(join(dir, "playbook.md"))).toBe(true);
-
-    // The ok variant surfaces the two required paths…
-    expect(result.domainSpecPath).toBe(join(dir, "domain_spec.md"));
-    expect(result.intentSpecPath).toBe(join(dir, "intent_spec.md"));
-    // …and the two optional ones when supplied.
-    expect(result.userSpecPath).toBe(join(dir, "user_spec.md"));
-    expect(result.playbookPath).toBe(join(dir, "playbook.md"));
-
-    expect(readFileSync(result.domainSpecPath, "utf8")).toBe(DOMAIN_SPEC);
-    expect(readFileSync(result.intentSpecPath, "utf8")).toBe(INTENT_SPEC);
-    expect(readFileSync(result.userSpecPath!, "utf8")).toBe(USER_SPEC);
-    expect(readFileSync(result.playbookPath!, "utf8")).toBe(PLAYBOOK);
-  });
-
-  it("a creation produces ALL FOUR spec files + their manifest paths — none is lazily absent (round-2)", () => {
-    // Founder review round 2: all four sil docs are PRESENT, non-blank, from
-    // creation (seeded partial by the ≤10-question setup + the agent's initial
-    // research). There is no two-spec-only create — the minimum create IS the full
-    // four-spec create.
-    const result = materializeProfile({ ...MIN_CREATE });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(existsSync(join(result.dir, "domain_spec.md"))).toBe(true);
-    expect(existsSync(join(result.dir, "intent_spec.md"))).toBe(true);
-    expect(existsSync(join(result.dir, "user_spec.md"))).toBe(true);
-    expect(existsSync(join(result.dir, "playbook.md"))).toBe(true);
-
-    expect(result.userSpecPath).toBeDefined();
-    expect(result.playbookPath).toBeDefined();
-    const manifest = readManifest(GOOD.agentId);
-    expect(typeof manifest.userSpecPath).toBe("string");
-    expect(typeof manifest.playbookPath).toBe("string");
-    // All four required artefacts + manifest.
-    expect(walkFiles(result.dir).sort()).toEqual(
-      ["domain_spec.md", "intent_spec.md", "user_spec.md", "playbook.md", "profile.json"].sort(),
+    // The freshly-created NEW-domain leaf is torn down (it was ours, just created).
+    expect(existsSync(domainDir(RUNNING.slug))).toBe(false);
+    // The agent dir survives, and the sibling domain's pack is intact.
+    expect(existsSync(getAgentArtefactDir(AGENT_ID))).toBe(true);
+    expect(readFileSync(join(domainDir(CYCLING.slug), "domain_spec.md"), "utf8")).toBe(
+      CYCLING.domainSpec,
     );
+    // The manifest was NEVER rewritten — the failed new domain is unregistered.
+    const domains = (readManifest()["domains"] ?? {}) as Record<string, unknown>;
+    expect(Object.keys(domains)).toEqual([CYCLING.slug]);
+    expect(domains[RUNNING.slug]).toBeUndefined();
   });
 
-  it("records domainSpecPath + intentSpecPath in the typed manifest, pointing at the artefacts", () => {
-    materializeProfile({ ...GOOD });
-    const manifest = readManifest(GOOD.agentId);
-    const dir = getAgentArtefactDir(GOOD.agentId);
-    expect(manifest.domainSpecPath).toBe(join(dir, "domain_spec.md"));
-    expect(manifest.intentSpecPath).toBe(join(dir, "intent_spec.md"));
-    expect(manifest.userSpecPath).toBe(join(dir, "user_spec.md"));
-    expect(manifest.playbookPath).toBe(join(dir, "playbook.md"));
-  });
+  it("a domains-path blocked by a regular file → persistence_failed, nothing partial, manifest unchanged", () => {
+    createShopper();
+    mint(CYCLING);
+    // Block the domains/ subtree with a regular file where the running leaf's
+    // parent chain expects a dir is impossible here; instead block the specific
+    // new leaf path with a FILE so mkdir(domains/<slug>) throws ENOTDIR.
+    const leaf = domainDir(RUNNING.slug);
+    mkdirSync(join(getAgentArtefactDir(AGENT_ID), "domains"), { recursive: true });
+    writeFileSync(leaf, "i am a file where the running leaf must go");
 
-  it("writes every artefact owner-only (0600) inside the 0700 dir", () => {
-    const result = materializeProfile({ ...GOOD });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(statSync(result.dir).mode & 0o777).toBe(0o700);
-    expect(statSync(result.domainSpecPath).mode & 0o777).toBe(0o600);
-    expect(statSync(result.intentSpecPath).mode & 0o777).toBe(0o600);
-    expect(statSync(result.userSpecPath!).mode & 0o777).toBe(0o600);
-    expect(statSync(result.playbookPath!).mode & 0o777).toBe(0o600);
-  });
-
-  it("leaves NO .tmp sibling behind after the atomic write", () => {
-    const result = materializeProfile({ ...GOOD });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(walkFiles(result.dir).filter((f) => f.includes(".tmp"))).toEqual([]);
+    const result = materializeProfile({
+      agentId: AGENT_ID,
+      name: "sil shopper",
+      userSpec: USER_SPEC_V1,
+      domain: RUNNING,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.kind).toBe("persistence_failed");
+    // The blocking file is untouched; the cycling sibling + manifest are intact.
+    expect(statSync(leaf).isFile()).toBe(true);
+    const domains = (readManifest()["domains"] ?? {}) as Record<string, unknown>;
+    expect(Object.keys(domains)).toEqual([CYCLING.slug]);
   });
 });
 
-describe("materializeProfile — validate-first: a missing/blank REQUIRED spec writes NOTHING", () => {
-  const dirExists = () => existsSync(getAgentArtefactDir(GOOD.agentId));
+describe("mint atomicity — an ORPHANED leaf (crash before the profile.json write) is invisible to readers", () => {
+  it("a domains/<slug>/ leaf not referenced by the manifest reads as not_found and never lists", () => {
+    createShopper();
+    mint(CYCLING);
 
-  it("OMITTED domainSpec → invalid_request(field=domainSpec), nothing written", () => {
-    // SDS is the operating model — domain_spec is required, not absent-is-fine.
-    // Cast: omitting a required field is a type error, but the RUNTIME contract is
-    // exactly that the store rejects it fail-closed (validate-first).
-    const { domainSpec: _d, ...noDomain } = GOOD;
-    const result = materializeProfile(noDomain as unknown as ProfileSpec);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("domainSpec");
-    expect(dirExists()).toBe(false);
-  });
+    // Simulate a crash AFTER the bodies were written but BEFORE the profile.json
+    // upsert: fabricate a fully-populated leaf the manifest does NOT reference.
+    const zombie = domainDir("zombie-niche");
+    mkdirSync(zombie, { recursive: true });
+    writeFileSync(join(zombie, "domain_spec.md"), "# orphan\nnever registered");
+    writeFileSync(join(zombie, "intent_spec.md"), "# orphan");
+    writeFileSync(join(zombie, "playbook.md"), "# orphan");
 
-  it("OMITTED intentSpec → invalid_request(field=intentSpec), nothing written", () => {
-    const { intentSpec: _i, ...noIntent } = GOOD;
-    const result = materializeProfile(noIntent as unknown as ProfileSpec);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("intentSpec");
-    expect(dirExists()).toBe(false);
-  });
+    // Manifest-gated: an unreferenced leaf is invisible.
+    const read = readAgentProfile(AGENT_ID, "zombie-niche");
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    expect(read.kind).toBe("not_found");
 
-  it("OMITTED userSpec → invalid_request(field=userSpec), nothing written (round-2: user_spec is REQUIRED)", () => {
-    // Founder review round 2: user_spec is no longer lazy/optional — it is present
-    // (seeded partial) from creation. Omitting it is a defect the store rejects
-    // fail-closed, exactly like a missing domain/intent spec.
-    const { userSpec: _u, ...noUser } = GOOD;
-    const result = materializeProfile(noUser as unknown as ProfileSpec);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("userSpec");
-    expect(dirExists()).toBe(false);
-  });
+    // It never appears in the shopper's domain list either (the map is the truth).
+    const list = listAgentProfiles();
+    const shopper = list.shoppers.find((s) => s.agentId === AGENT_ID);
+    expect(shopper).toBeDefined();
+    expect(shopper!.domains.map((d) => d.slug)).toEqual([CYCLING.slug]);
 
-  it("OMITTED playbook → invalid_request(field=playbook), nothing written (round-2: playbook is REQUIRED)", () => {
-    // Founder review round 2: playbook (buying taste) is no longer lazy/optional —
-    // it is present (seeded partial) from creation. Omitting it is rejected.
-    const { playbook: _p, ...noPlaybook } = GOOD;
-    const result = materializeProfile(noPlaybook as unknown as ProfileSpec);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("playbook");
-    expect(dirExists()).toBe(false);
-  });
-
-  it("present-but-blank domainSpec → invalid_request(field=domainSpec), nothing written", () => {
-    const result = materializeProfile({ ...GOOD, domainSpec: "   " });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("domainSpec");
-    expect(dirExists()).toBe(false);
-  });
-
-  it("present-but-blank intentSpec → invalid_request(field=intentSpec), nothing written", () => {
-    const result = materializeProfile({ ...GOOD, intentSpec: "" });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("intentSpec");
-    expect(dirExists()).toBe(false);
-  });
-
-  it("a blank REQUIRED spec does NOT partially write the OTHER good artefacts (whole-spec validate-first)", () => {
-    // The architect's partial-write-brick risk: a blank intentSpec must reject
-    // BEFORE any file is written — domain_spec.md must NOT appear just because it
-    // was the first good field. Validate-first is whole-spec.
-    const result = materializeProfile({ ...GOOD, intentSpec: "\t\n " });
-    expect(result.ok).toBe(false);
-    expect(existsSync(join(getAgentArtefactDir(GOOD.agentId), "domain_spec.md"))).toBe(false);
-    expect(walkFiles(join(getDataDir(), "agents"))).toEqual([]);
+    // …nor in the shopper overview's domain index.
+    const overview = readAgentProfile(AGENT_ID);
+    expect(overview.ok).toBe(true);
+    if (!overview.ok) return;
+    expect(overview.domains.map((d) => d.slug)).toEqual([CYCLING.slug]);
   });
 });
 
-describe("materializeProfile — every spec is required + non-blank; a later query AUGMENTS one in place", () => {
-  it("present-but-blank userSpec → invalid_request(field=userSpec), nothing written", () => {
-    const result = materializeProfile({ ...GOOD, userSpec: "   " });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("userSpec");
-    expect(existsSync(getAgentArtefactDir(GOOD.agentId))).toBe(false);
+// ===========================================================================
+// 4 — fail-closed reads: a missing required body → not_found (never partial)
+// ===========================================================================
+
+describe("readAgentProfile(agentId, slug) — fail-closed on any missing required body", () => {
+  it("the shared user_spec body is GONE → not_found for the overview AND for a domain read", () => {
+    createShopper();
+    mint(CYCLING);
+    rmSync(join(getAgentArtefactDir(AGENT_ID), "user_spec.md"), { force: true });
+
+    const overview = readAgentProfile(AGENT_ID);
+    expect(overview.ok).toBe(false);
+    if (overview.ok) return;
+    expect(overview.kind).toBe("not_found");
+
+    const domain = readAgentProfile(AGENT_ID, CYCLING.slug);
+    expect(domain.ok).toBe(false);
+    if (domain.ok) return;
+    expect(domain.kind).toBe("not_found");
   });
 
-  it("present-but-blank playbook → invalid_request(field=playbook), nothing written", () => {
-    const result = materializeProfile({ ...GOOD, playbook: "" });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("playbook");
-    expect(existsSync(getAgentArtefactDir(GOOD.agentId))).toBe(false);
+  it.each(["domain_spec.md", "intent_spec.md", "playbook.md"])(
+    "a domain whose %s body is GONE → not_found (never a half pack)",
+    (file) => {
+      createShopper();
+      mint(CYCLING);
+      rmSync(join(domainDir(CYCLING.slug), file), { force: true });
+      const read = readAgentProfile(AGENT_ID, CYCLING.slug);
+      expect(read.ok).toBe(false);
+      if (read.ok) return;
+      expect(read.kind).toBe("not_found");
+    },
+  );
+
+  it("a slug NOT in the domains map → not_found (manifest-gated), never a filesystem guess", () => {
+    createShopper();
+    mint(CYCLING);
+    const read = readAgentProfile(AGENT_ID, "never-minted");
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    expect(read.kind).toBe("not_found");
   });
 
-  it("a later re-materialize AUGMENTS the already-present user_spec in place, without disturbing domain/intent", () => {
-    // Round-2 model: user_spec is PRESENT (seeded partial) from creation, then
-    // lazily AUGMENTED per-query — not "added from absent". After a create, a
-    // second materialize overwrites user_spec.md with the augmented body.
-    const first = materializeProfile({ ...GOOD });
-    expect(first.ok).toBe(true);
-    if (!first.ok) return;
-    expect(readFileSync(first.userSpecPath!, "utf8")).toBe(USER_SPEC);
-
-    const augmented = USER_SPEC + "\n- HARD-NO: anything over 9 kg (reinforced this query).";
-    const second = materializeProfile({ ...GOOD, userSpec: augmented });
-    expect(second.ok).toBe(true);
-    if (!second.ok) return;
-    expect(readFileSync(second.userSpecPath!, "utf8")).toBe(augmented);
-    // Domain + intent untouched by a user-side augmentation.
-    expect(readFileSync(second.domainSpecPath, "utf8")).toBe(DOMAIN_SPEC);
-    expect(readFileSync(second.intentSpecPath, "utf8")).toBe(INTENT_SPEC);
+  it("a malformed/traversal domainSlug → invalid_request(field=domainSlug), reads nothing", () => {
+    createShopper();
+    mint(CYCLING);
+    for (const bad of ["../escape", "road/cycling", "..", "main", "Road-Cycling"]) {
+      const read = readAgentProfile(AGENT_ID, bad);
+      expect(read.ok, `expected reject for ${JSON.stringify(bad)}`).toBe(false);
+      if (read.ok) return;
+      expect(read.kind).toBe("invalid_request");
+      if (read.kind !== "invalid_request") return;
+      expect(read.field).toBe("domainSlug");
+    }
   });
 });
 
-describe("readAgentProfile — round-trips the four bodies; no persona; required specs always present", () => {
-  it("returns domainSpec + intentSpec + userSpec + playbook VERBATIM, and NO persona", () => {
-    materializeProfile({ ...GOOD });
-    const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(true);
-    if (!read.ok) return;
-    // The store preserves the bodies byte-for-byte — it does NOT parse them.
-    expect(read.domainSpec).toBe(DOMAIN_SPEC);
-    expect(read.intentSpec).toBe(INTENT_SPEC);
-    expect(read.userSpec).toBe(USER_SPEC);
-    expect(read.playbook).toBe(PLAYBOOK);
-    // Persona left the store — the read result carries no persona field.
-    expect("persona" in read).toBe(false);
-  });
+// ===========================================================================
+// 5 — empty-domains shopper reads as HEALTHY (not_found is the wrong answer)
+// ===========================================================================
 
-  it("HARD-constraint vs SOFT-preference survive distinguishably in the round-tripped user spec", () => {
-    // The store keeps the user_spec.md body intact, so the markers that separate a
-    // bendable soft preference from an inviolable hard constraint survive the
-    // write→read cycle — THIS is what lets downstream reasoning treat a hard
-    // constraint as inviolable (the distinction is in the persisted body, not lost
-    // to a lossy parse).
-    materializeProfile({ ...GOOD });
-    const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(true);
-    if (!read.ok) return;
-    const spec = read.userSpec!;
-    expect(spec).toContain("soft preferences");
-    expect(spec).toContain("HARD-NO: rim brakes");
-    expect(spec).toContain("INVIOLABLE");
-    expect(spec).toBe(USER_SPEC);
-  });
-
-  it("a created expert reads back ALL FOUR specs — none is absent at creation (round-2)", () => {
-    materializeProfile({ ...MIN_CREATE });
-    const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(true);
-    if (!read.ok) return;
-    expect(read.domainSpec).toBe(DOMAIN_SPEC);
-    expect(read.intentSpec).toBe(INTENT_SPEC);
-    // All four are present from creation — the user side is no longer absent.
-    expect(read.userSpec).toBe(USER_SPEC);
-    expect(read.playbook).toBe(PLAYBOOK);
-  });
-
-  it("a created manifest carries ALL FOUR path keys; the required gate is agentId/name/createdAt + all four spec paths", () => {
-    // Round-2: the manifest's required gate includes userSpecPath + playbookPath.
-    // A created expert's manifest carries all four spec path keys.
-    const result = materializeProfile({ ...MIN_CREATE });
-    expect(result.ok).toBe(true);
-    const manifest = readManifest(GOOD.agentId);
-    expect(typeof manifest.domainSpecPath).toBe("string");
-    expect(typeof manifest.intentSpecPath).toBe("string");
-    expect(typeof manifest.userSpecPath).toBe("string");
-    expect(typeof manifest.playbookPath).toBe("string");
-    expect(readAgentProfile(GOOD.agentId).ok).toBe(true);
-  });
-});
-
-describe("readAgentProfile — a manifest missing a REQUIRED spec key is corrupt (fails closed)", () => {
-  it("a profile.json with NO domainSpecPath → not_found (domain_spec is a required-gate field)", () => {
-    // SDS reframe: domain_spec/intent_spec are required, so their manifest path
-    // keys are part of readManifestFile's required gate. A manifest missing one is
-    // an interrupted/hand-edited write → the expert reads back not_found, never as
-    // a coherent-but-incomplete expert.
-    materializeProfile({ ...GOOD });
-    const manifestPath = join(getAgentArtefactDir(GOOD.agentId), "profile.json");
-    const manifest = readManifest(GOOD.agentId) as unknown as Record<string, unknown>;
-    delete manifest["domainSpecPath"];
-    // Re-write the manifest without the required key, preserving the file's perms.
-    chmodSync(manifestPath, 0o600);
-    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-    const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(false);
-    if (read.ok) return;
-    expect(read.kind).toBe("not_found");
-  });
-
-  it("a profile.json with NO intentSpecPath → not_found (intent_spec is a required-gate field)", () => {
-    materializeProfile({ ...GOOD });
-    const manifestPath = join(getAgentArtefactDir(GOOD.agentId), "profile.json");
-    const manifest = readManifest(GOOD.agentId) as unknown as Record<string, unknown>;
-    delete manifest["intentSpecPath"];
-    chmodSync(manifestPath, 0o600);
-    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-    const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(false);
-    if (read.ok) return;
-    expect(read.kind).toBe("not_found");
-  });
-
-  it("a profile.json with NO userSpecPath → not_found (round-2: user_spec is a required-gate field)", () => {
-    // Founder review round 2: userSpecPath joins the required gate. A manifest
-    // missing it is an interrupted/hand-edited write → not_found, never a
-    // coherent-but-incomplete expert.
-    materializeProfile({ ...GOOD });
-    const manifestPath = join(getAgentArtefactDir(GOOD.agentId), "profile.json");
-    const manifest = readManifest(GOOD.agentId) as unknown as Record<string, unknown>;
-    delete manifest["userSpecPath"];
-    chmodSync(manifestPath, 0o600);
-    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-    const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(false);
-    if (read.ok) return;
-    expect(read.kind).toBe("not_found");
-  });
-
-  it("a profile.json with NO playbookPath → not_found (round-2: playbook is a required-gate field)", () => {
-    materializeProfile({ ...GOOD });
-    const manifestPath = join(getAgentArtefactDir(GOOD.agentId), "profile.json");
-    const manifest = readManifest(GOOD.agentId) as unknown as Record<string, unknown>;
-    delete manifest["playbookPath"];
-    chmodSync(manifestPath, 0o600);
-    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-    const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(false);
-    if (read.ok) return;
-    expect(read.kind).toBe("not_found");
-  });
-
-  it("a manifest pointing at a user_spec.md whose body is GONE fails closed → not_found (round-2: all four are required)", () => {
-    // Per-file atomic, not transactional: a manifest can point at a user_spec.md
-    // that was hand-deleted. After round-2 the user spec is REQUIRED — a
-    // referenced-but-missing body of ANY of the four is fail-closed, exactly the
-    // role persona played pre-SDS. The read must NOT serve a coherent-but-partial
-    // expert off a missing required body.
-    materializeProfile({ ...GOOD });
-    rmSync(join(getAgentArtefactDir(GOOD.agentId), "user_spec.md"), { force: true });
-    const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(false);
-    if (read.ok) return;
-    expect(read.kind).toBe("not_found");
-  });
-
-  it("a manifest pointing at a playbook.md whose body is GONE fails closed → not_found (round-2: all four are required)", () => {
-    materializeProfile({ ...GOOD });
-    rmSync(join(getAgentArtefactDir(GOOD.agentId), "playbook.md"), { force: true });
-    const read = readAgentProfile(GOOD.agentId);
-    expect(read.ok).toBe(false);
-    if (read.ok) return;
-    expect(read.kind).toBe("not_found");
-  });
-});
-
-describe("materializeProfile — intentSpec is the PERSISTED schema; the per-query intent is NEVER persisted", () => {
-  it("persists intent_spec.md (the decomposition-dimension schema) — the store now carries intentSpec", () => {
-    // Correction 4: the prior @ts-expect-error blocking an intent store field is
-    // REVERSED. intentSpec is a real, REQUIRED ProfileSpec field — the persisted
-    // dimension schema/template. (No @ts-expect-error here: it must compile.)
-    const result = materializeProfile({ ...GOOD });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(existsSync(join(result.dir, "intent_spec.md"))).toBe(true);
-    expect(readFileSync(result.intentSpecPath, "utf8")).toBe(INTENT_SPEC);
-  });
-
-  it("NEVER writes an intent.md of filled per-query values — only the intent_spec.md schema", () => {
-    // The per-query intent (the dimensions filled in for one request) is ephemeral,
-    // conversation-only. The store persists the SCHEMA (intent_spec.md), never the
-    // INSTANCE. No intent.md is ever written.
-    const result = materializeProfile({ ...GOOD });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(existsSync(join(result.dir, "intent.md"))).toBe(false);
-    // Exactly the four behaviour artefacts + manifest — and intent_spec.md, never
-    // a bare intent.md.
-    const files = walkFiles(result.dir).sort();
-    expect(files).toEqual(
-      ["domain_spec.md", "intent_spec.md", "playbook.md", "profile.json", "user_spec.md"].sort(),
-    );
+describe("readAgentProfile — a freshly-created shopper with `domains: {}` is HEALTHY, not not_found", () => {
+  it("the overview returns ok with the shared user_spec + an EMPTY domain index", () => {
+    createShopper(USER_SPEC_V1);
+    const overview = readAgentProfile(AGENT_ID);
+    expect(overview.ok).toBe(true);
+    if (!overview.ok) return;
+    expect(overview.userSpec).toBe(USER_SPEC_V1);
+    expect(overview.domains).toEqual([]);
   });
 });

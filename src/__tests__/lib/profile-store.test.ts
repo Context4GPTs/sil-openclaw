@@ -1,34 +1,40 @@
 /**
- * UNIT — materializeProfile() behaviour-artefact writer (tier: unit, real temp
- * dir via the SIL_DATA_DIR override, no network, no host).
+ * UNIT — materializeProfile() writer, after the single-multi-domain shopper
+ * reshape (tier: unit, real temp dir via the SIL_DATA_DIR override, no network,
+ * no host).
  *
- * Card: spec-driven-shopping-sds-for-created-experts — Founder review round 2
- * (PR #33 bounced a SECOND time). After the SDS reframe the sil store holds FOUR
- * behaviour artefacts and NO persona (the persona is the host SOUL.md, written by
- * the engine via the host CLI — not a sil-side file). Round-2: ALL FOUR specs are
- * REQUIRED and present non-blank from creation (seeded partial, then augmented
- * per-query) — none is lazy/optional:
- *   - domain_spec.md  (REQUIRED) — deep researched niche expertise;
- *   - intent_spec.md  (REQUIRED) — the decomposition-dimension schema;
- *   - user_spec.md    (REQUIRED) — the user's domain-relevant facts + constraints;
- *   - playbook.md     (REQUIRED) — the user's buying taste.
+ * Card: single-multi-domain-sil-shopper — Slice 1 (store/tool plumbing). The
+ * per-niche flat layout is DELETED (no backwards compat). One persistent "sil
+ * shopper" now owns ONE agent dir holding a SHARED, agent-level user_spec.md +
+ * profile.json, with niche packs pushed down a level under domains/<slug>/:
  *
- * This file pins the GENERIC store invariants (the agentId gate, atomicity, the
- * 0600/0700 modes, no-token-coupling). The SDS-specific slot semantics
- * (required-vs-lazy, persona-gone, intent-schema-persisted) live in
- * `profile-store-sds.test.ts`.
+ *   $SIL_DATA_DIR/agents/<shopperId>/
+ *     ├─ user_spec.md            SHARED, agent-level (the one person).
+ *     ├─ profile.json            manifest: identity + userSpecPath + a `domains` MAP.
+ *     └─ domains/<slug>/
+ *         ├─ domain_spec.md      per-domain pack (researched niche expertise)
+ *         ├─ intent_spec.md      per-domain pack (decomposition dimensions)
+ *         └─ playbook.md         per-domain pack (niche buying taste)
  *
- * The invariants pinned here ARE the card's correctness bar for the artefact
- * layer:
- *   1. A valid spec materializes the required specs + profile.json (and the lazy
- *      ones when supplied) under $SIL_DATA_DIR/agents/<agentId>/, owner-only
- *      (0600), in a 0700 dir, with a typed manifest pointing at the artefacts.
- *   2. Validate-FIRST: every invalid field returns `invalid_request` naming the
- *      field and writes NOTHING — no agent directory appears (Product
- *      invariant 7, atomic outcome).
- *   3. Atomic on failure: a mid-write failure leaves NOTHING partial behind
- *      (persistence_failed with <dir>: <cause>).
- *   4. Identity boundary: materializing reads/writes no token (no coupling).
+ * `ProfileSpec` is reshaped to agent-level fields + an OPTIONAL `domain` pack:
+ *   { agentId, name, userSpec, domain?: { slug, name, domainSpec, intentSpec, playbook } }
+ *   - NO `domain`  ⇒ CREATE the shopper: write the shared user_spec.md + a
+ *     profile.json with `domains: {}` (the healthy freshly-created state). NO
+ *     domains/ dir exists yet.
+ *   - WITH `domain` ⇒ lazily MINT/refresh that niche: write
+ *     domains/<slug>/{domain_spec,intent_spec,playbook}.md, overwrite the shared
+ *     user_spec.md, and upsert `domains[slug]` — all in one atomic call.
+ *
+ * This file pins the GENERIC writer invariants that survive the reshape — the
+ * agentId gate, the NEW slug path-segment gate, validate-first, atomicity on a
+ * blocked path, the 0600/0700 modes, no-token-coupling, the resolved-from-
+ * getDataDir() dir. The deeper layout / lazy-mint / domains-map semantics live in
+ * `profile-store-sds.test.ts`; list/read/remove in `profile-store-manage.test.ts`.
+ *
+ * The four-flat-spec-per-expert contract is GONE: ProfileSpec no longer carries
+ * top-level domainSpec/intentSpec/playbook; the manifest no longer carries the
+ * four flat *Path keys (it carries userSpecPath + a domains map). No assertion of
+ * the old shape survives.
  *
  * Hermetic via the SIL_DATA_DIR temp-dir override (the repo's standard knob).
  */
@@ -57,7 +63,6 @@ import { join } from "node:path";
 import {
   materializeProfile,
   getAgentArtefactDir,
-  type ProfileManifest,
   type ProfileSpec,
 } from "../../lib/profile-store.js";
 import { getDataDir, getTokensPath } from "../../lib/credentials.js";
@@ -74,7 +79,6 @@ beforeEach(() => {
 afterEach(() => {
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
-  // Restore perms so rmSync can clean a dir a cleanup test chmod'd read-only.
   try {
     chmodSync(dataDir, 0o700);
   } catch {
@@ -83,31 +87,49 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-/** A full create — ALL FOUR REQUIRED specs (round-2: none is lazy/optional). */
-const GOOD = {
-  agentId: "gift-buyer",
-  name: "Gift Buyer",
+/** The shared, agent-level user spec — the one person, carried across niches. */
+const USER_SPEC =
+  "# User spec — the shopper (shared, agent-level)\n"
+  + "## Standing facts\n- Ships to Berlin 10115.\n- Inseam 81cm, shoe EU 43.\n"
+  + "## Hard constraints (INVIOLABLE across every niche)\n"
+  + "- HARD-NO: leather (ethics).\n- HARD-NO: anything over budget without a flag.";
+
+/** A complete domain pack (the per-niche artefacts, minted lazily on first shop). */
+const DOMAIN = {
+  slug: "road-cycling",
+  name: "Road cycling",
   domainSpec:
-    "# Gift-buying domain spec\nDimensions: recipient relationship, occasion,"
-    + " budget band, taste signals, delivery timeline. Trade-offs noted.",
+    "# Road-cycling domain spec (deep)\nFit mechanics, gearing theory, frame"
+    + " geometry, the full bike-fit process. Trade-offs noted.",
   intentSpec:
-    "# Intent spec — dimensions\nrecipient, occasion, budget, timeline, taste.",
-  userSpec: "# User spec\nFacts: buys for partner + two kids.\nHARD-NO: nothing over €50.",
-  playbook: "# Buying taste\nValue-conscious; prefers experiences over objects.",
+    "# Intent spec — decomposition dimensions\nuse-case, terrain, budget, timeline,"
+    + " compatibility, performance priorities, aesthetics.",
+  playbook:
+    "# Buying taste (road cycling)\nBudget band ~€1500; distrusts house-brand"
+    + " groupsets; Shimano over SRAM.",
 } as const;
 
-/** The minimum valid create. After Founder review round 2, all four sil specs are
- * REQUIRED + present from creation — so the minimum create IS the full four-spec
- * create. Kept as a named alias for call-site legibility. */
-const MIN = GOOD;
+/** Create the shopper (no domain): the one-time agent-level write. */
+const CREATE_SHOPPER = {
+  agentId: "sil-shopper",
+  name: "sil shopper",
+  userSpec: USER_SPEC,
+} as const;
 
-function readManifest(agentId: string): ProfileManifest {
+/** Mint a niche onto the shopper (lazy, shop-time). */
+const MINT = {
+  ...CREATE_SHOPPER,
+  domain: DOMAIN,
+} as const;
+
+/** Raw, untyped manifest read — decoupled from the manifest field shape so a
+ * RED run against the un-reshaped store never throws on a missing key. */
+function readManifest(agentId: string): Record<string, unknown> {
   const path = join(getAgentArtefactDir(agentId), "profile.json");
-  return JSON.parse(readFileSync(path, "utf8")) as ProfileManifest;
+  return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 }
 
-/** Every file under `dir`, recursively (relative paths). Used to prove no
- * `.tmp` sibling survives a write and no artefact survives a failed write. */
+/** Every file under `dir`, recursively (relative paths). */
 function walkFiles(dir: string, base = dir): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];
@@ -119,103 +141,133 @@ function walkFiles(dir: string, base = dir): string[] {
   return out;
 }
 
-describe("materializeProfile — valid spec writes the behaviour artefacts", () => {
-  it("writes domain_spec.md, intent_spec.md, the lazy slots, and profile.json under $SIL_DATA_DIR/agents/<agentId>/", () => {
-    const result = materializeProfile({ ...GOOD });
+describe("materializeProfile — create the shopper (no domain): shared user_spec + empty domains map", () => {
+  it("writes ONLY user_spec.md + profile.json at the agent level; NO domains/ dir yet", () => {
+    const result = materializeProfile({ ...CREATE_SHOPPER });
     expect(result.ok).toBe(true);
-    if (!result.ok) return; // narrow
+    if (!result.ok) return;
 
-    const expectedDir = join(getDataDir(), "agents", GOOD.agentId);
-    expect(result.dir).toBe(expectedDir);
-    expect(existsSync(join(expectedDir, "domain_spec.md"))).toBe(true);
-    expect(existsSync(join(expectedDir, "intent_spec.md"))).toBe(true);
-    expect(existsSync(join(expectedDir, "user_spec.md"))).toBe(true);
-    expect(existsSync(join(expectedDir, "playbook.md"))).toBe(true);
-    expect(existsSync(join(expectedDir, "profile.json"))).toBe(true);
-    // The persona is the host SOUL.md — never a sil-side file.
-    expect(existsSync(join(expectedDir, "persona.md"))).toBe(false);
+    const dir = join(getDataDir(), "agents", CREATE_SHOPPER.agentId);
+    expect(result.dir).toBe(dir);
+    expect(existsSync(join(dir, "user_spec.md"))).toBe(true);
+    expect(existsSync(join(dir, "profile.json"))).toBe(true);
+    // The per-niche flat artefacts are GONE from the agent level.
+    expect(existsSync(join(dir, "domain_spec.md"))).toBe(false);
+    expect(existsSync(join(dir, "intent_spec.md"))).toBe(false);
+    expect(existsSync(join(dir, "playbook.md"))).toBe(false);
+    // A freshly-created shopper has shopped nothing — no domains/ subtree.
+    expect(existsSync(join(dir, "domains"))).toBe(false);
 
-    expect(readFileSync(result.domainSpecPath, "utf8")).toBe(GOOD.domainSpec);
-    expect(readFileSync(result.intentSpecPath, "utf8")).toBe(GOOD.intentSpec);
+    // Exactly the two agent-level files.
+    expect(walkFiles(dir).sort()).toEqual(["profile.json", "user_spec.md"].sort());
+    expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(USER_SPEC);
+  });
+
+  it("the ok result surfaces userSpecPath + profilePath (and NO old flat *Path fields)", () => {
+    const result = materializeProfile({ ...CREATE_SHOPPER });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const dir = getAgentArtefactDir(CREATE_SHOPPER.agentId);
+    expect(result.userSpecPath).toBe(join(dir, "user_spec.md"));
+    expect(result.profilePath).toBe(join(dir, "profile.json"));
+    // The four flat spec paths left the result — they are per-domain now.
+    expect("domainSpecPath" in result).toBe(false);
+    expect("intentSpecPath" in result).toBe(false);
+    expect("playbookPath" in result).toBe(false);
+  });
+
+  it("the manifest carries userSpecPath + an EMPTY domains map + identity (no flat *Path keys)", () => {
+    materializeProfile({ ...CREATE_SHOPPER });
+    const manifest = readManifest(CREATE_SHOPPER.agentId);
+    const dir = getAgentArtefactDir(CREATE_SHOPPER.agentId);
+    expect(manifest["agentId"]).toBe(CREATE_SHOPPER.agentId);
+    expect(manifest["name"]).toBe(CREATE_SHOPPER.name);
+    expect(manifest["userSpecPath"]).toBe(join(dir, "user_spec.md"));
+    // domains is the source of truth — present, an object, and EMPTY (healthy).
+    expect(manifest["domains"]).toEqual({});
+    expect(typeof manifest["createdAt"]).toBe("string");
+    expect(Number.isNaN(Date.parse(manifest["createdAt"] as string))).toBe(false);
+    // The four flat spec-path keys are GONE from the manifest.
+    expect("domainSpecPath" in manifest).toBe(false);
+    expect("intentSpecPath" in manifest).toBe(false);
+    expect("playbookPath" in manifest).toBe(false);
   });
 
   it("resolves the artefact dir from getDataDir() — honours $SIL_DATA_DIR (never hardcoded)", () => {
-    // getAgentArtefactDir must sit under the overridden data dir, proving it
-    // reads the accessor and is not a baked-in ~/.local/share path.
     expect(getAgentArtefactDir("x")).toBe(join(dataDir, "agents", "x"));
   });
 
-  it("the manifest is typed and points at the required-spec artefacts (no personaPath)", () => {
-    const result = materializeProfile({ ...GOOD });
-    expect(result.ok).toBe(true);
-
-    const manifest = readManifest(GOOD.agentId);
-    expect(manifest.agentId).toBe(GOOD.agentId);
-    expect(manifest.name).toBe(GOOD.name);
-    expect(manifest.domainSpecPath).toBe(
-      join(getAgentArtefactDir(GOOD.agentId), "domain_spec.md"),
-    );
-    expect(manifest.intentSpecPath).toBe(
-      join(getAgentArtefactDir(GOOD.agentId), "intent_spec.md"),
-    );
-    // Persona left the store — no personaPath key on the manifest.
-    expect("personaPath" in manifest).toBe(false);
-    expect(typeof manifest.createdAt).toBe("string");
-    // ISO 8601 — parseable to a real date.
-    expect(Number.isNaN(Date.parse(manifest.createdAt))).toBe(false);
-  });
-
-  it("writes ALL FOUR spec files AND their manifest paths for a create (round-2: none is lazily absent)", () => {
-    const result = materializeProfile({ ...MIN });
+  it("writes the shared user_spec + manifest owner-only (0600) inside a 0700 dir", () => {
+    const result = materializeProfile({ ...CREATE_SHOPPER });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-
-    expect(existsSync(join(result.dir, "domain_spec.md"))).toBe(true);
-    expect(existsSync(join(result.dir, "intent_spec.md"))).toBe(true);
-    expect(existsSync(join(result.dir, "user_spec.md"))).toBe(true);
-    expect(existsSync(join(result.dir, "playbook.md"))).toBe(true);
-    expect(result.userSpecPath).toBeDefined();
-    expect(result.playbookPath).toBeDefined();
-
-    const manifest = readManifest(GOOD.agentId);
-    expect(typeof manifest.userSpecPath).toBe("string");
-    expect(typeof manifest.playbookPath).toBe("string");
-  });
-
-  it("writes artefacts owner-only (0600) inside a 0700 dir", () => {
-    const result = materializeProfile({ ...GOOD });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    // mask to the permission bits.
     expect(statSync(result.dir).mode & 0o777).toBe(0o700);
-    expect(statSync(result.domainSpecPath).mode & 0o777).toBe(0o600);
+    expect(statSync(result.userSpecPath).mode & 0o777).toBe(0o600);
     expect(statSync(result.profilePath).mode & 0o777).toBe(0o600);
   });
 
   it("does NOT read or write any token (no identity coupling)", () => {
-    // The tokens path must not appear as a side effect of materializing.
-    materializeProfile({ ...GOOD });
+    materializeProfile({ ...CREATE_SHOPPER });
     expect(existsSync(getTokensPath())).toBe(false);
   });
 
-  it("leaves NO .tmp sibling behind after the atomic write (tmp → rename → chmod)", () => {
-    // The store writes via a tmp sibling then renames over the target. A
-    // surviving `.tmp` means the rename never ran — the atomic-write contract
-    // broken (a reader could observe a half-written artefact).
-    const result = materializeProfile({ ...GOOD });
+  it("leaves NO .tmp sibling behind after the atomic write", () => {
+    const result = materializeProfile({ ...CREATE_SHOPPER });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const leftovers = walkFiles(result.dir).filter((f) => f.includes(".tmp"));
-    expect(leftovers).toEqual([]);
+    expect(walkFiles(result.dir).filter((f) => f.includes(".tmp"))).toEqual([]);
   });
 });
 
-describe("materializeProfile — validate-first: a bad spec writes NOTHING (invalid_request)", () => {
-  const dirExists = () => existsSync(getAgentArtefactDir(GOOD.agentId));
+describe("materializeProfile — mint a niche (with domain): the pack lands under domains/<slug>/", () => {
+  it("writes domains/<slug>/{domain_spec,intent_spec,playbook}.md owner-only, and upserts domains[slug]", () => {
+    // Create the shopper first (the intended flow), then mint the niche.
+    expect(materializeProfile({ ...CREATE_SHOPPER }).ok).toBe(true);
+    const result = materializeProfile({ ...MINT });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const domainDir = join(getAgentArtefactDir(MINT.agentId), "domains", DOMAIN.slug);
+    expect(readFileSync(join(domainDir, "domain_spec.md"), "utf8")).toBe(DOMAIN.domainSpec);
+    expect(readFileSync(join(domainDir, "intent_spec.md"), "utf8")).toBe(DOMAIN.intentSpec);
+    expect(readFileSync(join(domainDir, "playbook.md"), "utf8")).toBe(DOMAIN.playbook);
+    // Per-domain pack files are owner-only.
+    expect(statSync(join(domainDir, "domain_spec.md")).mode & 0o777).toBe(0o600);
+
+    // The manifest's domains map gains the slug, with the three per-domain paths.
+    const domains = (readManifest(MINT.agentId)["domains"] ?? {}) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(domains[DOMAIN.slug]).toBeDefined();
+    expect(domains[DOMAIN.slug]!["slug"]).toBe(DOMAIN.slug);
+    expect(domains[DOMAIN.slug]!["name"]).toBe(DOMAIN.name);
+    expect(domains[DOMAIN.slug]!["domainSpecPath"]).toBe(join(domainDir, "domain_spec.md"));
+    expect(domains[DOMAIN.slug]!["intentSpecPath"]).toBe(join(domainDir, "intent_spec.md"));
+    expect(domains[DOMAIN.slug]!["playbookPath"]).toBe(join(domainDir, "playbook.md"));
+    expect(typeof domains[DOMAIN.slug]!["createdAt"]).toBe("string");
+    expect(typeof domains[DOMAIN.slug]!["updatedAt"]).toBe("string");
+  });
+
+  it("the ok result echoes the minted domain entry (slug + the three per-domain paths)", () => {
+    expect(materializeProfile({ ...CREATE_SHOPPER }).ok).toBe(true);
+    const result = materializeProfile({ ...MINT });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.domain).toBeDefined();
+    expect(result.domain!.slug).toBe(DOMAIN.slug);
+    const domainDir = join(getAgentArtefactDir(MINT.agentId), "domains", DOMAIN.slug);
+    expect(result.domain!.domainSpecPath).toBe(join(domainDir, "domain_spec.md"));
+    expect(result.domain!.intentSpecPath).toBe(join(domainDir, "intent_spec.md"));
+    expect(result.domain!.playbookPath).toBe(join(domainDir, "playbook.md"));
+  });
+});
+
+describe("materializeProfile — validate-first on the agent-level fields (writes NOTHING)", () => {
+  const dirExists = () => existsSync(getAgentArtefactDir(CREATE_SHOPPER.agentId));
 
   it("missing agentId → invalid_request(field=agentId), nothing written", () => {
-    const result = materializeProfile({ ...GOOD, agentId: "" });
+    const result = materializeProfile({ ...CREATE_SHOPPER, agentId: "" });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("invalid_request");
@@ -225,7 +277,7 @@ describe("materializeProfile — validate-first: a bad spec writes NOTHING (inva
   });
 
   it('reserved "main" agentId → invalid_request(field=agentId), nothing written', () => {
-    const result = materializeProfile({ ...GOOD, agentId: "main" });
+    const result = materializeProfile({ ...CREATE_SHOPPER, agentId: "main" });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("invalid_request");
@@ -234,34 +286,20 @@ describe("materializeProfile — validate-first: a bad spec writes NOTHING (inva
     expect(existsSync(join(getDataDir(), "agents", "main"))).toBe(false);
   });
 
-  it("non-kebab agentId → invalid_request(field=agentId), nothing written", () => {
-    const result = materializeProfile({ ...GOOD, agentId: "Gift Buyer!" });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("agentId");
-  });
-
-  it("rejects a path-traversing / separator-bearing agentId (it is a dir-path segment)", () => {
-    // Security-relevant: agentId becomes a directory path segment under
-    // $SIL_DATA_DIR/agents/. A `..` or `/` would let an artefact escape the
-    // sandbox. The lower-kebab gate must reject every such shape — and write
-    // nothing for any of them.
-    for (const bad of ["../escape", "gift/buyer", "..", ".", "a/../b", "Gift-Buyer"]) {
-      const result = materializeProfile({ ...GOOD, agentId: bad });
+  it("path-traversing / separator-bearing agentId → invalid_request(field=agentId), nothing escapes", () => {
+    for (const bad of ["../escape", "shop/per", "..", ".", "a/../b", "Sil-Shopper"]) {
+      const result = materializeProfile({ ...CREATE_SHOPPER, agentId: bad });
       expect(result.ok, `expected reject for ${JSON.stringify(bad)}`).toBe(false);
       if (result.ok) return;
       expect(result.kind).toBe("invalid_request");
       if (result.kind !== "invalid_request") return;
       expect(result.field).toBe("agentId");
     }
-    // Nothing escaped the agents subtree (no stray file anywhere under it).
     expect(walkFiles(join(getDataDir(), "agents"))).toEqual([]);
   });
 
   it("blank name → invalid_request(field=name), nothing written", () => {
-    const result = materializeProfile({ ...GOOD, name: "   " });
+    const result = materializeProfile({ ...CREATE_SHOPPER, name: "   " });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("invalid_request");
@@ -270,32 +308,8 @@ describe("materializeProfile — validate-first: a bad spec writes NOTHING (inva
     expect(dirExists()).toBe(false);
   });
 
-  it("missing domainSpec (required) → invalid_request(field=domainSpec), nothing written", () => {
-    // Cast: omitting a required field is a type error; the RUNTIME contract is that
-    // the store rejects it fail-closed (validate-first).
-    const { domainSpec: _d, ...noDomain } = GOOD;
-    const result = materializeProfile(noDomain as unknown as ProfileSpec);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("domainSpec");
-    expect(dirExists()).toBe(false);
-  });
-
-  it("missing intentSpec (required) → invalid_request(field=intentSpec), nothing written", () => {
-    const { intentSpec: _i, ...noIntent } = GOOD;
-    const result = materializeProfile(noIntent as unknown as ProfileSpec);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("intentSpec");
-    expect(dirExists()).toBe(false);
-  });
-
-  it("missing userSpec (required, round-2) → invalid_request(field=userSpec), nothing written", () => {
-    const { userSpec: _u, ...noUser } = GOOD;
+  it("missing userSpec → invalid_request(field=userSpec), nothing written (userSpec is REQUIRED on EVERY call)", () => {
+    const { userSpec: _u, ...noUser } = CREATE_SHOPPER;
     const result = materializeProfile(noUser as unknown as ProfileSpec);
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -305,73 +319,30 @@ describe("materializeProfile — validate-first: a bad spec writes NOTHING (inva
     expect(dirExists()).toBe(false);
   });
 
-  it("missing playbook (required, round-2) → invalid_request(field=playbook), nothing written", () => {
-    const { playbook: _p, ...noPlaybook } = GOOD;
-    const result = materializeProfile(noPlaybook as unknown as ProfileSpec);
+  it("present-but-blank userSpec → invalid_request(field=userSpec), nothing written", () => {
+    const result = materializeProfile({ ...CREATE_SHOPPER, userSpec: "  \t\n " });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("invalid_request");
     if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("playbook");
-    expect(dirExists()).toBe(false);
-  });
-
-  it("present-but-blank playbook (required) → invalid_request(field=playbook), nothing written", () => {
-    const result = materializeProfile({ ...GOOD, playbook: "   " });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("playbook");
+    expect(result.field).toBe("userSpec");
     expect(dirExists()).toBe(false);
   });
 });
 
-describe("materializeProfile — atomic on write failure (persistence_failed, nothing partial)", () => {
-  it("when the artefact path is blocked by a file, returns persistence_failed with <dir>: <cause> and leaves nothing partial", () => {
-    // Force a write failure: pre-create `agents/<id>` as a FILE, so mkdir of the
-    // dir (recursive over an existing non-dir leaf) throws ENOTDIR/EEXIST.
+describe("materializeProfile — atomic on a blocked path (persistence_failed, nothing partial)", () => {
+  it("when the agent dir path is blocked by a regular file → persistence_failed, the file untouched", () => {
     const agentsDir = join(getDataDir(), "agents");
     mkdirSync(agentsDir, { recursive: true });
     // Place a regular file exactly where the agent DIR must go.
-    writeFileSync(join(agentsDir, GOOD.agentId), "i am a file, not a dir");
+    writeFileSync(join(agentsDir, CREATE_SHOPPER.agentId), "i am a file, not a dir");
 
-    const result = materializeProfile({ ...GOOD });
+    const result = materializeProfile({ ...CREATE_SHOPPER });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("persistence_failed");
     if (result.kind !== "persistence_failed") return;
-    // The path + cause are both present (actionable recovery).
-    expect(result.error).toContain(getAgentArtefactDir(GOOD.agentId));
-    // The blocking file is untouched; no partial artefacts were written under it.
-    expect(statSync(join(agentsDir, GOOD.agentId)).isFile()).toBe(true);
+    expect(result.error).toContain(getAgentArtefactDir(CREATE_SHOPPER.agentId));
+    expect(statSync(join(agentsDir, CREATE_SHOPPER.agentId)).isFile()).toBe(true);
   });
-
-  // chmod 0500 can't block writes for root — skip there rather than false-fail.
-  // The file-blocks-path case above covers the failure envelope for ALL uids;
-  // this one additionally drives the catch-block rmSync CLEANUP (a dir that was
-  // created, then a write into it failed) so no half-populated dir survives.
-  const asRoot = typeof process.getuid === "function" && process.getuid() === 0;
-  it.skipIf(asRoot)(
-    "CLEANS UP a partially-created artefact dir when a mid-write fails (no half-set survives)",
-    () => {
-      // Pre-create the agent dir READ-ONLY (0500): mkdir(recursive) is a no-op,
-      // then the tmp-file write inside it fails EACCES, driving the cleanup.
-      const agentDir = getAgentArtefactDir(GOOD.agentId);
-      mkdirSync(agentDir, { recursive: true });
-      chmodSync(agentDir, 0o500);
-
-      const result = materializeProfile({ ...GOOD });
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.kind).toBe("persistence_failed");
-
-      // No artefact file may survive a failed write. Restore perms first so we
-      // can inspect + afterEach can clean up.
-      if (existsSync(agentDir)) {
-        chmodSync(agentDir, 0o700);
-        expect(walkFiles(agentDir)).toEqual([]);
-      }
-    },
-  );
 });

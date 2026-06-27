@@ -1,62 +1,46 @@
 /**
- * UNIT — list/read/remove store primitives (tier: unit, real temp dir via the
- * SIL_DATA_DIR override, no network, no host).
+ * UNIT — list / read / remove store primitives after the single-multi-domain
+ * shopper reshape (tier: unit, real temp dir via the SIL_DATA_DIR override, no
+ * network, no host).
  *
- * Card: list-view-and-remove-local-expert-agents. The create-engine
- * (`materializeProfile`) wrote the artefact store; this card adds the three
- * primitives that MANAGE it:
- *   - listAgentProfiles()        — enumerate $SIL_DATA_DIR/agents/*\/profile.json
- *   - readAgentProfile(agentId)  — manifest + the SDS spec bodies for one
- *   - removeAgentArtefacts(id)   — delete exactly one validated agent's dir
+ * Card: single-multi-domain-sil-shopper — Slice 1. The lifecycle primitives shift
+ * from "experts" to "DOMAINS" semantics — they now manage the ONE shopper's
+ * domain packs, not separate per-niche experts:
  *
- * Each returns a discriminated result that NEVER throws across the boundary
- * (cloning the `MaterializeResult` shape, profile-store.ts:94-117) — the tool
- * maps each variant to a structured envelope. The invariants pinned here ARE
- * the card's correctness bar for the artefact-half of list/view/remove:
+ *   listAgentProfiles()                  — enumerate the shopper(s) + each one's
+ *                                          domain index from its `domains` map.
+ *   readAgentProfile(agentId, slug?)     — slug ⇒ that domain's 3 bodies + the
+ *                                          SHARED user_spec; no slug ⇒ the shopper
+ *                                          overview (identity + shared user_spec +
+ *                                          the domain index).
+ *   removeAgentArtefacts(agentId, slug)  — remove exactly ONE domain leaf +
+ *                                          de-register domains[slug]; the shopper
+ *                                          and shared user_spec survive. `slug` is
+ *                                          REQUIRED (no omit-deletes-everything).
  *
- *   LIST   (Flow 1, AC List):
- *     1. empty/absent store → ok with empty experts (a normal outcome).
- *     2. multiple experts → all present, each from its profile.json manifest
- *        (no dirname guessing — name/createdAt come from the file).
- *     3. ordered createdAt DESC (most-recently-created first).
- *     4. one corrupt/unreadable profile.json among healthy ones → that one in
- *        unreadable[], the rest still listed (the list never aborts/throws).
- *   READ   (Flow 2, AC View):
- *     5. ok → manifest + ALL FOUR spec bodies (round-2: all present from creation)
- *        read from the files the manifest points at.
- *     6. unknown id → not_found (a normal outcome, never a throw).
- *     7. traversal-shaped id (../x, a/b, .., a/../b, main, Mixed-Case) →
- *        invalid_request via AGENT_ID_RE, rejected BEFORE any join/read.
- *   REMOVE (Flow 3, AC Remove — clears the artefact half, scoped):
- *     8. removed → the target dir is gone.
- *     9. idempotent not_found on absent — a re-run is safe (converges to clean).
- *    10. traversal/main/malformed → invalid_request, DELETES NOTHING.
- *    11. a sibling expert's dir is byte-for-byte untouched (non-destructive).
- *    12. an rmSync that genuinely fails (non-writable parent) → persistence_failed
- *        with <dir>: <cause>, never a throw.
- *   IDENTITY BOUNDARY (Generic shopping unchanged):
- *    13. none of the three read/write a token (getTokensPath() never appears).
+ * The invariants pinned here:
+ *   LIST   1. empty/absent store → ok with empty shoppers (normal).
+ *          2. a shopper with N domains → its identity + N domain summaries
+ *             (slug, name, createdAt, updatedAt) from the `domains` map.
+ *          3. empty `domains` → the shopper still lists, with an empty domain
+ *             list (NOT not_found / NOT unreadable).
+ *          4. one corrupt profile.json → that shopper in unreadable[], the rest
+ *             still list (never aborts/throws).
+ *   READ   5. overview (no slug) → identity + shared user_spec + the domain index.
+ *          6. per-domain (slug) → the 3 domain bodies + the shared user_spec.
+ *          7. unknown agentId → not_found; traversal agentId → invalid_request.
+ *   REMOVE 8. removes exactly one leaf + de-registers it; sibling + shared
+ *             user_spec + the shopper survive.
+ *          9. removing the LAST domain leaves a healthy `domains: {}` shopper
+ *             (never deletes the agent dir / the domains parent / the shopper).
+ *         10. absent slug → not_found (idempotent); a missing/blank slug →
+ *             invalid_request(field=domainSlug), deletes nothing.
+ *         11. traversal/main slug → invalid_request(field=domainSlug), deletes
+ *             nothing; bad agentId → invalid_request(field=agentId).
+ *         12. a genuine rmSync failure → persistence_failed with <dir>: <cause>.
+ *   IDENTITY 13. none of the three read/write a token.
  *
- * Hermetic via the SIL_DATA_DIR temp-dir override (the repo's standard knob,
- * mirrors profile-store.test.ts:64-80).
- *
- * Contract this file pins for the implementation (expert-developer),
- * `src/lib/profile-store.ts`:
- *   - listAgentProfiles(): ListProfilesResult — discriminated, never throws.
- *     ok variant: { ok:true, experts: {agentId,name,…,createdAt}[]
- *     (createdAt DESC), unreadable: {agentId,error}[] }. (round-2: with all four
- *     specs required+present, a per-slot presence flag carries no signal.)
- *   - readAgentProfile(agentId): ReadProfileResult — discriminated, never throws.
- *     ok: { ok:true, agentId, name, domainSpec, intentSpec, userSpec, playbook,
- *     profilePath, createdAt } (NO persona; all four present at creation);
- *     not_found: { ok:false, kind:"not_found", agentId, message };
- *     bad id: { ok:false, kind:"invalid_request", field:"agentId", message }.
- *   - removeAgentArtefacts(agentId): RemoveProfileResult — discriminated, never
- *     throws. removed: { ok:true, agentId }; absent: { ok:false,
- *     kind:"not_found", agentId, message }; bad id: { ok:false,
- *     kind:"invalid_request", field:"agentId", message } AND deletes nothing;
- *     rmSync failure: { ok:false, kind:"persistence_failed", error:"<dir>:
- *     <cause>", message }.
+ * Hermetic via the SIL_DATA_DIR temp-dir override (mirrors profile-store.test.ts).
  */
 
 import {
@@ -86,6 +70,7 @@ import {
   readAgentProfile,
   removeAgentArtefacts,
   getAgentArtefactDir,
+  type ProfileSpec,
 } from "../../lib/profile-store.js";
 import { getDataDir, getTokensPath } from "../../lib/credentials.js";
 
@@ -93,7 +78,7 @@ let dataDir: string;
 let priorSilDataDir: string | undefined;
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "sil-profile-manage-"));
+  dataDir = mkdtempSync(join(tmpdir(), "sil-shopper-manage-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
 });
@@ -101,15 +86,26 @@ beforeEach(() => {
 afterEach(() => {
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
-  // Restore perms so rmSync can clean a dir a failure test chmod'd read-only.
   try {
     chmodSync(dataDir, 0o700);
     const agents = join(dataDir, "agents");
     if (existsSync(agents)) {
       chmodSync(agents, 0o700);
       for (const e of readdirSync(agents)) {
+        const a = join(agents, e);
         try {
-          chmodSync(join(agents, e), 0o700);
+          chmodSync(a, 0o700);
+          const dom = join(a, "domains");
+          if (existsSync(dom)) {
+            chmodSync(dom, 0o700);
+            for (const d of readdirSync(dom)) {
+              try {
+                chmodSync(join(dom, d), 0o700);
+              } catch {
+                /* best-effort */
+              }
+            }
+          }
         } catch {
           /* best-effort */
         }
@@ -121,50 +117,44 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-/** Materialize an expert and (optionally) backdate its manifest createdAt so
- * ordering is deterministic regardless of wall-clock resolution. The store's
- * own writer is used (never a hand-rolled fixture) so the test exercises the
- * real on-disk shape readAgentProfile/listAgentProfiles must parse.
- *
- * After the SDS reframe the store holds NO persona. Round-2: ALL FOUR specs are
- * REQUIRED and present from creation, so the fixture ALWAYS supplies all four (a
- * real create). Callers may override any of the four via opts. */
-function makeExpert(
+const SHOPPER = "sil-shopper";
+const USER_SPEC =
+  "# User spec (shared)\n- Ships to Berlin 10115.\nHARD-NO: leather (ethics).";
+
+function pack(slug: string, name: string): NonNullable<ProfileSpec["domain"]> {
+  return {
+    slug,
+    name,
+    domainSpec: `# Domain spec — ${name}\nResearched mechanics.`,
+    intentSpec: `# Intent spec — ${name}\nDecomposition dimensions.`,
+    playbook: `# Taste — ${name}\nSeeded preferences.`,
+  };
+}
+
+/** Create the shopper with `agentId`, then mint each (slug → name) domain. */
+function makeShopper(
   agentId: string,
-  opts: {
-    name?: string;
-    domainSpec?: string;
-    intentSpec?: string;
-    userSpec?: string;
-    playbook?: string;
-    createdAt?: string;
-  } = {},
+  domains: ReadonlyArray<readonly [string, string]> = [],
+  userSpec = USER_SPEC,
 ): void {
-  const result = materializeProfile({
-    agentId,
-    name: opts.name ?? `Expert ${agentId}`,
-    domainSpec: opts.domainSpec ?? `# Domain spec for ${agentId}\nResearched dimensions.`,
-    intentSpec: opts.intentSpec ?? `# Intent spec for ${agentId}\nDecomposition dimensions.`,
-    userSpec: opts.userSpec ?? `# User spec for ${agentId}\nFacts + hard constraints.`,
-    playbook: opts.playbook ?? `# Buying taste for ${agentId}\nSeeded preferences.`,
-  });
-  if (!result.ok) {
-    throw new Error(`fixture setup failed for ${agentId}: ${JSON.stringify(result)}`);
-  }
-  if (opts.createdAt !== undefined) {
-    // Rewrite profile.json with a fixed createdAt to pin ordering.
-    const manifestPath = join(getAgentArtefactDir(agentId), "profile.json");
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<
-      string,
-      unknown
-    >;
-    manifest["createdAt"] = opts.createdAt;
-    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+  const created = materializeProfile({ agentId, name: `Shopper ${agentId}`, userSpec });
+  if (!created.ok) throw new Error(`create failed: ${JSON.stringify(created)}`);
+  for (const [slug, name] of domains) {
+    const r = materializeProfile({ agentId, name: `Shopper ${agentId}`, userSpec, domain: pack(slug, name) });
+    if (!r.ok) throw new Error(`mint ${slug} failed: ${JSON.stringify(r)}`);
   }
 }
 
-/** Every file under `dir`, recursively (relative paths). Used to prove a
- * rejected-on-bad-id remove deleted NOTHING anywhere under agents/. */
+function domainDir(slug: string, agentId = SHOPPER): string {
+  return join(getAgentArtefactDir(agentId), "domains", slug);
+}
+
+function readManifest(agentId = SHOPPER): Record<string, unknown> {
+  return JSON.parse(
+    readFileSync(join(getAgentArtefactDir(agentId), "profile.json"), "utf8"),
+  ) as Record<string, unknown>;
+}
+
 function walkFiles(dir: string, base = dir): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];
@@ -181,192 +171,105 @@ function walkFiles(dir: string, base = dir): string[] {
 // ===========================================================================
 
 describe("listAgentProfiles — empty/absent store is a normal, successful empty listing", () => {
-  // list has NO failure variant: an absent store is a normal empty listing and
-  // per-entry problems land in unreadable[]. So the result carries experts +
-  // unreadable directly (no `ok` discriminant to gate on) — pin the BEHAVIOUR.
-  it("absent agents/ dir → empty experts, empty unreadable (not an error)", () => {
-    // Fresh temp data dir: no agents/ subtree exists at all.
+  it("absent agents/ dir → empty shoppers, empty unreadable (not an error)", () => {
     expect(existsSync(join(getDataDir(), "agents"))).toBe(false);
     const result = listAgentProfiles();
-    expect(result.experts).toEqual([]);
+    expect(result.shoppers).toEqual([]);
     expect(result.unreadable).toEqual([]);
-  });
-
-  it("present-but-empty agents/ dir → empty experts", () => {
-    // An agents/ dir with no expert subdirs is still a normal empty listing.
-    mkdirSync(join(getDataDir(), "agents"), { recursive: true });
-    const result = listAgentProfiles();
-    expect(result.experts).toEqual([]);
   });
 });
 
-describe("listAgentProfiles — multiple experts: all present, sourced from profile.json", () => {
-  it("lists every materialized expert with name + agentId + createdAt from its manifest", () => {
-    // Round-2: with all four specs required+present, a hasPlaybook flag is trivially
-    // true for every created expert and carries no discriminating signal — so we do
-    // NOT assert it. The durable behaviour is: every expert is enumerated, with its
-    // manifest name + createdAt sourced from the file (not the directory name).
-    makeExpert("gift-buyer", { name: "Gift Buyer" });
-    makeExpert("grocery-agent", { name: "Grocery Agent" });
-
-    const result = listAgentProfiles();
-    expect(result.unreadable).toEqual([]);
-
-    const byId = new Map(result.experts.map((e) => [e.agentId, e]));
-    expect(byId.size).toBe(2);
-
-    const gift = byId.get("gift-buyer");
-    expect(gift).toBeDefined();
-    // name comes from the manifest, NOT from the directory name.
-    expect(gift!.name).toBe("Gift Buyer");
-    expect(typeof gift!.createdAt).toBe("string");
-
-    const grocery = byId.get("grocery-agent");
-    expect(grocery).toBeDefined();
-    expect(grocery!.name).toBe("Grocery Agent");
-  });
-
-  it("reads name from the manifest, not the directory name (no filesystem-name guessing)", () => {
-    // The directory key is the agentId; the human name is a DISTINCT manifest
-    // field. A list that echoed the dir name as the name would pass a naive
-    // test but fail here, where the two deliberately differ.
-    makeExpert("shoe-expert", { name: "Sneaker Specialist" });
-    const result = listAgentProfiles();
-    const entry = result.experts.find((e) => e.agentId === "shoe-expert");
-    expect(entry).toBeDefined();
-    expect(entry!.name).toBe("Sneaker Specialist");
-    expect(entry!.name).not.toBe("shoe-expert");
-  });
-});
-
-describe("listAgentProfiles — ordered most-recently-created first (createdAt DESC)", () => {
-  it("returns experts in descending createdAt order", () => {
-    makeExpert("oldest", { createdAt: "2026-01-01T00:00:00.000Z" });
-    makeExpert("newest", { createdAt: "2026-06-22T00:00:00.000Z" });
-    makeExpert("middle", { createdAt: "2026-03-15T00:00:00.000Z" });
-
-    const result = listAgentProfiles();
-    expect(result.experts.map((e) => e.agentId)).toEqual([
-      "newest",
-      "middle",
-      "oldest",
+describe("listAgentProfiles — a shopper with N domains lists its identity + domain index", () => {
+  it("returns the shopper identity + each domain's slug/name/createdAt/updatedAt from the map", () => {
+    makeShopper(SHOPPER, [
+      ["road-cycling", "Road cycling"],
+      ["running-shoes", "Running shoes"],
     ]);
+
+    const result = listAgentProfiles();
+    expect(result.unreadable).toEqual([]);
+    const shopper = result.shoppers.find((s) => s.agentId === SHOPPER);
+    expect(shopper).toBeDefined();
+    expect(shopper!.name).toBe(`Shopper ${SHOPPER}`);
+
+    const byId = new Map(shopper!.domains.map((d) => [d.slug, d]));
+    expect([...byId.keys()].sort()).toEqual(["road-cycling", "running-shoes"]);
+    expect(byId.get("road-cycling")!.name).toBe("Road cycling");
+    expect(typeof byId.get("road-cycling")!.createdAt).toBe("string");
+    expect(typeof byId.get("road-cycling")!.updatedAt).toBe("string");
+  });
+
+  it("an empty-`domains` shopper still lists, with an EMPTY domain list (not not_found, not unreadable)", () => {
+    makeShopper(SHOPPER, []); // created, never shopped
+    const result = listAgentProfiles();
+    expect(result.unreadable).toEqual([]);
+    const shopper = result.shoppers.find((s) => s.agentId === SHOPPER);
+    expect(shopper).toBeDefined();
+    expect(shopper!.domains).toEqual([]);
   });
 });
 
 describe("listAgentProfiles — one corrupt manifest never blinds the user to the rest", () => {
-  it("a healthy expert + an unparseable profile.json → healthy listed, broken in unreadable[]", () => {
-    makeExpert("healthy", { name: "Healthy Expert", createdAt: "2026-05-01T00:00:00.000Z" });
-    makeExpert("broken", { name: "Broken Expert", createdAt: "2026-05-02T00:00:00.000Z" });
-    // Corrupt the broken one's manifest with non-JSON.
+  it("a healthy shopper + a corrupt profile.json → healthy listed, broken in unreadable[]", () => {
+    makeShopper("healthy", [["a-niche", "A niche"]]);
+    makeShopper("broken", []);
     const brokenManifest = join(getAgentArtefactDir("broken"), "profile.json");
     chmodSync(brokenManifest, 0o600);
-    writeFileSync(brokenManifest, "{ this is not valid json ");
+    writeFileSync(brokenManifest, "{ not valid json ");
 
     const result = listAgentProfiles();
-    // Must NOT throw — the broken one is isolated into unreadable[].
-
-    // The healthy expert still lists.
-    expect(result.experts.map((e) => e.agentId)).toEqual(["healthy"]);
-    // The broken one is reported by agentId in unreadable[], with an error.
-    expect(result.unreadable.map((u) => u.agentId)).toEqual(["broken"]);
+    expect(result.shoppers.map((s) => s.agentId)).toEqual(["healthy"]);
+    expect(result.unreadable.map((u) => u.agentId)).toContain("broken");
     expect(typeof result.unreadable[0]!.error).toBe("string");
     expect(result.unreadable[0]!.error.length).toBeGreaterThan(0);
   });
-
-  it("an expert subdir whose profile.json is entirely MISSING → reported unreadable, others still list", () => {
-    makeExpert("intact", { name: "Intact" });
-    // Create an agent subdir with NO profile.json (an interrupted create).
-    const orphanDir = getAgentArtefactDir("orphaned");
-    mkdirSync(orphanDir, { recursive: true });
-    writeFileSync(join(orphanDir, "domain_spec.md"), "a spec but no manifest");
-
-    const result = listAgentProfiles();
-    expect(result.experts.map((e) => e.agentId)).toEqual(["intact"]);
-    expect(result.unreadable.map((u) => u.agentId)).toContain("orphaned");
-  });
 });
 
 // ===========================================================================
-// readAgentProfile
+// readAgentProfile — overview vs per-domain
 // ===========================================================================
 
-describe("readAgentProfile — ok: manifest + artefact bodies for one expert", () => {
-  it("returns name, the required spec bodies, the lazy bodies, profilePath, createdAt — and NO persona", () => {
-    makeExpert("gift-buyer", {
-      name: "Gift Buyer",
-      domainSpec: "# Gift-buying domain spec\nRecipient, occasion, budget, taste dimensions.",
-      intentSpec: "# Intent spec\nrecipient, occasion, budget, timeline.",
-      userSpec: "# User spec\nBuys for partner.\nHARD-NO: nothing over €50.",
-      playbook: "# Buying taste\nValue-conscious.",
-    });
-
-    const result = readAgentProfile("gift-buyer");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.agentId).toBe("gift-buyer");
-    expect(result.name).toBe("Gift Buyer");
-    // The BODIES are read from disk (the files the manifest points at), not the
-    // manifest paths alone — the skill renders detail from these.
-    expect(result.domainSpec).toBe(
-      "# Gift-buying domain spec\nRecipient, occasion, budget, taste dimensions.",
-    );
-    expect(result.intentSpec).toBe("# Intent spec\nrecipient, occasion, budget, timeline.");
-    expect(result.userSpec).toBe("# User spec\nBuys for partner.\nHARD-NO: nothing over €50.");
-    expect(result.playbook).toBe("# Buying taste\nValue-conscious.");
-    // Persona left the store — the read result carries none.
-    expect("persona" in result).toBe(false);
-    expect(result.profilePath).toBe(
-      join(getAgentArtefactDir("gift-buyer"), "profile.json"),
-    );
-    expect(typeof result.createdAt).toBe("string");
-    expect(Number.isNaN(Date.parse(result.createdAt))).toBe(false);
-  });
-
-  it("returns ALL FOUR spec bodies for a created expert (round-2: none is absent at creation)", () => {
-    makeExpert("grocery-agent", { name: "Grocery Agent" }); // all four seeded by default
-    const result = readAgentProfile("grocery-agent");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    // All four specs are present from creation now.
-    expect(typeof result.domainSpec).toBe("string");
-    expect(result.domainSpec.length).toBeGreaterThan(0);
-    expect(typeof result.intentSpec).toBe("string");
-    expect(result.intentSpec.length).toBeGreaterThan(0);
-    expect(typeof result.userSpec).toBe("string");
-    expect(result.userSpec!.length).toBeGreaterThan(0);
-    expect(typeof result.playbook).toBe("string");
-    expect(result.playbook!.length).toBeGreaterThan(0);
+describe("readAgentProfile — overview (no slug): identity + shared user_spec + domain index", () => {
+  it("returns the shopper identity, the SHARED user_spec body, and the domain index — no bodies", () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]], USER_SPEC);
+    const overview = readAgentProfile(SHOPPER);
+    expect(overview.ok).toBe(true);
+    if (!overview.ok) return;
+    expect(overview.agentId).toBe(SHOPPER);
+    expect(overview.userSpec).toBe(USER_SPEC);
+    expect(overview.domains.map((d) => d.slug)).toEqual(["road-cycling"]);
+    expect(overview.profilePath).toBe(join(getAgentArtefactDir(SHOPPER), "profile.json"));
   });
 });
 
-describe("readAgentProfile — unknown id fails gracefully (not_found, never a throw)", () => {
-  it("an id with no artefact dir → not_found naming the agentId, no throw", () => {
-    makeExpert("exists", {}); // a healthy neighbour, to prove read is scoped
-    const result = readAgentProfile("does-not-exist");
+describe("readAgentProfile — per-domain (slug): the 3 domain bodies + the shared user_spec", () => {
+  it("returns domainSpec + intentSpec + playbook (the pack) AND the shared user_spec", () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]], USER_SPEC);
+    const read = readAgentProfile(SHOPPER, "road-cycling");
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.slug).toBe("road-cycling");
+    expect(read.domainSpec).toBe("# Domain spec — Road cycling\nResearched mechanics.");
+    expect(read.intentSpec).toBe("# Intent spec — Road cycling\nDecomposition dimensions.");
+    expect(read.playbook).toBe("# Taste — Road cycling\nSeeded preferences.");
+    // The user_spec read with a domain is the SHARED, agent-level one.
+    expect(read.userSpec).toBe(USER_SPEC);
+  });
+});
+
+describe("readAgentProfile — graceful failures", () => {
+  it("an unknown agentId → not_found naming it, no throw", () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    const result = readAgentProfile("no-such-shopper");
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("not_found");
     if (result.kind !== "not_found") return;
-    expect(result.agentId).toBe("does-not-exist");
-    expect(typeof result.message).toBe("string");
+    expect(result.agentId).toBe("no-such-shopper");
   });
 
-  it("an agent dir whose profile.json is unreadable → not_found (a degraded read, not a throw)", () => {
-    makeExpert("degraded", { name: "Degraded" });
-    const manifestPath = join(getAgentArtefactDir("degraded"), "profile.json");
-    writeFileSync(manifestPath, "}}} not json {{{");
-    const result = readAgentProfile("degraded");
-    // A corrupt manifest must never throw out of read — it degrades to not_found.
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("not_found");
-  });
-});
-
-describe("readAgentProfile — traversal-shaped id rejected fail-closed BEFORE any read", () => {
-  it.each(["../escape", "gift/buyer", "..", ".", "a/../b", "main", "Gift-Buyer", ""])(
-    "rejects %j with invalid_request(field=agentId) and reads nothing",
+  it.each(["../escape", "shop/per", "..", ".", "main", "Sil-Shopper", ""])(
+    "a traversal/main/malformed agentId %j → invalid_request(field=agentId), reads nothing",
     (bad) => {
       const result = readAgentProfile(bad);
       expect(result.ok, `expected reject for ${JSON.stringify(bad)}`).toBe(false);
@@ -379,152 +282,131 @@ describe("readAgentProfile — traversal-shaped id rejected fail-closed BEFORE a
 });
 
 // ===========================================================================
-// removeAgentArtefacts
+// removeAgentArtefacts(agentId, slug) — one domain leaf, de-registered, scoped
 // ===========================================================================
 
-describe("removeAgentArtefacts — removes exactly the named expert's dir", () => {
-  it("removed → the target artefact dir is gone", () => {
-    makeExpert("gift-buyer", { name: "Gift Buyer" });
-    const dir = getAgentArtefactDir("gift-buyer");
-    expect(existsSync(dir)).toBe(true);
+describe("removeAgentArtefacts — removes exactly ONE domain leaf + de-registers it", () => {
+  it("the target leaf is gone + de-registered; the sibling domain + shared user_spec + shopper survive", () => {
+    makeShopper(SHOPPER, [
+      ["road-cycling", "Road cycling"],
+      ["running-shoes", "Running shoes"],
+    ]);
+    expect(existsSync(domainDir("road-cycling"))).toBe(true);
 
-    const result = removeAgentArtefacts("gift-buyer");
+    const result = removeAgentArtefacts(SHOPPER, "road-cycling");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.agentId).toBe("gift-buyer");
-    expect(existsSync(dir)).toBe(false);
-  });
-});
 
-describe("removeAgentArtefacts — non-destructive to OTHER experts", () => {
-  it("removing one of several leaves every other expert's dir byte-for-byte untouched", () => {
-    makeExpert("target", { name: "Target", playbook: "to be deleted" });
-    makeExpert("survivor-a", { name: "Survivor A", playbook: "keep me A" });
-    makeExpert("survivor-b", { name: "Survivor B" });
-
-    const survivorAFiles = walkFiles(getAgentArtefactDir("survivor-a")).sort();
-    const survivorASnapshot = survivorAFiles.map((rel) =>
-      readFileSync(join(getAgentArtefactDir("survivor-a"), rel), "utf8"),
+    // The leaf is gone…
+    expect(existsSync(domainDir("road-cycling"))).toBe(false);
+    // …and de-registered from the manifest, while the sibling stays.
+    const domains = (readManifest()["domains"] ?? {}) as Record<string, unknown>;
+    expect(Object.keys(domains)).toEqual(["running-shoes"]);
+    expect(existsSync(domainDir("running-shoes"))).toBe(true);
+    // The shopper + the SHARED user_spec are untouched (artefact-only, scoped).
+    expect(existsSync(join(getAgentArtefactDir(SHOPPER), "user_spec.md"))).toBe(true);
+    expect(readFileSync(join(getAgentArtefactDir(SHOPPER), "user_spec.md"), "utf8")).toBe(
+      USER_SPEC,
     );
-
-    const result = removeAgentArtefacts("target");
-    expect(result.ok).toBe(true);
-
-    // The target is gone…
-    expect(existsSync(getAgentArtefactDir("target"))).toBe(false);
-    // …and every other expert's dir survives, byte-for-byte.
-    expect(existsSync(getAgentArtefactDir("survivor-a"))).toBe(true);
-    expect(existsSync(getAgentArtefactDir("survivor-b"))).toBe(true);
-    expect(walkFiles(getAgentArtefactDir("survivor-a")).sort()).toEqual(survivorAFiles);
-    survivorAFiles.forEach((rel, i) => {
-      expect(
-        readFileSync(join(getAgentArtefactDir("survivor-a"), rel), "utf8"),
-      ).toBe(survivorASnapshot[i]);
-    });
   });
 
-  it("never deletes the agents/ PARENT — only the single leaf dir", () => {
-    makeExpert("solo", { name: "Solo" });
-    const agentsParent = join(getDataDir(), "agents");
-    expect(existsSync(agentsParent)).toBe(true);
-    const result = removeAgentArtefacts("solo");
+  it("removing the LAST domain leaves a healthy `domains: {}` shopper (never deletes the shopper)", () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    const result = removeAgentArtefacts(SHOPPER, "road-cycling");
     expect(result.ok).toBe(true);
-    // The leaf is gone but the agents/ subtree itself remains (a removed-last
-    // expert must not delete the store root — list of an empty store still works).
-    expect(existsSync(getAgentArtefactDir("solo"))).toBe(false);
-    expect(existsSync(agentsParent)).toBe(true);
+
+    // The agent dir + shared user_spec + manifest survive; the domains map is now {}.
+    expect(existsSync(getAgentArtefactDir(SHOPPER))).toBe(true);
+    expect(existsSync(join(getAgentArtefactDir(SHOPPER), "user_spec.md"))).toBe(true);
+    expect((readManifest()["domains"] ?? {})).toEqual({});
+    // The shopper still reads back healthy (empty domain index, not not_found).
+    const overview = readAgentProfile(SHOPPER);
+    expect(overview.ok).toBe(true);
+    if (!overview.ok) return;
+    expect(overview.domains).toEqual([]);
   });
 });
 
-describe("removeAgentArtefacts — idempotent not_found on an absent target", () => {
-  it("an id with no dir → not_found, deletes nothing; a second remove is also not_found (re-run safe)", () => {
-    makeExpert("neighbour", { name: "Neighbour" }); // prove scope
-
-    const first = removeAgentArtefacts("never-existed");
+describe("removeAgentArtefacts — required slug, idempotent, fail-closed on a bad slug/id", () => {
+  it("absent slug → not_found (idempotent: a re-run is also not_found), deletes nothing", () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    const first = removeAgentArtefacts(SHOPPER, "never-minted");
     expect(first.ok).toBe(false);
     if (first.ok) return;
     expect(first.kind).toBe("not_found");
-    if (first.kind !== "not_found") return;
-    expect(first.agentId).toBe("never-existed");
-
-    // The neighbour is untouched by the no-op remove.
-    expect(existsSync(getAgentArtefactDir("neighbour"))).toBe(true);
-
-    // Idempotent: a second remove of the same absent id ALSO returns not_found,
-    // never an error — a retry after a partial host-CLI/artefact failure
-    // converges to clean.
-    const second = removeAgentArtefacts("never-existed");
+    // The real domain is untouched.
+    expect(existsSync(domainDir("road-cycling"))).toBe(true);
+    const second = removeAgentArtefacts(SHOPPER, "never-minted");
     expect(second.ok).toBe(false);
     if (second.ok) return;
     expect(second.kind).toBe("not_found");
   });
 
-  it("re-removing an id that WAS just removed returns not_found (full removed→not_found cycle is idempotent)", () => {
-    makeExpert("transient", { name: "Transient" });
-    const removed = removeAgentArtefacts("transient");
-    expect(removed.ok).toBe(true);
-    const again = removeAgentArtefacts("transient");
-    expect(again.ok).toBe(false);
-    if (again.ok) return;
-    expect(again.kind).toBe("not_found");
+  it("a MISSING/blank domainSlug → invalid_request(field=domainSlug), deletes nothing (no omit-deletes-everything)", () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    for (const missing of ["", undefined as unknown as string]) {
+      const result = removeAgentArtefacts(SHOPPER, missing);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.kind).toBe("invalid_request");
+      if (result.kind !== "invalid_request") return;
+      expect(result.field).toBe("domainSlug");
+      // The whole shopper + its domain are untouched — an absent slug deletes NOTHING.
+      expect(existsSync(domainDir("road-cycling"))).toBe(true);
+      expect(existsSync(getAgentArtefactDir(SHOPPER))).toBe(true);
+    }
   });
-});
 
-describe("removeAgentArtefacts — malformed/traversal/main id is rejected and DELETES NOTHING", () => {
-  it.each(["../escape", "gift/buyer", "..", ".", "a/../b", "main", "Gift-Buyer", ""])(
-    "rejects %j with invalid_request(field=agentId) and removes nothing from the store",
+  it.each(["../escape", "road/cycling", "..", ".", "a/../b", "main", "Road-Cycling"])(
+    "a traversal/main slug %j → invalid_request(field=domainSlug), deletes nothing",
     (bad) => {
-      // Seed two real experts; a bad id must not reach outside the agents subtree
-      // nor touch either of them.
-      makeExpert("alpha", { name: "Alpha", playbook: "keep" });
-      makeExpert("beta", { name: "Beta" });
-      const before = walkFiles(join(getDataDir(), "agents")).sort();
-
-      const result = removeAgentArtefacts(bad);
+      makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+      const before = walkFiles(getAgentArtefactDir(SHOPPER)).sort();
+      const result = removeAgentArtefacts(SHOPPER, bad);
       expect(result.ok, `expected reject for ${JSON.stringify(bad)}`).toBe(false);
       if (result.ok) return;
       expect(result.kind).toBe("invalid_request");
       if (result.kind !== "invalid_request") return;
-      expect(result.field).toBe("agentId");
-
-      // NOTHING under agents/ changed — the bad id deleted nothing.
-      expect(walkFiles(join(getDataDir(), "agents")).sort()).toEqual(before);
-      expect(existsSync(getAgentArtefactDir("alpha"))).toBe(true);
-      expect(existsSync(getAgentArtefactDir("beta"))).toBe(true);
+      expect(result.field).toBe("domainSlug");
+      expect(walkFiles(getAgentArtefactDir(SHOPPER)).sort()).toEqual(before);
     },
   );
+
+  it("a bad agentId → invalid_request(field=agentId), deletes nothing", () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+    const result = removeAgentArtefacts("../escape", "road-cycling");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.kind).toBe("invalid_request");
+    if (result.kind !== "invalid_request") return;
+    expect(result.field).toBe("agentId");
+    expect(existsSync(domainDir("road-cycling"))).toBe(true);
+  });
 });
 
 describe("removeAgentArtefacts — a genuine rmSync failure returns persistence_failed, never throws", () => {
-  // chmod 0500 can't block deletes for root — skip there rather than false-fail.
   const asRoot = typeof process.getuid === "function" && process.getuid() === 0;
   it.skipIf(asRoot)(
-    "a non-writable agents/ parent (rmSync of the leaf fails EACCES) → persistence_failed with <dir>: <cause>",
+    "a non-writable domains/ parent (rmSync of the leaf fails EACCES) → persistence_failed with <dir>: <cause>",
     () => {
-      makeExpert("locked", { name: "Locked" });
-      const dir = getAgentArtefactDir("locked");
-      const agentsParent = join(getDataDir(), "agents");
-      // rmSync of the leaf needs WRITE on the PARENT dir (to unlink the entry).
-      // Make the parent read+exec-only so the unlink fails EACCES.
-      chmodSync(agentsParent, 0o500);
+      makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
+      const leaf = domainDir("road-cycling");
+      const domainsParent = join(getAgentArtefactDir(SHOPPER), "domains");
+      // Unlinking the leaf needs WRITE on its PARENT (domains/). Make it read+exec.
+      chmodSync(domainsParent, 0o500);
 
-      const result = removeAgentArtefacts("locked");
-      // Restore perms immediately so the assertions + afterEach can clean up.
-      chmodSync(agentsParent, 0o700);
+      const result = removeAgentArtefacts(SHOPPER, "road-cycling");
+      chmodSync(domainsParent, 0o700); // restore immediately for assertions + cleanup
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.kind).toBe("persistence_failed");
       if (result.kind !== "persistence_failed") return;
-      // The path + cause are both present in `error` (actionable recovery),
-      // mirroring the writer's failure envelope: "<dir>: <cause>".
-      expect(result.error).toContain(dir);
+      expect(result.error).toContain(leaf);
       expect(result.error).toMatch(/.+: .+/);
-      // The recovery hint steers the agent at the data dir (card §108).
       expect(result.recovery).toBe("fix_data_dir");
-      // The dir was NOT removed (the delete genuinely failed) — but the result
-      // is a structured failure, not a thrown error.
-      expect(existsSync(dir)).toBe(true);
+      // The leaf was NOT removed (the delete genuinely failed) — structured, not thrown.
+      expect(existsSync(leaf)).toBe(true);
     },
   );
 });
@@ -534,31 +416,12 @@ describe("removeAgentArtefacts — a genuine rmSync failure returns persistence_
 // ===========================================================================
 
 describe("list/read/remove — no identity coupling (getTokensPath never appears)", () => {
-  it("listAgentProfiles reads/writes no token", () => {
-    makeExpert("a", {});
+  it("none of the three create the tokens path across a full list→read→remove cycle", () => {
+    makeShopper(SHOPPER, [["road-cycling", "Road cycling"]]);
     listAgentProfiles();
+    readAgentProfile(SHOPPER, "road-cycling");
+    removeAgentArtefacts(SHOPPER, "road-cycling");
     expect(existsSync(getTokensPath())).toBe(false);
-  });
-
-  it("readAgentProfile reads/writes no token", () => {
-    makeExpert("b", {});
-    readAgentProfile("b");
-    expect(existsSync(getTokensPath())).toBe(false);
-  });
-
-  it("removeAgentArtefacts reads/writes no token", () => {
-    makeExpert("c", {});
-    removeAgentArtefacts("c");
-    expect(existsSync(getTokensPath())).toBe(false);
-  });
-
-  it("none of the three create the tokens path even across a full list→read→remove cycle", () => {
-    makeExpert("cycle", { name: "Cycle", playbook: "pb" });
-    listAgentProfiles();
-    readAgentProfile("cycle");
-    removeAgentArtefacts("cycle");
-    expect(existsSync(getTokensPath())).toBe(false);
-    // Sanity: the leaf statSync below proves the temp dir itself is intact.
     expect(statSync(getDataDir()).isDirectory()).toBe(true);
   });
 });
