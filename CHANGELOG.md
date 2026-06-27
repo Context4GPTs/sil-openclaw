@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-06-27
+
 ### Changed
 
 - **Catalog description rewritten to "Turn your OpenClaw into an expert shopping
