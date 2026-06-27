@@ -50,11 +50,17 @@ SDS **web-refreshes the domain spec on every query** and the §2 research pass a
    openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json
    openclaw config set plugins.entries.sil.enabled true --strict-json
    ```
-   The skill attach makes the agent **know how** to drive the tools; the plugin enable makes the four `sil_*` tools available. Keep `sil` in the agent's skill list and do not deny the `sil_*` tools.
+   The skill attach makes the agent **know how** to drive the tools; the plugin enable turns the sil plugin **on** — but on `alpine/openclaw:2026.6.9` it does **not** by itself un-filter the `sil_*` tools (see the admission step next). Keep `sil` in the agent's skill list and do not deny the `sil_*` tools.
 
-7. **Validate with the host's OWN check, THEN declare created.** Run `openclaw config validate --json`. On `alpine/openclaw:2026.6.9` the verdict is `{ valid, path, issues? }` — success keys off **`.valid`**, never an `ok` field. Only when `valid: true` do you report **`created`**. If `valid: false` (or any CLI step failed), report **`persistence_failed`** with the failing **path** + **cause** (the `issues?`), leaving nothing partial.
+7. **Admit sil at the host allow surfaces — run the shipped helper.** Enabling the plugin is necessary but not sufficient: until `sil` is admitted at the **global** allow surfaces `plugins.allow` + **`tools.alsoAllow`**, the host keeps the four `sil_*` tools **filtered**, so the opened expert can't call them. Admission is **plugin-ID only** — there is no per-tool key. The value-mode `openclaw config set` above is **overwrite-only** on this image, so it cannot additively merge those shared global arrays without clobbering another already-admitted plugin (e.g. `klodi`). Run the shipped admission helper — the package `bin` that ships with the plugin (same artefact as the `openclaw:allowlist` script) — which performs the **additive, idempotent, atomic, self-validating** three-surface merge (`plugins.allow` + `tools.alsoAllow` + `plugins.entries.sil`):
+   ```
+   sil-openclaw-allowlist
+   ```
+   It re-confirms the plugin-enable as an idempotent no-op, so re-running it on every creation never duplicates or clobbers an existing entry. **If the helper exits non-zero (a failed admission), report `persistence_failed` with the path + cause and do NOT declare `created`** — never a green `created` over still-filtered tools, exactly as a rejected `openclaw config validate` is handled in the next step.
 
-8. **Tell the user it is ready.** On `created`, tell them the expert exists and how to open it. Opening it loads the persona (`SOUL.md`) and all four SDS specs (`profile.json`), and the expert calls `sil_search` / `sil_product_get` (and `sil_register` / `sil_whoami` as needed) on the user's intent with **no further setup**.
+8. **Validate with the host's OWN check, THEN declare created.** Run `openclaw config validate --json`. On `alpine/openclaw:2026.6.9` the verdict is `{ valid, path, issues? }` — success keys off **`.valid`**, never an `ok` field. Only when `valid: true` **and** the allow-list admission (step 7) succeeded do you report **`created`**. If `valid: false`, the admission helper exited non-zero, or any CLI step failed, report **`persistence_failed`** with the failing **path** + **cause** (the `issues?`), leaving nothing partial.
+
+9. **Tell the user it is ready.** On `created`, tell them the expert exists and how to open it. Opening it loads the persona (`SOUL.md`) and all four SDS specs (`profile.json`), and — because the `sil_*` tools were admitted in step 7 — the expert calls `sil_search` / `sil_product_get` (and `sil_register` / `sil_whoami` as needed) on the user's intent with **no further setup**.
 
 ## Status taxonomy (agent-creation engine)
 
@@ -63,7 +69,7 @@ SDS **web-refreshes the domain spec on every query** and the §2 research pass a
 | `created` | Agent added, artefacts materialized, sil plugin + skill wired, `openclaw config validate` accepted it. | Tell the user it's ready and how to open it. |
 | `invalid_request` | Spec failed validation (missing/blank field). **Nothing written.** | Name the field, fix it, run again — do NOT proceed to `openclaw agents add`. |
 | `collision` | An agent with that id already exists. | Surface it; pick a different id. **Never overwrite.** |
-| `persistence_failed` | A write or `openclaw config validate` step failed. **Nothing partial** left. | Fix the reported path/cause, create again. |
+| `persistence_failed` | A write, the allow-list admission helper (non-zero exit), or `openclaw config validate` step failed. **Nothing partial** left. | Fix the reported path/cause, create again. |
 
 ## Runtime — how a created expert loads its behaviour
 

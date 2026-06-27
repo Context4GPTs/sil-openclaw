@@ -3682,3 +3682,178 @@ describe("SDS — all four specs are the REQUIRED materialize inputs, seeded at 
     expect(missing).toEqual([]);
   });
 });
+
+/* ===========================================================================
+ * BUG — created experts don't allow-list sil's tools (tools.alsoAllow)
+ * (card: allow-list-sil-tools-on-expert-creation)
+ *
+ * tier: integration. ROOT CAUSE: the agent-creation engine sets the plugin-
+ * ENABLE surface (`plugins.entries.sil.enabled true`) but never the tool-
+ * ADMISSION surface `tools.alsoAllow`, so a freshly created expert's four sil_*
+ * tools stay filtered — the user must hand-edit the host config before the
+ * expert works at all. Admission is plugin-ID-only across three surfaces
+ * (`src/lib/openclaw-allowlist.ts:6-21`); `tools.alsoAllow` is the one the engine
+ * never touches.
+ *
+ * The fix is WIRING + PROSE only (no plugin TS change): the engine invokes the
+ * already-shipped #35 helper — `scripts/allowlist-openclaw.mjs`, exposed as the
+ * package bin `sil-openclaw-allowlist` and the `openclaw:allowlist` pnpm script —
+ * which performs the additive, idempotent, atomic three-surface merge. The merge
+ * CORE is already proven by `openclaw-allowlist.integration.test.ts:182-259`; do
+ * NOT duplicate it here. These pin the WIRING gap the bug is actually about:
+ *   - the engine reference invokes the helper to admit `tools.alsoAllow`, AFTER
+ *     the agent shell is created;
+ *   - the engine gates `created` on REAL admission (a failed admission is
+ *     `persistence_failed`, never a green `created` over filtered tools);
+ *   - SKILL.md session-start points a missing-tools path at the helper instead
+ *     of dead-ending at "consult host docs and stop";
+ *   - the worked example carries the same helper line as the engine (coupling).
+ *
+ * Content-seam tests over the real skill markdown (read from disk) — same pattern
+ * as the host-wiring-shape block above. They assert on STABLE substrings (the
+ * shipped helper's bin/script/pnpm identifiers, the admission surface) and on
+ * ORDER (admission after the shell), never brittle full-text. These assertions
+ * ARE the spec. Do NOT weaken them to match the markdown.
+ * ========================================================================= */
+
+/** Stable identifiers of the shipped #35 helper: the package bin, the script
+ * basename, and the pnpm script. The engine/SKILL/example may invoke it in ANY
+ * of these forms; naming one is enough. All three are distinctive to the real
+ * artefact (no generic prose collides), so requiring one pins the REAL shipped
+ * helper — NOT a hand-rolled `openclaw config set` that would clobber existing
+ * `tools.alsoAllow` entries (the architect's ruled-out inline path). */
+const ALLOWLIST_HELPER_TOKENS = [
+  "sil-openclaw-allowlist",
+  "allowlist-openclaw.mjs",
+  "openclaw:allowlist",
+] as const;
+
+/** First index at which ANY helper token appears in a (lower-cased) body, or -1. */
+function firstHelperIdx(body: string): number {
+  const idxs = ALLOWLIST_HELPER_TOKENS.map((t) => body.indexOf(t)).filter(
+    (i) => i >= 0,
+  );
+  return idxs.length ? Math.min(...idxs) : -1;
+}
+
+describe("references/agent_creation_engine.md — admits sil at tools.alsoAllow via the shipped helper (BUG: allow-list-sil-tools-on-expert-creation)", () => {
+  it("invokes the shipped allow-list helper (sil-openclaw-allowlist / allowlist-openclaw.mjs / openclaw:allowlist), NOT just enabling the plugin", () => {
+    // The whole bug: step 6 sets the plugin-ENABLE surface but never invokes the
+    // admission helper, so the sil_* tools stay filtered. Naming a helper token
+    // proves the engine REUSES the additive #35 merge rather than re-deriving an
+    // inline value-mode `config set` (which would clobber a pre-existing
+    // tools.alsoAllow entry — explicitly ruled out by the architect). Report which
+    // forms were found so a forgotten wiring is a legible failure, not an opaque
+    // false.
+    const body = engineBodyLower();
+    const present = ALLOWLIST_HELPER_TOKENS.filter((t) => body.includes(t));
+    expect(present).not.toEqual([]);
+  });
+
+  it("names the tool-admission surface `tools.alsoAllow` (the surface that actually un-filters sil's tools)", () => {
+    // Admission is plugin-ID-only across three surfaces; `tools.alsoAllow` is the
+    // one the pre-fix engine never touches (openclaw-allowlist.ts:6-21), so a
+    // created expert's tools stay filtered. The engine prose must name it as the
+    // admission surface the helper writes — naming only the enable surface is the
+    // bug.
+    expect(engineBodyLower()).toContain("tools.alsoallow");
+  });
+
+  it("orders the admission step AFTER the agent shell is created (`openclaw agents add` precedes the helper)", () => {
+    // The opened expert cannot un-filter its own tools — admission must be
+    // persisted at creation time, AFTER the agent shell exists (step 3's
+    // `openclaw agents add`). Order in the prose IS the spec: a helper invoked
+    // before the shell would have no agent to admit tools for.
+    const body = engineBodyLower();
+    const addIdx = body.indexOf("openclaw agents add");
+    const helperIdx = firstHelperIdx(body);
+    expect(addIdx).toBeGreaterThanOrEqual(0);
+    expect(helperIdx).toBeGreaterThanOrEqual(0);
+    expect(addIdx).toBeLessThan(helperIdx);
+  });
+
+  it("gates the `created` verdict on real admission — a failed allow-list step yields `persistence_failed`, not a green `created` over filtered tools", () => {
+    // PO open-questions #1/#2 (fail-closed): step 7/8 must NOT report `created`
+    // while the tools are still filtered. A non-zero helper exit / failed admission
+    // maps to `persistence_failed`. The admission-FAILURE wording is net-new (the
+    // pre-fix engine names no admission at all), so requiring it — AND its
+    // proximity to `persistence_failed` — cannot false-green off the engine's
+    // EXISTING `openclaw config validate` failure prose.
+    const body = engineBodyLower();
+    const FAIL_TOKENS = [
+      "non-zero",
+      "exits non-zero",
+      "helper exit",
+      "helper fail",
+      "admission fail",
+      "failed admission",
+      "allow-list fail",
+      "allowlist fail",
+    ];
+    const failIdxs = FAIL_TOKENS.map((t) => body.indexOf(t)).filter(
+      (i) => i >= 0,
+    );
+    expect(failIdxs.length).toBeGreaterThan(0);
+    const failIdx = Math.min(...failIdxs);
+    // `persistence_failed` must be the named outcome IN PROXIMITY to the failed
+    // admission (same step / its outcome handling), in either direction — not
+    // merely present somewhere later in the status-taxonomy table.
+    const window = body.slice(Math.max(0, failIdx - 240), failIdx + 320);
+    expect(window).toContain("persistence_failed");
+  });
+});
+
+describe("sil-shopping/SKILL.md — session start points a missing-tools path at the admission helper (BUG: allow-list-sil-tools-on-expert-creation)", () => {
+  /** The `## Session start` section body of SKILL.md, lower-cased — from that
+   * heading to the next `## ` heading. The fix lives in this section: the
+   * missing-`sil_*`-tools branch must offer the one-command helper, not dead-end. */
+  function sessionStartLower(): string {
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+    const heading = "## Session start";
+    const start = body.indexOf(heading);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const rest = body.slice(start + heading.length);
+    const nextHeading = rest.indexOf("\n## ");
+    const section = nextHeading >= 0 ? rest.slice(0, nextHeading) : rest;
+    return section.toLowerCase();
+  }
+
+  it("points the missing-`sil_*`-tools branch at the shipped admission helper (self-healing, not a dead-end)", () => {
+    // BUG: today session-start tells the user to "consult the host's tool-allowlist
+    // docs and stop" — an un-actionable dead-end. The fix points them at the
+    // one-command helper so the base-agent path self-heals admission (PO #1).
+    const section = sessionStartLower();
+    const present = ALLOWLIST_HELPER_TOKENS.filter((t) => section.includes(t));
+    expect(present).not.toEqual([]);
+  });
+
+  it("no longer dead-ends at 'consult … docs and stop' without offering the fix", () => {
+    // The distinctive dead-end phrasing must go: the missing-tools branch must not
+    // tell the user to consult docs and STOP with no actionable fix. Anchor on the
+    // stable dead-end signature (consult + 'and stop') that marks the un-actionable
+    // branch this card deletes.
+    const section = sessionStartLower();
+    const deadEnds =
+      section.includes("consult the host's tool-allowlist docs and stop") ||
+      (section.includes("consult") && section.includes("and stop"));
+    expect(deadEnds).toBe(false);
+  });
+});
+
+describe("examples/road_cycling_expert_walkthrough.md — carries the same allow-list helper line as the engine (coupling, BUG: allow-list-sil-tools-on-expert-creation)", () => {
+  it("names the shipped allow-list helper, same as the engine reference (example↔engine cannot silently re-diverge)", () => {
+    // The worked example hand-duplicates step 6's wiring block (the copy-paste-
+    // most-likely artefact; skill-content.test.ts already couples its `--strict-json`
+    // enable to the engine). It must ALSO carry the helper-invocation line, or the
+    // example keeps wiring only the enable while the engine admits — the two
+    // surfaces re-diverge. Pin BOTH so the coupling is enforced from this card on.
+    const engineHasHelper = ALLOWLIST_HELPER_TOKENS.some((t) =>
+      engineBodyLower().includes(t),
+    );
+    const exampleHasHelper = ALLOWLIST_HELPER_TOKENS.some((t) =>
+      exampleBodyLower().includes(t),
+    );
+    expect(engineHasHelper).toBe(true);
+    expect(exampleHasHelper).toBe(true);
+  });
+});

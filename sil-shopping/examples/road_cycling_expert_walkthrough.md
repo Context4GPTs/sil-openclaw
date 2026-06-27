@@ -106,7 +106,13 @@ openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json
 openclaw config set plugins.entries.sil.enabled true --strict-json
 ```
 
-→ `openclaw config validate --json` returns valid → **`created`**.
+→ then **admit sil at the host allow surfaces** so the `sil_*` tools are un-filtered — the shipped helper does the additive, idempotent merge of `plugins.allow` + `tools.alsoAllow` (never clobbering another admitted plugin like `klodi`):
+
+```
+sil-openclaw-allowlist
+```
+
+→ `openclaw config validate --json` returns valid → **`created`** (a non-zero helper exit would be `persistence_failed`, not `created` — never a green expert over still-filtered tools).
 
 ## As general counsel — an ongoing advisor, not a one-query optimizer
 
