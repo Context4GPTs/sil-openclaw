@@ -10,6 +10,26 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Changed
+
+- **`sil-shopping` skill rewritten for the single multi-domain shopper.** The skill
+  bundle now drives the model shipped by Slice 1 (#38): **one** persistent shopper (a
+  generalist created once) that learns **domains** (niches) on first shop, replacing
+  the retired per-niche-expert flow with **no backwards-compat path**. Onboarding
+  collapses to a two-touchpoint create (persona + the shared cross-niche user spec —
+  no niche research at create); the shop loop classifies the niche, **reuses a learned
+  domain or mints a new one on the fly** (announced + correctable, with semantic slug
+  dedup to avoid fragmentation), layers intent over the active domain's taste over the
+  shared facts over the domain mechanics, and learns every query via the cheap
+  `sil_remember` append (a person fact carries across niches; a niche taste stays in
+  that domain). A second create is refused — the shopper is a singleton. The
+  `tools.alsoAllow` admission step (#37) and the `sil_remember` per-query persist (#39)
+  are preserved. Four references were renamed to match the vocabulary:
+  `expert_shopping.md`→`shop_loop.md`, `manage_experts.md`→`manage_domains.md`,
+  `refine_expert.md`→`refine_shopper.md`,
+  `road_cycling_expert_walkthrough.md`→`multi_domain_shopper_walkthrough.md`. Skill
+  prose + tests only — no plugin code or manifest change.
+
 ## [0.3.5] - 2026-06-27
 
 ### Changed
