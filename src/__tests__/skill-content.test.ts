@@ -1,44 +1,44 @@
 /**
- * INTEGRATION — skill discoverability + the progressive-disclosure split
- * (tier: integration — reads the real skill/ files from disk and compares
- * their bodies against the set of registered tool names and the pinned
- * procedure invariants; multiple artifacts interacting, the skill-doc ↔
- * registration seam and the SKILL.md-router ↔ reference-files seam).
+ * INTEGRATION — single multi-domain SHOPPER skill ↔ registered-tool drift guard
+ * (tier: integration — reads the real `sil-shopping/` skill files from disk and
+ * compares their bodies against the set of registered tool names and the pinned
+ * single-shopper procedure invariants; multiple artifacts interacting across the
+ * skill-doc ↔ registration seam and the SKILL.md-router ↔ reference-files seam).
  *
- * Named `skill-content.test.ts` to mirror the reference adapter's file
- * of the same name. The skill is authored as a progressive-disclosure
- * bundle (skill-creator convention): a MAXIMALLY-LEAN `skill/SKILL.md` pure
- * router plus detailed procedures under `skill/references/` and a worked example
- * under `skill/examples/`. So content this file pins lives in the file that now
- * OWNS it:
- *   - the router (intent→tool→reference) lives in `skill/SKILL.md` — it NAMES
- *     every registered tool and routes, but holds NO per-tool detail;
- *   - the four core tools' per-tool behaviour + the shared status taxonomy live
- *     in `skill/references/catalog_tools_reference.md`;
- *   - the brainstorm interview procedure lives in
- *     `skill/references/brainstorm_interview.md`;
- *   - the agent-creation engine lives in
- *     `skill/references/agent_creation_engine.md`;
- *   - the answer→sil_search-param mapping lives in
- *     `skill/references/search_param_mapping.md`;
- *   - the worked end-to-end example lives in `skill/examples/`.
+ * THE MODEL THIS FILE PINS (card: single-shopper-skill-rewrite — Slice 2 of #38):
+ * there is ONE persistent **shopper** (a generalist created ONCE) that learns
+ * **domains** (niches) LAZILY on first shop. This RETIRES the per-niche **expert**
+ * model wholesale (no backwards compat). The skill bundle was renamed +
+ * rewritten to drive the shipped single-shopper tool surface:
+ *   - `expert_shopping.md`                 → `shop_loop.md`
+ *   - `manage_experts.md`                  → `manage_domains.md`
+ *   - `refine_expert.md`                   → `refine_shopper.md`
+ *   - `road_cycling_expert_walkthrough.md` → `multi_domain_shopper_walkthrough.md`
+ *   - `agent_creation_engine.md` / `brainstorm_interview.md` keep their names,
+ *     rewritten in place (create ONE shopper, two-touchpoint interview).
  *
- * Frontmatter is parsed with a small self-contained extractor (no
- * gray-matter dependency assumed — the skeleton's dep set is minimal)
- * that still REJECTS a malformed frontmatter block: a missing closing
- * fence, an empty block, or absent keys all fail. Adversarial intent:
- * "frontmatter parses" must mean structurally valid, not merely present.
+ * The tool surface is NINE tools (`registerProfileTools` adds the 5th profile
+ * verb `sil_remember`): `sil_register`, `sil_whoami`, `sil_search`,
+ * `sil_product_get`, `sil_profile_materialize`, `sil_profile_list`,
+ * `sil_profile_get`, `sil_profile_remove`, `sil_remember`. Shapes that drive the
+ * prose pins:
+ *   - `sil_profile_materialize { agentId, name, userSpec, domain? }` — NO `domain`
+ *     ⇒ create the shopper (writes the SHARED `user_spec.md` + an empty `domains`
+ *     map); WITH `domain` ⇒ lazily mint/refresh a niche pack;
+ *   - `sil_profile_get { agentId, domainSlug? }` — overview vs one domain;
+ *   - `sil_profile_remove { agentId, domainSlug }` — forget ONE domain;
+ *   - `sil_remember { agentId, kind:"fact"|"taste", text, domain?, hard? }` —
+ *     the cheap per-query append (fact → SHARED user spec, taste → active domain).
  *
- * Contract this file pins for the implementation (expert-developer):
- *   skill/SKILL.md has a valid `--- ... ---` YAML frontmatter block at
- *   the top with non-empty `name:` and `description:` scalars, a body
- *   that mentions each registered sil_* tool by name and routes to the
- *   reference/example files (every `references/…` / `examples/…` path it
- *   names exists on disk); the references hold the procedure detail —
- *   including the four core tools' per-tool behaviour + the shared status
- *   taxonomy in `references/catalog_tools_reference.md` (NOT inline in the
- *   router); and the runtime skill carries NO contributor-facing
- *   "adding a tool" prose.
+ * THESE ASSERTIONS ARE THE SPEC. Do NOT weaken them to match the markdown — the
+ * markdown is rewritten to satisfy them. Anchors are NET-NEW tokens + OR-grouped
+ * intent substrings + indexOf ordering on step VERBS — never `§N` numbers, never
+ * brittle full sentences. The per-niche-expert negatives match whole-word
+ * `\bexperts?\b` (so legitimate "niche expertise" never false-fails).
+ *
+ * Frontmatter is parsed with a small self-contained extractor that REJECTS a
+ * malformed block (missing fence, empty body, absent keys) — "parses" means
+ * structurally valid, not merely present.
  */
 
 import { describe, it, expect } from "vitest";
@@ -58,30 +58,71 @@ const REPO_ROOT = join(HERE, "..", "..");
 const SKILL_DIR = join(REPO_ROOT, "sil-shopping");
 const SKILL_PATH = join(SKILL_DIR, "SKILL.md");
 
-// The progressive-disclosure reference + example files that now own the
-// detailed procedures the router points at.
-const CATALOG_TOOLS_PATH = join(
-  SKILL_DIR,
-  "references",
-  "catalog_tools_reference.md",
-);
+// The progressive-disclosure reference + example files that own the detailed
+// procedures the router points at. The four RENAMED files carry the single-
+// shopper vocabulary in their paths (the router links name them; the test
+// constants encode them) — a `manage_experts.md`-whose-body-says-domains was the
+// exact expert/shopper confusion this card kills, so the rename is load-bearing.
+const CATALOG_TOOLS_PATH = join(SKILL_DIR, "references", "catalog_tools_reference.md");
 const BRAINSTORM_PATH = join(SKILL_DIR, "references", "brainstorm_interview.md");
 const ENGINE_PATH = join(SKILL_DIR, "references", "agent_creation_engine.md");
 const MAPPING_PATH = join(SKILL_DIR, "references", "search_param_mapping.md");
-const MANAGE_PATH = join(SKILL_DIR, "references", "manage_experts.md");
-const EXPERT_SHOPPING_PATH = join(
-  SKILL_DIR,
-  "references",
+const MANAGE_PATH = join(SKILL_DIR, "references", "manage_domains.md");
+const SHOP_LOOP_PATH = join(SKILL_DIR, "references", "shop_loop.md");
+const REFINE_PATH = join(SKILL_DIR, "references", "refine_shopper.md");
+const EXAMPLE_PATH = join(SKILL_DIR, "examples", "multi_domain_shopper_walkthrough.md");
+
+/** The pre-rewrite filenames the rename retired. Must be gone from disk AND from
+ * every cross-link in the bundle (the router-glob catches router links, NOT the
+ * cross-links buried inside reference bodies — this set drives the body scan). */
+const RETIRED_FILENAMES = [
   "expert_shopping.md",
-);
-// SC6 — the refine-an-existing-expert loop (this card). NEW reference file; the
-// content-seam block at the foot of this file pins its load-bearing invariants.
-const REFINE_PATH = join(SKILL_DIR, "references", "refine_expert.md");
-const EXAMPLE_PATH = join(
-  SKILL_DIR,
-  "examples",
+  "manage_experts.md",
+  "refine_expert.md",
   "road_cycling_expert_walkthrough.md",
-);
+] as const;
+
+/** Whole-word "expert"/"experts" — the per-niche-expert agent noun the card
+ * retires from user-facing vocabulary. Whole-word so legitimate "niche
+ * expertise" / "expertly" never trips it (the false-token trap). */
+const PER_NICHE_EXPERT_WORD = /\bexperts?\b/i;
+
+/**
+ * Whole-word "expert" matches that are NOT legitimate retro-references to the
+ * RETIRED per-niche-expert model. The card RETIRES "expert" as user-facing
+ * vocabulary for the CURRENT model (the agent is a "shopper", a niche a "domain")
+ * — but it EXPLICITLY mandates retro-references to the retired model (e.g. the
+ * manage reference frames a legacy flat-layout dir as "a legacy expert" and steers
+ * re-create; docs name "the retired per-niche-expert model"). So an `expert`
+ * occurrence is allowed iff it sits in a legacy/retired/per-niche context; any
+ * other occurrence frames the CURRENT model as a per-niche expert and is
+ * forbidden. Returns the offending contexts (empty ⇒ clean). This is the
+ * disavowal-token discipline: a corrected doc may NAME the retired model to bury
+ * it — never the bare token as a blanket forbid.
+ */
+function perNicheExpertOffenders(body: string): string[] {
+  const offenders: string[] = [];
+  const re = /\bexperts?\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    const before = body.slice(Math.max(0, m.index - 28), m.index).toLowerCase();
+    const isRetro =
+      before.includes("legacy") ||
+      before.includes("retired") ||
+      before.includes("per-niche") ||
+      before.includes("no longer") ||
+      before.includes("old ");
+    if (!isRetro) {
+      offenders.push(
+        body
+          .slice(Math.max(0, m.index - 24), m.index + m[0].length + 12)
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+    }
+  }
+  return offenders;
+}
 
 interface Frontmatter {
   raw: string;
@@ -89,17 +130,15 @@ interface Frontmatter {
 }
 
 /**
- * Extract and validate the leading `--- ... ---` frontmatter block.
- * Throws on a structurally-invalid block (no opening fence at byte 0,
- * no closing fence, or empty body) — so "parses" is a real assertion.
- * Reads top-level `key: value` scalar lines (enough for name +
- * description; nested metadata is ignored, not required).
+ * Extract + validate the leading `--- ... ---` frontmatter block. Throws on a
+ * structurally-invalid block (no opening fence at byte 0, no closing fence, or
+ * empty body) — so "parses" is a real assertion. Reads top-level `key: value`
+ * scalar lines (enough for name + description; nested metadata is ignored).
  */
 function parseFrontmatter(content: string): Frontmatter {
   if (!content.startsWith("---")) {
     throw new Error("SKILL.md does not open with a `---` frontmatter fence");
   }
-  // Find the closing fence on its own line after the opening one.
   const closeMatch = content.slice(3).match(/\n---[ \t]*\r?\n/);
   if (!closeMatch || closeMatch.index === undefined) {
     throw new Error("SKILL.md frontmatter has no closing `---` fence");
@@ -110,7 +149,6 @@ function parseFrontmatter(content: string): Frontmatter {
   }
   const fields: Record<string, string> = {};
   for (const line of raw.split(/\r?\n/)) {
-    // Only top-level (non-indented) key: value scalar lines.
     const m = /^([A-Za-z0-9_]+):\s*(.*)$/.exec(line);
     if (m && m[2] !== "") {
       fields[m[1]!] = m[2]!.replace(/^["']|["']$/g, "").trim();
@@ -120,26 +158,22 @@ function parseFrontmatter(content: string): Frontmatter {
 }
 
 function skillBody(content: string): string {
-  // Everything after the closing fence.
   const closeMatch = content.slice(3).match(/\n---[ \t]*\r?\n/);
   if (!closeMatch || closeMatch.index === undefined) return content;
   return content.slice(3 + closeMatch.index + closeMatch[0].length);
 }
 
-/** Read a skill file and return its body below the frontmatter (reference/
- * example files may have none — then the whole content is the body). */
+/** Read a skill file and return its body below the frontmatter (reference/example
+ * files may have none — then the whole content is the body). */
 function readBody(path: string): string {
   const content = readFileSync(path, "utf8");
   return content.startsWith("---") ? skillBody(content) : content;
 }
 
-/** The set of names the real register code emits against a mock api. Must
- * call EVERY tool group that src/index.ts#register() wires, so the skill
- * is checked against the REAL tool surface (`sil_register`, `sil_whoami`,
- * `sil_search`, `sil_product_get`, and the `sil_profile_*` family —
- * materialize + list/get/remove). Mirror register() — registerProfileTools
- * is wired in too, so the bundle-mentions check below covers the profile
- * tools, not just identity + catalog. */
+/** The set of names the real register code emits against a mock api. Mirrors
+ * src/index.ts#register(): identity + catalog + profile groups, so the bundle is
+ * checked against the REAL nine-tool surface (`registerProfileTools` wires the
+ * four `sil_profile_*` tools AND `sil_remember`). */
 function registeredNames(): Set<string> {
   const api = createMockPluginApi();
   registerIdentityTools(api);
@@ -148,12 +182,10 @@ function registeredNames(): Set<string> {
   return registeredToolNames(api);
 }
 
-/** The whole progressive-disclosure bundle as one lower-case corpus: the
- * router PLUS every reference + example. Under progressive disclosure the
- * BUNDLE is the source of truth for the tool surface — a tool may be named
- * in the file that OWNS its procedure (e.g. `sil_profile_materialize` lives
- * in the engine reference, the manage tools in `manage_experts.md`), not
- * forced into the lean router. The bundle-mentions gate checks against this. */
+/** The whole progressive-disclosure bundle as one corpus: the router PLUS every
+ * reference + example. Under progressive disclosure the BUNDLE is the source of
+ * truth for the tool surface — a tool may be named in the file that OWNS its
+ * procedure, not forced into the lean router. */
 function bundleCorpus(): string {
   return [
     readBody(SKILL_PATH),
@@ -162,12 +194,31 @@ function bundleCorpus(): string {
     readBody(ENGINE_PATH),
     readBody(MAPPING_PATH),
     readBody(MANAGE_PATH),
+    readBody(SHOP_LOOP_PATH),
+    readBody(REFINE_PATH),
     readBody(EXAMPLE_PATH),
   ].join("\n");
 }
 
-describe("skill/SKILL.md — discoverability", () => {
-  it("exists at skill/SKILL.md", () => {
+/** Every bundle file's absolute path (for the bundle-wide scans). */
+const BUNDLE_FILES: ReadonlyArray<readonly [string, string]> = [
+  ["SKILL.md", SKILL_PATH],
+  ["catalog_tools_reference.md", CATALOG_TOOLS_PATH],
+  ["brainstorm_interview.md", BRAINSTORM_PATH],
+  ["agent_creation_engine.md", ENGINE_PATH],
+  ["search_param_mapping.md", MAPPING_PATH],
+  ["manage_domains.md", MANAGE_PATH],
+  ["shop_loop.md", SHOP_LOOP_PATH],
+  ["refine_shopper.md", REFINE_PATH],
+  ["multi_domain_shopper_walkthrough.md", EXAMPLE_PATH],
+];
+
+/* ===========================================================================
+ * DISCOVERABILITY + FRONTMATTER — the single-shopper SKILL.md
+ * ========================================================================= */
+
+describe("sil-shopping/SKILL.md — discoverability", () => {
+  it("exists at sil-shopping/SKILL.md", () => {
     expect(existsSync(SKILL_PATH)).toBe(true);
   });
 
@@ -178,42 +229,23 @@ describe("skill/SKILL.md — discoverability", () => {
 
   it("exposes a non-empty `name` in frontmatter", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
-    expect(fm.fields["name"]).toBeDefined();
     expect((fm.fields["name"] ?? "").length).toBeGreaterThan(0);
   });
 
   it("exposes a non-empty `description` in frontmatter", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
-    expect(fm.fields["description"]).toBeDefined();
     expect((fm.fields["description"] ?? "").length).toBeGreaterThan(0);
   });
 });
 
-describe("sil-shopping/SKILL.md — collision-fix frontmatter (name == basename, description routes every family)", () => {
-  const REQUIRED_DESCRIPTION_TRIGGERS = [
-    "shop on sil",
-    "make me a shopping expert",
-    "Route here for any shopping, identity, or shopping-expert intent on sil",
-  ] as const;
-
-  it("frontmatter `name` equals the published basename `sil-shopping` (AC6 — not the stale `sil`)", () => {
+describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename; description drives nine tools, shopper/domain model, NO expert vocab)", () => {
+  it("frontmatter `name` equals the published basename `sil-shopping` (not the stale `sil`)", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     expect(fm.fields["name"]).toBe("sil-shopping");
+    expect(fm.fields["name"]).not.toBe("sil");
   });
 
-  it("frontmatter `description` carries the locked trigger phrase for every intent family (AC5)", () => {
-    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
-    const description = fm.fields["description"] ?? "";
-    expect(description.length).toBeGreaterThan(0);
-    const missing = REQUIRED_DESCRIPTION_TRIGGERS.filter(
-      (t) => !description.includes(t),
-    );
-    expect(missing).toEqual([]);
-  });
-
-  it("frontmatter `description` enumerates the nine sil_* tools it drives (reference tail, not trigger)", () => {
-    // The sil-remember-append-memory-tool card adds the 9th tool (sil_remember),
-    // so the "Drives …" enumeration in the frontmatter description must name it too.
+  it("frontmatter `description` enumerates the NINE sil_* tools it drives (incl. sil_remember)", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     const description = fm.fields["description"] ?? "";
     const missing = [
@@ -230,89 +262,135 @@ describe("sil-shopping/SKILL.md — collision-fix frontmatter (name == basename,
     expect(missing).toEqual([]);
   });
 
-  it("frontmatter `name` no longer carries the bare plugin id `sil` (the pre-fix value)", () => {
+  it("frontmatter `description` presents the SHOPPER + DOMAIN model (not the retired per-niche expert)", () => {
+    // The card: the description is rewritten from the per-niche-expert lifecycle to
+    // create-your-shopper / shop-any-niche / manage-domains. NET-NEW: the model
+    // noun is "shopper" and niches are "domains" — the pre-rewrite description said
+    // "shopping expert" and named no "shopper"/"domain", so both are RED today.
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
-    expect(fm.fields["name"]).not.toBe("sil");
+    const description = (fm.fields["description"] ?? "").toLowerCase();
+    expect(description).toContain("shopper");
+    expect(description).toContain("domain");
+  });
+
+  it("frontmatter `description` carries NO per-niche-expert vocabulary (whole-word `expert`)", () => {
+    // "zero surviving per-niche-expert prose" applied to the trigger description —
+    // no "shopping expert", no "shopping-expert intent". Whole-word so a hypothetical
+    // "expertise" would not false-fail.
+    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+    const description = fm.fields["description"] ?? "";
+    expect(PER_NICHE_EXPERT_WORD.test(description)).toBe(false);
   });
 });
 
-describe("skill bundle — source of truth for the tool surface", () => {
+/* ===========================================================================
+ * BUNDLE — the tool surface + the rename retirement
+ * ========================================================================= */
+
+describe("skill bundle — source of truth for the nine-tool surface", () => {
+  it("registeredNames() equals NINE (the four core tools + the five sil_profile_* / sil_remember verbs)", () => {
+    const names = registeredNames();
+    expect(names.size, `registered tools: ${[...names].sort().join(", ")}`).toBe(9);
+    expect(names.has("sil_remember")).toBe(true);
+  });
+
   it("names EVERY registered real tool somewhere in the bundle (router or the reference that owns it)", () => {
-    // Progressive disclosure: the BUNDLE (router + references + example) is the
-    // source of truth, not the lean router alone. Every registered tool must be
-    // named in the file that OWNS its procedure — the four core tools + the
-    // manage tools in the router/their references, and `sil_profile_materialize`
-    // in the engine reference (the router must NOT inline it — the lean-router
-    // block below pins that). So we check the registered surface against the
-    // whole bundle, reporting any unnamed tool by name.
     const corpus = bundleCorpus();
     const names = registeredNames();
-    expect(names.size).toBeGreaterThan(0); // sanity: there ARE tools
     const missing = [...names].filter((name) => !corpus.includes(name));
     expect(missing).toEqual([]);
   });
 
   it("names the four core tools in the LEAN router itself (the always-loaded entry point)", () => {
-    // The router is what an agent reads first, before loading any reference. The
-    // four core shopping tools must be named in the router so the session-start
-    // tool check has a source of truth without loading a reference.
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    for (const tool of [
-      "sil_register",
-      "sil_whoami",
-      "sil_search",
-      "sil_product_get",
-    ]) {
+    for (const tool of ["sil_register", "sil_whoami", "sil_search", "sil_product_get"]) {
       expect(body).toContain(tool);
     }
   });
 
   it("names no removed example tool (sil_ping / sil_echo) anywhere in the bundle", () => {
-    // The contributor-mental-model goal: the skill no longer presents the
-    // deleted stubs as a real, callable tool surface — in NO bundle file.
     const corpus = bundleCorpus();
     expect(corpus).not.toContain("sil_ping");
     expect(corpus).not.toContain("sil_echo");
   });
 });
 
+describe("skill bundle — the rename retired the per-niche-expert filenames (renamed files exist; old names gone from disk AND every cross-link)", () => {
+  it("the four renamed files EXIST on disk and their pre-rewrite names do NOT", () => {
+    const renames: ReadonlyArray<readonly [string, string]> = [
+      [SHOP_LOOP_PATH, join(SKILL_DIR, "references", "expert_shopping.md")],
+      [MANAGE_PATH, join(SKILL_DIR, "references", "manage_experts.md")],
+      [REFINE_PATH, join(SKILL_DIR, "references", "refine_expert.md")],
+      [EXAMPLE_PATH, join(SKILL_DIR, "examples", "road_cycling_expert_walkthrough.md")],
+    ];
+    const problems: string[] = [];
+    for (const [renamed, old] of renames) {
+      if (!existsSync(renamed)) problems.push(`missing renamed file: ${renamed}`);
+      if (existsSync(old)) problems.push(`stale old file still on disk: ${old}`);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("NO bundle file cross-links any retired filename (the link blast radius is grepped to zero)", () => {
+    // Renaming 4 files breaks every [...](expert_shopping.md|manage_experts.md|
+    // refine_expert.md|road_cycling_expert_walkthrough.md) link across SKILL.md,
+    // search_param_mapping.md, the renamed files cross-linking each other, and the
+    // example. The router's "every path exists" glob catches router links but NOT
+    // cross-links buried inside reference bodies — this scan catches all of them.
+    const offenders: string[] = [];
+    for (const [label, path] of BUNDLE_FILES) {
+      const body = readBody(path);
+      for (const old of RETIRED_FILENAMES) {
+        if (body.includes(old)) offenders.push(`${label} → ${old}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("NO card-owned rewrite carries per-niche-expert user-facing vocabulary (whole-word `expert`)", () => {
+    // The card's headline success signal: zero surviving per-niche-expert prose. The
+    // model noun is "shopper", a niche is a "domain". Whole-word `\bexperts?\b` so
+    // legitimate "niche expertise" passes; "shopping expert" / "your experts" fail.
+    // search_param_mapping.md (vocab-only edits founder-de-scopable) + the untouched
+    // catalog reference are excluded — they get the link-integrity scan above.
+    const SCAN: ReadonlyArray<readonly [string, string]> = [
+      ["SKILL.md", SKILL_PATH],
+      ["agent_creation_engine.md", ENGINE_PATH],
+      ["brainstorm_interview.md", BRAINSTORM_PATH],
+      ["shop_loop.md", SHOP_LOOP_PATH],
+      ["manage_domains.md", MANAGE_PATH],
+      ["refine_shopper.md", REFINE_PATH],
+      ["multi_domain_shopper_walkthrough.md", EXAMPLE_PATH],
+    ];
+    const offenders: string[] = [];
+    for (const [label, path] of SCAN) {
+      for (const ctx of perNicheExpertOffenders(readBody(path))) {
+        offenders.push(`${label}: …${ctx}…`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
 /* ===========================================================================
- * CATALOG + IDENTITY TOOLS REFERENCE — the per-tool behaviour + the shared
- * status taxonomy now live in references/catalog_tools_reference.md (founder
- * decision: SKILL.md is a MAXIMALLY-LEAN pure router). These read the REAL
- * reference from disk and pin the detail the router DELEGATES to it — the
- * four core tools' behaviour and the status vocabulary every shopping tool
- * shares. Same content-seam pattern as the engine/brainstorm blocks below.
+ * CATALOG + IDENTITY TOOLS REFERENCE — per-tool behaviour + shared status
+ * taxonomy (delegated from the lean router; niche-agnostic, model-neutral).
  * ========================================================================= */
 
-/** Lower-cased catalog-tools reference body — the file that OWNS the four
- * core tools' per-tool behaviour + the shared status taxonomy after the
- * maximally-lean-router split. */
 function catalogToolsBodyLower(): string {
   return readBody(CATALOG_TOOLS_PATH).toLowerCase();
 }
 
-describe("references/catalog_tools_reference.md — per-tool behaviour + shared status taxonomy (delegated from the router)", () => {
+describe("references/catalog_tools_reference.md — per-tool behaviour + shared status taxonomy", () => {
   it("exists on disk", () => {
     expect(existsSync(CATALOG_TOOLS_PATH)).toBe(true);
   });
 
   it("documents the per-tool behaviour of all four core tools", () => {
-    // The detail the router moved OUT of SKILL.md: how each of the four core
-    // tools behaves. The reference must name each tool AND carry a behaviour
-    // detail unique to it (so it is the real per-tool detail, not a bare list).
     const body = catalogToolsBodyLower();
-    for (const tool of [
-      "sil_register",
-      "sil_whoami",
-      "sil_search",
-      "sil_product_get",
-    ]) {
+    for (const tool of ["sil_register", "sil_whoami", "sil_search", "sil_product_get"]) {
       expect(body).toContain(tool);
     }
-    // Behaviour tokens that only the per-tool detail carries — the register
-    // browser handshake, whoami's transparent refresh, search's ranking +
-    // pagination cursor, product_get's partial not_found.
     expect(body).toContain("awaiting_browser");
     expect(body).toContain("cursor");
     expect(body).toContain("not_found");
@@ -320,29 +398,20 @@ describe("references/catalog_tools_reference.md — per-tool behaviour + shared 
   });
 
   it("holds the shared status taxonomy (all six statuses, with the recovery rule)", () => {
-    // The shared status taxonomy moved here from the router. The reference must
-    // name every status in the vocabulary the catalog/identity tools share, so
-    // an agent loading it knows how to route each outcome.
     const body = catalogToolsBodyLower();
-    const STATUSES = [
+    const missing = [
       "ok",
       "not_registered",
       "must_reregister",
       "forbidden",
       "invalid_request",
       "retryable",
-    ];
-    const missing = STATUSES.filter((s) => !body.includes(s));
+    ].filter((s) => !body.includes(s));
     expect(missing).toEqual([]);
-    // The recovery rule travels with the taxonomy: follow the tool's own
-    // recovery hint, never improvise (re-registering can't fix a bad query).
     expect(body).toContain("recovery");
   });
 
   it("does NOT carry the agent-creation procedure (it is a SHOPPING-tools reference, not the engine)", () => {
-    // Keep the seam clean: the catalog/identity reference owns the four core
-    // tools, NOT the agent-creation engine. The engine's load-bearing host CLI
-    // must not have leaked into this reference.
     const body = catalogToolsBodyLower();
     expect(body).not.toContain("openclaw agents add");
     expect(body).not.toContain("sil_profile_materialize");
@@ -350,52 +419,51 @@ describe("references/catalog_tools_reference.md — per-tool behaviour + shared 
 });
 
 /* ===========================================================================
- * PROGRESSIVE-DISCLOSURE ROUTER — SKILL.md is a LEAN router, the detail lives
- * in references/ + examples/ (skill-creator convention).
- *
- * tier: integration. These read the REAL skill/SKILL.md + reference/example
- * files from disk and pin the SPLIT: the router routes (names the references
- * by relative path, with the endorsement-before-engine gate explicit), the
- * references exist on disk, and no detailed procedure leaked back into the
- * router. Mirrors skill-creator's "referenced-files-must-exist" validation.
+ * LEAN ROUTER — SKILL.md routes to the RENAMED references; no detail leaks back.
  * ========================================================================= */
 
-describe("skill/SKILL.md — lean router that routes to references + examples", () => {
-  it("routes to the brainstorm interview, the engine, the param mapping, and the worked example by relative path", () => {
+describe("sil-shopping/SKILL.md — lean router routes to the renamed references", () => {
+  it("routes to the brainstorm interview, the engine, the param mapping, the shop loop, manage-domains, refine-shopper, and the renamed example by relative path", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    expect(body).toContain("references/brainstorm_interview.md");
-    expect(body).toContain("references/agent_creation_engine.md");
-    expect(body).toContain("references/search_param_mapping.md");
-    expect(body).toContain("examples/road_cycling_expert_walkthrough.md");
+    const expected = [
+      "references/brainstorm_interview.md",
+      "references/agent_creation_engine.md",
+      "references/search_param_mapping.md",
+      "references/shop_loop.md",
+      "references/manage_domains.md",
+      "references/refine_shopper.md",
+      "examples/multi_domain_shopper_walkthrough.md",
+    ];
+    const missing = expected.filter((rel) => !body.includes(rel));
+    expect(missing).toEqual([]);
+  });
+
+  it("every references/… and examples/… path SKILL.md mentions EXISTS on disk", () => {
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+    const referenced = [
+      ...body.matchAll(/(references|examples)\/[A-Za-z0-9_./-]+\.md/g),
+    ].map((m) => m[0]);
+    expect(referenced.length).toBeGreaterThan(0);
+    const missing = referenced.filter((rel) => !existsSync(join(SKILL_DIR, rel)));
+    expect(missing).toEqual([]);
   });
 
   it("makes the endorsement-before-engine gate unmistakable in the routing block", () => {
-    // The single strongest invariant of the split: the router must make clear
-    // the engine reference is read/run ONLY after the user's explicit
-    // endorsement of the assembled draft. So an agent that reads the router
-    // alone (before loading any reference) already knows the gate exists.
+    // Creating the shopper still runs the engine ONLY after the user's explicit
+    // endorsement of the assembled draft. Reading the router alone, an agent already
+    // knows the gate exists, and that the interview is loaded before the engine.
     const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
-    // The endorsement token and the engine reference must both appear, and
-    // the endorsement gate must be stated ahead of running the engine.
     const endorseIdx = body.indexOf("endorse");
     const engineRefIdx = body.indexOf("agent_creation_engine.md");
+    const interviewRefIdx = body.indexOf("brainstorm_interview.md");
     expect(endorseIdx).toBeGreaterThanOrEqual(0);
     expect(engineRefIdx).toBeGreaterThanOrEqual(0);
-    // "only after … endorse … agent_creation_engine.md": the gate language
-    // precedes the engine-reference pointer in the routing block.
-    expect(endorseIdx).toBeLessThan(engineRefIdx);
-    // And the router names the interview reference FIRST (read it before the
-    // engine), so the order an agent loads them in is interview → engine.
-    const interviewRefIdx = body.indexOf("brainstorm_interview.md");
     expect(interviewRefIdx).toBeGreaterThanOrEqual(0);
+    expect(endorseIdx).toBeLessThan(engineRefIdx);
     expect(interviewRefIdx).toBeLessThan(engineRefIdx);
   });
 
-  it("keeps the router LEAN — the detailed procedures do NOT live in SKILL.md", () => {
-    // skill-creator: info lives in ONE place. The router must not duplicate
-    // the engine's ordered host-CLI steps. `openclaw agents add` is the
-    // engine's load-bearing command; it belongs in the engine reference, not
-    // the router. (The router may NAME the reference, not inline its steps.)
+  it("keeps the router LEAN — the engine's ordered host-CLI steps do NOT live in SKILL.md", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
     expect(body).not.toContain("openclaw agents add");
     expect(body).not.toContain("openclaw config validate");
@@ -403,3482 +471,40 @@ describe("skill/SKILL.md — lean router that routes to references + examples", 
   });
 
   it("does NOT inline the per-tool behaviour or the status taxonomy (they live in catalog_tools_reference.md, no duplication)", () => {
-    // Founder decision: SKILL.md is a MAXIMALLY-LEAN pure router. The four core
-    // tools' per-tool behaviour and the shared status taxonomy moved OUT into
-    // references/catalog_tools_reference.md. skill-creator's no-duplication rule
-    // means the router must NOT re-carry that detail. Anchor on tokens that
-    // belong ONLY to the moved detail — the register browser-handshake status
-    // and the catalog-tool status vocabulary. The router may NAME the tools
-    // (it routes to them) but must not inline how they behave or their statuses.
     const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
     expect(body).not.toContain("awaiting_browser");
     expect(body).not.toContain("not_registered");
     expect(body).not.toContain("must_reregister");
     expect(body).not.toContain("retryable");
-    // The router DOES route to the catalog/identity reference that owns them.
     expect(body).toContain("references/catalog_tools_reference.md");
   });
+});
 
-  it("every references/… and examples/… path SKILL.md mentions EXISTS on disk", () => {
-    // Mirrors skill-creator's referenced-files-must-exist validation: a
-    // router that points at a missing reference is a broken skill. This glob
-    // auto-covers references/manage_experts.md once the router names it (the
-    // manage block below asserts that route), so a dangling manage pointer
-    // fails here too.
+describe("sil-shopping/SKILL.md — routes every shop / manage / refine / create intent to the renamed reference that owns it", () => {
+  it("routes the shopping intent to references/shop_loop.md", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    const referenced = [
-      ...body.matchAll(/(references|examples)\/[A-Za-z0-9_./-]+\.md/g),
-    ].map((m) => m[0]);
-    expect(referenced.length).toBeGreaterThan(0); // sanity: it routes somewhere
-    const missing = referenced.filter(
-      (rel) => !existsSync(join(SKILL_DIR, rel)),
-    );
-    expect(missing).toEqual([]);
-    // Explicitly: the manage reference is one of the paths the router points
-    // at, and it exists on disk (path-integrity, named for clarity).
-    expect(referenced).toContain("references/manage_experts.md");
-    expect(existsSync(MANAGE_PATH)).toBe(true);
+    expect(body).toContain("references/shop_loop.md");
+    expect(body.toLowerCase()).toContain("sil_search");
   });
 
-  it("routes the manage intents (list/view/remove) to references/manage_experts.md", () => {
-    // The new manage capability is wired into the router exactly like the other
-    // intents: a routing row mapping the list/view/remove intents to the three
-    // sil_profile_* tools and pointing at the manage reference. The router must
-    // name all three tools AND the reference, so an agent reading the router
-    // alone knows where the manage flow's detail lives.
+  it("routes the manage intents (list/view/remove) to references/manage_domains.md, naming the three sil_profile_* tools", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    for (const tool of [
-      "sil_profile_list",
-      "sil_profile_get",
-      "sil_profile_remove",
-    ]) {
+    for (const tool of ["sil_profile_list", "sil_profile_get", "sil_profile_remove"]) {
       expect(body).toContain(tool);
     }
-    expect(body).toContain("references/manage_experts.md");
+    expect(body).toContain("references/manage_domains.md");
   });
-});
 
-/* ===========================================================================
- * MANAGE LOCAL EXPERTS — list / view / remove
- * (card: list-view-and-remove-local-expert-agents)
- *
- * tier: integration. The three management procedures are conversational prose
- * in references/manage_experts.md (the file that OWNS the manage flow after the
- * progressive-disclosure re-home) driving the three plugin tools — plus the
- * host CLI for the wiring half of remove. The reference body IS the source of
- * truth the host agent follows, so — exactly as the engine block pins its
- * procedure — we pin that the manage reference names each tool and spells out
- * the load-bearing invariants: host-CLI-FIRST remove ordering, confirm-before-
- * remove, graceful not_found / invalid_request framing, and the artefact-store
- * (`profile.json`) source-of-truth (never the host agent list).
- *
- * These anchor on tool NAMES + content tokens, NEVER on `§N` section numbers,
- * so they survive any renumber.
- * ========================================================================= */
-
-/** Lower-cased manage reference body — the file that OWNS the list/view/remove
- * flow after the re-home. The manage tools' procedure detail lives here, not in
- * the lean router. */
-function manageBodyLower(): string {
-  return readBody(MANAGE_PATH).toLowerCase();
-}
-
-describe("references/manage_experts.md — names the three management tools by name (list/view/remove)", () => {
-  it("exists on disk", () => {
-    expect(existsSync(MANAGE_PATH)).toBe(true);
-  });
-
-  it("names sil_profile_list, sil_profile_get, and sil_profile_remove in the reference", () => {
-    const body = readBody(MANAGE_PATH);
-    const missing = [
-      "sil_profile_list",
-      "sil_profile_get",
-      "sil_profile_remove",
-    ].filter((name) => !body.includes(name));
-    // Report by name so a forgotten tool is named, not an opaque false.
-    expect(missing).toEqual([]);
-  });
-});
-
-describe("references/manage_experts.md — manage-experts procedure spells out the load-bearing invariants", () => {
-  it("frames a distinct manage/list/view/remove capability (not just the create engine)", () => {
-    // The create engine already names experts. This card adds MANAGEMENT — the
-    // reference must name listing/viewing/removing experts, so the re-homed
-    // section is a real capability, not a re-read of the create prose.
-    const body = manageBodyLower();
-    const namesList = body.includes("list");
-    const namesView = body.includes("view") || body.includes("show");
-    const namesRemove = body.includes("remove") || body.includes("delete");
-    expect(namesList && namesView && namesRemove).toBe(true);
-  });
-
-  it("orders the remove flow host-CLI FIRST: `openclaw agents remove` precedes the procedural `sil_profile_remove` call", () => {
-    // The architect's partial-failure decision: the skill runs the HOST wiring
-    // removal (`openclaw agents remove <id>`) BEFORE the sil artefact removal
-    // (`sil_profile_remove { agentId }`). Order in the prose IS the spec —
-    // artefacts-first then a failed host step leaves a broken-but-loading
-    // expert; host-first leaves only harmless, list-surfaced disk cruft.
-    //
-    // Adversarial precision on the anchor: `sil_profile_remove` is also named
-    // earlier in the intent→tool TABLE and the per-tool prose (before the
-    // numbered procedure). A naive first-occurrence indexOf would catch those
-    // reference mentions and FALSELY fail even on a correctly ordered procedure.
-    // Anchor the artefact step on its procedural CALL FORM (`sil_profile_remove {`
-    // — the invocation with its arg object), which appears only in the numbered
-    // remove procedure, so the ordering check pins the real step sequence.
-    const body = manageBodyLower();
-    const hostRemoveIdx = body.indexOf("openclaw agents remove");
-    const artefactCallIdx = body.indexOf("sil_profile_remove {");
-    expect(hostRemoveIdx).toBeGreaterThanOrEqual(0);
-    expect(artefactCallIdx).toBeGreaterThanOrEqual(0);
-    expect(hostRemoveIdx).toBeLessThan(artefactCallIdx);
-  });
-
-  it("requires confirming with the user BEFORE a destructive remove", () => {
-    // Remove is destructive + irreversible, so the skill confirms before acting.
-    // The reference must say so (confirm/confirmation before removing), so the
-    // agent does not silently delete.
-    const body = manageBodyLower();
-    const confirms =
-      body.includes("confirm") ||
-      body.includes("confirmation") ||
-      body.includes("explicit go-ahead") ||
-      body.includes("ask before");
-    expect(confirms).toBe(true);
-  });
-
-  it("names `not_found` graceful framing for an unknown expert (view & remove)", () => {
-    // Referencing an unknown expert fails gracefully — a plain not_found, ideally
-    // listing the experts that DO exist, never a stack trace or raw path. The
-    // reference must name the not_found outcome AND the graceful framing.
-    const body = manageBodyLower();
-    expect(body).toContain("not_found");
-    const graceful =
-      body.includes("never surface a stack trace") ||
-      body.includes("never a stack trace") ||
-      body.includes("not a stack trace") ||
-      (body.includes("stack trace") && body.includes("never")) ||
-      body.includes("raw path") ||
-      body.includes("raw filesystem path");
-    expect(graceful).toBe(true);
-  });
-
-  it("names `invalid_request` for a malformed/traversal expert id (deletes nothing)", () => {
-    // The fail-closed id-validation outcome the management tools surface — the
-    // reference must name it so the agent recognizes a bad-id rejection (deletes
-    // nothing) versus an unknown expert (not_found).
-    expect(manageBodyLower()).toContain("invalid_request");
-  });
-
-  it("keeps the artefact-store source-of-truth framing (list reads profile.json, not the host list)", () => {
-    // A sil expert IS a readable agents/<id>/profile.json — list reads the
-    // manifest, not the host agent list. The reference must name the artefact
-    // store / profile.json as the listing source, so a bare host agent is not
-    // mistaken for a sil expert.
-    const body = manageBodyLower();
-    const namesArtefactSource =
-      body.includes("profile.json") ||
-      body.includes("artefact store") ||
-      body.includes("sil_data_dir") ||
-      body.includes("sil data dir");
-    expect(namesArtefactSource).toBe(true);
-    // And it must say this is the source of truth (never artefacts-first /
-    // never the host list as the authority).
-    const namesSourceOfTruth =
-      body.includes("source of truth") ||
-      body.includes("source-of-truth") ||
-      body.includes("never the host agent list") ||
-      body.includes("not the host agent list");
-    expect(namesSourceOfTruth).toBe(true);
-  });
-
-  it("names the manage status taxonomy (ok / not_found / invalid_request / removed / persistence_failed)", () => {
-    // The manage flow has its own outcome vocabulary. The reference must name
-    // each status so an agent loading it knows how to route each outcome.
-    const body = manageBodyLower();
-    const missing = [
-      "ok",
-      "not_found",
-      "invalid_request",
-      "removed",
-      "persistence_failed",
-    ].filter((s) => !body.includes(s));
-    expect(missing).toEqual([]);
-  });
-});
-
-describe("skill — the contributor-facing 'adding a tool' prose is GONE from the runtime skill", () => {
-  it("no skill file carries the repo-CLAUDE.md 'how to add a tool' contributor content", () => {
-    // The monolithic SKILL.md carried a §6 "Adding a real tool" section — pure
-    // contributor guidance that already lives in the repo CLAUDE.md. It has no
-    // place in a RUNTIME shopping skill. Assert it is gone from SKILL.md AND
-    // every reference/example (it must not have been relocated, only deleted).
-    const corpus = [
-      readBody(SKILL_PATH),
-      readBody(CATALOG_TOOLS_PATH),
-      readBody(BRAINSTORM_PATH),
-      readBody(ENGINE_PATH),
-      readBody(MAPPING_PATH),
-      readBody(MANAGE_PATH),
-      readBody(EXAMPLE_PATH),
-    ]
-      .join("\n")
-      .toLowerCase();
-    // The contributor section's distinctive tokens — the registration plumbing
-    // an agent USING the skill never needs.
-    expect(corpus).not.toContain("registerxtools");
-    expect(corpus).not.toContain("contracts.tools");
-    expect(corpus).not.toContain("adding a real tool");
-    expect(corpus).not.toContain("adding a tool");
-  });
-});
-
-/* ===========================================================================
- * AGENT-CREATION ENGINE — the procedure-as-source-of-truth seam
- * (card: create-a-valid-sil-wired-openclaw-agent-profile)
- *
- * tier: integration. These now read the REAL
- * skill/references/agent_creation_engine.md from disk (the file that OWNS the
- * engine after the progressive-disclosure split) and pin the agent-creation
- * procedure as a source of truth — the engine is the skill prose driving the
- * host CLI (no plugin-tool code per the architect's verdict), so the engine
- * reference IS the spec the host agent follows. Pinning it is exactly how this
- * file already pins the tool surface.
- *
- * These are adversarial: they do not merely check a keyword is present, they
- * check the load-bearing invariants of the engine are spelled out —
- *   - the host-native CLI surface is named (not invented JSON authoring);
- *   - the four outcome statuses form the engine's status taxonomy;
- *   - validate-FIRST ordering (nothing written on a bad spec);
- *   - collision is non-destructive (list-check before add, never clobber);
- *   - host-own validation gates "success" (config validate before created);
- *   - the behaviour artefacts are materialized into $SIL_DATA_DIR (founder
- *     steer) — the persona/instructions + the domain sub-skill that power
- *     the created agent, kept OUT of the thin host `agents` wiring entry.
- *
- * No host, no network, no Docker: this is a content seam over the engine file.
- * The real host round (create → validate → shop, SC3) is `live-verification`'s
- * job, NOT a test-tier assertion — these never fake a running host.
- * ========================================================================= */
-
-/** Lower-cased engine reference body — substring checks are intent ("the
- * procedure names X"), so case folding avoids a brittle fail on an incidental
- * capitalization while keeping the exact-token literals (CLI names, status
- * words) honest. The engine now OWNS this content. */
-function engineBodyLower(): string {
-  return readBody(ENGINE_PATH).toLowerCase();
-}
-
-/** The four outcome statuses the architect fixed as the engine's taxonomy
- * (mirrors identity.ts/catalog.ts structured-error vocabulary). Pinned as a
- * named set so a missing one is reported by NAME, not as an opaque false. */
-const ENGINE_STATUSES = [
-  "created",
-  "invalid_request",
-  "collision",
-  "persistence_failed",
-] as const;
-
-describe("references/agent_creation_engine.md — agent-creation procedure is a pinned source of truth (AC1)", () => {
-  it("names the host-native agent-creation CLI `openclaw agents add`", () => {
-    // The persistence path is host-CLI-driven (the plugin may NOT write host
-    // config — noChildProcess + filesystemScope). The procedure must name the
-    // host's OWN creation command, not a plugin tool or hand-authored JSON.
-    expect(engineBodyLower()).toContain("openclaw agents add");
-  });
-
-  it("names the host `agents` config surface the profile lands in", () => {
-    // Product invariant 1/6: a real host `agents` entry in the user's local
-    // OpenClaw config — not a bespoke sil data file. The body must name the
-    // surface so the agent knows WHERE the profile lives.
-    expect(engineBodyLower()).toContain("agents");
-  });
-
-  it("names ALL FOUR engine outcome statuses (created/invalid_request/collision/persistence_failed)", () => {
-    const body = engineBodyLower();
-    const missing = ENGINE_STATUSES.filter((s) => !body.includes(s));
-    // Report by name: a partial taxonomy is the failure this pins. An engine
-    // that names `created` but never `collision` would silently clobber.
-    expect(missing).toEqual([]);
-  });
-
-  it("frames the procedure as agent-creation, not just tool-driving (a distinct shopping-expert intent)", () => {
-    // Adversarial: the pre-existing skill already drove the four sil_* tools.
-    // This card adds a NEW capability — creating a sil-wired agent. The body
-    // must mention creating an agent/expert/profile, so the new procedure is
-    // a real addition, not a re-read of the old tool table.
-    const body = engineBodyLower();
-    const namesCreation =
-      body.includes("create") || body.includes("creation");
-    const namesSubject =
-      body.includes("expert") ||
-      body.includes("agent profile") ||
-      body.includes("shopping expert");
-    expect(namesCreation && namesSubject).toBe(true);
-  });
-});
-
-describe("references/agent_creation_engine.md — validate-first: a bad spec writes NOTHING (AC2)", () => {
-  it("names the `invalid_request` outcome for an invalid/incomplete spec", () => {
-    expect(engineBodyLower()).toContain("invalid_request");
-  });
-
-  it("specifies validating the spec BEFORE invoking `openclaw agents add` (validate-first ordering)", () => {
-    // Product invariant 7 (atomic outcome) + AC2: on a bad spec the engine
-    // stops at validation and `openclaw agents add` is never reached. The
-    // procedure must put a spec-validation step textually AHEAD of the add
-    // step, so an agent following top-to-bottom validates first. Order in the
-    // prose IS the spec — a procedure that adds-then-validates clobbers on a
-    // bad spec.
-    //
-    // Adversarial precision: key the "before" anchor on the `validate` VERB.
-    // The engine reference's step 1 is a spec-validation step ABOVE the
-    // `openclaw agents add` in step 3, so requiring `validate` before `add`
-    // only goes green on a genuine spec-validation step preceding the
-    // creation call.
-    const body = engineBodyLower();
-    const firstValidateIdx = body.indexOf("validate");
-    const addIdx = body.indexOf("openclaw agents add");
-    expect(firstValidateIdx).toBeGreaterThanOrEqual(0);
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(firstValidateIdx).toBeLessThan(addIdx);
-  });
-
-  it("requires the spec's mandatory fields — name AND persona/instructions — to be present", () => {
-    // AC2 enumerates the invalid shapes: missing name, empty persona, no sil
-    // skill attached. The procedure must name persona/instructions and the
-    // unique name as required, so the validation has a concrete checklist —
-    // not a vague "if the spec is bad".
-    const body = engineBodyLower();
-    expect(body).toContain("persona");
-    // The name must be required AND unique (the collision precondition).
-    expect(body).toMatch(/name/);
-  });
-
-  it("states that nothing is written / no profile is created on an invalid spec", () => {
-    // The atomic-outcome invariant, in prose: on `invalid_request` the engine
-    // writes NOTHING. The body must say so, so the agent does not half-create.
-    const body = engineBodyLower();
-    const saysNothingWritten =
-      body.includes("write nothing") ||
-      body.includes("writes nothing") ||
-      body.includes("nothing is written") ||
-      body.includes("write no") ||
-      body.includes("does not write") ||
-      body.includes("no profile") ||
-      body.includes("nothing partial") ||
-      body.includes("no partial");
-    expect(saysNothingWritten).toBe(true);
-  });
-});
-
-describe("references/agent_creation_engine.md — collision is non-destructive (AC3)", () => {
-  it("names the collision check via `openclaw agents list` (read before write)", () => {
-    // AC3: the engine checks existing agents with the host's OWN list command
-    // before adding, so a same-name agent is detected, not overwritten.
-    expect(engineBodyLower()).toContain("openclaw agents list");
-  });
-
-  it("names the `collision` outcome and that it does NOT clobber an existing agent", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("collision");
-    // Product invariant 8 / UX principle 4: never silently overwrite. The body
-    // must say so explicitly — "do not overwrite" / "never clobber" / "no
-    // overwrite" — so the agent surfaces the collision instead of replacing.
-    const saysNonDestructive =
-      body.includes("overwrite") ||
-      body.includes("clobber") ||
-      body.includes("never overwrite") ||
-      body.includes("not overwrite") ||
-      body.includes("non-destructive") ||
-      body.includes("do not clobber");
-    expect(saysNonDestructive).toBe(true);
-  });
-
-  it("orders the collision check BEFORE the add (list precedes add in the procedure)", () => {
-    // Adversarial ordering: `openclaw agents list` must come before `openclaw
-    // agents add` in the prose, or an agent following the steps top-to-bottom
-    // would add first and discover the collision too late (after clobbering).
-    const body = engineBodyLower();
-    const listIdx = body.indexOf("openclaw agents list");
-    const addIdx = body.indexOf("openclaw agents add");
-    expect(listIdx).toBeGreaterThanOrEqual(0);
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(listIdx).toBeLessThan(addIdx);
-  });
-});
-
-describe("references/agent_creation_engine.md — valid spec persists a host-loadable, sil-wired agent (AC4)", () => {
-  it("invokes `openclaw agents add` non-interactively with JSON output", () => {
-    // AC4: `openclaw agents add … --non-interactive --json` — the exact
-    // machine-drivable form (an interactive prompt cannot be agent-driven).
-    const body = engineBodyLower();
-    expect(body).toContain("--non-interactive");
-    expect(body).toContain("--json");
-  });
-
-  it("gates 'created' on the host's OWN validation via `openclaw config validate`", () => {
-    // Product invariant 1 + AC4: "valid" means the HOST says yes, verified the
-    // way the host validates — `openclaw config validate` (or load probe). The
-    // body must name it, so success ≠ "the plugin thinks it's fine".
-    expect(engineBodyLower()).toContain("openclaw config validate");
-  });
-
-  it("orders config-validate AFTER add (validate the written profile, then declare created)", () => {
-    // The defect this card exists to prevent: emitting a profile the host then
-    // rejects. The procedure must validate AFTER the add and only then report
-    // `created` — so the validate step sits between `add` and `created`.
-    const body = engineBodyLower();
-    const addIdx = body.indexOf("openclaw agents add");
-    const validateIdx = body.indexOf("openclaw config validate");
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(validateIdx).toBeGreaterThan(addIdx);
-  });
-
-  it("wires the sil PLUGIN enabled into the created agent (the four tools come for free)", () => {
-    // Product invariant 2 + the spec→flag mapping: the created agent has the
-    // sil plugin enabled, which is what makes sil_register/sil_whoami/
-    // sil_search/sil_product_get available to it. The body must say the
-    // profile enables the `sil` plugin.
-    const body = engineBodyLower();
-    const wiresPlugin =
-      body.includes("plugin") &&
-      (body.includes("enable") || body.includes("enabled"));
-    expect(wiresPlugin).toBe(true);
-  });
-
-  it("wires the sil SKILL attached into the created agent (it knows HOW to drive the tools)", () => {
-    // Product invariant 3: the created agent attaches the sil skill (+ any
-    // generated sub-skill). The body must say the profile attaches the skill,
-    // not just enable the plugin — plugin without skill knows the tools exist
-    // but not how to drive them.
-    const body = engineBodyLower();
-    const wiresSkill =
-      body.includes("skill") &&
-      (body.includes("attach") || body.includes("attached"));
-    expect(wiresSkill).toBe(true);
-  });
-
-  it("names `persistence_failed` (with path + cause) for a write/validate failure", () => {
-    // AC4 failure half / Product invariant 7: on a CLI or validate failure the
-    // engine reports `persistence_failed` with the path + cause and leaves
-    // nothing partial. The body must name the outcome AND that it carries the
-    // failing path/cause, so the agent's recovery is actionable.
-    const body = engineBodyLower();
-    expect(body).toContain("persistence_failed");
-    const namesPathCause =
-      body.includes("path") && body.includes("cause");
-    expect(namesPathCause).toBe(true);
-  });
-});
-
-/* ===========================================================================
- * HOST-WIRING SHAPES PINNED TO alpine/openclaw:2026.6.9
- * (card: realign-skill-4-host-cli-to-openclaw-2026-4-15)
- *
- * tier: unit. The engine's two host-wiring shapes drifted from the real
- * 2026.6.9 OpenClaw CLI the sil-stage host round probes live:
- *   - the plugin-ENABLE step used `--merge`, which is NOT a flag on this image;
- *     the real path is a value-mode set with `--strict-json`;
- *   - the VALIDATE-verdict read keyed off a non-existent `ok: false`; the real
- *     `openclaw config validate --json` shape is `{ valid, path, issues? }`, so
- *     the verdict is read from `valid`.
- * These mirror the host round's real-shape probes (sil-stage host-round-create.mjs
- * 321-337) rather than re-asserting prose, turning "doc says X, host proves X"
- * from coincidence into a checked invariant. Each shape is pinned in BOTH the
- * engine reference AND the worked example (the copy-paste-most-likely artefact),
- * so the two duplicated wirings cannot silently re-diverge.
- *
- * Adversarial: for EACH shape we assert presence-of-correct AND absence-of-
- * defective. A one-sided presence check passes while a stray `--merge` lingers
- * beside `--strict-json`, or a residual `ok: false` lingers beside `valid`.
- * ========================================================================= */
-
-/** Lower-cased worked-example body — the example carries the SAME two wiring
- * shapes by hand, so it is pinned alongside the engine reference. */
-function exampleBodyLower(): string {
-  return readBody(EXAMPLE_PATH).toLowerCase();
-}
-
-describe("references/agent_creation_engine.md — host-wiring shapes match alpine/openclaw:2026.6.9", () => {
-  it("enables the sil plugin with the host's real value-mode set (`--strict-json`), NOT `--merge`", () => {
-    // The 2026.6.9 CLI has no scalar `--merge` flag; the enable is a value-mode set
-    // with `--strict-json` (host-round-create.mjs:321-329). Anchor the POSITIVE
-    // on the FULL enable substring — `plugins.entries.sil.enabled true
-    // --strict-json` — not bare `--strict-json`, because the adjacent skills set
-    // already uses `--strict-json` correctly (line 45) and a bare-token check
-    // would pass even with the enable still on `--merge`.
-    const body = engineBodyLower();
-    expect(body).toContain(
-      "plugins.entries.sil.enabled true --strict-json",
-    );
-    // NEGATIVE: NO `--merge` remains anywhere in the engine reference — a stray
-    // `--merge` lingering beside the corrected `--strict-json` is exactly the
-    // one-sided-pass the card warns against. `--merge` appears nowhere
-    // legitimately in this doc, so absence of the bare flag is the tight check.
-    expect(body).not.toContain("--merge");
-  });
-
-  it("reads the validate verdict from `.valid` (the `{ valid, path, issues? }` shape), NOT a non-existent `ok: false`", () => {
-    // The real `openclaw config validate --json` shape is `{ valid, path,
-    // issues? }` (host-round-create.mjs:333-337) — success/failure keys off
-    // `valid`, never `ok`. POSITIVE: the verdict read references `valid`.
-    const body = engineBodyLower();
-    expect(body).toContain("valid");
-    // NEGATIVE: NO `ok: false` verdict read remains. Scope the negative match
-    // to the PRECISE verdict token `ok: false` — a bare `ok` is innocent prose
-    // elsewhere (step-4 `sil_profile_materialize` outcomes name a bare `ok`),
-    // and matching bare `ok` would false-positive on legitimate text.
-    expect(body).not.toContain("ok: false");
-  });
-
-  it("names/pins the LATEST asserted OpenClaw image tag `alpine/openclaw:2026.6.9` (couples the doc to the host that proves it), with NO stale `2026.4.15` lingering", () => {
-    // Surfacing the tag the sil-stage host round validates against makes "doc
-    // says X, host proves X" a coupled guarantee, not a coincidence — the next
-    // CLI surface change can no longer silently re-open this bug. Match the
-    // literal tag case-sensitively against the un-lowercased body so the
-    // asserted string is the exact tag, not an incidentally-cased near-miss.
-    const raw = readBody(ENGINE_PATH);
-    // POSITIVE: the doc pins the latest reproducible tag.
-    expect(raw).toContain("alpine/openclaw:2026.6.9");
-    // NEGATIVE: the superseded pin is gone everywhere — a stray `2026.4.15`
-    // lingering beside the corrected `2026.6.9` is exactly the one-sided-pass
-    // this card warns against (the doc↔host coupling is only real when a single
-    // tag is named). Scope the negative to the bare version token so any
-    // surviving `alpine/openclaw:2026.4.15` (or prose naming it) trips it.
-    expect(raw).not.toContain("2026.4.15");
-  });
-});
-
-describe("examples/road_cycling_expert_walkthrough.md — wiring shape stays coupled to the engine reference", () => {
-  it("carries the SAME corrected enable shape (`--strict-json`, NO `--merge`) as the engine reference", () => {
-    // The example is the copy-paste-most-likely artefact and duplicates the
-    // enable shape by hand (line 98). Pinning it here couples the two artefacts:
-    // a future edit cannot re-introduce `--merge` in the example with nothing
-    // red. Same FULL-substring anchor — the skills set on the same line already
-    // carries `--strict-json`, so a bare-token check would not catch a `--merge`
-    // enable.
-    const body = exampleBodyLower();
-    expect(body).toContain(
-      "plugins.entries.sil.enabled true --strict-json",
-    );
-    expect(body).not.toContain("--merge");
-  });
-});
-
-describe("references/agent_creation_engine.md — the created agent shops with no further setup (AC5 / SC3)", () => {
-  it("states the created agent can call sil_search / sil_product_get with no further setup", () => {
-    // AC5 / SC3 (the goal's primary correctness bar): after creation the agent
-    // shops immediately. The body must name the catalog tools the created
-    // expert calls AND the "no further setup" guarantee — the zero-setup
-    // promise is the whole product (UX principle 1). The HOST round is
-    // live-verified; here we pin that the skill PROMISES it.
-    const body = engineBodyLower();
-    expect(body).toContain("sil_search");
-    expect(body).toContain("sil_product_get");
-    const noFurtherSetup =
-      body.includes("no further setup") ||
-      body.includes("without further setup") ||
-      body.includes("zero further setup") ||
-      body.includes("no additional setup") ||
-      body.includes("zero-setup");
-    expect(noFurtherSetup).toBe(true);
-  });
-
-  it("does NOT couple creation to identity (no register/token as a precondition to CREATE)", () => {
-    // Product out-of-scope: creating an expert neither requires nor performs
-    // sil registration. The procedure must keep creation local + offline — it
-    // must NOT state that registration / a token is a precondition of creating
-    // the profile (the expert registers the user LATER, on first shop).
-    // The engine DOES mention sil_register (the deferred first-shop step), so we
-    // can't assert its absence globally — instead assert the creation procedure
-    // does not present registration as a prerequisite *for creation*.
-    const body = engineBodyLower();
-    const couplesIdentity =
-      /register[^.]*before[^.]*creat/.test(body) ||
-      /creat[^.]*requires[^.]*register/.test(body) ||
-      /must.*register.*to.*creat/.test(body);
-    expect(couplesIdentity).toBe(false);
-  });
-});
-
-describe("references/agent_creation_engine.md — behaviour artefacts materialized into $SIL_DATA_DIR (founder steer)", () => {
-  it("names $SIL_DATA_DIR as where the behaviour artefacts are materialized", () => {
-    // Founder steer 2026-06-22: the engine materializes FIXED behaviour
-    // artefacts into the sil data directory ($SIL_DATA_DIR — the plugin's
-    // disclosed filesystemScope) at creation time. The body must name the
-    // data dir as the artefact store, distinct from the host `agents` wiring.
-    const body = engineBodyLower();
-    const namesDataDir =
-      body.includes("$sil_data_dir") ||
-      body.includes("sil_data_dir") ||
-      body.includes("sil data directory") ||
-      body.includes("sil data dir");
-    expect(namesDataDir).toBe(true);
-  });
-
-  it("writes the persona DIRECTLY into the host SOUL.md via the host CLI — NO materialize-then-copy step (Correction 1)", () => {
-    // Correction 1: the persona IS the agent's soul/system framing — the host's
-    // SOUL.md, written by the engine via the host CLI. It is NOT a sil-side
-    // behaviour artefact. The superseded "materialize persona.md then COPY it into
-    // SOUL.md" step is GONE: the engine writes the persona straight into SOUL.md.
-    //
-    // NOTE: we do NOT forbid the literal `persona.md` token — the corrected doc
-    // legitimately uses it to DISAVOW the file ("no persona.md", "not a sil
-    // artefact"). We pin the BEHAVIOUR: persona → SOUL.md directly, and the copy
-    // step is gone.
-    const body = engineBodyLower();
-    // The persona lands in the host SOUL.md (the system framing).
-    expect(body).toContain("soul.md");
-    // The persona is written DIRECTLY / straight into SOUL.md (no intermediate).
-    const namesDirectWrite =
-      body.includes("directly into the workspace soul.md") ||
-      body.includes("directly into the host soul.md") ||
-      body.includes("straight into") ||
-      body.includes("write the persona directly") ||
-      body.includes("persona directly") ||
-      (body.includes("persona") && body.includes("soul.md") && body.includes("no copy")) ||
-      (body.includes("persona") && body.includes("soul.md") && body.includes("no") && body.includes("copy step"));
-    expect(namesDirectWrite).toBe(true);
-    // The superseded copy step is removed: no "copy the materialized persona …".
-    const namesCopyStep =
-      body.includes("copy the materialized persona") ||
-      body.includes("copy the persona") ||
-      body.includes("copies the persona") ||
-      body.includes("copy persona.md") ||
-      body.includes("copy the materialized");
-    expect(namesCopyStep).toBe(false);
-  });
-
-  it("names the deep researched domain spec + the decomposition-dimension intent spec as the REQUIRED behaviour artefacts (Correction 2/4)", () => {
-    // After the reframe the engine materializes the two REQUIRED specs at creation:
-    // a DEEP, researched domain_spec.md and the agent-specific intent_spec.md
-    // decomposition-dimension schema. The body must name both as the materialized
-    // behaviour layer (the lazy user_spec / playbook fill later, per-query).
-    const body = engineBodyLower();
-    const namesDomainSpec =
-      body.includes("domain spec") ||
-      body.includes("domain-spec") ||
-      body.includes("domain_spec") ||
-      body.includes("domainspec");
-    const namesIntentSpec =
-      body.includes("intent spec") ||
-      body.includes("intent-spec") ||
-      body.includes("intent_spec") ||
-      body.includes("intentspec");
-    expect(namesDomainSpec).toBe(true);
-    expect(namesIntentSpec).toBe(true);
-  });
-
-  it("keeps the store boundary clean: host config = wiring, $SIL_DATA_DIR = behaviour", () => {
-    // Founder steer: store boundary stays clean — host `agents` config holds
-    // the WIRING (plugin enabled + skill attached), $SIL_DATA_DIR holds the
-    // BEHAVIOUR artefacts. The host config write stays host-CLI-driven; the
-    // artefact write is the in-scope sil-owned write. The body must reflect
-    // both surfaces — wiring via the CLI, behaviour via the data dir — so the
-    // two-store boundary is explicit in the prose.
-    const body = engineBodyLower();
-    const namesDataDir =
-      body.includes("sil_data_dir") || body.includes("sil data dir");
-    const namesHostConfig =
-      body.includes("openclaw agents add") ||
-      body.includes("openclaw config validate");
-    expect(namesDataDir && namesHostConfig).toBe(true);
-  });
-});
-
-/* ===========================================================================
- * BRAINSTORM / INTERVIEW PROCEDURE — the conversational spec-filling seam
- * (card: brainstorm-driven-creation-of-a-tailored-expert)
- *
- * tier: integration. Same content-seam pattern as the engine block above, now
- * re-pointed at the file that OWNS the brainstorm after the progressive-
- * disclosure split: read the REAL skill/references/brainstorm_interview.md from
- * disk (and, for the answer→param mapping detail the interview delegates to,
- * skill/references/search_param_mapping.md), lowercase, and pin the brainstorm
- * PROCEDURE as a source of truth via OR-grouped intent-token substrings and
- * ORDERING via indexOf comparison. The brainstorm is skill prose the host agent
- * follows — there is NO new plugin tool, NO code path — so the reference body IS
- * the spec, exactly as it is for the engine. These never fake a transcript: "a
- * real agent runs a genuinely good interview" is `live-verification`'s job, NOT
- * a test tier. We pin the procedure's load-bearing invariants:
- *   - SC1: open, multi-turn, TWO-SIDED interview (domain attributes AND the
- *     user's own tastes/style/budget/constraints), explicitly NOT a form-fill;
- *     all FIVE converged sections named;
- *   - narrow-first gate: a vague/over-broad domain is narrowed WITH the user
- *     BEFORE persona/mapping/rubric (ordering anchor);
- *   - per-section converge + re-entrant (reflect-back + confirm; collaborative);
- *   - SC2 tailoring: persona + answer→param mapping + rubric reflect STATED
- *     inputs; the mapping names REAL sil_search params; ship_to left EMPTY by
- *     default (no sil_whoami round-trip);
- *   - endorsement-before-creation: an endorse/confirm token PRECEDES the first
- *     engine step (`openclaw agents add` / `sil_profile_materialize`) — ZERO
- *     engine steps before explicit endorsement (ordering anchor, now pinned in
- *     the interview reference that owns the endorsement gate);
- *   - abandon-mid-flow creates nothing; collision → refine-or-rename never
- *     clobber; the spec is a valid sil_profile_materialize input.
- * ========================================================================= */
-
-/** Lower-cased brainstorm interview reference body — the file that OWNS the
- * interview after the split. */
-function brainstormBodyLower(): string {
-  return readBody(BRAINSTORM_PATH).toLowerCase();
-}
-
-/** The interview delegates the concrete answer→param mapping detail to the
- * dedicated mapping reference. Where an assertion pins the worked param tokens
- * the interview points at (price_min, condition, ship_to, …), read the
- * interview + the mapping it references as one corpus — the agent loads both
- * when authoring the mapping section. */
-function brainstormCorpusLower(): string {
-  return (readBody(BRAINSTORM_PATH) + "\n" + readBody(MAPPING_PATH)).toLowerCase();
-}
-
-describe("references/brainstorm_interview.md — brainstorm conducts an open, two-sided interview (SC1)", () => {
-  it("names the brainstorm/interview as an open, multi-turn conversation (a distinct procedure)", () => {
-    // SC1: the new capability is a conversational interview that PRODUCES the
-    // spec the engine consumes. The body must name it as a brainstorm/interview
-    // and as multi-turn / back-and-forth / conversational — not a single shot.
-    const body = brainstormBodyLower();
-    const namesInterview =
-      body.includes("brainstorm") ||
-      body.includes("interview");
-    const namesMultiTurn =
-      body.includes("multi-turn") ||
-      body.includes("back-and-forth") ||
-      body.includes("back and forth") ||
-      body.includes("conversation") ||
-      body.includes("conversational");
-    expect(namesInterview).toBe(true);
-    expect(namesMultiTurn).toBe(true);
-  });
-
-  it("states the interview is NOT a fixed questionnaire / form-fill", () => {
-    // The product thesis (founder intent): an OPEN interview, NOT a form-fill.
-    // The body must explicitly disavow the fixed-questionnaire shape — a generic
-    // "ask some questions" is not enough; the prose must say it is NOT a form.
-    const body = brainstormBodyLower();
-    const disavowsForm =
-      body.includes("not a fixed questionnaire") ||
-      body.includes("not a questionnaire") ||
-      body.includes("not a form-fill") ||
-      body.includes("not a form fill") ||
-      body.includes("not a form") ||
-      body.includes("not a fixed form") ||
-      body.includes("not a wizard") ||
-      body.includes("not a locked wizard") ||
-      (body.includes("questionnaire") && body.includes("not")) ||
-      body.includes("conversation, not a form-fill");
-    expect(disavowsForm).toBe(true);
-  });
-
-  it("elicits BOTH the domain's decision-attributes AND the user's personal tastes/constraints", () => {
-    // Business rule 3 (elicit BOTH sides): a spec from only domain attributes
-    // (generic) or only preferences (no searchable mapping) is incomplete. The
-    // body must name the two sides — the domain's decision-attributes AND the
-    // user's own tastes/style/budget/constraints.
-    const body = brainstormBodyLower();
-    const namesDomainAttributes =
-      body.includes("decision-attribute") ||
-      body.includes("decision attribute") ||
-      body.includes("decision-attributes") ||
-      body.includes("domain's attributes") ||
-      body.includes("attributes that matter") ||
-      (body.includes("attribute") && body.includes("domain"));
-    const namesPersonalTastes =
-      (body.includes("taste") || body.includes("preference") || body.includes("priorities")) &&
-      (body.includes("budget") || body.includes("constraint") || body.includes("style"));
-    expect(namesDomainAttributes).toBe(true);
-    expect(namesPersonalTastes).toBe(true);
-  });
-
-  it("CADENCE: at least ONE TOUCHPOINT PER DOCUMENT (Round 3 Correction 2) — the retired '≤10 questions' budget is GONE", () => {
-    // Round 3 Correction 2: the round-1/2 "≤10 questions" budget is RETIRED. The
-    // cadence rule is now "AT LEAST ONE TOUCHPOINT PER DOCUMENT" — the creation
-    // walks the five artefacts, one user touchpoint each, in order (domain is the
-    // exception: agent-researched, ZERO questions). The brainstorm doc owns this
-    // rule. It must:
-    //   (1) NAME the one-touchpoint-per-document cadence, AND
-    //   (2) NO LONGER carry the superseded "≤10 questions" / "at most 10" budget
-    //       framing (round 3 explicitly says "retire the ≤10 questions budget").
-    const body = brainstormBodyLower();
-    const namesOneTouchpointPerDoc =
-      body.includes("one touchpoint per document") ||
-      body.includes("one touchpoint per doc") ||
-      body.includes("a touchpoint per document") ||
-      body.includes("touchpoint per document") ||
-      body.includes("one touchpoint each") ||
-      body.includes("at least one touchpoint per") ||
-      (body.includes("touchpoint") && body.includes("per document")) ||
-      (body.includes("one touchpoint") && body.includes("each"));
-    expect(namesOneTouchpointPerDoc).toBe(true);
-    // The retired ≤10-question budget MUST be gone — a lingering "≤10" beside the
-    // new touchpoint rule is the one-sided-pass / false-green the content-seam
-    // tests warn against (round 3: "retire the round-1 '≤10 questions' budget …
-    // update every place rule B's '≤10 questions' framing appears").
-    expect(body).not.toContain("≤10");
-    expect(body).not.toContain("<=10");
-    expect(body).not.toContain("10 question");
-    expect(body).not.toContain("ten question");
-    expect(body).not.toContain("at most 10");
-    expect(body).not.toContain("no more than 10");
-  });
-
-  it("the deep domain_spec comes from the AGENT'S OWN research, not user interrogation (Correction 2 / domain = ZERO questions)", () => {
-    // Round 3 Correction 1 step 2: the domain artefact is researched by the AGENT
-    // (web + knowledge) with NO user question in between — it is the explicit
-    // zero-question exception to the one-touchpoint-per-document rule. The DEEP
-    // domain_spec.md is the agent's own job, NOT extracted by interrogating the
-    // user. The body must name that the deep domain expertise comes from the
-    // agent's own research, not from grilling the user.
-    const body = brainstormBodyLower();
-    const namesOwnResearch =
-      body.includes("own research") ||
-      body.includes("agent's own research") ||
-      body.includes("researches the niche") ||
-      body.includes("research the niche") ||
-      body.includes("researches the web") ||
-      body.includes("research the web") ||
-      (body.includes("research") && body.includes("web")) ||
-      (body.includes("research") && body.includes("not") && body.includes("interrog"));
-    // Domain is the zero-question artefact — no user question for it.
-    const namesDomainZeroQuestion =
-      body.includes("no question") ||
-      body.includes("no user question") ||
-      body.includes("zero question") ||
-      body.includes("without a question") ||
-      body.includes("without asking") ||
-      (body.includes("domain") && body.includes("no question"));
-    expect(namesOwnResearch).toBe(true);
-    expect(namesDomainZeroQuestion).toBe(true);
-  });
-
-  it("setup SEEDS the FIVE corrected artefacts at creation: persona (→ SOUL.md), domain_spec, user_spec, playbook, intent_spec (Round 3 Correction 1)", () => {
-    // Round 3 Correction 1: creation walks the five artefacts, one touchpoint
-    // each. The OLD seller-method "elicitation style + answer→param mapping +
-    // rubric" as DISTINCT converged sections is dissolved (Correction 3):
-    // elicitation folds into the persona, the mapping lives in domain_spec + the
-    // generic mapping ref, the rubric emerges at recommend time. The brainstorm
-    // doc must name all five corrected artefacts as creation targets — the
-    // persona (→ SOUL.md) AND all four sil specs. (The niche is no longer a
-    // separately-CONVERGED target: it FALLS OUT of the persona answer — pinned by
-    // the persona-first ordering block below.)
-    const body = brainstormBodyLower();
-    const namesPersona = body.includes("persona");
-    const namesDomainSpec =
-      body.includes("domain spec") ||
-      body.includes("domain-spec") ||
-      body.includes("domain_spec") ||
-      body.includes("domainspec");
-    const namesUserSpec =
-      body.includes("user spec") ||
-      body.includes("user-spec") ||
-      body.includes("user_spec") ||
-      body.includes("userspec");
-    const namesPlaybook = body.includes("playbook");
-    const namesIntentSpec =
-      body.includes("intent spec") ||
-      body.includes("intent-spec") ||
-      body.includes("intent_spec") ||
-      body.includes("intentspec");
-    const missing: string[] = [];
-    if (!namesPersona) missing.push("persona (→ SOUL.md)");
-    if (!namesDomainSpec) missing.push("researched domain_spec");
-    if (!namesUserSpec) missing.push("seeded user_spec");
-    if (!namesPlaybook) missing.push("seeded playbook");
-    if (!namesIntentSpec) missing.push("derived intent_spec");
-    expect(missing).toEqual([]);
-  });
-});
-
-describe("references/brainstorm_interview.md — creation ASKS the PERSONA FIRST; the niche FALLS OUT of that answer (Round 3 Correction 1)", () => {
-  it("the FIRST creation touchpoint is the PERSONA/identity question (NOT niche-narrowing)", () => {
-    // Round 3 Correction 1 step 1: creation leads with the SOUL.md / persona
-    // question — "what kind of expert do you want, and how should it behave?" —
-    // the persona / identity question, NOT niche-narrowing. The separate
-    // "narrow the niche FIRST" step is DROPPED (round 3: "drop any separate
-    // 'narrow the niche' step"). The body must:
-    //   (1) NAME the persona/identity ask-first touchpoint, and
-    //   (2) frame it as identity/behaviour, not niche-narrowing.
-    const body = brainstormBodyLower();
-    const namesPersonaAsk =
-      body.includes("what kind of expert") ||
-      body.includes("how should it behave") ||
-      body.includes("ask first") || body.includes("ask-first") ||
-      body.includes("asked first") ||
-      (body.includes("persona") && body.includes("first")) ||
-      (body.includes("soul.md") && body.includes("first"));
-    const framesIdentityNotNiche =
-      body.includes("identity") || body.includes("behave") ||
-      body.includes("how it behaves") || body.includes("how it should behave") ||
-      body.includes("kind of expert") ||
-      (body.includes("persona") && body.includes("voice"));
-    expect(namesPersonaAsk).toBe(true);
-    expect(framesIdentityNotNiche).toBe(true);
-  });
-
-  it("the NICHE FALLS OUT of the persona answer — there is NO separate niche-narrowing step that PRECEDES the persona ask (Round 3 Correction 1)", () => {
-    // Round 3 Correction 1 step 1: "The niche FALLS OUT of the answer; drop any
-    // separate 'narrow the niche' step." The doc must state the niche is derived
-    // from / falls out of the persona answer — niche-narrowing is no longer the
-    // lead-off gate.
-    const body = brainstormBodyLower();
-    const nicheFallsOut =
-      body.includes("falls out") || body.includes("fall out") ||
-      body.includes("falls out of") ||
-      body.includes("derived from the persona") ||
-      body.includes("from the persona answer") ||
-      body.includes("from that answer") ||
-      (body.includes("niche") && body.includes("persona") && body.includes("answer"));
-    expect(nicheFallsOut).toBe(true);
-  });
-
-  it("the creation FLOW walks the FIVE artefacts in ORDER: persona/SOUL → domain → user_spec → playbook → intent_spec (Round 3 Correction 1)", () => {
-    // Round 3 Correction 1: the creation walks the five artefacts, one touchpoint
-    // each, in this exact order:
-    //   1. SOUL.md (persona, ask-first)
-    //   2. domain_spec.md (agent web-research, no question)
-    //   3. user_spec.md (one basic niche fact — shoes→foot length+width, bike→
-    //      height+leg length)
-    //   4. playbook.md (one question: compare a set of options)
-    //   5. intent_spec.md (present PRD dimensions, ask to sign off)
-    // Adversarial precision — anchor on each artefact's STEP HEADING (the `### `
-    // markdown heading that NAMES the artefact's `.md` file), NOT the raw first
-    // mention. The doc legitimately opens with a five-artefact OVERVIEW TABLE + a
-    // principles list that NAME all five artefacts up front, so
-    // `indexOf("playbook")` / `indexOf("user_spec")` land in that overview ABOVE
-    // the steps — a raw-mention anchor FALSELY fails even on correctly-ordered
-    // prose (the agenda-table trap the old narrow-first test guarded against). A
-    // step heading is a line that BOTH starts with `### ` AND carries the artefact
-    // filename — that combination occurs only at the artefact's actual step (the
-    // overview is a `|` table, the principles are bullets, the rules are an ordered
-    // list — none are `### ` headings). The developer keeps full latitude over the
-    // heading's wording and step number; we pin only that the five step headings
-    // appear in this order.
-    const body = brainstormBodyLower();
-    /** Index of the first `### ` heading line that mentions the given artefact
-     * token (e.g. `soul.md`, `domain_spec`). Returns -1 if no such heading. */
-    const stepHeadingIdx = (token: string): number => {
-      const lines = body.split("\n");
-      let offset = 0;
-      for (const line of lines) {
-        if (line.startsWith("### ") && line.includes(token)) return offset;
-        offset += line.length + 1; // +1 for the stripped "\n"
-      }
-      return -1;
-    };
-    const personaIdx = stepHeadingIdx("soul.md");
-    const domainIdx = stepHeadingIdx("domain_spec");
-    const userIdx = stepHeadingIdx("user_spec");
-    const playbookIdx = stepHeadingIdx("playbook");
-    const intentIdx = stepHeadingIdx("intent_spec");
-    for (const [name, idx] of [
-      ["SOUL.md (ask-first) step heading", personaIdx],
-      ["domain_spec step heading", domainIdx],
-      ["user_spec step heading", userIdx],
-      ["playbook step heading", playbookIdx],
-      ["intent_spec step heading", intentIdx],
-    ] as const) {
-      expect(idx, `${name} not found in brainstorm_interview.md`).toBeGreaterThanOrEqual(0);
-    }
-    // The chain is in order — persona FIRST, intent_spec LAST.
-    expect(personaIdx).toBeLessThan(domainIdx);
-    expect(domainIdx).toBeLessThan(userIdx);
-    expect(userIdx).toBeLessThan(playbookIdx);
-    expect(playbookIdx).toBeLessThan(intentIdx);
-  });
-
-  it("user_spec is ONE BASIC niche-fact question (shoes→foot length+width, bike→height+leg length) — Round 3 Correction 1 step 3", () => {
-    // Round 3 Correction 1 step 3: the user_spec touchpoint is ONE basic question
-    // — the single most-basic niche fact. The founder's two examples (shoes →
-    // foot length + width; bike → height + leg length) are the canonical shape;
-    // the doc must name the one-basic-fact touchpoint with a concrete niche
-    // example so the agent asks the right single thing, not a questionnaire.
-    const body = brainstormBodyLower();
-    const namesOneBasicFact =
-      body.includes("one basic") || body.includes("a basic") ||
-      body.includes("most-basic") || body.includes("most basic") ||
-      body.includes("single most-basic") || body.includes("one question") ||
-      (body.includes("basic") && body.includes("fact"));
-    const namesConcreteExample =
-      body.includes("foot length") || body.includes("foot width") ||
-      body.includes("height") || body.includes("leg length") ||
-      body.includes("inseam") ||
-      (body.includes("shoe") && body.includes("foot")) ||
-      (body.includes("bike") && body.includes("height"));
-    expect(namesOneBasicFact).toBe(true);
-    expect(namesConcreteExample).toBe(true);
-  });
-
-  it("playbook is ONE question that surfaces buying taste by asking to COMPARE a set of options — Round 3 Correction 1 step 4", () => {
-    // Round 3 Correction 1 step 4: the playbook touchpoint is ONE question that
-    // surfaces buying taste by asking the user to COMPARE a set of options
-    // (preference). The doc must name the compare-a-set-of-options touchpoint.
-    const body = brainstormBodyLower();
-    const namesCompareOptions =
-      body.includes("compare a set of options") ||
-      body.includes("compare a set") ||
-      body.includes("compare options") ||
-      body.includes("compare a few options") ||
-      body.includes("set of options") ||
-      (body.includes("compare") && body.includes("option") && body.includes("playbook")) ||
-      (body.includes("compare") && body.includes("preference"));
-    expect(namesCompareOptions).toBe(true);
-  });
-
-  it("intent_spec is a SIGN-OFF touchpoint — present the PRD dimensions and ask the user to sign off — Round 3 Correction 1 step 5", () => {
-    // Round 3 Correction 1 step 5: the intent_spec touchpoint PRESENTS the PRD
-    // decomposition dimensions and asks the user to SIGN OFF. The doc must name
-    // presenting the dimensions + the sign-off ask.
-    const body = brainstormBodyLower();
-    const namesSignOff =
-      body.includes("sign off") || body.includes("sign-off") ||
-      body.includes("signs off") || body.includes("signoff") ||
-      body.includes("ask the user to sign") ||
-      (body.includes("present") && body.includes("dimension") && body.includes("intent"));
-    const namesPrdDimensions =
-      body.includes("prd") || body.includes("decomposition dimension") ||
-      body.includes("decomposition-dimension") ||
-      (body.includes("dimension") && body.includes("intent"));
-    expect(namesSignOff).toBe(true);
-    expect(namesPrdDimensions).toBe(true);
-  });
-});
-
-describe("references/brainstorm_interview.md — per-section converge + re-entrant (collaborative, not a locked wizard)", () => {
-  it("states each section is converged with the user (reflect-back + confirm) before advancing", () => {
-    // Business rule 5: reflect-and-confirm per section. The body must name the
-    // reflect-back-then-confirm loop — ask, reflect a short summary of what it
-    // heard, get a yes/adjust before moving on.
-    const body = brainstormBodyLower();
-    const reflectsBack =
-      body.includes("reflect back") ||
-      body.includes("reflect-back") ||
-      body.includes("reflects back") ||
-      body.includes("reflect a") ||
-      body.includes("summary of what") ||
-      body.includes("reflect");
-    const confirms =
-      body.includes("confirm") ||
-      body.includes("yes / adjust") ||
-      body.includes("yes/adjust") ||
-      body.includes("before moving on") ||
-      body.includes("before advancing");
-    expect(reflectsBack).toBe(true);
-    expect(confirms).toBe(true);
-  });
-
-  it("states the flow is collaborative / re-entrant — the user can revise an earlier section", () => {
-    // Business rule 5: the flow is re-entrant, not linear-locked. The body must
-    // say the user can revise/return to an earlier section — collaborative, not
-    // a locked wizard.
-    const body = brainstormBodyLower();
-    const isReentrant =
-      body.includes("re-entrant") ||
-      body.includes("reentrant") ||
-      body.includes("revise an earlier") ||
-      body.includes("revise earlier") ||
-      body.includes("revisit") ||
-      body.includes("return to an earlier") ||
-      body.includes("go back") ||
-      (body.includes("revise") && body.includes("earlier"));
-    const isCollaborative =
-      body.includes("collaborative") ||
-      body.includes("not a locked wizard") ||
-      body.includes("not linear-locked") ||
-      body.includes("not a wizard");
-    expect(isReentrant).toBe(true);
-    expect(isCollaborative).toBe(true);
-  });
-});
-
-describe("references/brainstorm_interview.md — SC2 tailoring: the spec reflects THIS user's stated inputs", () => {
-  it("states the persona, mapping, and rubric must reflect the user's STATED inputs (tailored, not template)", () => {
-    // Business rule 4 (SC2): the persona, answer→param mapping, and rubric must
-    // reflect what THIS user said — not a generic template. The body must say
-    // the tailoring is real (reflects the user's stated tastes/priorities), not
-    // a fixed template.
-    const body = brainstormBodyLower();
-    const namesStated =
-      body.includes("stated") ||
-      body.includes("what this user said") ||
-      body.includes("what the user said") ||
-      body.includes("the user's stated");
-    const namesTailored =
-      body.includes("tailored") ||
-      body.includes("tailor") ||
-      body.includes("not a generic template") ||
-      body.includes("not a template") ||
-      body.includes("not generic");
-    expect(namesStated).toBe(true);
-    expect(namesTailored).toBe(true);
-  });
-
-  it("maps concrete stated inputs to REAL sil_search params (budget→price_min/price_max, prefer secondhand→condition, niche→query/category)", () => {
-    // SC2 core: the answer→param mapping must target the REAL sil_search params
-    // (catalog.ts), not invented filters. The mapping reference (which the
-    // interview delegates this detail to) must name the concrete params a stated
-    // input maps onto: a budget → price_min/price_max; "prefer secondhand"/"new
-    // only" → condition; the niche → query and/or category. Read the interview +
-    // the mapping it references as one corpus.
-    const body = brainstormCorpusLower();
-    expect(body).toContain("price_min");
-    expect(body).toContain("price_max");
-    expect(body).toContain("condition");
-    expect(body).toContain("query");
-    expect(body).toContain("category");
-    // The mapping must tie a stated budget to the price params, not merely list
-    // them — a budget token near the price params proves the worked example.
-    expect(body).toContain("budget");
-    // "secondhand" is the concrete condition value a "prefer secondhand" taste
-    // maps onto — naming it proves the mapping is a real worked example.
-    expect(body).toContain("secondhand");
-  });
-
-  it("leaves ship_to EMPTY by default and never round-trips sil_whoami to populate it", () => {
-    // Business rule 9 / location-aware-search-flow: the inherited search
-    // behaviour must leave ship_to empty (server resolves the registered
-    // default) and must NOT instruct the expert to call sil_whoami to populate
-    // it. The mapping reference (delegated from the interview) must name ship_to,
-    // state it is left empty by default, and disavow the sil_whoami round-trip.
-    const body = brainstormCorpusLower();
-    expect(body).toContain("ship_to");
-    const leavesEmpty =
-      body.includes("ship_to empty") ||
-      body.includes("ship_to left empty") ||
-      body.includes("leave ship_to empty") ||
-      body.includes("leaves ship_to empty") ||
-      (body.includes("ship_to") && body.includes("empty"));
-    expect(leavesEmpty).toBe(true);
-    // The no-whoami-roundtrip rule: the mapping must NOT round-trip sil_whoami
-    // to populate ship_to. The prose must disavow it — "never call sil_whoami",
-    // "do not round-trip sil_whoami", "without sil_whoami".
-    const disavowsWhoamiRoundtrip =
-      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) ||
-      /sil_whoami[^.]*(never|not)/.test(body);
-    expect(disavowsWhoamiRoundtrip).toBe(true);
-  });
-
-  it("ties the recommendation rubric to the user's stated priorities (weighted, not a fixed order)", () => {
-    // Business rule 4 / SC2: the rubric ranks/picks by the user's stated
-    // priorities (e.g. "durability over price", a hard-no brand) — weighted by
-    // what the user said, not a fixed order. The body must name the rubric AND
-    // tie it to stated priorities, with a concrete worked example.
-    const body = brainstormBodyLower();
-    const namesRubric =
-      body.includes("rubric") ||
-      (body.includes("rank") && body.includes("recommend"));
-    const tiesToPriorities =
-      body.includes("priorities") ||
-      body.includes("priority") ||
-      body.includes("weighted") ||
-      body.includes("weight") ||
-      body.includes("durability over price") ||
-      body.includes("hard no") ||
-      body.includes("hard-no");
-    expect(namesRubric).toBe(true);
-    expect(tiesToPriorities).toBe(true);
-  });
-
-  it("frames the converged output as a valid sil_profile_materialize input (agentId lower-kebab ≠ main, name, REQUIRED domain+intent specs, lazy user/playbook)", () => {
-    // SC2 / the spec-contract bridge after the SDS reframe: the converged spec
-    // must be a VALID input to sil_profile_materialize — { agentId (lower-kebab,
-    // ≠ main), name, domainSpec (required), intentSpec (required), userSpec? /
-    // playbook? (lazy) }. The persona is NOT a materialize input (it goes straight
-    // to the host SOUL.md). The body must frame the brainstorm output as that spec
-    // and name agentId's lower-kebab + not-main constraint.
-    const body = brainstormBodyLower();
-    expect(body).toContain("sil_profile_materialize");
-    expect(body).toContain("agentid");
-    const namesLowerKebab =
-      body.includes("lower-kebab") ||
-      body.includes("lower kebab") ||
-      body.includes("kebab");
-    const namesNotMain = body.includes("main");
-    expect(namesLowerKebab).toBe(true);
-    expect(namesNotMain).toBe(true);
-    // The two REQUIRED specs are named as materialize inputs.
-    const namesDomainSpec =
-      body.includes("domainspec") ||
-      body.includes("domain spec") ||
-      body.includes("domain-spec") ||
-      body.includes("domain_spec");
-    const namesIntentSpec =
-      body.includes("intentspec") ||
-      body.includes("intent spec") ||
-      body.includes("intent-spec") ||
-      body.includes("intent_spec");
-    expect(namesDomainSpec).toBe(true);
-    expect(namesIntentSpec).toBe(true);
-  });
-});
-
-describe("skill — endorsement before creation: ZERO engine steps before an explicit go-ahead", () => {
-  it("names an explicit endorsement / go-ahead on the assembled draft", () => {
-    // Business rule 1 (the strongest invariant): nothing is created until the
-    // user explicitly endorses the assembled draft. The interview reference (the
-    // file that owns the endorsement gate) must name an explicit endorsement /
-    // go-ahead — and that it is an affirmative user act, not inferred from
-    // answering the last question or from silence.
-    const body = brainstormBodyLower();
-    const namesEndorsement =
-      body.includes("endorse") ||
-      body.includes("endorsement") ||
-      body.includes("go-ahead") ||
-      body.includes("go ahead") ||
-      (body.includes("explicit") && (body.includes("approve") || body.includes("confirm")));
-    const namesDraft =
-      body.includes("draft") ||
-      body.includes("assembled spec") ||
-      body.includes("assembled draft");
-    expect(namesEndorsement).toBe(true);
-    expect(namesDraft).toBe(true);
-  });
-
-  it("orders the endorsement BEFORE the engine pointer (the interview reaches the engine only after endorsement)", () => {
-    // The card's strongest ordering invariant, preserved across the split: in
-    // the interview reference, an endorse/confirm anchor must precede the
-    // pointer that hands off to the engine reference. Because the engine is
-    // loaded DOWNSTREAM of the interview, an endorsement step textually ahead of
-    // the engine handoff proves the agent cannot reach creation before the
-    // user's explicit go-ahead. Anchor on the `endorse` verb — the brainstorm
-    // owns it.
-    const body = brainstormBodyLower();
-    const endorseIdx = body.indexOf("endorse");
-    const engineHandoffIdx = body.indexOf("agent_creation_engine.md");
-    expect(endorseIdx).toBeGreaterThanOrEqual(0);
-    expect(engineHandoffIdx).toBeGreaterThanOrEqual(0);
-    // The endorsement gate is stated, and the FINAL/after-endorsement handoff to
-    // the engine reference comes after an endorse mention. The last engine-ref
-    // pointer (the "after endorsement, proceed to the engine" handoff) must be
-    // preceded by an endorse token.
-    const lastEngineHandoffIdx = body.lastIndexOf("agent_creation_engine.md");
-    expect(endorseIdx).toBeLessThan(lastEngineHandoffIdx);
-  });
-
-  it("guards BOTH write surfaces behind endorsement (no openclaw agents add / sil_profile_materialize pre-endorsement)", () => {
-    // The same gate against the two concrete write surfaces. The interview
-    // reference must keep the engine's write commands OUT of the pre-endorsement
-    // flow — neither `openclaw agents add` nor `sil_profile_materialize` may be
-    // reachable before the endorsement gate. The interview names the engine only
-    // as a post-endorsement handoff; if it mentions either write surface, that
-    // mention must come AFTER the endorse token.
-    const body = brainstormBodyLower();
-    const endorseIdx = body.indexOf("endorse");
-    expect(endorseIdx).toBeGreaterThanOrEqual(0);
-    const addIdx = body.indexOf("openclaw agents add");
-    if (addIdx >= 0) expect(endorseIdx).toBeLessThan(addIdx);
-    const materializeIdx = body.indexOf("sil_profile_materialize");
-    // sil_profile_materialize IS named (the spec-contract bridge) — its first
-    // mention is the self-check of the spec SHAPE, which legitimately precedes
-    // endorsement; the WRITE call lives in the engine. So we do not order the
-    // first mention. The invariant that matters — no engine STEP runs pre-
-    // endorsement — is pinned by the engine handoff ordering above and the
-    // prose-state assertion below.
-    expect(materializeIdx).toBeGreaterThanOrEqual(0);
-  });
-
-  it("states ZERO engine steps run before endorsement (nothing created until the user says yes)", () => {
-    // Business rule 1 + 2, in prose: before endorsement the flow has called
-    // ZERO engine steps. The body must say nothing is created / written until
-    // the user endorses — the draft lives only in conversation until then.
-    const body = brainstormBodyLower();
-    const saysNothingUntilEndorsed =
-      body.includes("nothing is created until") ||
-      body.includes("nothing created until") ||
-      body.includes("creates nothing until") ||
-      body.includes("create nothing until") ||
-      body.includes("nothing is written until") ||
-      body.includes("zero engine steps") ||
-      body.includes("no engine step") ||
-      (body.includes("only on") && body.includes("endorse")) ||
-      (body.includes("only") && body.includes("endorse") && body.includes("engine"));
-    expect(saysNothingUntilEndorsed).toBe(true);
-  });
-});
-
-describe("references/brainstorm_interview.md — abandon mid-flow creates nothing", () => {
-  it("states abandoning mid-flow leaves a clean state with nothing written (no partial expert)", () => {
-    // Business rule 2: if the user stops/changes their mind before endorsing,
-    // the flow has created nothing — no partial expert to clean up, because no
-    // engine step ran pre-endorsement. The body must name the abandon path and
-    // that it leaves nothing partial (no teardown needed).
-    const body = brainstormBodyLower();
-    const namesAbandon =
-      body.includes("abandon") ||
-      body.includes("stops") ||
-      body.includes("changes their mind") ||
-      body.includes("walks away") ||
-      body.includes("walk away") ||
-      body.includes("change their mind") ||
-      body.includes("mid-flow");
-    const namesNothingCreated =
-      body.includes("nothing is created") ||
-      body.includes("nothing created") ||
-      body.includes("created nothing") ||
-      body.includes("creates nothing") ||
-      body.includes("nothing was written") ||
-      body.includes("no partial") ||
-      body.includes("nothing partial") ||
-      body.includes("clean state");
-    expect(namesAbandon).toBe(true);
-    expect(namesNothingCreated).toBe(true);
-  });
-
-  it("states the flow never saves progress by writing artefacts early", () => {
-    // Business rule 2 corollary: the flow must never "save progress" by writing
-    // artefacts before endorsement — the draft lives in conversation only. The
-    // body must disavow early/partial writes, so abandonment is automatically
-    // clean.
-    const body = brainstormBodyLower();
-    const disavowsEarlyWrite =
-      body.includes("never save progress") ||
-      body.includes("not save progress") ||
-      body.includes("does not save progress") ||
-      body.includes("draft lives only in the conversation") ||
-      body.includes("draft lives in conversation") ||
-      body.includes("only in the conversation") ||
-      body.includes("only in conversation") ||
-      body.includes("no writes before") ||
-      body.includes("write nothing before") ||
-      body.includes("writes nothing before") ||
-      body.includes('"save progress"');
-    expect(disavowsEarlyWrite).toBe(true);
-  });
-});
-
-describe("references/brainstorm_interview.md — collision is handled in the conversation: refine-or-rename, never clobber", () => {
-  it("offers refine-or-rename on a colliding agentId (a path forward, not a dead-end)", () => {
-    // Business rule 7 / the card's collision edge: when the proposed agentId
-    // collides with an existing expert, the flow offers a CHOICE — refine the
-    // niche under a new id, or rename this one — rather than dead-ending. The
-    // body must name both the rename option AND the refine-the-niche
-    // alternative, so the user is never stuck.
-    const body = brainstormBodyLower();
-    const offersRename =
-      body.includes("rename") ||
-      body.includes("different id") ||
-      body.includes("new id") ||
-      body.includes("pick a different");
-    const offersRefine =
-      body.includes("refine") ||
-      body.includes("refine the niche") ||
-      body.includes("refine the existing");
-    expect(offersRename).toBe(true);
-    expect(offersRefine).toBe(true);
-  });
-
-  it("never clobbers an existing expert on collision (defers to the engine's collision refusal)", () => {
-    // Business rule 7: the flow never overwrites an existing expert — it
-    // surfaces the `collision` outcome and offers refine-or-rename. The body
-    // must disavow clobbering on collision, consistent with the engine's
-    // non-destructive collision refusal.
-    const body = brainstormBodyLower();
-    expect(body).toContain("collision");
-    const neverClobbers =
-      body.includes("never overwrite") ||
-      body.includes("never clobber") ||
-      body.includes("not overwrite") ||
-      body.includes("do not overwrite") ||
-      body.includes("do not clobber") ||
-      body.includes("non-destructive");
-    expect(neverClobbers).toBe(true);
-  });
-});
-
-describe("references/brainstorm_interview.md — creation is local + offline: no identity coupling in the interview", () => {
-  it("does NOT present sil registration / a token as a prerequisite to CREATE the expert", () => {
-    // Business rule 8: the interview never presents sil registration / a token
-    // as a prerequisite to CREATE the expert (the expert registers the user
-    // later, on first shop). The brainstorm must not ask the user to register
-    // before creating. Same adversarial shape as the engine's AC5 identity-
-    // coupling guard: assert the brainstorm does not gate CREATION on register.
-    const body = brainstormBodyLower();
-    const couplesIdentity =
-      /register[^.]*before[^.]*creat/.test(body) ||
-      /creat[^.]*requires[^.]*register/.test(body) ||
-      /must.*register.*to.*creat/.test(body) ||
-      /register[^.]*prerequisite[^.]*creat/.test(body);
-    expect(couplesIdentity).toBe(false);
-  });
-});
-
-/* ===========================================================================
- * WORKED EXAMPLE — the end-to-end walkthrough exists and demonstrates the gate.
- * skill-creator: ≥1 worked example showing the full journey (free-form request
- * → interview convergence → assembled spec → created expert). Pin its presence
- * and that it carries the endorsement gate, so the example never drifts into a
- * shortcut that skips the user's go-ahead.
- * ========================================================================= */
-
-describe("examples/ — a worked end-to-end example exists and demonstrates the endorsement gate", () => {
-  it("the worked example file exists on disk", () => {
-    expect(existsSync(EXAMPLE_PATH)).toBe(true);
-  });
-
-  it("walks the full journey: a free-form request, the interview, an assembled spec, a created expert", () => {
-    const body = readBody(EXAMPLE_PATH).toLowerCase();
-    // The assembled spec shape and the catalog tools the created expert calls.
-    expect(body).toContain("agentid");
-    expect(body).toContain("persona");
-    expect(body).toContain("playbook");
-    // The journey reaches the engine via the host-native creation command.
-    expect(body).toContain("openclaw agents add");
-  });
-
-  it("shows the endorsement gate — the engine runs only AFTER the user's explicit go-ahead", () => {
-    // The example must not model a shortcut: the explicit endorsement must
-    // precede the engine's first write command in the walkthrough.
-    const body = readBody(EXAMPLE_PATH).toLowerCase();
-    const endorseIdx = body.indexOf("endorse");
-    const addIdx = body.indexOf("openclaw agents add");
-    expect(endorseIdx).toBeGreaterThanOrEqual(0);
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(endorseIdx).toBeLessThan(addIdx);
-  });
-});
-
-/* ===========================================================================
- * ROUND 3 — the worked example is a SHORT, GENERAL-COUNSEL walkthrough that
- * walks the FIVE-artefact creation FLOW from a create-expert request (NOT a
- * single-query optimizer), per the card's "## Founder review round 3" Corrections
- * 1 + 3 + 4.
- *
- * tier: integration (reads the real skill/examples/road_cycling_expert_walkthrough.md
- * from disk). These pins target the FOUR things round 3 changes about the example:
- *   (Correction 1) it starts from a create-expert request and walks the five
- *     artefacts one touchpoint each, in order;
- *   (Correction 3) it frames the expert as GENERAL COUNSEL / an ongoing buyer
- *     advisor, NOT a single-query optimizer (its main flaw);
- *   (Correction 2/4) the "≤10 questions" budget is GONE, and the doc is much
- *     shorter (context-window budget).
- * ========================================================================= */
-
-describe("examples/road_cycling_expert_walkthrough.md — ROUND 3: short, general-counsel, five-artefact creation flow", () => {
-  /** Lower-cased example body, and a raw line-count for the length budget. */
-  function exampleLower(): string {
-    return readBody(EXAMPLE_PATH).toLowerCase();
-  }
-  function exampleLineCount(): number {
-    return readBody(EXAMPLE_PATH).split("\n").length;
-  }
-
-  it("starts from a CREATE-EXPERT request and walks the FIVE-artefact creation flow (Correction 1)", () => {
-    // Round 3 Correction 3: the example must START FROM THE CREATE-EXPERT REQUEST
-    // and walk the five-artefact flow of Correction 1 — not open mid-shop. The
-    // body must name a create-an-expert opening AND all five artefacts so the
-    // walkthrough demonstrates the full creation walk.
-    const body = exampleLower();
-    const startsFromCreateRequest =
-      body.includes("create an expert") || body.includes("create a shopping expert") ||
-      body.includes("an expert that shops") || body.includes("expert that shops for") ||
-      body.includes("i want an expert") || body.includes("build me an expert") ||
-      (body.includes("create") && body.includes("expert") && body.includes("request"));
-    expect(startsFromCreateRequest).toBe(true);
-    // All five artefacts walked: persona/SOUL + the four sil specs.
-    const namesSoul = body.includes("soul.md") || body.includes("persona");
-    const namesDomain =
-      body.includes("domain_spec") || body.includes("domain spec") ||
-      body.includes("domain-spec");
-    const namesUser =
-      body.includes("user_spec") || body.includes("user spec") ||
-      body.includes("user-spec");
-    const namesPlaybook = body.includes("playbook");
-    const namesIntent =
-      body.includes("intent_spec") || body.includes("intent spec") ||
-      body.includes("intent-spec");
-    const missing: string[] = [];
-    if (!namesSoul) missing.push("persona/SOUL.md");
-    if (!namesDomain) missing.push("domain_spec");
-    if (!namesUser) missing.push("user_spec");
-    if (!namesPlaybook) missing.push("playbook");
-    if (!namesIntent) missing.push("intent_spec");
-    expect(missing).toEqual([]);
-  });
-
-  it("walks the five artefacts in the Correction-1 ORDER: persona/SOUL → domain → user_spec → playbook → intent_spec", () => {
-    // Round 3 Correction 1: the creation walks the five artefacts, one touchpoint
-    // each, in this order. The example demonstrates the flow, so its narrative
-    // must hit the artefacts in the same monotonic order an agent would.
-    //
-    // Adversarial precision — anchor on each artefact's STEP-MARKER line, NOT the
-    // raw first mention. The example re-names every artefact filename inside the
-    // assembled JSONC spec block AND in the prose, so a raw `indexOf(filename)`
-    // can land outside the walk. The interview steps are bold-numbered markers
-    // (`**1. \`SOUL.md\` …`, `**2. \`domain_spec.md\` …`): a line that starts with a
-    // bold-step marker AND carries the artefact filename occurs only at that
-    // artefact's step. The developer keeps latitude over wording; we pin only the
-    // five step markers' order.
-    const body = exampleLower();
-    /** Index of the first bold-numbered step-marker line (`**<n>. … <token>`) that
-     * mentions the given artefact token. Falls back to the first heading line
-     * (`#`/`##`/`###`) that mentions it, so a heading-based example still anchors. */
-    const stepMarkerIdx = (token: string): number => {
-      const lines = body.split("\n");
-      let offset = 0;
-      for (const line of lines) {
-        const isStepMarker = /^\*\*\d/.test(line) || line.startsWith("#");
-        if (isStepMarker && line.includes(token)) return offset;
-        offset += line.length + 1;
-      }
-      return -1;
-    };
-    const personaIdx = stepMarkerIdx("soul.md");
-    const domainIdx = stepMarkerIdx("domain_spec");
-    const userIdx = stepMarkerIdx("user_spec");
-    const playbookIdx = stepMarkerIdx("playbook");
-    const intentIdx = stepMarkerIdx("intent_spec");
-    for (const [name, idx] of [
-      ["persona/SOUL step marker", personaIdx],
-      ["domain_spec step marker", domainIdx],
-      ["user_spec step marker", userIdx],
-      ["playbook step marker", playbookIdx],
-      ["intent_spec step marker", intentIdx],
-    ] as const) {
-      expect(idx, `${name} not found in the example`).toBeGreaterThanOrEqual(0);
-    }
-    expect(personaIdx).toBeLessThan(domainIdx);
-    expect(domainIdx).toBeLessThan(userIdx);
-    expect(userIdx).toBeLessThan(playbookIdx);
-    expect(playbookIdx).toBeLessThan(intentIdx);
-  });
-
-  it("frames the expert as GENERAL COUNSEL / an ongoing buyer advisor — NOT a single-query optimizer (Correction 3, the example's main flaw)", () => {
-    // Round 3 Correction 3: frame the expert as GENERAL COUNSEL to the buyer (an
-    // ongoing advisor across the buyer's needs), NOT a single-query optimizer —
-    // that single-query fixation is named as the example's MAIN FLAW. The body
-    // must carry the general-counsel / ongoing-advisor framing.
-    const body = exampleLower();
-    const framesGeneralCounsel =
-      body.includes("general counsel") || body.includes("general-counsel") ||
-      body.includes("ongoing advisor") || body.includes("ongoing buyer advisor") ||
-      body.includes("ongoing buying advisor") ||
-      body.includes("standing advisor") ||
-      body.includes("advisor across") || body.includes("counsel to the buyer") ||
-      body.includes("over time") && body.includes("advisor") ||
-      (body.includes("ongoing") && body.includes("advisor"));
-    expect(framesGeneralCounsel).toBe(true);
-  });
-
-  it("the example is NOT FIXATED on a single shopping query — it does NOT carry the deep per-query map/search/rubric machinery (Correction 3)", () => {
-    // Round 3 Correction 3: the single-query fixation is the example's MAIN FLAW.
-    // The rewritten example demonstrates the CREATION FLOW + the general-counsel
-    // posture — it must NOT re-descend into a full single-query optimization (the
-    // map→search-params→rubric machinery that belongs in expert_shopping.md, not
-    // a creation walkthrough). We pin the ABSENCE of the single-query-optimizer
-    // tell: a literal sil_search param block (`price_max:` / `category:` with
-    // `condition:`) is the single-query machinery the example should no longer
-    // carry. (The example may MENTION shopping happens later — but not re-run a
-    // full param-mapped query as its centrepiece.)
-    const body = exampleLower();
-    const carriesFullParamQueryBlock =
-      (body.includes("price_max:") && body.includes("category:")) ||
-      (body.includes("price_max:") && body.includes("condition:")) ||
-      body.includes("# €1500 → minor units") ||
-      body.includes("→ minor units (cents)");
-    expect(carriesFullParamQueryBlock).toBe(false);
-  });
-
-  it("the retired '≤10 questions' budget is GONE from the example (Correction 2)", () => {
-    // Round 3 Correction 2: "≤10 questions" is retired everywhere. The example
-    // currently states "Setup is light (≤10 questions)" and tallies a running
-    // question budget ("Questions so far: ~2", "Well under 10") — all of that
-    // must be gone. The cadence is one-touchpoint-per-document now.
-    const body = exampleLower();
-    expect(body).not.toContain("≤10");
-    expect(body).not.toContain("<=10");
-    expect(body).not.toContain("10 question");
-    expect(body).not.toContain("under 10");
-    expect(body).not.toContain("question budget");
-    expect(body).not.toContain("questions so far");
-  });
-
-  it("the example is MUCH SHORTER — within the context-window budget ceiling (Correction 4)", () => {
-    // Round 3 Correction 4: the example (286 lines) is too long — the agent's
-    // context window is a hard budget. It must be cut MUCH shorter. Dropping the
-    // single-query-optimizer sections (the map/search/rubric/second-query blocks)
-    // and trimming restatement brings the five-artefact creation walk well under
-    // a 180-line ceiling (a ~37%+ cut from 286). The ceiling forces a real trim
-    // without being so tight it costs the five-artefact walk.
-    const lines = exampleLineCount();
-    expect(
-      lines,
-      `example is ${lines} lines — round 3 requires a much shorter general-counsel walkthrough (ceiling 180)`,
-    ).toBeLessThanOrEqual(180);
-  });
-});
-
-/* ===========================================================================
- * REFINE AN EXISTING EXPERT — the self-reinforcement loop seam
- * (card: refine-an-expert-from-observed-sessions-self-reinf — SC6)
- *
- * tier: unit (the *nature* of each assertion is a single-artefact prose check
- * over the real reference body — the umbrella file declares itself integration
- * because it reads real skill files, but these mirror how the sibling SC4 card
- * tagged its identical reference-content criteria). Same content-seam pattern as
- * the engine/brainstorm blocks above: read the REAL
- * skill/references/refine_expert.md from disk, lowercase, and pin the loop's
- * load-bearing invariants via OR-grouped intent-token substrings + indexOf
- * step-VERB ordering anchors — NEVER `§N` numbers, NEVER exact sentences, so the
- * prose stays editable.
- *
- * The architect's verdict: SC6 is skill-guidance-only — no `src/` change, no new
- * plugin tool. The refine loop COMPOSES the existing `sil_profile_get` (load) +
- * `sil_profile_materialize` (atomic in-place re-write) tools; the reference body
- * IS the spec the host agent follows, exactly as it is for the engine. These
- * never fake a host: "a real refinement genuinely sharpens the expert" is
- * `live-verification`'s job (this repo has NO host-load gate per CLAUDE.md), and
- * the artefact-interaction half (the in-place re-write preserving prior artefacts
- * on failure; the materialize→re-materialize→read round-trip) is pinned by the
- * integration test in src/__tests__/lib/refine-rewrite.test.ts.
- *
- * The 7 unit invariants pinned here come straight from the card's 7 `unit`
- * acceptance criteria / the In-Dev handoff "Where to start (qa-developer)" list.
- * RED on arrival: refine_expert.md does not exist yet (expert-developer authors
- * it in GREEN) — every read + assert below fails until it does.
- * ========================================================================= */
-
-/** Lower-cased refine reference body — the file that OWNS the refine loop. */
-function refineBodyLower(): string {
-  return readBody(REFINE_PATH).toLowerCase();
-}
-
-/** The refine reference + the search-param mapping it DELEGATES the param table
- * to, read as one corpus — for the never-invent-a-filter / ship_to-empty checks
- * where the worked param detail legitimately lives in the mapping reference the
- * refine loop POINTS AT (rather than re-carrying). */
-function refineCorpusLower(): string {
-  return (readBody(REFINE_PATH) + "\n" + readBody(MAPPING_PATH)).toLowerCase();
-}
-
-describe("references/refine_expert.md — exists + names the load/persist tools it composes (AC1/AC4)", () => {
-  it("exists on disk", () => {
-    // RED until expert-developer authors the reference. A refine loop with no
-    // reference is a broken capability — the router would point at a missing file.
-    expect(existsSync(REFINE_PATH)).toBe(true);
-  });
-
-  it("names the load step `sil_profile_get` (load the expert it sharpens)", () => {
-    // Step 1 (trigger + load): the loop loads the named expert's current
-    // artefacts via the existing get tool — manifest + persona + playbook. The
-    // reference must name the real load tool so the path is loadable.
-    expect(refineBodyLower()).toContain("sil_profile_get");
-  });
-
-  it("names the persist step `sil_profile_materialize` (the atomic in-place re-write)", () => {
-    // Step 4 (persist): the confirmed subset persists by re-running the engine's
-    // persist step — `sil_profile_materialize` with the UPDATED spec. The
-    // reference must name the real persist tool (NOT a hand-rolled write under
-    // $SIL_DATA_DIR — that would diverge from the store's atomic-write idiom and
-    // re-open the half-refined surface).
-    expect(refineBodyLower()).toContain("sil_profile_materialize");
-  });
-});
-
-describe("references/refine_expert.md — propose from the OBSERVED session, tied to evidence, not a generic template (AC1)", () => {
-  it("frames a distinct REFINE capability (load→propose→confirm→persist), not the create engine or a shop loop", () => {
-    // Adversarial: the engine already CREATES experts and SC4 owns the SHOP loop.
-    // This card adds REFINE — sharpening an EXISTING expert. The body must name
-    // refining/sharpening an existing expert, so it is a real distinct capability,
-    // not a re-read of the create prose or a duplicate of the shop loop.
-    const body = refineBodyLower();
-    const namesRefine =
-      body.includes("refine") ||
-      body.includes("sharpen") ||
-      body.includes("amend");
-    const namesExistingExpert =
-      body.includes("existing expert") ||
-      body.includes("an existing") ||
-      (body.includes("existing") && body.includes("expert")) ||
-      body.includes("the named expert");
-    expect(namesRefine).toBe(true);
-    expect(namesExistingExpert).toBe(true);
-  });
-
-  it("proposes refinements drawn from the OBSERVED session (not invented out of nothing)", () => {
-    // Step 2 (propose, session-grounded): proposals are drawn from what the agent
-    // actually OBSERVED in the just-completed/in-progress shopping session under
-    // this expert. The body must name the observed session as the source.
-    const body = refineBodyLower();
-    const namesObserved =
-      body.includes("observed session") ||
-      body.includes("observed shopping") ||
-      body.includes("what it observed") ||
-      body.includes("what the agent observed") ||
-      (body.includes("observed") && body.includes("session"));
-    expect(namesObserved).toBe(true);
-  });
-
-  it("ties each proposal to CONCRETE observed evidence (a query that returned junk, what was rejected, a taste volunteered-but-uncaptured)", () => {
-    // Business rule / AC1: every proposal CITES the observed evidence behind it —
-    // a `sil_search` param mapping that returned (ir)relevant items, what the user
-    // accepted/rejected, a taste volunteered but never captured. The body must
-    // name the evidence categories so a proposal is grounded, not guesswork.
-    const body = refineBodyLower();
-    // The evidence is tied to what was returned / accepted / rejected / volunteered.
-    const namesEvidence =
-      body.includes("evidence") ||
-      body.includes("grounded") ||
-      body.includes("returned relevant") ||
-      body.includes("returned irrelevant") ||
-      body.includes("relevant or irrelevant") ||
-      body.includes("relevant vs irrelevant") ||
-      body.includes("accepted") ||
-      body.includes("rejected") ||
-      body.includes("volunteered");
-    expect(namesEvidence).toBe(true);
-    // And it names WHICH artefact element each proposal changes — a persona
-    // standing rule, a mapping entry, a rubric weight — so a proposal is concrete.
-    const namesArtefactTarget =
-      body.includes("persona") &&
-      (body.includes("mapping") || body.includes("rubric"));
-    expect(namesArtefactTarget).toBe(true);
-  });
-
-  it("disavows a generic, ungrounded improvement template (no plausible-sounding guesswork)", () => {
-    // AC1 / risk: a proposal NOT tied to anything the session showed is guesswork
-    // dressed as expertise. The body must disavow the generic-template shape —
-    // "not a generic template", "never a generic improvement", "do not fabricate".
-    const body = refineBodyLower();
-    const disavowsGeneric =
-      body.includes("not a generic template") ||
-      body.includes("not a generic") ||
-      body.includes("never a generic") ||
-      body.includes("not a template") ||
-      body.includes("not generic") ||
-      body.includes("ungrounded") ||
-      (body.includes("generic") && body.includes("not")) ||
-      (body.includes("template") && body.includes("not"));
-    expect(disavowsGeneric).toBe(true);
-  });
-});
-
-describe("references/refine_expert.md — per-proposal SUBSET confirmation; only the confirmed subset folds in (AC2)", () => {
-  it("names per-proposal subset confirmation (all / some / none — not all-or-nothing)", () => {
-    // AC2: the user confirms a SUBSET (per-proposal accept/reject), not just a
-    // single yes/no over the whole batch. The body must name subset confirmation.
-    const body = refineBodyLower();
-    const namesSubset =
-      body.includes("subset") ||
-      body.includes("all, some, or none") ||
-      body.includes("all/some/none") ||
-      body.includes("all, some or none") ||
-      body.includes("per-proposal") ||
-      body.includes("per proposal") ||
-      body.includes("which to keep") ||
-      body.includes("which refinements to keep");
-    expect(namesSubset).toBe(true);
-  });
-
-  it("states ONLY the confirmed subset is folded into the spec + persisted (the rest discarded with the conversation)", () => {
-    // AC2: only the confirmed subset persists; the unconfirmed proposals are
-    // discarded with the conversation. The body must say only the confirmed
-    // changes are folded in / persisted — no over-persist.
-    const body = refineBodyLower();
-    const onlyConfirmed =
-      body.includes("only the confirmed") ||
-      body.includes("only confirmed") ||
-      body.includes("confirmed subset") ||
-      (body.includes("confirmed") && body.includes("folded")) ||
-      (body.includes("only") && body.includes("confirm") && body.includes("persist"));
-    expect(onlyConfirmed).toBe(true);
-    const discardsRest =
-      body.includes("discard") ||
-      body.includes("discarded") ||
-      body.includes("dies with the conversation") ||
-      body.includes("live only in the conversation") ||
-      body.includes("lives only in the conversation") ||
-      body.includes("only in the conversation") ||
-      body.includes("nothing else persists") ||
-      body.includes("no more");
-    expect(discardsRest).toBe(true);
-  });
-});
-
-describe("references/refine_expert.md — confirm-before-persist GATE; never inferred from silence/off-topic (AC3)", () => {
-  it("names the confirm-before-persist gate (an explicit affirmative act)", () => {
-    // AC3 (the strongest invariant): nothing persists without the user's explicit
-    // confirmation. The body must name confirmation as an explicit affirmative act
-    // gating the persist.
-    const body = refineBodyLower();
-    const namesConfirmGate =
-      body.includes("confirm") ||
-      body.includes("confirmation") ||
-      body.includes("explicit") ||
-      body.includes("affirmative");
-    expect(namesConfirmGate).toBe(true);
-  });
-
-  it("states confirmation is NEVER inferred from silence or an off-topic / unrelated reply", () => {
-    // AC3 headline trust contract: "confirm" is never inferred from silence or
-    // from the user answering an unrelated question. The body must disavow both.
-    const body = refineBodyLower();
-    const disavowsSilence =
-      body.includes("never inferred from silence") ||
-      body.includes("not inferred from silence") ||
-      body.includes("never from silence") ||
-      (body.includes("silence") && body.includes("never")) ||
-      (body.includes("silence") && body.includes("not"));
-    const disavowsOffTopic =
-      body.includes("off-topic") ||
-      body.includes("off topic") ||
-      body.includes("unrelated question") ||
-      body.includes("unrelated reply") ||
-      body.includes("answering an unrelated") ||
-      body.includes("answering something unrelated") ||
-      body.includes("an unrelated");
-    expect(disavowsSilence).toBe(true);
-    expect(disavowsOffTopic).toBe(true);
-  });
-
-  it("orders the CONFIRM verb strictly BEFORE the persist/materialize verb (the gate precedes the write)", () => {
-    // AC3 ordering anchor (mirrors the engine's validate-before-add): the confirm
-    // step must come textually BEFORE the `sil_profile_materialize`/persist step,
-    // so an agent following top-to-bottom confirms first and can never persist a
-    // proposal the user has not confirmed. Order in the prose IS the spec.
-    //
-    // Adversarial precision: anchor the persist side on the materialize TOOL
-    // token (the write surface), and the confirm side on the `confirm` verb. If
-    // the reference legitimately names the materialize tool earlier (e.g. naming
-    // the persist step it routes to), the LAST confirm before the materialize
-    // CALL still proves the gate; here we require the FIRST confirm to precede the
-    // materialize mention — a procedure that materializes before any confirm is
-    // exactly the trust violation this pins.
-    const body = refineBodyLower();
-    const confirmIdx = body.indexOf("confirm");
-    const materializeIdx = body.indexOf("sil_profile_materialize");
-    expect(confirmIdx).toBeGreaterThanOrEqual(0);
-    expect(materializeIdx).toBeGreaterThanOrEqual(0);
-    expect(confirmIdx).toBeLessThan(materializeIdx);
-  });
-});
-
-describe("references/refine_expert.md — persist is atomic; a failure leaves the PRIOR artefacts intact (AC4)", () => {
-  it("frames the persist as an atomic in-place re-write of THAT ONE agentId's SDS artefacts (Correction 1: persona refresh goes to SOUL.md, NOT a sil persona.md)", () => {
-    // AC4 after the reframe: refine targets the SDS spec files — domain_spec.md /
-    // user_spec.md / playbook.md / intent_spec.md — via an ATOMIC in-place
-    // re-materialize of that one expert's artefacts (full-spec, never a partial/
-    // field-level write). A PERSONA refinement refreshes the host SOUL.md via the
-    // host CLI, NOT a sil-side persona.md (which no longer exists). The body must
-    // name the atomic re-write AND the SDS spec files it targets, and must NOT name
-    // a persona.md sil artefact.
-    const body = refineBodyLower();
-    const namesAtomic =
-      body.includes("atomic") ||
-      body.includes("all-or-nothing") ||
-      body.includes("all or nothing") ||
-      body.includes("in-place re-write") ||
-      body.includes("in-place rewrite") ||
-      body.includes("re-write") ||
-      body.includes("rewrite") ||
-      body.includes("overwrite");
-    expect(namesAtomic).toBe(true);
-    // The SDS spec files the re-write targets — at least the domain spec + a lazy
-    // user-side slot (playbook taste or user_spec facts).
-    const namesDomainSpec =
-      body.includes("domain_spec.md") ||
-      body.includes("domain spec") ||
-      body.includes("domain-spec");
-    expect(namesDomainSpec).toBe(true);
-    expect(body).toContain("playbook.md");
-    // Persona is no longer a sil-side artefact — the refine doc must not name a
-    // persona.md sil file (a persona change refreshes SOUL.md via the host CLI).
-    expect(body).not.toContain("persona.md");
-  });
-
-  it("states a persist FAILURE leaves the PRIOR artefacts intact (never a half-refined expert) and tells the user it did not stick", () => {
-    // AC4 failure half: a failed re-write leaves the PRIOR artefacts intact (the
-    // store's `dirPreexisted` guard never tears down a pre-existing dir), and the
-    // user is told the refinement did not stick. The body must name BOTH — prior
-    // artefacts survive, and never a half-refined expert.
-    const body = refineBodyLower();
-    const priorSurvives =
-      body.includes("prior artefacts") ||
-      body.includes("prior artifacts") ||
-      body.includes("prior expert") ||
-      body.includes("leaves the prior") ||
-      body.includes("leave the prior") ||
-      body.includes("prior state") ||
-      body.includes("left intact") ||
-      body.includes("leaves intact") ||
-      (body.includes("intact") && body.includes("prior")) ||
-      (body.includes("unchanged") && body.includes("fail"));
-    const neverHalfRefined =
-      body.includes("half-refined") ||
-      body.includes("half refined") ||
-      body.includes("never half") ||
-      body.includes("nothing partial") ||
-      body.includes("no partial") ||
-      body.includes("did not stick") ||
-      body.includes("didn't stick") ||
-      body.includes("does not stick");
-    expect(priorSurvives).toBe(true);
-    expect(neverHalfRefined).toBe(true);
-  });
-});
-
-describe("references/refine_expert.md — per-user/local under $SIL_DATA_DIR; NO server endpoint on the refine path (AC6)", () => {
-  it("frames refinement as per-user + local under $SIL_DATA_DIR (no shared store, no cross-user signal)", () => {
-    // AC6: the improvement is per-user and local — written only to this user's
-    // $SIL_DATA_DIR/agents/<agentId>/, no server-side aggregation, no shared
-    // store. The body must name per-user/local AND the data dir.
-    const body = refineBodyLower();
-    const namesPerUserLocal =
-      body.includes("per-user") ||
-      body.includes("per user") ||
-      body.includes("local") ||
-      body.includes("on this machine") ||
-      body.includes("your own");
-    const namesDataDir =
-      body.includes("$sil_data_dir") ||
-      body.includes("sil_data_dir") ||
-      body.includes("sil data directory") ||
-      body.includes("sil data dir");
-    expect(namesPerUserLocal).toBe(true);
-    expect(namesDataDir).toBe(true);
-    // And it disavows server-side aggregation / a shared store / cross-user signal.
-    const disavowsServer =
-      body.includes("no server-side aggregation") ||
-      body.includes("no server side aggregation") ||
-      body.includes("no shared store") ||
-      body.includes("no shared expert") ||
-      body.includes("no cross-user") ||
-      body.includes("no server endpoint") ||
-      (body.includes("no") && body.includes("aggregation")) ||
-      (body.includes("never") && body.includes("shared"));
-    expect(disavowsServer).toBe(true);
-  });
-
-  it("NEGATIVE: names NO server / sil-api endpoint on the refine path (no register/whoami round-trip, no network call)", () => {
-    // AC6 negative token check: the refine/persist path calls no server endpoint.
-    // The catalog/identity server-call surface must NOT appear as a refine STEP —
-    // the loop reasons over loaded artefacts + observations and persists locally.
-    // sil_register / sil_whoami are the identity round-trips the refine path must
-    // not perform; a `sil-api` / server-endpoint token would mean a network call.
-    const body = refineBodyLower();
-    // No identity round-trip on the refine path (the loop loads + persists, it
-    // does not register or whoami).
-    expect(body).not.toContain("sil_register");
-    expect(body).not.toContain("sil_whoami");
-    // No raw server/api endpoint token on the refine path.
-    expect(body).not.toContain("sil-api");
-    expect(body).not.toContain("api.sil");
-    expect(body).not.toContain("https://");
-  });
-});
-
-describe("references/refine_expert.md — single-agentId isolation; other experts + generic shopping untouched (AC7)", () => {
-  it("scopes the persist to the single named agentId's directory", () => {
-    // AC7: the persist touches exactly `agents/<agentId>/` for the named expert.
-    // The body must name the single-agentId scope (keyed off the one validated id).
-    const body = refineBodyLower();
-    const namesAgentScope =
-      body.includes("agentid") ||
-      body.includes("agent id") ||
-      body.includes("agents/<") ||
-      body.includes("agents/") ||
-      body.includes("the named expert");
-    expect(namesAgentScope).toBe(true);
-  });
-
-  it("states other experts AND the generic profile-less shopping path are UNTOUCHED", () => {
-    // AC7 isolation bar: no sibling expert's artefacts mutate, and a plain sil
-    // session still shops exactly as today. The body must name BOTH — other
-    // experts untouched AND generic/profile-less shopping untouched.
-    const body = refineBodyLower();
-    const othersUntouched =
-      body.includes("other expert") ||
-      body.includes("sibling") ||
-      body.includes("another expert") ||
-      (body.includes("other") && body.includes("untouched"));
-    const genericUntouched =
-      body.includes("generic") ||
-      body.includes("profile-less") ||
-      body.includes("profileless") ||
-      body.includes("plain sil") ||
-      body.includes("plain shopping") ||
-      (body.includes("untouched") && body.includes("shopping"));
-    expect(othersUntouched).toBe(true);
-    expect(genericUntouched).toBe(true);
-  });
-});
-
-describe("references/refine_expert.md — mapping refinements target REAL sil_search params; POINT AT the mapping, don't restate it (AC8)", () => {
-  it("names the never-invent-a-filter rule (a no-matching-param taste folds into query text or the rubric)", () => {
-    // AC8: a refinement to the answer→param mapping maps ONLY onto real
-    // sil_search params; a volunteered taste with no matching param folds into
-    // `query` text or the rubric — NEVER a fabricated filter. The body must name
-    // the never-invent rule AND the fold-into-query/rubric fallback.
-    const body = refineBodyLower();
-    const namesNeverInvent =
-      body.includes("never an invented filter") ||
-      body.includes("never invent a filter") ||
-      body.includes("not invent a filter") ||
-      body.includes("never an invented") ||
-      body.includes("invented filter") ||
-      body.includes("fabricated filter") ||
-      body.includes("real sil_search param") ||
-      body.includes("only real") ||
-      (body.includes("invent") && body.includes("filter"));
-    expect(namesNeverInvent).toBe(true);
-    const foldsIntoQueryOrRubric =
-      body.includes("query text") ||
-      body.includes("into query") ||
-      body.includes("into the query") ||
-      body.includes("the rubric") ||
-      (body.includes("query") && body.includes("rubric"));
-    expect(foldsIntoQueryOrRubric).toBe(true);
-  });
-
-  it("names the ship_to-empty / no-sil_whoami-round-trip rule", () => {
-    // AC8: the mapping leaves ship_to EMPTY (server resolves the registered
-    // default) and never round-trips sil_whoami to populate it. The refine
-    // reference must name this rule (consistent with the established mapping
-    // rules) — read with the mapping reference it points at, since the worked
-    // ship_to detail may legitimately live in the mapping reference.
-    const body = refineCorpusLower();
-    expect(body).toContain("ship_to");
-    const leavesEmpty =
-      body.includes("ship_to empty") ||
-      body.includes("ship_to left empty") ||
-      body.includes("leave ship_to empty") ||
-      body.includes("leaves ship_to empty") ||
-      (body.includes("ship_to") && body.includes("empty"));
-    expect(leavesEmpty).toBe(true);
-    const disavowsWhoamiRoundtrip =
-      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) ||
-      /sil_whoami[^.]*(never|not)/.test(body);
-    expect(disavowsWhoamiRoundtrip).toBe(true);
-  });
-
-  it("POINTS AT search_param_mapping.md rather than re-carrying the param table (references-not-restates)", () => {
-    // AC8 / the no-duplication invariant (same one the router tests pin): the
-    // refine reference must LINK the mapping reference, NOT restate the param
-    // table. Two checks: (1) it names the mapping reference by relative path;
-    // (2) it does NOT re-carry the worked param TOKENS that belong only to the
-    // mapping reference (a refine reference that lists price_min/price_max/
-    // condition itself has duplicated the table — drift waiting to happen).
-    const body = readBody(REFINE_PATH).toLowerCase();
-    const pointsAtMapping =
-      body.includes("search_param_mapping.md") ||
-      body.includes("references/search_param_mapping.md");
-    expect(pointsAtMapping).toBe(true);
-    // It must NOT re-carry the param table's worked tokens (link, don't restate).
-    expect(body).not.toContain("price_min");
-    expect(body).not.toContain("price_max");
-  });
-});
-
-describe("references/refine_expert.md — no-observed-signal fallback: guided amend, never fabricate (AC9)", () => {
-  it("names the no-observed-signal fallback — guided amend (ask what to change) or invite-to-shop-first", () => {
-    // AC9: when no observed session signal is available (a fresh session, or the
-    // prior session out of context), the agent falls back to a guided amend (ask
-    // the user what to change) or invites them to shop first. The body must name
-    // the no-signal case AND the fallback.
-    const body = refineBodyLower();
-    const namesNoSignal =
-      body.includes("no observed") ||
-      body.includes("no session") ||
-      body.includes("fresh session") ||
-      body.includes("out of context") ||
-      body.includes("no signal") ||
-      body.includes("without an observed") ||
-      body.includes("no shopping session");
-    expect(namesNoSignal).toBe(true);
-    const namesFallback =
-      body.includes("guided amend") ||
-      body.includes("ask the user what to change") ||
-      body.includes("ask what to change") ||
-      body.includes("ask what they") ||
-      body.includes("invite") ||
-      body.includes("shop first") ||
-      body.includes("shop a session first");
-    expect(namesFallback).toBe(true);
-  });
-
-  it("states the agent must NOT fabricate session observations", () => {
-    // AC9 trust bar: the expert must NEVER invent session evidence to propose
-    // against. The body must disavow fabricating observations.
-    const body = refineBodyLower();
-    const disavowsFabrication =
-      body.includes("not fabricate") ||
-      body.includes("never fabricate") ||
-      body.includes("do not fabricate") ||
-      body.includes("don't fabricate") ||
-      body.includes("not invent") ||
-      body.includes("never invent") ||
-      body.includes("without inventing") ||
-      body.includes("rather than inventing") ||
-      body.includes("rather than invent") ||
-      (body.includes("fabricat") && body.includes("not")) ||
-      (body.includes("invent") && body.includes("observation"));
-    expect(disavowsFabrication).toBe(true);
-  });
-});
-
-/* ===========================================================================
- * EXPERT-SHOPPING LOOP — the shop-time behaviour a created expert runs (SC4)
- * (card: expert-shopping-behaviour-for-a-created-agent)
- *
- * tier: unit (single-reference content/ordering substring + indexOf checks) +
- * integration (the cross-file additive-not-regressive seam). Same content-seam
- * pattern as the engine/brainstorm blocks above: read the REAL
- * skill/references/expert_shopping.md from disk, lowercase, and pin the
- * shop-time loop as a SOURCE OF TRUTH — there is no plugin-tool change, no code
- * path; the reference body IS the spec the created expert follows when a user
- * states a shopping intent. The loop consumes the already-materialized profile
- * artefacts (persona.md / playbook.md / profile.json under $SIL_DATA_DIR — the
- * engine's Runtime hook ENDS where this loop STARTS) and the existing
- * sil_search / sil_product_get tools UNCHANGED.
- *
- * Adversarial discipline (mirrors the engine/brainstorm blocks): anchor on step
- * VERBS via indexOf ORDERING and OR-grouped intent tokens — NEVER on `§N`
- * section numbers and NEVER on exact sentences, so any reword survives. The
- * loop ORDER is the spec: elicit → map → search → compare → recommend, and
- * re-fetch BEFORE the buy hand-off.
- *
- * No host, no network, no faked transcript: "a real expert genuinely shops like
- * a specialist" is `live-verification`'s job, NOT a test tier (this repo has no
- * host-load gate — CLAUDE.md). These pin the reference's load-bearing
- * invariants, not merely that a keyword is present.
- *
- * Reference, not restate: the loop POINTS AT search_param_mapping.md for the
- * param table and DELEGATES the status taxonomy to catalog_tools_reference.md —
- * the no-duplication invariant the router-leanness tests already enforce on
- * SKILL.md, extended here to the new reference.
- * ========================================================================= */
-
-/** Lower-cased expert-shopping reference body — the file that OWNS the shop-time
- * loop a created expert runs. Substring checks are intent ("the loop names X");
- * indexOf comparisons pin step ORDER. */
-function expertShoppingBodyLower(): string {
-  return readBody(EXPERT_SHOPPING_PATH).toLowerCase();
-}
-
-describe("references/expert_shopping.md — exists and starts where the engine's Runtime hook ends", () => {
-  it("exists on disk", () => {
-    // RED until the expert-developer authors it. The router's
-    // every-references-path-exists glob auto-covers the new pointer once SKILL.md
-    // names it; this block pins the BODY's load-bearing invariants.
-    expect(existsSync(EXPERT_SHOPPING_PATH)).toBe(true);
-  });
-
-  it("frames a distinct shop-time loop for a created expert consuming the loaded profile artefacts", () => {
-    // SC4 is a NEW behaviour: the shop-time loop a created expert runs, driven by
-    // the playbook's rubric/priority order over the EXISTING tools. The body must
-    // name the profile artefacts it consumes (the engine's Runtime hook loads
-    // them — playbook/persona) AND the shopping subject, so this is a real
-    // addition, not a re-read of the engine's creation prose.
-    const body = expertShoppingBodyLower();
-    const namesArtefacts =
-      body.includes("playbook") ||
-      body.includes("persona") ||
-      body.includes("profile.json");
-    const namesShopping =
-      body.includes("shop") ||
-      body.includes("shopping intent") ||
-      body.includes("shopping");
-    expect(namesArtefacts).toBe(true);
-    expect(namesShopping).toBe(true);
-  });
-});
-
-describe("references/expert_shopping.md — the loop ORDER is the spec (elicit → map → search → compare → recommend)", () => {
-  it("names the elicit-in-priority-order step, disavows the form-fill, and forbids re-asking a stated attribute", () => {
-    // AC1: when a load-bearing attribute is missing, the expert elicits it through
-    // back-and-forth IN THE PLAYBOOK'S PRIORITY ORDER — not a fixed form-fill, and
-    // never re-asking what was already stated. Same shape as the brainstorm
-    // "not a form-fill" block: name the elicit step, the priority-order rule, the
-    // form-fill disavowal, and the no-re-ask rule (OR-grouped intent tokens).
-    const body = expertShoppingBodyLower();
-    expect(body).toContain("elicit");
-    const namesPriorityOrder =
-      body.includes("priority order") ||
-      body.includes("priority-order") ||
-      body.includes("priority-ordered") ||
-      (body.includes("priority") && body.includes("order"));
-    const disavowsForm =
-      body.includes("not a fixed form-fill") ||
-      body.includes("not a form-fill") ||
-      body.includes("not a form fill") ||
-      body.includes("not a form") ||
-      body.includes("not a fixed battery") ||
-      body.includes("not a question battery") ||
-      body.includes("not a wizard") ||
-      body.includes("not a questionnaire") ||
-      (body.includes("battery") && body.includes("not")) ||
-      (body.includes("form-fill") && body.includes("not"));
-    const forbidsReask =
-      body.includes("never re-ask") ||
-      body.includes("never reask") ||
-      body.includes("not re-ask") ||
-      body.includes("do not re-ask") ||
-      body.includes("don't re-ask") ||
-      body.includes("never re-asking") ||
-      body.includes("never ask again") ||
-      (body.includes("re-ask") && body.includes("never")) ||
-      (body.includes("already stated") && body.includes("never"));
-    expect(namesPriorityOrder).toBe(true);
-    expect(disavowsForm).toBe(true);
-    expect(forbidsReask).toBe(true);
-  });
-
-  it("states elicitation is need-driven — a sufficiently-specified intent proceeds straight to map+search (no invented question battery)", () => {
-    // AC (second criterion): the elicitation is need-driven, only for a MISSING
-    // load-bearing attribute. An intent that already carries enough load-bearing
-    // attributes for a defensible search proceeds to map + search — the expert
-    // does NOT invent an extra battery. The body must say elicitation triggers on
-    // a missing/load-bearing gap, not as a fixed gate before every search.
-    const body = expertShoppingBodyLower();
-    const namesLoadBearing =
-      body.includes("load-bearing") ||
-      body.includes("load bearing");
-    const namesNeedDriven =
-      body.includes("missing") ||
-      body.includes("need-driven") ||
-      body.includes("only when") ||
-      body.includes("only if") ||
-      body.includes("only for") ||
-      body.includes("already stated") ||
-      body.includes("sufficiently specified") ||
-      body.includes("enough") ||
-      body.includes("proceed straight") ||
-      body.includes("proceeds straight") ||
-      body.includes("straight to");
-    expect(namesLoadBearing).toBe(true);
-    expect(namesNeedDriven).toBe(true);
-  });
-
-  it("orders the loop steps elicit → map → search → compare → recommend (indexOf on step VERBS, not §N numbers)", () => {
-    // AC1+AC3+AC4: the loop ORDER is the spec, exactly as the engine pins
-    // validate-first / list-before-add. An agent following the prose top-to-bottom
-    // must elicit, then map answers to params, then search, then compare the
-    // returned candidates, then recommend. Anchor on the step VERBS so a reword of
-    // the prose survives and a §N renumber is irrelevant.
-    const body = expertShoppingBodyLower();
-    const elicitIdx = body.indexOf("elicit");
-    const mapIdx = body.indexOf("map");
-    const searchIdx = body.indexOf("sil_search");
-    const compareIdx = (() => {
-      for (const anchor of ["compare", "comparing", "evaluate"]) {
-        const i = body.indexOf(anchor);
-        if (i >= 0) return i;
-      }
-      return -1;
-    })();
-    const recommendIdx = (() => {
-      for (const anchor of ["recommend", "recommendation"]) {
-        const i = body.indexOf(anchor);
-        if (i >= 0) return i;
-      }
-      return -1;
-    })();
-    expect(elicitIdx).toBeGreaterThanOrEqual(0);
-    expect(mapIdx).toBeGreaterThanOrEqual(0);
-    expect(searchIdx).toBeGreaterThanOrEqual(0);
-    expect(compareIdx).toBeGreaterThanOrEqual(0);
-    expect(recommendIdx).toBeGreaterThanOrEqual(0);
-    // elicit precedes map precedes search precedes compare precedes recommend.
-    expect(elicitIdx).toBeLessThan(mapIdx);
-    expect(mapIdx).toBeLessThan(searchIdx);
-    expect(searchIdx).toBeLessThan(compareIdx);
-    expect(compareIdx).toBeLessThan(recommendIdx);
-  });
-});
-
-describe("references/expert_shopping.md — map step: real sil_search params, never an invented filter, ship_to empty", () => {
-  it("names sil_search, the never-invent-a-filter rule, and the ship_to-empty / no-sil_whoami-round-trip rule", () => {
-    // AC (map criterion): the expert maps each answer to a WELL-FORMED sil_search
-    // param, NEVER an invented filter, and leaves ship_to EMPTY so the server
-    // resolves the registered default (no sil_whoami round-trip). Same shape as
-    // the brainstorm mapping block: name the never-invent rule, ship_to, and
-    // disavow the sil_whoami round-trip — OR-grouped so a reword survives.
-    const body = expertShoppingBodyLower();
-    expect(body).toContain("sil_search");
-    const neverInvents =
-      body.includes("never invent a filter") ||
-      body.includes("never invent a param") ||
-      body.includes("not invent a filter") ||
-      body.includes("do not invent") ||
-      body.includes("never an invented filter") ||
-      body.includes("invented filter") ||
-      (body.includes("invent") && body.includes("filter"));
-    expect(neverInvents).toBe(true);
-    expect(body).toContain("ship_to");
-    const leavesShipToEmpty =
-      body.includes("ship_to empty") ||
-      body.includes("ship_to left empty") ||
-      body.includes("leave ship_to empty") ||
-      body.includes("leaves ship_to empty") ||
-      (body.includes("ship_to") && body.includes("empty"));
-    expect(leavesShipToEmpty).toBe(true);
-    const disavowsWhoamiRoundtrip =
-      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) ||
-      /sil_whoami[^.]*(never|not)/.test(body);
-    expect(disavowsWhoamiRoundtrip).toBe(true);
-  });
-
-  it("POINTS AT search_param_mapping.md for the param table (references, does NOT re-carry it)", () => {
-    // The references-not-restates invariant (architect risk): the loop's map step
-    // must LINK the dedicated mapping reference, not copy its table into this file.
-    // Two sources of truth drift. The body must name the mapping reference by
-    // relative path so an agent loads it for the worked table.
-    const body = expertShoppingBodyLower();
-    expect(body).toContain("search_param_mapping.md");
-  });
-});
-
-describe("references/expert_shopping.md — compare + recommend: rubric weighted by stated priorities, always the 'why', best-first preserved", () => {
-  it("names the compare-on-the-rubric step weighted by the user's stated priorities", () => {
-    // AC (compare/recommend criterion): the expert compares candidates on the
-    // PLAYBOOK'S RUBRIC weighted by the user's STATED priorities (plus persona
-    // hard-rules / hard-no's). The body must name the rubric AND tie it to the
-    // user's stated priorities — the specialist behaviour, not generic ranking.
-    const body = expertShoppingBodyLower();
-    const namesRubric =
-      body.includes("rubric") ||
-      (body.includes("compare") && body.includes("recommend"));
-    const tiesToStatedPriorities =
-      body.includes("stated priorities") ||
-      body.includes("stated priority") ||
-      body.includes("the user's stated") ||
-      body.includes("weighted by") ||
-      (body.includes("priorities") && body.includes("stated")) ||
-      (body.includes("priority") && body.includes("weight")) ||
-      body.includes("hard-no") ||
-      body.includes("hard no") ||
-      body.includes("hard-rule") ||
-      body.includes("hard rule");
-    expect(namesRubric).toBe(true);
-    expect(tiesToStatedPriorities).toBe(true);
-  });
-
-  it("requires domain-relevant rationale (always the 'why') with every recommendation", () => {
-    // UX principle / SC4 headline: the "why" IS the product. Every recommendation
-    // carries domain-relevant rationale tied to the rubric — not a bare list. The
-    // body must mandate the rationale / "why" with the recommendation.
-    const body = expertShoppingBodyLower();
-    const requiresWhy =
-      body.includes("rationale") ||
-      body.includes('"why"') ||
-      body.includes("the why") ||
-      body.includes("explain why") ||
-      body.includes("why it") ||
-      body.includes("why this") ||
-      (body.includes("recommend") && body.includes("because")) ||
-      (body.includes("recommendation") && body.includes("reason"));
-    expect(requiresWhy).toBe(true);
-  });
-
-  it("preserves sil_search's best-first order — present results best-first, never re-rank", () => {
-    // AC (compare criterion) + catalog_tools_reference: sil_search returns
-    // best-first; the expert presents in order and does NOT re-rank. The body must
-    // name the best-first / do-not-re-rank rule, so the rubric informs the
-    // recommendation's RATIONALE without re-sorting the list.
-    const body = expertShoppingBodyLower();
-    const namesBestFirst =
-      body.includes("best-first") ||
-      body.includes("best first") ||
-      body.includes("best match first") ||
-      body.includes("in order");
-    const disavowsRerank =
-      body.includes("never re-rank") ||
-      body.includes("never rerank") ||
-      body.includes("not re-rank") ||
-      body.includes("do not re-rank") ||
-      body.includes("don't re-rank") ||
-      (body.includes("re-rank") && body.includes("not")) ||
-      (body.includes("rerank") && body.includes("not"));
-    expect(namesBestFirst).toBe(true);
-    expect(disavowsRerank).toBe(true);
-  });
-});
-
-describe("references/expert_shopping.md — re-fetch before buy (sil_product_get) — never commit off the stale sil_search snapshot", () => {
-  it("names the re-fetch-with-sil_product_get-before-buy step", () => {
-    // AC (re-fetch criterion): before any buy hand-off, re-fetch the chosen item
-    // via sil_product_get for point-in-time price / availability / checkout_url.
-    // The body must name sil_product_get AND tie it to the pre-buy re-fetch.
-    const body = expertShoppingBodyLower();
-    expect(body).toContain("sil_product_get");
-    const namesRefetch =
-      body.includes("re-fetch") ||
-      body.includes("refetch") ||
-      body.includes("re-fetches") ||
-      body.includes("fetch again") ||
-      (body.includes("fetch") && body.includes("before"));
-    expect(namesRefetch).toBe(true);
-  });
-
-  it("forbids committing a buy off the stale sil_search snapshot", () => {
-    // AC (re-fetch criterion): never commit a buy off the earlier sil_search
-    // snapshot — price/availability/checkout_url are point-in-time. The body must
-    // disavow buying off the stale snapshot, distinct from merely naming the
-    // re-fetch step.
-    const body = expertShoppingBodyLower();
-    const namesStaleSnapshot =
-      body.includes("stale") ||
-      body.includes("point-in-time") ||
-      body.includes("point in time") ||
-      (body.includes("snapshot") && body.includes("never")) ||
-      (body.includes("snapshot") && body.includes("not")) ||
-      (body.includes("sil_search") && body.includes("snapshot"));
-    expect(namesStaleSnapshot).toBe(true);
-  });
-
-  it("orders the re-fetch step BEFORE the buy hand-off (indexOf on the re-fetch verb, not §N)", () => {
-    // The re-fetch must precede the buy/checkout hand-off in the prose, or an
-    // agent following top-to-bottom would commit on the stale snapshot. Anchor on
-    // sil_product_get (the re-fetch invocation) and the buy/checkout/purchase
-    // hand-off token. Same ordering discipline as the engine's add-then-validate.
-    const body = expertShoppingBodyLower();
-    const refetchIdx = body.indexOf("sil_product_get");
-    const buyIdx = (() => {
-      for (const anchor of [
-        "buy",
-        "checkout",
-        "purchase",
-        "hand-off to purchase",
-        "hand off to purchase",
-      ]) {
-        const i = body.indexOf(anchor);
-        if (i >= 0) return i;
-      }
-      return -1;
-    })();
-    expect(refetchIdx).toBeGreaterThanOrEqual(0);
-    expect(buyIdx).toBeGreaterThanOrEqual(0);
-    // The re-fetch (sil_product_get) precedes the buy hand-off — buy off fresh
-    // detail, never the stale sil_search snapshot.
-    expect(refetchIdx).toBeLessThan(buyIdx);
-  });
-});
-
-describe("references/expert_shopping.md — empty (ok + products: []) → relax-and-explain, distinct from the unservable case", () => {
-  it("names the ok-empty outcome, the relax/re-frame action, and the explain-what-changed rule", () => {
-    // AC (empty criterion): on status ok with products: [] the expert RELAXES or
-    // re-frames the params (loosens a constraint / broadens the query) and
-    // EXPLAINS what it changed and why — it does not dead-end silently. The body
-    // must name the ok-empty case, the relax/re-frame action, AND the explain
-    // rule — three distinct invariants.
-    const body = expertShoppingBodyLower();
-    const namesEmptyOk =
-      body.includes("products: []") ||
-      body.includes("products: [ ]") ||
-      body.includes("empty result") ||
-      body.includes("empty product") ||
-      body.includes("nothing matched") ||
-      body.includes("no matches") ||
-      (body.includes("ok") && body.includes("empty"));
-    const relaxes =
-      body.includes("relax") ||
-      body.includes("re-frame") ||
-      body.includes("reframe") ||
-      body.includes("loosen") ||
-      body.includes("broaden");
-    const explains =
-      body.includes("explain") ||
-      body.includes("what changed") ||
-      body.includes("what it changed") ||
-      body.includes("what was relaxed") ||
-      body.includes("say what");
-    expect(namesEmptyOk).toBe(true);
-    expect(relaxes).toBe(true);
-    expect(explains).toBe(true);
-  });
-
-  it("forbids the silent dead-end on empty (it never just stops)", () => {
-    // The empty-result silent dead-end is the named failure mode. The body must
-    // disavow stopping silently on an empty match — distinct from relaxing.
-    const body = expertShoppingBodyLower();
-    const forbidsDeadEnd =
-      body.includes("dead-end") ||
-      body.includes("dead end") ||
-      body.includes("never just stop") ||
-      body.includes("not just stop") ||
-      body.includes("does not dead-end") ||
-      body.includes("not stop silently") ||
-      body.includes("never stop silently") ||
-      (body.includes("silently") && body.includes("not")) ||
-      (body.includes("silent") && body.includes("never"));
-    expect(forbidsDeadEnd).toBe(true);
-  });
-});
-
-describe("references/expert_shopping.md — unservable domain → honest 'no', never junk (distinct from empty)", () => {
-  it("names the honest-'no' for a domain the catalog cannot serve, distinct from the empty-but-servable case", () => {
-    // AC (unservable criterion): for a domain the catalog GENUINELY cannot serve
-    // (not shippable / age-gated / out of scope) the expert says so HONESTLY — a
-    // different outcome from the empty-but-servable relax case. The body must name
-    // the unservable case (its triggers) AND that the answer is an honest "no".
-    const body = expertShoppingBodyLower();
-    const namesUnservable =
-      body.includes("cannot serve") ||
-      body.includes("can't serve") ||
-      body.includes("unservable") ||
-      body.includes("not shippable") ||
-      body.includes("non-shippable") ||
-      body.includes("age-gated") ||
-      body.includes("age gated") ||
-      body.includes("out of scope") ||
-      body.includes("out-of-scope");
-    const namesHonestNo =
-      body.includes("honest") ||
-      body.includes('say "no"') ||
-      body.includes("say so") ||
-      body.includes("says so") ||
-      body.includes("plainly") ||
-      body.includes('an honest "no"') ||
-      (body.includes("honest") && body.includes("no"));
-    expect(namesUnservable).toBe(true);
-    expect(namesHonestNo).toBe(true);
-  });
-
-  it("forbids fabricating / padding with junk to avoid saying 'no'", () => {
-    // UX principle "never return junk": the expert never pads with irrelevant or
-    // unbuyable options to avoid saying "no". The body must disavow the
-    // fabricate/pad-with-junk behaviour — distinct from the relax-and-explain path.
-    const body = expertShoppingBodyLower();
-    const forbidsJunk =
-      body.includes("never fabricate") ||
-      body.includes("not fabricate") ||
-      body.includes("do not fabricate") ||
-      body.includes("never pad") ||
-      body.includes("not pad") ||
-      body.includes("never junk") ||
-      body.includes("never return junk") ||
-      body.includes("not return junk") ||
-      body.includes("irrelevant") ||
-      body.includes("unbuyable") ||
-      (body.includes("junk") && body.includes("never")) ||
-      (body.includes("junk") && body.includes("not"));
-    expect(forbidsJunk).toBe(true);
-  });
-});
-
-describe("references/expert_shopping.md — non-ok status → follow the tool's own recovery, never improvise (and a non-ok is NOT an empty match)", () => {
-  it("names the follow-the-tool's-own-recovery / never-improvise rule on a non-ok status", () => {
-    // AC (non-ok criterion): on a sil_search/sil_product_get non-ok status the
-    // expert follows the tool's OWN recovery hint and never improvises a different
-    // one. Same shape as catalog_tools_reference's recovery rule, but the loop
-    // must REFERENCE it. The body must name the recovery hint AND the
-    // never-improvise rule.
-    const body = expertShoppingBodyLower();
-    expect(body).toContain("recovery");
-    const neverImprovise =
-      body.includes("never improvise") ||
-      body.includes("not improvise") ||
-      body.includes("do not improvise") ||
-      body.includes("don't improvise") ||
-      body.includes("never a different") ||
-      body.includes("follow the tool") ||
-      body.includes("follow the recovery") ||
-      (body.includes("recovery") && body.includes("never"));
-    expect(neverImprovise).toBe(true);
-  });
-
-  it("states a non-ok status is NOT an empty match (no pointless param-relaxing on a retryable / auth failure)", () => {
-    // The mis-attribution failure mode: a retryable (transient/source down) or an
-    // auth status must NOT be treated like an empty match — relaxing params on a
-    // retryable is wrong recovery. The body must distinguish a non-ok status from
-    // an ok-empty result, so the expert retries / re-auths instead of relaxing.
-    const body = expertShoppingBodyLower();
-    const distinguishesNonOkFromEmpty =
-      body.includes("not an empty match") ||
-      body.includes("not the same as empty") ||
-      body.includes("not an empty result") ||
-      body.includes("not treat") ||
-      body.includes("do not treat") ||
-      body.includes("never treat") ||
-      body.includes("not mistake") ||
-      body.includes("don't mistake") ||
-      body.includes("not the same as a non-ok") ||
-      (body.includes("retryable") && body.includes("not")) ||
-      (body.includes("transient") &&
-        (body.includes("not") || body.includes("never")));
-    expect(distinguishesNonOkFromEmpty).toBe(true);
-  });
-
-  it("DELEGATES the status taxonomy to catalog_tools_reference.md — does NOT re-carry the taxonomy tokens that belong only to it", () => {
-    // The references-not-restates invariant (architect risk): the loop must LINK
-    // catalog_tools_reference.md for the status taxonomy, NOT copy it. Anchor on
-    // tokens that belong ONLY to the moved taxonomy detail — the register
-    // browser-handshake status and the catalog status vocabulary that the
-    // router-leanness test (skill-content.test.ts:350-365) already pins as ABSENT
-    // from the lean SKILL.md. Apply the same discipline to the new reference: it
-    // must NOT re-carry those taxonomy tokens.
-    const body = expertShoppingBodyLower();
-    // It must POINT AT the taxonomy's owner.
-    expect(body).toContain("catalog_tools_reference.md");
-    // And it must NOT re-list the taxonomy that belongs only there. These tokens
-    // are unique to catalog_tools_reference.md's per-tool detail + status table;
-    // the loop references the outcomes by behaviour (empty / non-ok / recovery),
-    // never by re-carrying the vocabulary.
-    expect(body).not.toContain("awaiting_browser");
-    expect(body).not.toContain("not_registered");
-    expect(body).not.toContain("must_reregister");
-  });
-});
-
-describe("skill bundle — the expert-shopping path is ADDITIVE: the generic profile-less flow does NOT regress", () => {
-  it("keeps the lean router's four-core-tools-in-the-router invariant intact (no regression from the additive pointer)", () => {
-    // Integration AC: the generic, profile-less shopping flow must keep working —
-    // the four core tools stay named in the lean router, and the new
-    // expert-shopping pointer is ADDITIVE, not a replacement. This re-asserts the
-    // router-leanness invariant survives the additive change (the existing
-    // four-core-tools-in-the-router test at :200-213 is the canonical guard; this
-    // pins it together with the bundle's source-of-truth for the new reference).
+  it("routes the refine intent to references/refine_shopper.md", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    for (const tool of [
-      "sil_register",
-      "sil_whoami",
-      "sil_search",
-      "sil_product_get",
-    ]) {
-      expect(body).toContain(tool);
-    }
-  });
-
-  it("the new reference stays a SHOP-TIME reference — no contributor 'adding a tool' prose leaked in", () => {
-    // The bundle-wide no-contributor-prose invariant (skill-content.test.ts
-    // :555-579) applies to the new reference too: a runtime shopping reference
-    // never carries registerXTools / contracts.tools / "adding a tool" plumbing.
-    const body = expertShoppingBodyLower();
-    expect(body).not.toContain("registerxtools");
-    expect(body).not.toContain("contracts.tools");
-    expect(body).not.toContain("adding a real tool");
-    expect(body).not.toContain("adding a tool");
+    expect(body).toContain("references/refine_shopper.md");
   });
 });
 
-/* ===========================================================================
- * SPEC-DRIVEN SHOPPING (SDS) — the FIVE-artefact model (card:
- * spec-driven-shopping-sds-for-created-experts, Founder review round 1 — PR #33
- * bounced and refactored to the corrected model).
- *
- * SDS is the OPERATING MODEL for every created expert — not an additive optional
- * layer. The five artefacts:
- *   - SOUL.md        (host workspace, host CLI) — the persona / identity / voice;
- *   - domain_spec.md (sil data dir, REQUIRED)   — deep researched niche expertise,
- *                                                 web-refreshed every query;
- *   - intent_spec.md (sil data dir, REQUIRED)   — the agent-specific decomposition
- *                                                 DIMENSIONS (PRD-style) for a query;
- *   - user_spec.md   (sil data dir, REQUIRED)   — the user's domain-relevant facts
- *                                                 + hard constraints;
- *   - playbook.md    (sil data dir, REQUIRED)   — the user's buying TASTE.
- * All four sil docs are REQUIRED + present-at-creation (round-2), augmented every
- * query (we keep learning). The per-query INTENT (the dimensions filled in for one
- * request) is EPHEMERAL — never persisted; only the intent_spec.md SCHEMA is.
- *
- * tier: integration. The SDS behaviour is SKILL PROSE the host agent follows —
- * NO new plugin tool (the 8-tool manifest is frozen; manifest-contract stays
- * green unchanged); the persisted specs reuse `sil_profile_materialize`. The
- * reference BODIES are the spec, pinned via OR-grouped intent-token substrings.
- * These never fake a transcript: whether a real expert VISIBLY reasons over the
- * layers and NEVER violates a hard constraint end-to-end, and the DEPTH/quality
- * of the domain research, are `live-verification`'s job (the e2e tier) — NOT a
- * deterministic assertion here.
- *
- * What this block pins (the doc-pinnable SDS invariants, corrected):
- *   - the FIVE-artefact framing REPLACES the old two-slot / "no third slot"
- *     framing — and the persona is the host SOUL.md (no persona.md, no copy step);
- *   - creation walks the five artefacts ONE TOUCHPOINT PER DOCUMENT in order
- *     (round-3 Correction 1/2: persona ask-first → domain agent-researched/zero-q →
- *     user_spec one basic fact → playbook one compare-options → intent_spec
- *     sign-off; the "≤10 questions" budget is RETIRED); the deep domain_spec is the
- *     agent's OWN research;
- *   - intent_spec.md = persisted decomposition DIMENSIONS (the per-query intent is
- *     ephemeral); per-query WEB REFRESH of domain_spec.md;
- *   - per-query AUGMENT of facts→user_spec.md / taste→playbook.md (all four present
- *     from creation, augmented every query — we keep learning); playbook = the
- *     user's buying taste, not the seller's method;
- *   - precedence intent > playbook > user_spec > domain_spec; hard-constraint
- *     inviolability (routed to a real filter AND a reject-at-recommend rule);
- *   - refine targets domain_spec / user_spec / playbook / intent_spec;
- *   - domain_spec + intent_spec named in the engine as REQUIRED materialize inputs.
- * ========================================================================= */
-
-describe("SDS — the FIVE-artefact model REPLACES the two-slot / no-third-slot framing (no false-green residue)", () => {
-  it("the interview no longer asserts 'no third slot' / a strict two-slot model (the superseded framing is GONE)", () => {
-    // The five-artefact rewrite must REPLACE, not sit beside, the old framing. A
-    // lingering "no third slot" / "two artefact slots" sentence is the one-sided
-    // pass the content-seam tests warn against. The superseded language must be
-    // removed from the interview doc.
-    const body = brainstormBodyLower();
-    expect(body).not.toContain("no third slot");
-    expect(body).not.toContain("there is no third");
-    expect(body).not.toContain("two artefact slots");
-    expect(body).not.toContain("exactly the two");
-    // The intermediate FOUR-slot framing (the bounced PR #33 model) is also gone —
-    // the model is FIVE artefacts now (the persona left the sil store).
-    expect(body).not.toContain("four artefact slot");
-    expect(body).not.toContain("four-slot");
-    expect(body).not.toContain("four slots");
-  });
-
-  it("the interview names the FIVE artefacts (persona→SOUL.md, domain_spec, intent_spec, user_spec, playbook)", () => {
-    // The corrected framing: five artefacts. The persona is the host SOUL.md
-    // (identity/voice); the four sil-store artefacts are domain_spec (required),
-    // intent_spec (required), user_spec (lazy), playbook (lazy buying-taste). The
-    // interview must name them so the agent fills the right ones.
-    const body = brainstormBodyLower();
-    // Persona is now the host SOUL.md, not a sil persona.md slot.
-    const namesPersonaSoul =
-      body.includes("soul.md") || body.includes("persona");
-    const namesDomainSpec =
-      body.includes("domain spec") || body.includes("domain-spec") ||
-      body.includes("domain_spec") || body.includes("domainspec");
-    const namesIntentSpec =
-      body.includes("intent spec") || body.includes("intent-spec") ||
-      body.includes("intent_spec") || body.includes("intentspec");
-    const namesUserSpec =
-      body.includes("user spec") || body.includes("user-spec") ||
-      body.includes("user_spec") || body.includes("userspec");
-    const namesPlaybook = body.includes("playbook");
-    const missing: string[] = [];
-    if (!namesPersonaSoul) missing.push("persona/SOUL.md");
-    if (!namesDomainSpec) missing.push("domain_spec");
-    if (!namesIntentSpec) missing.push("intent_spec");
-    if (!namesUserSpec) missing.push("user_spec");
-    if (!namesPlaybook) missing.push("playbook");
-    expect(missing).toEqual([]);
-    // And it frames the count as five.
-    const namesFive =
-      body.includes("five artefact") || body.includes("five-artefact") ||
-      body.includes("five artefacts") || body.includes("5 artefact");
-    expect(namesFive).toBe(true);
-  });
-});
-
-describe("SDS — creation researches a DEEP domain_spec from the agent's own knowledge + web (niche-concrete)", () => {
-  it("the interview names an active domain-research pass producing a DEEP domain spec", () => {
-    // Correction 2 / Flow (a): after the niche is narrowed, the expert ACTIVELY
-    // RESEARCHES the niche deeply — the full mechanics of how to buy well — and
-    // converges a domain_spec. The depth is the agent's OWN job (web + knowledge),
-    // not latent persona prose relabelled and not user interrogation.
-    const body = brainstormBodyLower();
-    const namesResearch =
-      body.includes("research") || body.includes("researched") ||
-      body.includes("domain-research") || body.includes("domain research");
-    const namesDepth =
-      body.includes("deep") || body.includes("deeply") ||
-      body.includes("full mechanics") || body.includes("how to buy") ||
-      body.includes("everything about") || body.includes("complete process") ||
-      body.includes("decision-dimension") || body.includes("decision dimension") ||
-      (body.includes("dimension") && body.includes("trade-off")) ||
-      (body.includes("dimension") && body.includes("trade off"));
-    expect(namesResearch).toBe(true);
-    expect(namesDepth).toBe(true);
-  });
-
-  it("the domain spec must be niche-CONCRETE, never generic restated persona prose (the spec-theatre guard)", () => {
-    // Business rule 1 + the spec-theatre risk: a domain spec that is just relabelled
-    // persona prose defeats SDS. The doc must STATE the bar — niche-specific, things
-    // a layperson can't name — so the agent is told NOT to restate persona prose.
-    const body = brainstormBodyLower();
-    const namesNicheConcrete =
-      body.includes("niche-specific") || body.includes("niche-concrete") ||
-      body.includes("specific to") || body.includes("concrete to") ||
-      body.includes("a layperson") || body.includes("layperson") ||
-      body.includes("cannot name") || body.includes("can't name") ||
-      body.includes("couldn't enumerate") || body.includes("could not enumerate") ||
-      body.includes("uninformed");
-    const disavowsGeneric =
-      body.includes("not generic") || body.includes("never generic") ||
-      body.includes("not restated persona") || body.includes("not just restated") ||
-      body.includes("not a generic");
-    expect(namesNicheConcrete).toBe(true);
-    expect(disavowsGeneric).toBe(true);
-  });
-
-  it("the engine passes BOTH domainSpec AND intentSpec to sil_profile_materialize as REQUIRED creation inputs (Correction 4 / rule A)", () => {
-    // The engine's creation step must pass domainSpec AND the derived intentSpec
-    // into the materialize call — both REQUIRED at creation (SDS is the operating
-    // model; a missing/shallow domain spec is a defect, not absent-is-fine). The
-    // engine doc must name both as materialize inputs, through the SAME tool.
-    const body = engineBodyLower();
-    const namesDomainSpecInput =
-      body.includes("domainspec") || body.includes("domain spec") ||
-      body.includes("domain-spec") || body.includes("domain_spec");
-    const namesIntentSpecInput =
-      body.includes("intentspec") || body.includes("intent spec") ||
-      body.includes("intent-spec") || body.includes("intent_spec");
-    expect(namesDomainSpecInput).toBe(true);
-    expect(namesIntentSpecInput).toBe(true);
-    expect(body).toContain("sil_profile_materialize");
-  });
-
-  it("the engine ensures the created expert has WEB tools (for per-query domain refresh + research) — Correction 5", () => {
-    // Correction 5: the created expert needs web access for the per-query
-    // domain_spec refresh + the creation-time research. The engine must wire web
-    // tools into the created agent's tool profile (or document the host-capability
-    // dependency) — it must not assume the web step happens by magic.
-    const body = engineBodyLower();
-    const namesWeb =
-      body.includes("web") || body.includes("browse") ||
-      body.includes("internet") || body.includes("online research");
-    const namesToolWiring =
-      body.includes("tool profile") || body.includes("tool-profile") ||
-      body.includes("tools") || body.includes("capability") ||
-      body.includes("web tool");
-    expect(namesWeb).toBe(true);
-    expect(namesToolWiring).toBe(true);
-  });
-});
-
-describe("SDS — per-query WEB REFRESH of domain_spec.md (kept current + complete)", () => {
-  it("the loop refreshes domain_spec.md from the WEB on every query, BEFORE recommending, and persists the enhancement", () => {
-    // Correction 5 step 1: domain_spec.md is NOT frozen at creation — on every
-    // query, before recommending, the expert goes to the WEB and enhances it to
-    // stay current + complete (new models, standards, prices, technique), then
-    // persists the enhancement via re-materialize. The body must name the web
-    // refresh of the domain spec AND that the refresh is persisted.
-    const body = expertShoppingBodyLower();
-    const namesWebRefresh =
-      (body.includes("web") &&
-        (body.includes("refresh") || body.includes("enhance") ||
-          body.includes("update") || body.includes("current"))) ||
-      body.includes("web refresh") ||
-      body.includes("web-refresh");
-    const namesDomainSpec =
-      body.includes("domain spec") || body.includes("domain-spec") ||
-      body.includes("domain_spec") || body.includes("domainspec");
-    const namesPersist =
-      body.includes("persist") || body.includes("re-materialize") ||
-      body.includes("rematerialize") || body.includes("sil_profile_materialize");
-    expect(namesWebRefresh).toBe(true);
-    expect(namesDomainSpec).toBe(true);
-    expect(namesPersist).toBe(true);
-  });
-});
-
-describe("SDS — every query lazily AUGMENTS the already-present user_spec.md / playbook.md (we keep learning)", () => {
-  it("the loop AUGMENTS the already-present user_spec/playbook with a new fact/taste, per-query, on demand — not a capture-from-empty (round-2)", () => {
-    // Founder review round 2: user_spec.md + playbook.md are PRESENT (seeded
-    // partial) from creation. On a query, if a new user fact or taste surfaces, the
-    // expert AUGMENTS the already-present doc — in-context for THIS query — into
-    // user_spec.md (a fact/measurement/hard-constraint) or playbook.md (a
-    // buying-taste preference), then persists + never re-asks. The user side grows
-    // incrementally by reinforcement, never "captured from empty for the first
-    // time". The body must name lazy/per-query augmentation of an already-present
-    // doc, NOT a one-time capture.
-    const body = expertShoppingBodyLower();
-    const namesLazyPerQuery =
-      body.includes("lazy") || body.includes("lazily") ||
-      body.includes("on demand") || body.includes("on-demand") ||
-      body.includes("incremental") || body.includes("as needed") ||
-      body.includes("when needed") || body.includes("only when") ||
-      body.includes("per-query") || body.includes("per query") ||
-      body.includes("every query");
-    const namesAugment =
-      body.includes("augment") || body.includes("reinforce") ||
-      body.includes("enrich") || body.includes("sharpen") ||
-      body.includes("keep learning") || body.includes("grows") ||
-      body.includes("grow") || body.includes("update");
-    const namesUserOrTaste =
-      body.includes("user_spec") || body.includes("user spec") ||
-      body.includes("user-spec") || body.includes("userspec") ||
-      body.includes("playbook");
-    const namesPersist =
-      body.includes("persist") || body.includes("re-materialize") ||
-      body.includes("rematerialize") || body.includes("sil_profile_materialize");
-    expect(namesLazyPerQuery).toBe(true);
-    expect(namesAugment).toBe(true);
-    expect(namesUserOrTaste).toBe(true);
-    expect(namesPersist).toBe(true);
-  });
-
-  it("all four sil docs are PRESENT from creation (seeded partial) — the loop AUGMENTS them, it does not capture them from empty (round-2)", () => {
-    // Round-2 correction: all four sil docs exist non-blank from creation, seeded
-    // quickly/partial (the ≤10-question setup + an initial research pass), then
-    // augmented/reinforced over time. The loop doc must FRAME the user side as
-    // already-present-and-augmented (we keep learning), NOT as captured-from-empty.
-    // It must NOT carry an ACTIVE instruction to capture the whole user spec from
-    // empty before the loop (the bounced round-1 model).
-    const body = expertShoppingBodyLower();
-    const framesAlreadyPresentAndAugmented =
-      body.includes("already present") || body.includes("already exist") ||
-      body.includes("seeded") || body.includes("present from creation") ||
-      body.includes("keep learning") ||
-      (body.includes("augment") &&
-        (body.includes("user_spec") || body.includes("user spec") ||
-          body.includes("playbook"))) ||
-      (body.includes("reinforce") &&
-        (body.includes("user_spec") || body.includes("user spec") ||
-          body.includes("playbook")));
-    expect(framesAlreadyPresentAndAugmented).toBe(true);
-    // No ACTIVE "the user side starts empty / capture it before the loop"
-    // instruction (the bounced round-1 lazy-from-absent model) survives. We pin
-    // only the unambiguous active-instruction tokens — NOT a brittle forbid on
-    // "batch" / "first-shop", which a corrected doc may legitimately use to DISAVOW
-    // the old model (the literal-token-trap from the qa-developer pair memory).
-    const framesUserSideAsStartingEmpty =
-      body.includes("capture the whole user spec before") ||
-      body.includes("capture the user spec before searching") ||
-      body.includes("before the per-request loop runs, capture") ||
-      body.includes("before the loop, capture the user spec") ||
-      body.includes("user_spec.md starts empty") ||
-      body.includes("user spec starts empty") ||
-      body.includes("playbook starts empty") ||
-      body.includes("starts (near-)empty") ||
-      body.includes("start empty, fill lazily") ||
-      body.includes("fill from empty");
-    expect(framesUserSideAsStartingEmpty).toBe(false);
-  });
-
-  it("a held user_spec/playbook fact is REUSED and NEVER re-asked once captured (capture-once-per-fact)", () => {
-    // Rule B / business rule 2: once a fact or taste is captured it is reused and
-    // never re-asked. (Augmentation is PER FACT, not a one-shot batch.) The body
-    // must name reuse AND the never-re-ask rule for a stored attribute.
-    const body = expertShoppingBodyLower();
-    const namesReuse =
-      body.includes("reuse") || body.includes("reuses") ||
-      body.includes("reused") || body.includes("already holds") ||
-      body.includes("already captured") || body.includes("never re-ask");
-    const namesNeverReask =
-      body.includes("never re-ask") || body.includes("never re-elicit") ||
-      body.includes("not re-ask") || body.includes("does not re-ask") ||
-      body.includes("never reask");
-    expect(namesReuse).toBe(true);
-    expect(namesNeverReask).toBe(true);
-  });
-
-  it("playbook.md is the USER's buying TASTE (price sensitivity / brand / preference), NOT the seller's method (Correction 3)", () => {
-    // Correction 3: playbook.md stores HOW THE USER LIKES TO BUY — price
-    // sensitivity, brand preference, general taste. The old seller-method playbook
-    // (elicitation style + answer→param mapping + rubric) is dissolved. The body
-    // must frame playbook as the user's buying taste.
-    const body = expertShoppingBodyLower();
-    const namesPlaybook = body.includes("playbook");
-    const namesBuyingTaste =
-      body.includes("buying taste") || body.includes("buying-taste") ||
-      body.includes("price sensitivity") || body.includes("price-sensitivity") ||
-      body.includes("brand preference") || body.includes("brand-preference") ||
-      (body.includes("taste") && body.includes("playbook")) ||
-      (body.includes("how the user") && body.includes("buy")) ||
-      (body.includes("how they like to buy"));
-    expect(namesPlaybook).toBe(true);
-    expect(namesBuyingTaste).toBe(true);
-  });
-
-  it("the user-side artefacts are per-user + local — no server aggregation / cross-user signal (privacy posture)", () => {
-    // Rule B / business rule 5: user_spec + playbook are written only to this
-    // user's $SIL_DATA_DIR/agents/<id>/, same posture as refinement — no server
-    // aggregation, no shared store, no cross-user pooling. The loop must name the
-    // local/per-user posture.
-    const body = expertShoppingBodyLower();
-    const namesLocal =
-      body.includes("$sil_data_dir") || body.includes("sil_data_dir") ||
-      body.includes("sil data directory") || body.includes("per-user") ||
-      body.includes("local");
-    const namesNoServer =
-      body.includes("no server") || body.includes("no cross-user") ||
-      body.includes("no shared store") || body.includes("no aggregation") ||
-      body.includes("not pooled") || body.includes("never pooled");
-    expect(namesLocal).toBe(true);
-    expect(namesNoServer).toBe(true);
-  });
-});
-
-/* ===========================================================================
- * sil_remember — the lightweight per-query APPEND persist verb (card:
- * sil-remember-append-memory-tool). The card REPLACES the heavy whole-doc
- * sil_profile_materialize round-trip as the per-query fact/taste persistence
- * path with a cheap single-entry append, and adds an after-recommendation
- * trigger. These are POSITIVE pins on sil_remember — the old permissive
- * namesPersist OR-chains above (which list sil_profile_materialize) do NOT flip
- * on their own, so this block is the forcing function for the de-stub. RED now:
- * `sil_remember` appears nowhere in the bundle yet.
- * ========================================================================= */
-describe("references/expert_shopping.md — sil_remember is THE per-query persist verb (de-stub of the heavy path)", () => {
-  it("names sil_remember as the per-query persistence verb for a surfaced fact/taste", () => {
-    const body = expertShoppingBodyLower();
-    // The cheap append path is named explicitly as the per-query persist verb…
-    expect(body).toContain("sil_remember");
-    // …for BOTH routed kinds — a person FACT and a niche TASTE.
-    expect(body.includes("fact") && body.includes("taste")).toBe(true);
-  });
-
-  it("reserves sil_profile_materialize for the WHOLE-DOC paths, not per-query fact/taste learning", () => {
-    const body = expertShoppingBodyLower();
-    // Both verbs are present (materialize stays for the domain-spec web refresh /
-    // refine / contradiction-resolution), but sil_remember is the per-query one.
-    expect(body).toContain("sil_profile_materialize");
-    expect(body).toContain("sil_remember");
-    const reservesWholeDoc =
-      body.includes("whole-doc") || body.includes("whole doc") ||
-      body.includes("web refresh") || body.includes("refresh") ||
-      body.includes("refine") || body.includes("overwrite") ||
-      body.includes("re-materialize") || body.includes("contradict");
-    expect(reservesWholeDoc).toBe(true);
-  });
-
-  it("carries an after-recommendation capture step that routes each surfaced fact/taste through sil_remember", () => {
-    const body = expertShoppingBodyLower();
-    expect(body).toContain("sil_remember");
-    // The founder's "fires after every recommendation": an after-recommendation
-    // step must EXIST and route capture through sil_remember (the cheap append),
-    // NEAR the trigger phrase so the loop reads as one coherent step.
-    const triggers = [
-      "after every recommendation",
-      "after a recommendation",
-      "after the recommendation",
-      "after recommending",
-      "after you recommend",
-      "once you have recommended",
-      "once you've recommended",
-      "before the turn ends",
-      "post-recommendation",
-      "after-recommendation",
-    ];
-    const hits = triggers.map((t) => body.indexOf(t)).filter((i) => i >= 0).sort((a, b) => a - b);
-    expect(hits.length, "no after-recommendation trigger phrase found").toBeGreaterThan(0);
-    const at = hits[0] ?? 0;
-    expect(body.slice(at, at + 600)).toContain("sil_remember");
-  });
-
-  it("guards the after-recommendation capture to fire ONLY when a new fact/taste surfaced (no empty/noise entries)", () => {
-    const body = expertShoppingBodyLower();
-    expect(body).toContain("sil_remember");
-    const onlyWhenSurfaced =
-      body.includes("only when") || body.includes("only if") ||
-      body.includes("nothing surfaced") || body.includes("no new fact") ||
-      body.includes("nothing to save") || body.includes("no empty") ||
-      body.includes("noise");
-    expect(onlyWhenSurfaced).toBe(true);
-  });
-});
-
-describe("SDS — intent_spec.md is the PERSISTED decomposition-dimension schema; the per-query intent is ephemeral", () => {
-  it("intent_spec.md is a PERSISTED dimension schema (PRD-style), derived from the domain at creation (Correction 4)", () => {
-    // Correction 4: intent_spec.md holds the DIMENSIONS of the decomposition — a
-    // PRD-style template of what a good query must resolve (use-case, terrain,
-    // budget, compatibility, …), derived from THIS agent's domain. It is a
-    // PERSISTED artefact (the schema), authored at creation, refine-mutable. The
-    // engine doc must name intent_spec as a persisted schema/dimensions derived
-    // from the domain — NOT merely an ephemeral per-request notion.
-    const body = engineBodyLower();
-    const namesIntentSpec =
-      body.includes("intent spec") || body.includes("intent-spec") ||
-      body.includes("intent_spec") || body.includes("intentspec");
-    const namesDimensionSchema =
-      body.includes("dimension") || body.includes("decomposition") ||
-      body.includes("prd") || body.includes("schema") || body.includes("template");
-    const namesDerivedFromDomain =
-      (body.includes("derive") && body.includes("domain")) ||
-      (body.includes("derived") && body.includes("domain")) ||
-      (body.includes("from") && body.includes("domain spec")) ||
-      (body.includes("from") && body.includes("domain_spec"));
-    expect(namesIntentSpec).toBe(true);
-    expect(namesDimensionSchema).toBe(true);
-    expect(namesDerivedFromDomain).toBe(true);
-  });
-
-  it("the loop DECOMPOSES the query along the intent_spec dimensions into the per-query intent BEFORE searching", () => {
-    // Correction 5 step 2: at shopping time the expert decomposes the request along
-    // the intent_spec.md dimensions → the per-query intent (what they want right
-    // now), before searching. The body must name decomposing/deriving the per-query
-    // intent along the persisted dimensions.
-    const body = expertShoppingBodyLower();
-    const namesDecompose =
-      body.includes("decompose") || body.includes("decomposition") ||
-      body.includes("derive") || body.includes("derives") ||
-      body.includes("derived") || body.includes("fill in the dimension") ||
-      body.includes("along the") && body.includes("dimension");
-    const namesIntent =
-      body.includes("intent spec") || body.includes("intent-spec") ||
-      body.includes("intent_spec") || body.includes("intentspec") ||
-      body.includes("per-query intent") || body.includes("the intent");
-    expect(namesDecompose).toBe(true);
-    expect(namesIntent).toBe(true);
-  });
-
-  it("the PER-QUERY intent (filled dimensions) is EPHEMERAL — never persisted; only the intent_spec SCHEMA is (no intent.md instance)", () => {
-    // Correction 4: persist the TEMPLATE, never the INSTANCE. The per-query intent
-    // (the dimensions filled in for one request) lives only in the conversation —
-    // no intent.md of filled values is ever written. The loop doc must state the
-    // per-query intent is ephemeral/never-persisted; and no skill doc may instruct
-    // writing an intent.md (the filled-instance file).
-    const body = expertShoppingBodyLower();
-    const namesEphemeral =
-      body.includes("ephemeral") || body.includes("conversation-only") ||
-      body.includes("conversation only") || body.includes("never persisted") ||
-      body.includes("not persisted") || body.includes("lives in the session") ||
-      body.includes("lives in the conversation");
-    expect(namesEphemeral).toBe(true);
-    // No doc instructs an intent.md FILLED-INSTANCE artefact (the schema is
-    // intent_spec.md, never a bare intent.md of filled values).
-    const corpus =
-      brainstormBodyLower() +
-      engineBodyLower() +
-      expertShoppingBodyLower() +
-      refineBodyLower();
-    expect(corpus).not.toContain("intent.md");
-  });
-});
-
-describe("SDS — layering precedence intent > playbook > user_spec > domain_spec, with hard-constraint inviolability", () => {
-  it("the loop states the precedence ordering intent > playbook > user_spec > domain_spec (Correction / rule B)", () => {
-    // Rule B corrected precedence: intent (the explicit request) > playbook (the
-    // user's buying taste) > user_spec (the user's facts; hard constraints
-    // inviolable) > domain_spec (the substrate). The body must name this ordering.
-    const body = expertShoppingBodyLower();
-    const namesPrecedence =
-      body.includes("intent > playbook > user") ||
-      body.includes("intent>playbook>user") ||
-      body.includes("intent over playbook over user") ||
-      (body.includes("precedence") &&
-        body.includes("intent") &&
-        body.includes("playbook") &&
-        body.includes("user") &&
-        body.includes("domain")) ||
-      (body.includes("more specific layer") && body.includes("wins"));
-    expect(namesPrecedence).toBe(true);
-  });
-
-  it("the loop states a user_spec HARD CONSTRAINT is INVIOLABLE — intent never overrides it", () => {
-    // Business rule 3 + the precedence exception: intent can override a SOFT
-    // preference, but NEVER a HARD constraint. A hard constraint holds at
-    // search-param time, in the rubric, and in the final pick — a violating
-    // recommendation is a defect even if the catalog surfaced it. The body must
-    // name the hard constraint, its inviolability, AND that intent does not
-    // override it.
-    const body = expertShoppingBodyLower();
-    const namesHardConstraint =
-      body.includes("hard constraint") ||
-      body.includes("hard-constraint") ||
-      body.includes("hard-no") ||
-      body.includes("hard no") ||
-      body.includes("inviolable");
-    const namesInviolable =
-      body.includes("inviolable") ||
-      body.includes("never break") ||
-      body.includes("never broken") ||
-      body.includes("never violate") ||
-      body.includes("never overrid") || // override / overridden / overrides
-      body.includes("not overrid");
-    expect(namesHardConstraint).toBe(true);
-    expect(namesInviolable).toBe(true);
-  });
-
-  it("the mapping doc routes a hard constraint to a real FILTER + a reject-at-recommend rule, never only query free text", () => {
-    // Architect Risk (hard-constraint leak): a hard constraint that lives only as
-    // soft `query` text can leak. The mapping doc must state a hard constraint is
-    // routed to a real filter where one exists AND to an explicit reject-at-
-    // recommend rubric rule — never ONLY into query free text. We read the mapping
-    // doc (which owns the param routing) for the hard-constraint handling.
-    const body = readBody(MAPPING_PATH).toLowerCase();
-    const namesHardConstraint =
-      body.includes("hard constraint") ||
-      body.includes("hard-constraint") ||
-      body.includes("hard-no") ||
-      body.includes("inviolable");
-    const routesToFilterAndReject =
-      (body.includes("filter") || body.includes("condition") || body.includes("available")) &&
-      (body.includes("reject") || body.includes("never recommend") || body.includes("rubric"));
-    const disavowsQueryOnly =
-      body.includes("not only") ||
-      body.includes("never only") ||
-      body.includes("not just query") ||
-      body.includes("more than query") ||
-      body.includes("not merely query");
-    expect(namesHardConstraint).toBe(true);
-    expect(routesToFilterAndReject).toBe(true);
-    expect(disavowsQueryOnly).toBe(true);
-  });
-});
-
-describe("SDS — refine targets domain_spec / user_spec / playbook / intent_spec (persona refresh → SOUL.md)", () => {
-  it("the refine doc names domain_spec, user_spec, playbook AND intent_spec as refinable artefact elements", () => {
-    // Refine can now target a domain_spec dimension, a user_spec fact / hard
-    // constraint, a playbook buying-taste, OR the intent_spec dimension schema —
-    // each persisted via the same in-place re-materialize. A PERSONA refinement
-    // refreshes the host SOUL.md via the host CLI (Correction 1), not a sil
-    // persona.md. The refine doc must name all four sil-store refine targets.
-    const body = refineBodyLower();
-    const namesDomainSpec =
-      body.includes("domain spec") || body.includes("domain-spec") ||
-      body.includes("domain_spec") || body.includes("domainspec");
-    const namesUserSpec =
-      body.includes("user spec") || body.includes("user-spec") ||
-      body.includes("user_spec") || body.includes("userspec");
-    const namesPlaybook = body.includes("playbook");
-    const namesIntentSpec =
-      body.includes("intent spec") || body.includes("intent-spec") ||
-      body.includes("intent_spec") || body.includes("intentspec");
-    const missing: string[] = [];
-    if (!namesDomainSpec) missing.push("domain_spec");
-    if (!namesUserSpec) missing.push("user_spec");
-    if (!namesPlaybook) missing.push("playbook");
-    if (!namesIntentSpec) missing.push("intent_spec");
-    expect(missing).toEqual([]);
-  });
-
-  it("a refinement is persisted via the SAME in-place re-materialize (no new tool, no hand-rolled write)", () => {
-    // The refine doc must persist the layers through the EXISTING
-    // sil_profile_materialize re-write — no new tool (the 8-tool manifest is
-    // frozen), no hand-rolled write under the data dir.
-    const body = refineBodyLower();
-    expect(body).toContain("sil_profile_materialize");
-    const namesInPlace =
-      body.includes("in-place") || body.includes("in place") ||
-      body.includes("re-materialize") || body.includes("rematerialize") ||
-      body.includes("overwrit");
-    expect(namesInPlace).toBe(true);
-  });
-
-  it("a PERSONA refinement refreshes the host SOUL.md via the host CLI — NOT a sil persona.md (Correction 1)", () => {
-    // Correction 1: the persona is the host SOUL.md, so a persona refinement is a
-    // SOUL.md refresh via the host CLI — never a sil-side persona.md re-write. The
-    // refine doc must route persona changes to SOUL.md and must NOT name a sil
-    // persona.md artefact.
-    const body = refineBodyLower();
-    const namesSoulRefresh =
-      body.includes("soul.md") &&
-      (body.includes("refresh") || body.includes("rewrite") ||
-        body.includes("re-write") || body.includes("update") ||
-        body.includes("host cli") || body.includes("host-cli"));
-    expect(namesSoulRefresh).toBe(true);
-    expect(body).not.toContain("persona.md");
-  });
-});
-
-describe("SDS — all four specs are the REQUIRED materialize inputs, seeded at creation (8-tool manifest frozen, no new tool)", () => {
-  it("the engine names ALL FOUR specs (domainSpec, intentSpec, userSpec, playbook) as REQUIRED sil_profile_materialize inputs (round-2)", () => {
-    // Round-2: the store makes ALL FOUR specs REQUIRED (domainSpec + intentSpec +
-    // userSpec + playbook) — present non-blank from creation. The engine (which
-    // owns the materialize call) must name all four as inputs to the SAME tool —
-    // proving the five-artefact model rides the existing tool, not a new one (the
-    // 8-tool manifest stays frozen).
-    const body = engineBodyLower();
-    const namesDomainSpec =
-      body.includes("domainspec") || body.includes("domain spec") ||
-      body.includes("domain-spec") || body.includes("domain_spec");
-    const namesIntentSpec =
-      body.includes("intentspec") || body.includes("intent spec") ||
-      body.includes("intent-spec") || body.includes("intent_spec");
-    const namesUserSpec =
-      body.includes("userspec") || body.includes("user spec") ||
-      body.includes("user-spec") || body.includes("user_spec");
-    const namesPlaybook = body.includes("playbook");
-    const missing: string[] = [];
-    if (!namesDomainSpec) missing.push("domainSpec");
-    if (!namesIntentSpec) missing.push("intentSpec");
-    if (!namesUserSpec) missing.push("userSpec");
-    if (!namesPlaybook) missing.push("playbook");
-    expect(missing).toEqual([]);
-    expect(body).toContain("sil_profile_materialize");
-  });
-
-  it("the engine SEEDS the user side (user_spec + playbook) at creation — all four present non-blank from the start, not deferred (round-2)", () => {
-    // Round-2 cross-cutting rule A: the creation step seeds ALL FOUR sil docs
-    // quickly (partial) at creation — the researched domain_spec + derived
-    // intent_spec dimensions AND an initial user_spec + playbook. The engine doc
-    // (which owns the materialize call) must name seeding/passing the user side at
-    // creation — not deferring it to first shop.
-    const body = engineBodyLower();
-    const seedsUserSide =
-      ((body.includes("seed") || body.includes("seeded") || body.includes("initial")) &&
-        (body.includes("user_spec") || body.includes("user spec") ||
-          body.includes("playbook"))) ||
-      (body.includes("all four") &&
-        (body.includes("creation") || body.includes("materialize"))) ||
-      (body.includes("present") &&
-        (body.includes("user_spec") || body.includes("user spec")) &&
-        body.includes("creation"));
-    expect(seedsUserSide).toBe(true);
-  });
-
-  it("the interview seeds all four sil docs under the ONE-TOUCHPOINT-PER-DOCUMENT setup — the user side is present from creation, NOT 'filled lazily later' (Round 3 cadence + round-2 present-at-creation)", () => {
-    // Round-2 structure STANDS: setup seeds ALL FOUR sil docs (partial) at
-    // creation. Round 3 changes only the CADENCE rule — the budget is now
-    // "one touchpoint per document" (domain = zero questions), NOT "≤10 questions".
-    // The brainstorm doc must (1) name the one-touchpoint-per-document cadence,
-    // (2) seed the user side at creation, and (3) NOT carry the bounced round-1
-    // "user spec / buying taste fill lazily later" framing (the user side is
-    // present from creation now).
-    const body = brainstormBodyLower();
-    const namesTouchpointCadence =
-      body.includes("one touchpoint per document") ||
-      body.includes("one touchpoint per doc") ||
-      body.includes("a touchpoint per document") ||
-      body.includes("touchpoint per document") ||
-      body.includes("one touchpoint each") ||
-      body.includes("at least one touchpoint per") ||
-      (body.includes("touchpoint") && body.includes("per document")) ||
-      (body.includes("one touchpoint") && body.includes("each"));
-    const seedsUserSideAtCreation =
-      ((body.includes("seed") || body.includes("seeded") || body.includes("initial")) &&
-        (body.includes("user spec") || body.includes("user_spec") ||
-          body.includes("playbook") || body.includes("buying taste"))) ||
-      (body.includes("all four") && body.includes("present")) ||
-      (body.includes("present") && body.includes("creation"));
-    expect(namesTouchpointCadence).toBe(true);
-    expect(seedsUserSideAtCreation).toBe(true);
-    // The bounced round-1 "fill lazily later" / "start empty" framing for the user
-    // side must be GONE — all four are present from creation now.
-    expect(body).not.toContain("fill lazily later");
-    expect(body).not.toContain("fill later");
-    expect(body).not.toContain("starts empty");
-    expect(body).not.toContain("start empty");
-    // Round 3: the retired ≤10-question budget must NOT survive in the brainstorm
-    // doc (the cadence is one-touchpoint-per-document now).
-    expect(body).not.toContain("≤10");
-    expect(body).not.toContain("<=10");
-    expect(body).not.toContain("10 question");
-    expect(body).not.toContain("ten question");
-    expect(body).not.toContain("at most 10");
-  });
-
-  it("the engine's Runtime hook loads the FOUR sil-store artefacts (domain_spec + intent_spec + user_spec + playbook); the persona is the host SOUL.md", () => {
-    // The Runtime hook loads the four sil-store behaviour artefacts so the
-    // shop-time loop has them. The persona is the host SOUL.md (loaded by the host
-    // as system framing), NOT a sil artefact the hook reads. The body must name
-    // loading the four sil artefacts at runtime.
-    const body = engineBodyLower();
-    const loadsDomain =
-      body.includes("domain spec") || body.includes("domain-spec") ||
-      body.includes("domain_spec") || body.includes("domainspec");
-    const loadsIntent =
-      body.includes("intent spec") || body.includes("intent-spec") ||
-      body.includes("intent_spec") || body.includes("intentspec");
-    const loadsUser =
-      body.includes("user spec") || body.includes("user-spec") ||
-      body.includes("user_spec") || body.includes("userspec");
-    const loadsPlaybook = body.includes("playbook");
-    const missing: string[] = [];
-    if (!loadsDomain) missing.push("domain_spec");
-    if (!loadsIntent) missing.push("intent_spec");
-    if (!loadsUser) missing.push("user_spec");
-    if (!loadsPlaybook) missing.push("playbook");
-    expect(missing).toEqual([]);
-  });
-});
-
-/* ===========================================================================
- * BUG — created experts don't allow-list sil's tools (tools.alsoAllow)
- * (card: allow-list-sil-tools-on-expert-creation)
- *
- * tier: integration. ROOT CAUSE: the agent-creation engine sets the plugin-
- * ENABLE surface (`plugins.entries.sil.enabled true`) but never the tool-
- * ADMISSION surface `tools.alsoAllow`, so a freshly created expert's four sil_*
- * tools stay filtered — the user must hand-edit the host config before the
- * expert works at all. Admission is plugin-ID-only across three surfaces
- * (`src/lib/openclaw-allowlist.ts:6-21`); `tools.alsoAllow` is the one the engine
- * never touches.
- *
- * The fix is WIRING + PROSE only (no plugin TS change): the engine invokes the
- * already-shipped #35 helper — `scripts/allowlist-openclaw.mjs`, exposed as the
- * package bin `sil-openclaw-allowlist` and the `openclaw:allowlist` pnpm script —
- * which performs the additive, idempotent, atomic three-surface merge. The merge
- * CORE is already proven by `openclaw-allowlist.integration.test.ts:182-259`; do
- * NOT duplicate it here. These pin the WIRING gap the bug is actually about:
- *   - the engine reference invokes the helper to admit `tools.alsoAllow`, AFTER
- *     the agent shell is created;
- *   - the engine gates `created` on REAL admission (a failed admission is
- *     `persistence_failed`, never a green `created` over filtered tools);
- *   - SKILL.md session-start points a missing-tools path at the helper instead
- *     of dead-ending at "consult host docs and stop";
- *   - the worked example carries the same helper line as the engine (coupling).
- *
- * Content-seam tests over the real skill markdown (read from disk) — same pattern
- * as the host-wiring-shape block above. They assert on STABLE substrings (the
- * shipped helper's bin/script/pnpm identifiers, the admission surface) and on
- * ORDER (admission after the shell), never brittle full-text. These assertions
- * ARE the spec. Do NOT weaken them to match the markdown.
- * ========================================================================= */
-
-/** Stable identifiers of the shipped #35 helper: the package bin, the script
- * basename, and the pnpm script. The engine/SKILL/example may invoke it in ANY
- * of these forms; naming one is enough. All three are distinctive to the real
- * artefact (no generic prose collides), so requiring one pins the REAL shipped
- * helper — NOT a hand-rolled `openclaw config set` that would clobber existing
- * `tools.alsoAllow` entries (the architect's ruled-out inline path). */
-const ALLOWLIST_HELPER_TOKENS = [
-  "sil-openclaw-allowlist",
-  "allowlist-openclaw.mjs",
-  "openclaw:allowlist",
-] as const;
-
-/** First index at which ANY helper token appears in a (lower-cased) body, or -1. */
-function firstHelperIdx(body: string): number {
-  const idxs = ALLOWLIST_HELPER_TOKENS.map((t) => body.indexOf(t)).filter(
-    (i) => i >= 0,
-  );
-  return idxs.length ? Math.min(...idxs) : -1;
-}
-
-describe("references/agent_creation_engine.md — admits sil at tools.alsoAllow via the shipped helper (BUG: allow-list-sil-tools-on-expert-creation)", () => {
-  it("invokes the shipped allow-list helper (sil-openclaw-allowlist / allowlist-openclaw.mjs / openclaw:allowlist), NOT just enabling the plugin", () => {
-    // The whole bug: step 6 sets the plugin-ENABLE surface but never invokes the
-    // admission helper, so the sil_* tools stay filtered. Naming a helper token
-    // proves the engine REUSES the additive #35 merge rather than re-deriving an
-    // inline value-mode `config set` (which would clobber a pre-existing
-    // tools.alsoAllow entry — explicitly ruled out by the architect). Report which
-    // forms were found so a forgotten wiring is a legible failure, not an opaque
-    // false.
-    const body = engineBodyLower();
-    const present = ALLOWLIST_HELPER_TOKENS.filter((t) => body.includes(t));
-    expect(present).not.toEqual([]);
-  });
-
-  it("names the tool-admission surface `tools.alsoAllow` (the surface that actually un-filters sil's tools)", () => {
-    // Admission is plugin-ID-only across three surfaces; `tools.alsoAllow` is the
-    // one the pre-fix engine never touches (openclaw-allowlist.ts:6-21), so a
-    // created expert's tools stay filtered. The engine prose must name it as the
-    // admission surface the helper writes — naming only the enable surface is the
-    // bug.
-    expect(engineBodyLower()).toContain("tools.alsoallow");
-  });
-
-  it("orders the admission step AFTER the agent shell is created (`openclaw agents add` precedes the helper)", () => {
-    // The opened expert cannot un-filter its own tools — admission must be
-    // persisted at creation time, AFTER the agent shell exists (step 3's
-    // `openclaw agents add`). Order in the prose IS the spec: a helper invoked
-    // before the shell would have no agent to admit tools for.
-    const body = engineBodyLower();
-    const addIdx = body.indexOf("openclaw agents add");
-    const helperIdx = firstHelperIdx(body);
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(helperIdx).toBeGreaterThanOrEqual(0);
-    expect(addIdx).toBeLessThan(helperIdx);
-  });
-
-  it("gates the `created` verdict on real admission — a failed allow-list step yields `persistence_failed`, not a green `created` over filtered tools", () => {
-    // PO open-questions #1/#2 (fail-closed): step 7/8 must NOT report `created`
-    // while the tools are still filtered. A non-zero helper exit / failed admission
-    // maps to `persistence_failed`. The admission-FAILURE wording is net-new (the
-    // pre-fix engine names no admission at all), so requiring it — AND its
-    // proximity to `persistence_failed` — cannot false-green off the engine's
-    // EXISTING `openclaw config validate` failure prose.
-    const body = engineBodyLower();
-    const FAIL_TOKENS = [
-      "non-zero",
-      "exits non-zero",
-      "helper exit",
-      "helper fail",
-      "admission fail",
-      "failed admission",
-      "allow-list fail",
-      "allowlist fail",
-    ];
-    const failIdxs = FAIL_TOKENS.map((t) => body.indexOf(t)).filter(
-      (i) => i >= 0,
-    );
-    expect(failIdxs.length).toBeGreaterThan(0);
-    const failIdx = Math.min(...failIdxs);
-    // `persistence_failed` must be the named outcome IN PROXIMITY to the failed
-    // admission (same step / its outcome handling), in either direction — not
-    // merely present somewhere later in the status-taxonomy table.
-    const window = body.slice(Math.max(0, failIdx - 240), failIdx + 320);
-    expect(window).toContain("persistence_failed");
-  });
-});
-
-describe("sil-shopping/SKILL.md — session start points a missing-tools path at the admission helper (BUG: allow-list-sil-tools-on-expert-creation)", () => {
+describe("sil-shopping/SKILL.md — session start retains the admission self-heal branch (#37, preserved)", () => {
   /** The `## Session start` section body of SKILL.md, lower-cased — from that
-   * heading to the next `## ` heading. The fix lives in this section: the
-   * missing-`sil_*`-tools branch must offer the one-command helper, not dead-end. */
+   * heading to the next `## ` heading. The missing-`sil_*`-tools branch must offer
+   * the one-command helper, not dead-end. */
   function sessionStartLower(): string {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
     const heading = "## Session start";
@@ -3891,19 +517,12 @@ describe("sil-shopping/SKILL.md — session start points a missing-tools path at
   }
 
   it("points the missing-`sil_*`-tools branch at the shipped admission helper (self-healing, not a dead-end)", () => {
-    // BUG: today session-start tells the user to "consult the host's tool-allowlist
-    // docs and stop" — an un-actionable dead-end. The fix points them at the
-    // one-command helper so the base-agent path self-heals admission (PO #1).
     const section = sessionStartLower();
     const present = ALLOWLIST_HELPER_TOKENS.filter((t) => section.includes(t));
     expect(present).not.toEqual([]);
   });
 
   it("no longer dead-ends at 'consult … docs and stop' without offering the fix", () => {
-    // The distinctive dead-end phrasing must go: the missing-tools branch must not
-    // tell the user to consult docs and STOP with no actionable fix. Anchor on the
-    // stable dead-end signature (consult + 'and stop') that marks the un-actionable
-    // branch this card deletes.
     const section = sessionStartLower();
     const deadEnds =
       section.includes("consult the host's tool-allowlist docs and stop") ||
@@ -3912,20 +531,1133 @@ describe("sil-shopping/SKILL.md — session start points a missing-tools path at
   });
 });
 
-describe("examples/road_cycling_expert_walkthrough.md — carries the same allow-list helper line as the engine (coupling, BUG: allow-list-sil-tools-on-expert-creation)", () => {
-  it("names the shipped allow-list helper, same as the engine reference (example↔engine cannot silently re-diverge)", () => {
-    // The worked example hand-duplicates step 6's wiring block (the copy-paste-
-    // most-likely artefact; skill-content.test.ts already couples its `--strict-json`
-    // enable to the engine). It must ALSO carry the helper-invocation line, or the
-    // example keeps wiring only the enable while the engine admits — the two
-    // surfaces re-diverge. Pin BOTH so the coupling is enforced from this card on.
-    const engineHasHelper = ALLOWLIST_HELPER_TOKENS.some((t) =>
-      engineBodyLower().includes(t),
+describe("skill — the contributor-facing 'adding a tool' prose is GONE from the runtime skill", () => {
+  it("no bundle file carries the repo-CLAUDE.md 'how to add a tool' contributor content", () => {
+    const corpus = bundleCorpus().toLowerCase();
+    expect(corpus).not.toContain("registerxtools");
+    expect(corpus).not.toContain("contracts.tools");
+    expect(corpus).not.toContain("adding a real tool");
+    expect(corpus).not.toContain("adding a tool");
+  });
+});
+
+/* ===========================================================================
+ * AGENT-CREATION ENGINE — create ONE shopper (userSpec only, no domain),
+ * singleton refusal, admission preserved. The procedure-as-source-of-truth seam.
+ * ========================================================================= */
+
+function engineBodyLower(): string {
+  return readBody(ENGINE_PATH).toLowerCase();
+}
+
+/** The four engine outcome statuses (mirrors identity.ts/catalog.ts vocabulary). */
+const ENGINE_STATUSES = ["created", "invalid_request", "collision", "persistence_failed"] as const;
+
+describe("references/agent_creation_engine.md — host-CLI procedure is a pinned source of truth", () => {
+  it("names the host-native creation CLI `openclaw agents add` and the host `agents` config surface", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("openclaw agents add");
+    expect(body).toContain("agents");
+  });
+
+  it("names ALL FOUR engine outcome statuses (created/invalid_request/collision/persistence_failed)", () => {
+    const body = engineBodyLower();
+    const missing = ENGINE_STATUSES.filter((s) => !body.includes(s));
+    expect(missing).toEqual([]);
+  });
+
+  it("frames the procedure as creating ONE shopper (NOT a per-niche expert)", () => {
+    const body = engineBodyLower();
+    const namesCreation = body.includes("create") || body.includes("creation");
+    const namesShopper = body.includes("shopper");
+    expect(namesCreation).toBe(true);
+    expect(namesShopper).toBe(true);
+    expect(perNicheExpertOffenders(readBody(ENGINE_PATH))).toEqual([]);
+  });
+});
+
+describe("references/agent_creation_engine.md — validate-first; collision is a SINGLETON refusal", () => {
+  it("names `invalid_request` and validates the spec BEFORE `openclaw agents add` (validate-first ordering)", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("invalid_request");
+    const firstValidateIdx = body.indexOf("validate");
+    const addIdx = body.indexOf("openclaw agents add");
+    expect(firstValidateIdx).toBeGreaterThanOrEqual(0);
+    expect(addIdx).toBeGreaterThanOrEqual(0);
+    expect(firstValidateIdx).toBeLessThan(addIdx);
+  });
+
+  it("requires the mandatory create fields — name AND persona AND the shared userSpec", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("persona");
+    expect(body).toContain("userspec");
+    expect(body).toMatch(/name/);
+  });
+
+  it("names the SINGLETON refusal — a second create is refused with 'a shopper already exists', never a second shopper", () => {
+    // NET-NEW: the pre-rewrite engine framed collision as an agentId clash only.
+    // The single-shopper model adds the singleton invariant: the user has exactly
+    // ONE shopper; a second create attempt is refused and steered to add-a-domain or
+    // refine — never a second shopper minted.
+    const body = engineBodyLower();
+    const namesSingletonRefusal =
+      body.includes("a shopper already exists") ||
+      body.includes("already have a shopper") ||
+      body.includes("shopper already exists");
+    expect(namesSingletonRefusal).toBe(true);
+    const namesSingleton = body.includes("singleton");
+    const refusesSecond =
+      body.includes("never mint a second shopper") ||
+      body.includes("never a second shopper") ||
+      body.includes("not a second shopper") ||
+      (body.includes("second shopper") && body.includes("never"));
+    expect(namesSingleton || refusesSecond).toBe(true);
+  });
+
+  it("reads existing agents BEFORE the add (collision check precedes `openclaw agents add`)", () => {
+    const body = engineBodyLower();
+    const listIdx = body.indexOf("openclaw agents list");
+    const addIdx = body.indexOf("openclaw agents add");
+    expect(listIdx).toBeGreaterThanOrEqual(0);
+    expect(addIdx).toBeGreaterThanOrEqual(0);
+    expect(listIdx).toBeLessThan(addIdx);
+  });
+
+  it("states nothing is written on an invalid spec (atomic outcome)", () => {
+    const body = engineBodyLower();
+    const saysNothingWritten =
+      body.includes("write nothing") ||
+      body.includes("writes nothing") ||
+      body.includes("nothing is written") ||
+      body.includes("does not write") ||
+      body.includes("nothing partial") ||
+      body.includes("no partial");
+    expect(saysNothingWritten).toBe(true);
+  });
+});
+
+describe("references/agent_creation_engine.md — the create call is `sil_profile_materialize { agentId, name, userSpec }` with NO domain (no per-niche specs at create)", () => {
+  it("names the create-materialize call with userSpec and NO `domain` (the shopper, not a domain pack)", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("sil_profile_materialize");
+    // The exact create-call arg list — userSpec only (NET-NEW; the retired engine
+    // passed `domainSpec, intentSpec, userSpec, playbook`).
+    expect(body).toContain("agentid, name, userspec");
+    const passesNoDomain =
+      body.includes("pass no `domain`") ||
+      body.includes("pass no domain") ||
+      body.includes("no `domain` at create") ||
+      body.includes("no domain at create") ||
+      body.includes("with no `domain`") ||
+      body.includes("with no domain") ||
+      body.includes("without a `domain`") ||
+      body.includes("without a domain");
+    expect(passesNoDomain).toBe(true);
+  });
+
+  it("states create writes the shared user_spec + an EMPTY domains map (a fresh shopper has no domains, healthily)", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("user_spec.md");
+    const namesEmptyDomains =
+      body.includes("domains: {}") ||
+      body.includes("empty `domains`") ||
+      body.includes("empty domains") ||
+      (body.includes("domains") && body.includes("map") && body.includes("empty"));
+    expect(namesEmptyDomains).toBe(true);
+  });
+
+  it("NEGATIVE: no 'all four specs from creation' — the retired four-spec create-call arg-list is GONE", () => {
+    // The lazy-mint move (create-time → first-shop) means NO per-domain pack is
+    // authored at create. We forbid the RETIRED four-spec create-call arg-list and
+    // the four-SDS-specs-at-creation framing — NOT the bare tokens `domainSpec` /
+    // `intentSpec` (the corrected engine legitimately NAMES them to DISAVOW them at
+    // create: "there is no domainSpec / intentSpec / playbook here").
+    const body = engineBodyLower();
+    expect(body).not.toContain("domainspec, intentspec, userspec, playbook");
+    expect(body).not.toContain("name, domainspec, intentspec, userspec, playbook");
+    expect(body).not.toContain("all four sds specs");
+    expect(body).not.toContain("four sds specs");
+    expect(body).not.toContain("all four are present from creation");
+  });
+});
+
+describe("references/agent_creation_engine.md — wires a host-loadable, sil-wired shopper; validate gates created", () => {
+  it("invokes `openclaw agents add` non-interactively with JSON output", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("--non-interactive");
+    expect(body).toContain("--json");
+  });
+
+  it("gates 'created' on the host's OWN validation, ordered AFTER the add, reading `.valid` (not a non-existent `ok` field)", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("openclaw config validate");
+    const addIdx = body.indexOf("openclaw agents add");
+    const validateIdx = body.indexOf("openclaw config validate");
+    expect(addIdx).toBeGreaterThanOrEqual(0);
+    expect(validateIdx).toBeGreaterThan(addIdx);
+    expect(body).toContain("valid");
+    expect(body).not.toContain("ok: false");
+  });
+
+  it("enables the sil plugin with the host's real value-mode set (`--strict-json`), NOT `--merge`", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("plugins.entries.sil.enabled true --strict-json");
+    expect(body).not.toContain("--merge");
+  });
+
+  it("pins the asserted OpenClaw image tag with NO stale 2026.4.15 lingering", () => {
+    const raw = readBody(ENGINE_PATH);
+    expect(raw).toContain("alpine/openclaw:2026.6.9");
+    expect(raw).not.toContain("2026.4.15");
+  });
+
+  it("wires the sil PLUGIN enabled AND the sil SKILL attached into the created shopper", () => {
+    const body = engineBodyLower();
+    const wiresPlugin = body.includes("plugin") && (body.includes("enable") || body.includes("enabled"));
+    const wiresSkill = body.includes("skill") && (body.includes("attach") || body.includes("attached"));
+    expect(wiresPlugin).toBe(true);
+    expect(wiresSkill).toBe(true);
+  });
+
+  it("names `persistence_failed` (with path + cause) for a write/validate failure", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("persistence_failed");
+    expect(body.includes("path") && body.includes("cause")).toBe(true);
+  });
+
+  it("states the created shopper shops with NO further setup (calls sil_search / sil_product_get immediately)", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("sil_search");
+    expect(body).toContain("sil_product_get");
+    const noFurtherSetup =
+      body.includes("no further setup") ||
+      body.includes("without further setup") ||
+      body.includes("zero further setup") ||
+      body.includes("no additional setup");
+    expect(noFurtherSetup).toBe(true);
+  });
+
+  it("does NOT couple creation to identity (no register/token as a precondition to CREATE)", () => {
+    const body = engineBodyLower();
+    const couplesIdentity =
+      /register[^.]*before[^.]*creat/.test(body) ||
+      /creat[^.]*requires[^.]*register/.test(body) ||
+      /must.*register.*to.*creat/.test(body);
+    expect(couplesIdentity).toBe(false);
+  });
+});
+
+describe("references/agent_creation_engine.md — persona → host SOUL.md directly; $SIL_DATA_DIR holds the shared user spec", () => {
+  it("writes the persona DIRECTLY into the host SOUL.md — NO sil persona.md, no copy step", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("soul.md");
+    const namesDirectWrite =
+      body.includes("straight into") ||
+      body.includes("write the persona directly") ||
+      body.includes("persona directly") ||
+      body.includes("directly into the workspace soul.md") ||
+      body.includes("directly into the host soul.md") ||
+      (body.includes("persona") && body.includes("soul.md") && body.includes("no copy"));
+    expect(namesDirectWrite).toBe(true);
+    const namesCopyStep =
+      body.includes("copy the materialized persona") ||
+      body.includes("copy the persona") ||
+      body.includes("copies the persona") ||
+      body.includes("copy persona.md");
+    expect(namesCopyStep).toBe(false);
+  });
+
+  it("names $SIL_DATA_DIR as where the shared user spec is materialized, with the store boundary kept clean (host config = wiring)", () => {
+    const body = engineBodyLower();
+    const namesDataDir =
+      body.includes("$sil_data_dir") ||
+      body.includes("sil_data_dir") ||
+      body.includes("sil data directory") ||
+      body.includes("sil data dir");
+    const namesHostConfig =
+      body.includes("openclaw agents add") || body.includes("openclaw config validate");
+    expect(namesDataDir).toBe(true);
+    expect(namesHostConfig).toBe(true);
+  });
+
+  it("the Runtime hook loads the shared user_spec + the (possibly empty) domains map; per-domain packs load LAZILY at shop time", () => {
+    // NET-NEW: the retired engine loaded four sil artefacts at runtime. The single-
+    // shopper engine loads the SHARED user spec + the domains map, and per-domain
+    // packs load lazily on first shop.
+    const body = engineBodyLower();
+    const loadsSharedUserSpec =
+      body.includes("shared `user_spec.md`") ||
+      body.includes("shared user_spec.md") ||
+      body.includes("shared user spec") ||
+      (body.includes("user_spec") && body.includes("shared"));
+    const namesDomainsMap =
+      body.includes("`domains`") || body.includes("domains map") || body.includes("domains` map");
+    const lazy =
+      body.includes("lazil") || body.includes("lazy") ||
+      body.includes("on first shop") || body.includes("at shop time");
+    expect(loadsSharedUserSpec).toBe(true);
+    expect(namesDomainsMap).toBe(true);
+    expect(lazy).toBe(true);
+  });
+});
+
+/* ===========================================================================
+ * ADMISSION (#37, preserved) — the create flow admits sil at tools.alsoAllow via
+ * the shipped helper, AFTER the agent shell, gating `created` on real admission.
+ * ========================================================================= */
+
+/** Stable identifiers of the shipped #35 helper: the package bin, the script
+ * basename, and the pnpm script. Naming one is enough; all three are distinctive
+ * to the real artefact, so requiring one pins the REAL shipped helper — never a
+ * hand-rolled `openclaw config set` that would clobber existing `tools.alsoAllow`. */
+const ALLOWLIST_HELPER_TOKENS = [
+  "sil-openclaw-allowlist",
+  "allowlist-openclaw.mjs",
+  "openclaw:allowlist",
+] as const;
+
+function firstHelperIdx(body: string): number {
+  const idxs = ALLOWLIST_HELPER_TOKENS.map((t) => body.indexOf(t)).filter((i) => i >= 0);
+  return idxs.length ? Math.min(...idxs) : -1;
+}
+
+describe("references/agent_creation_engine.md — admits sil at tools.alsoAllow via the shipped helper (#37, retained through the rewrite)", () => {
+  it("invokes the shipped allow-list helper (sil-openclaw-allowlist / allowlist-openclaw.mjs / openclaw:allowlist), NOT just enabling the plugin", () => {
+    const present = ALLOWLIST_HELPER_TOKENS.filter((t) => engineBodyLower().includes(t));
+    expect(present).not.toEqual([]);
+  });
+
+  it("names the tool-admission surface `tools.alsoAllow` (the surface that un-filters sil's tools)", () => {
+    expect(engineBodyLower()).toContain("tools.alsoallow");
+  });
+
+  it("orders the admission step AFTER the agent shell is created (`openclaw agents add` precedes the helper)", () => {
+    const body = engineBodyLower();
+    const addIdx = body.indexOf("openclaw agents add");
+    const helperIdx = firstHelperIdx(body);
+    expect(addIdx).toBeGreaterThanOrEqual(0);
+    expect(helperIdx).toBeGreaterThanOrEqual(0);
+    expect(addIdx).toBeLessThan(helperIdx);
+  });
+
+  it("gates the `created` verdict on real admission — a failed allow-list step yields `persistence_failed`, not a green `created` over filtered tools", () => {
+    const body = engineBodyLower();
+    const FAIL_TOKENS = [
+      "non-zero",
+      "exits non-zero",
+      "helper exit",
+      "helper fail",
+      "admission fail",
+      "failed admission",
+      "allow-list fail",
+      "allowlist fail",
+    ];
+    const failIdxs = FAIL_TOKENS.map((t) => body.indexOf(t)).filter((i) => i >= 0);
+    expect(failIdxs.length).toBeGreaterThan(0);
+    const failIdx = Math.min(...failIdxs);
+    const window = body.slice(Math.max(0, failIdx - 240), failIdx + 320);
+    expect(window).toContain("persistence_failed");
+  });
+});
+
+/* ===========================================================================
+ * BRAINSTORM / INTERVIEW — exactly TWO touchpoints (persona + shared user-spec
+ * seed); NO create-time domain research / compare-options taste / intent sign-off.
+ * ========================================================================= */
+
+function brainstormBodyLower(): string {
+  return readBody(BRAINSTORM_PATH).toLowerCase();
+}
+
+describe("references/brainstorm_interview.md — open, two-sided interview that converges a shopper draft", () => {
+  it("names the brainstorm/interview as an open, multi-turn conversation that is NOT a form-fill", () => {
+    const body = brainstormBodyLower();
+    const namesInterview = body.includes("brainstorm") || body.includes("interview");
+    const namesMultiTurn =
+      body.includes("multi-turn") ||
+      body.includes("back-and-forth") ||
+      body.includes("back and forth") ||
+      body.includes("conversation") ||
+      body.includes("conversational");
+    const disavowsForm =
+      body.includes("not a fixed questionnaire") ||
+      body.includes("not a questionnaire") ||
+      body.includes("not a form-fill") ||
+      body.includes("not a form fill") ||
+      body.includes("not a form") ||
+      body.includes("not a wizard") ||
+      (body.includes("questionnaire") && body.includes("not"));
+    expect(namesInterview).toBe(true);
+    expect(namesMultiTurn).toBe(true);
+    expect(disavowsForm).toBe(true);
+  });
+
+  it("converges with the user — reflect-back + confirm per touchpoint; collaborative / re-entrant", () => {
+    const body = brainstormBodyLower();
+    const reflectsBack =
+      body.includes("reflect back") || body.includes("reflect-back") ||
+      body.includes("reflects back") || body.includes("reflect a") ||
+      body.includes("summary of what") || body.includes("reflect");
+    const confirms =
+      body.includes("confirm") || body.includes("yes/adjust") ||
+      body.includes("before moving on") || body.includes("before advancing");
+    const collaborative =
+      body.includes("collaborative") || body.includes("re-entrant") ||
+      body.includes("reentrant") || body.includes("revise an earlier") ||
+      body.includes("revisit") || body.includes("not a locked wizard");
+    expect(reflectsBack).toBe(true);
+    expect(confirms).toBe(true);
+    expect(collaborative).toBe(true);
+  });
+});
+
+describe("references/brainstorm_interview.md — exactly TWO create touchpoints (persona + shared user-spec seed); no per-niche work at create", () => {
+  it("names exactly TWO touchpoints — the PERSONA and the SHARED USER-SPEC seed", () => {
+    // NET-NEW: the retired interview walked FIVE artefacts (one touchpoint each). The
+    // single-shopper interview collapses to TWO: persona (voice/standing rules — the
+    // shopper is a generalist, the niche no longer falls out) + a shared user-spec
+    // seed (cross-niche facts + hard constraints).
+    const body = brainstormBodyLower();
+    const namesTwoTouchpoints =
+      body.includes("two touchpoints") ||
+      body.includes("two touch-points") ||
+      body.includes("exactly two") ||
+      (body.includes("two") && body.includes("touchpoint"));
+    expect(namesTwoTouchpoints).toBe(true);
+    const namesPersona = body.includes("persona");
+    const namesSharedUserSpec =
+      body.includes("shared user spec") ||
+      body.includes("shared `user_spec") ||
+      body.includes("shared user_spec") ||
+      (body.includes("user spec") && body.includes("shared")) ||
+      (body.includes("user_spec") && body.includes("shared"));
+    expect(namesPersona).toBe(true);
+    expect(namesSharedUserSpec).toBe(true);
+  });
+
+  it("seeds the SHARED user spec with cross-niche facts + hard constraints (not a per-niche fact)", () => {
+    const body = brainstormBodyLower();
+    const namesCrossNiche =
+      body.includes("cross-niche") || body.includes("across every niche") ||
+      body.includes("every niche") || body.includes("across niches");
+    const namesFactsAndConstraints =
+      (body.includes("fact") || body.includes("address") || body.includes("size")) &&
+      (body.includes("hard constraint") || body.includes("hard-constraint") || body.includes("constraint"));
+    expect(namesCrossNiche).toBe(true);
+    expect(namesFactsAndConstraints).toBe(true);
+  });
+
+  it("RELOCATES niche work to first-shop lazy mint — no domain-research / compare-options / sign-off STEP runs at onboarding", () => {
+    // The deep domain research (old §2), the compare-a-set-of-options taste (old §4),
+    // and the intent-dimension sign-off (old §5) MOVE to first-shop lazy mint
+    // (shop_loop.md). The corrected interview legitimately NAMES them only to
+    // DISAVOW them ("not authored here", "deferred to first shop") — so we pin the
+    // relocation POSITIVELY and forbid the AFFIRMATIVE old-model STEP instructions,
+    // NEVER the bare tokens (the disavowal-token trap that false-greens/false-reds a
+    // corrected doc).
+    const body = brainstormBodyLower();
+    // POSITIVE: the niche work is deferred to first shop / lazy mint.
+    const relocates =
+      (body.includes("first shop") || body.includes("lazily") || body.includes("lazy mint")) &&
+      (body.includes("not authored here") ||
+        body.includes("deferred") ||
+        body.includes("no domain interview") ||
+        body.includes("does not research any niche") ||
+        body.includes("no niche is researched") ||
+        body.includes("minted lazily") ||
+        body.includes("minted later"));
+    expect(relocates).toBe(true);
+    // NEGATIVE: the active old five-touchpoint create-STEP instructions are gone (a
+    // regression to the old model would re-introduce one of these affirmative steps).
+    expect(body).not.toContain("actively research it yourself");
+    expect(body).not.toContain("research it yourself");
+    expect(body).not.toContain("research the niche yourself");
+    expect(body).not.toContain("compare a set of options");
+    expect(body).not.toContain("ask the user to sign off");
+    expect(body).not.toContain("ask you to sign off");
+  });
+});
+
+describe("references/brainstorm_interview.md — the assembled draft is { agentId, name, persona, userSpec }; endorsement-gated", () => {
+  it("frames the converged output as a { agentId, name, persona, userSpec } draft (no domain, no per-niche specs)", () => {
+    const body = brainstormBodyLower();
+    expect(body).toContain("agentid");
+    expect(body).toContain("persona");
+    expect(body).toContain("userspec");
+    const namesKebab =
+      body.includes("lower-kebab") || body.includes("lower kebab") || body.includes("kebab");
+    expect(namesKebab).toBe(true);
+    expect(body).toContain("main");
+    // NET-NEW draft shape: the contiguous { agentId, name, persona, userSpec } arg
+    // list. The retired draft carried { …, domainSpec, intentSpec, userSpec, playbook }.
+    // Pin the new shape POSITIVELY — the corrected doc legitimately NAMES
+    // domainSpec/intentSpec only to DISAVOW them ("no domainSpec/intentSpec — there
+    // is none at create"), so a bare `not.toContain("domainspec")` would false-fail.
+    expect(body).toContain("agentid, name, persona, userspec");
+  });
+
+  it("names an explicit endorsement/go-ahead on the assembled draft, BEFORE the engine handoff", () => {
+    const body = brainstormBodyLower();
+    const namesEndorsement =
+      body.includes("endorse") || body.includes("endorsement") ||
+      body.includes("go-ahead") || body.includes("go ahead");
+    const namesDraft =
+      body.includes("draft") || body.includes("assembled spec") || body.includes("assembled draft");
+    expect(namesEndorsement).toBe(true);
+    expect(namesDraft).toBe(true);
+    const endorseIdx = body.indexOf("endorse");
+    const lastEngineHandoffIdx = body.lastIndexOf("agent_creation_engine.md");
+    expect(endorseIdx).toBeGreaterThanOrEqual(0);
+    expect(lastEngineHandoffIdx).toBeGreaterThanOrEqual(0);
+    expect(endorseIdx).toBeLessThan(lastEngineHandoffIdx);
+  });
+
+  it("states ZERO engine steps run before endorsement; abandon mid-flow creates nothing", () => {
+    const body = brainstormBodyLower();
+    const nothingBeforeEndorse =
+      body.includes("nothing is created until") ||
+      body.includes("nothing created until") ||
+      body.includes("creates nothing until") ||
+      body.includes("zero engine steps") ||
+      body.includes("no engine step") ||
+      (body.includes("only") && body.includes("endorse"));
+    const abandonClean =
+      body.includes("nothing is created") || body.includes("nothing created") ||
+      body.includes("created nothing") || body.includes("no partial") ||
+      body.includes("nothing partial") || body.includes("clean state");
+    expect(nothingBeforeEndorse).toBe(true);
+    expect(abandonClean).toBe(true);
+  });
+
+  it("does NOT present sil registration / a token as a prerequisite to CREATE the shopper", () => {
+    const body = brainstormBodyLower();
+    const couplesIdentity =
+      /register[^.]*before[^.]*creat/.test(body) ||
+      /creat[^.]*requires[^.]*register/.test(body) ||
+      /must.*register.*to.*creat/.test(body);
+    expect(couplesIdentity).toBe(false);
+  });
+});
+
+/* ===========================================================================
+ * SHOP LOOP — the heart of the model change. classify → reuse-before-mint →
+ * on-miss research + materialize WITH domain (announced, correctable) → the loop
+ * over the active domain; per-query sil_remember; precedence with SHARED user_spec.
+ * ========================================================================= */
+
+function shopLoopBodyLower(): string {
+  return readBody(SHOP_LOOP_PATH).toLowerCase();
+}
+
+describe("references/shop_loop.md — exists; one shopper, many lazily-minted domains", () => {
+  it("exists on disk", () => {
+    expect(existsSync(SHOP_LOOP_PATH)).toBe(true);
+  });
+
+  it("frames ONE shopper holding many domains, each minted lazily on first shop, reading the shared user spec + the domains map", () => {
+    const body = shopLoopBodyLower();
+    const oneShopperManyDomains =
+      (body.includes("one shopper") && body.includes("domain")) ||
+      (body.includes("single shopper") && body.includes("domain"));
+    expect(oneShopperManyDomains).toBe(true);
+    const lazyMint =
+      body.includes("minted lazily") || body.includes("lazily") ||
+      (body.includes("mint") && body.includes("first shop"));
+    expect(lazyMint).toBe(true);
+    const readsSharedUserSpec =
+      body.includes("shared user spec") || body.includes("shared `user_spec") ||
+      (body.includes("user_spec") && body.includes("shared"));
+    expect(readsSharedUserSpec).toBe(true);
+  });
+});
+
+describe("references/shop_loop.md — entry: classify → reuse-before-mint (semantic dedup) → on-miss mint announced + correctable", () => {
+  it("classifies the query's niche by skill reasoning (no routing tool), then reads profile.json.domains", () => {
+    const body = shopLoopBodyLower();
+    const namesClassify = body.includes("classify") || body.includes("classif");
+    expect(namesClassify).toBe(true);
+    const readsDomainsMap =
+      body.includes("profile.json.domains") ||
+      body.includes("profile.json`.domains") ||
+      (body.includes("profile.json") && body.includes("domains"));
+    expect(readsDomainsMap).toBe(true);
+  });
+
+  it("REUSES an existing matching domain before minting — semantic slug dedup is the shop loop's job (load-bearing)", () => {
+    // Architect risk: the store enforces only shape; without reuse-before-mint the
+    // one shopper fragments into thin duplicate packs. This is the headline dedup
+    // rule the test must pin hard.
+    const body = shopLoopBodyLower();
+    const namesReuseBeforeMint =
+      body.includes("reuse-before-mint") ||
+      body.includes("reuse an existing domain before minting") ||
+      (body.includes("reuse") && (body.includes("before mint") || body.includes("before minting")));
+    expect(namesReuseBeforeMint).toBe(true);
+    const namesSemanticDedup = body.includes("semantic") && (body.includes("dedup") || body.includes("slug"));
+    const namesFragmentRisk =
+      body.includes("fragment") || body.includes("duplicate") || body.includes("thin pack") || body.includes("thin packs");
+    expect(namesSemanticDedup || namesFragmentRisk).toBe(true);
+  });
+
+  it("on a MISS mints the domain on the fly, ANNOUNCED, with the inferred domain STATED so the user can correct it", () => {
+    const body = shopLoopBodyLower();
+    const announces =
+      body.includes("announce") || body.includes("announced") ||
+      (body.includes("tell the user") && body.includes("new niche"));
+    const disavowsSilentMint =
+      body.includes("never silently") || body.includes("not silently") ||
+      (body.includes("announce") && body.includes("never"));
+    const correctable =
+      body.includes("correct it") || body.includes("can correct") ||
+      body.includes("stated so the user can correct") || body.includes("the inferred");
+    expect(announces).toBe(true);
+    expect(disavowsSilentMint).toBe(true);
+    expect(correctable).toBe(true);
+  });
+
+  it("on a MISS runs the research pass + persists with `sil_profile_materialize` WITH a `domain` object (the whole-doc mint path)", () => {
+    const body = shopLoopBodyLower();
+    expect(body.includes("research")).toBe(true);
+    expect(body).toContain("sil_profile_materialize");
+    const withDomainObject =
+      body.includes("with the `domain` object") ||
+      body.includes("with the domain object") ||
+      body.includes("with a `domain` object") ||
+      body.includes("with a domain object") ||
+      body.includes("domain: { slug") ||
+      (body.includes("sil_profile_materialize") && body.includes("domain") && body.includes("slug"));
+    expect(withDomainObject).toBe(true);
+  });
+});
+
+describe("references/shop_loop.md — layering precedence with the SHARED user spec; per-query learning via sil_remember", () => {
+  it("layers intent > playbook(domain) > user_spec(SHARED) > domain_spec(domain), with hard-constraint inviolability", () => {
+    const body = shopLoopBodyLower();
+    const namesPrecedence =
+      body.includes("intent > playbook") ||
+      (body.includes("precedence") && body.includes("intent") && body.includes("playbook") &&
+        body.includes("user_spec") && body.includes("domain_spec"));
+    expect(namesPrecedence).toBe(true);
+    const userSpecIsShared =
+      body.includes("user_spec(shared)") ||
+      body.includes("shared user spec") ||
+      (body.includes("user_spec") && body.includes("shared"));
+    expect(userSpecIsShared).toBe(true);
+    const hardInviolable =
+      (body.includes("hard constraint") || body.includes("hard-constraint")) &&
+      (body.includes("inviolable") || body.includes("never overrid") || body.includes("never break") || body.includes("never violate"));
+    expect(hardInviolable).toBe(true);
+  });
+
+  it("persists a per-query learning with a SINGLE sil_remember call — fact → SHARED user spec, taste → ACTIVE domain", () => {
+    const body = shopLoopBodyLower();
+    expect(body).toContain("sil_remember");
+    const factToShared =
+      (body.includes('kind: "fact"') || body.includes("kind:fact") || body.includes("kind: fact")) &&
+      (body.includes("shared") || body.includes("every niche") || body.includes("across"));
+    expect(factToShared).toBe(true);
+    const tasteToActiveDomain =
+      (body.includes('kind: "taste"') || body.includes("kind:taste") || body.includes("kind: taste")) &&
+      body.includes("active domain");
+    expect(tasteToActiveDomain).toBe(true);
+  });
+
+  it("reserves the whole-doc `sil_profile_materialize` for the heavy paths (mint, web refresh, refine) — NOT per-query learning", () => {
+    const body = shopLoopBodyLower();
+    expect(body).toContain("sil_profile_materialize");
+    expect(body).toContain("sil_remember");
+    const reservesWholeDoc =
+      body.includes("whole-doc") || body.includes("whole doc") ||
+      body.includes("web refresh") || body.includes("web-refresh") ||
+      body.includes("refine") || body.includes("contradict") ||
+      body.includes("re-materialize");
+    expect(reservesWholeDoc).toBe(true);
+  });
+
+  it("carries an after-recommendation capture that routes each surfaced fact/taste through sil_remember, firing ONLY when something surfaced", () => {
+    const body = shopLoopBodyLower();
+    const triggers = [
+      "after every recommendation",
+      "after a recommendation",
+      "after the recommendation",
+      "after recommending",
+      "before the turn ends",
+      "post-recommendation",
+      "after-recommendation",
+    ];
+    const hits = triggers.map((t) => body.indexOf(t)).filter((i) => i >= 0).sort((a, b) => a - b);
+    expect(hits.length, "no after-recommendation trigger phrase found").toBeGreaterThan(0);
+    const at = hits[0] ?? 0;
+    expect(body.slice(at, at + 600)).toContain("sil_remember");
+    const onlyWhenSurfaced =
+      body.includes("only when") || body.includes("only if") ||
+      body.includes("nothing surfaced") || body.includes("no new fact") ||
+      body.includes("no empty") || body.includes("noise");
+    expect(onlyWhenSurfaced).toBe(true);
+  });
+
+  it("keeps capture in-the-open + reviewable via sil_profile_get + erasable via sil_profile_remove", () => {
+    const body = shopLoopBodyLower();
+    const inTheOpen =
+      body.includes("in the open") || body.includes("in-the-open") ||
+      body.includes("never silently harvested") || body.includes("not silently harvested");
+    expect(inTheOpen).toBe(true);
+    expect(body).toContain("sil_profile_get");
+    expect(body).toContain("sil_profile_remove");
+  });
+});
+
+describe("references/shop_loop.md — the map/search/compare/recommend loop (preserved invariants)", () => {
+  it("maps to real sil_search params, never invents a filter, leaves ship_to empty without a sil_whoami round-trip", () => {
+    const body = shopLoopBodyLower();
+    expect(body).toContain("sil_search");
+    const neverInvents =
+      body.includes("never invent a filter") || body.includes("never invent a param") ||
+      body.includes("not invent a filter") || body.includes("do not invent") ||
+      (body.includes("invent") && body.includes("filter"));
+    expect(neverInvents).toBe(true);
+    expect(body).toContain("ship_to");
+    const leavesShipToEmpty =
+      body.includes("ship_to empty") || body.includes("leave ship_to empty") ||
+      (body.includes("ship_to") && body.includes("empty"));
+    expect(leavesShipToEmpty).toBe(true);
+    const disavowsWhoami =
+      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) ||
+      /sil_whoami[^.]*(never|not)/.test(body);
+    expect(disavowsWhoami).toBe(true);
+  });
+
+  it("recommends with the 'why' that cites the layers, presents best-first, and never re-ranks", () => {
+    const body = shopLoopBodyLower();
+    const requiresWhy =
+      body.includes("rationale") || body.includes('"why"') || body.includes("the why") ||
+      body.includes("why this") || (body.includes("recommend") && body.includes("cite"));
+    expect(requiresWhy).toBe(true);
+    const namesBestFirst = body.includes("best-first") || body.includes("best first") || body.includes("in order");
+    const disavowsRerank =
+      body.includes("never re-rank") || body.includes("not re-rank") ||
+      body.includes("do not re-rank") || (body.includes("re-rank") && body.includes("not"));
+    expect(namesBestFirst).toBe(true);
+    expect(disavowsRerank).toBe(true);
+  });
+
+  it("re-fetches the chosen item with sil_product_get BEFORE any buy (never commits off the stale sil_search snapshot)", () => {
+    // A bare indexOf("buy") mis-anchors on "buying niche" / "how to buy well" early
+    // in the doc, so pin the re-fetch-before-buy invariant by PHRASE, not a global
+    // ordering scan: the pre-buy re-fetch step + the never-off-stale rule.
+    const body = shopLoopBodyLower();
+    expect(body).toContain("sil_product_get");
+    const refetchBeforeBuy =
+      body.includes("before any buy") ||
+      body.includes("before the buy") ||
+      body.includes("before any purchase") ||
+      body.includes("before any checkout") ||
+      (body.includes("re-fetch") && body.includes("before"));
+    expect(refetchBeforeBuy).toBe(true);
+    const neverOffStale =
+      body.includes("never commit a buy off the stale") ||
+      body.includes("off the stale") ||
+      (body.includes("stale") && body.includes("snapshot")) ||
+      body.includes("point-in-time");
+    expect(neverOffStale).toBe(true);
+  });
+
+  it("handles ok+empty (relax + explain), the unservable 'no' (never junk), and non-ok (follow recovery, never improvise)", () => {
+    const body = shopLoopBodyLower();
+    const relaxesEmpty =
+      (body.includes("relax") || body.includes("re-frame") || body.includes("broaden")) &&
+      body.includes("explain");
+    expect(relaxesEmpty).toBe(true);
+    const honestNo =
+      (body.includes("cannot serve") || body.includes("unservable") || body.includes("not shippable") || body.includes("out of scope")) &&
+      (body.includes("honest") || body.includes("never fabricate") || body.includes("never pad") || body.includes("junk"));
+    expect(honestNo).toBe(true);
+    expect(body).toContain("recovery");
+    const neverImprovise =
+      body.includes("never improvise") || body.includes("not improvise") || body.includes("follow the tool");
+    expect(neverImprovise).toBe(true);
+  });
+
+  it("DELEGATES the param table to search_param_mapping.md and the status taxonomy to catalog_tools_reference.md (references, does not restate)", () => {
+    const body = shopLoopBodyLower();
+    expect(body).toContain("search_param_mapping.md");
+    expect(body).toContain("catalog_tools_reference.md");
+    expect(body).not.toContain("awaiting_browser");
+    expect(body).not.toContain("not_registered");
+    expect(body).not.toContain("must_reregister");
+  });
+});
+
+/* ===========================================================================
+ * MANAGE DOMAINS — list/view/remove operate on DOMAINS; remove ONE domain; two
+ * granularities (forget a domain vs decommission the whole shopper).
+ * ========================================================================= */
+
+function manageBodyLower(): string {
+  return readBody(MANAGE_PATH).toLowerCase();
+}
+
+describe("references/manage_domains.md — exists; names the three management tools", () => {
+  it("exists on disk", () => {
+    expect(existsSync(MANAGE_PATH)).toBe(true);
+  });
+
+  it("names sil_profile_list, sil_profile_get, and sil_profile_remove", () => {
+    const body = readBody(MANAGE_PATH);
+    const missing = ["sil_profile_list", "sil_profile_get", "sil_profile_remove"].filter(
+      (name) => !body.includes(name),
     );
-    const exampleHasHelper = ALLOWLIST_HELPER_TOKENS.some((t) =>
-      exampleBodyLower().includes(t),
+    expect(missing).toEqual([]);
+  });
+});
+
+describe("references/manage_domains.md — list/view/remove operate on DOMAINS; remove forgets ONE domain", () => {
+  it("frames the managed unit as the shopper's DOMAINS (list/view/remove a domain), not per-niche experts", () => {
+    const body = manageBodyLower();
+    const namesList = body.includes("list");
+    const namesView = body.includes("view") || body.includes("show");
+    const namesRemove = body.includes("remove") || body.includes("forget") || body.includes("delete");
+    expect(namesList && namesView && namesRemove).toBe(true);
+    expect(body).toContain("domain");
+  });
+
+  it("`sil_profile_remove { agentId, domainSlug }` forgets ONE domain — the shopper, the shared user spec, and the SIBLING domains survive", () => {
+    // NET-NEW: the retired manage flow removed a whole expert via `sil_profile_remove
+    // { agentId }`. The single-shopper flow forgets ONE domain (domainSlug REQUIRED),
+    // leaving the shopper + shared user_spec + sibling domains intact.
+    const body = manageBodyLower();
+    const namesDomainSlug =
+      body.includes("domainslug") || body.includes("domain_slug") || body.includes("domain slug");
+    expect(namesDomainSlug).toBe(true);
+    const forgetsOneDomain =
+      body.includes("forget one domain") || body.includes("forget a domain") ||
+      body.includes("one domain") || body.includes("single domain") ||
+      (body.includes("one") && body.includes("domain") && body.includes("pack"));
+    expect(forgetsOneDomain).toBe(true);
+    const siblingsSurvive =
+      body.includes("sibling") || body.includes("other domains") ||
+      body.includes("shared user spec") || (body.includes("the shopper") && body.includes("survive"));
+    expect(siblingsSurvive).toBe(true);
+  });
+
+  it("makes the TWO remove granularities distinct — forget a DOMAIN vs decommission the WHOLE SHOPPER (host CLI)", () => {
+    // NET-NEW: "delete the grocery agent" now means forget the grocery DOMAIN.
+    // Decommissioning the whole shopper (host wiring + SOUL.md + tree) is a separate,
+    // host-CLI-first action.
+    const body = manageBodyLower();
+    const namesForgetDomain = body.includes("forget") && body.includes("domain");
+    const namesDecommissionShopper =
+      body.includes("decommission") || body.includes("whole shopper") ||
+      body.includes("the entire shopper") || (body.includes("openclaw agents remove") && body.includes("shopper"));
+    expect(namesForgetDomain).toBe(true);
+    expect(namesDecommissionShopper).toBe(true);
+    expect(body).toContain("openclaw agents remove");
+  });
+
+  it("confirms before a destructive remove; frames not_found / invalid_request gracefully (never a stack trace / raw path)", () => {
+    const body = manageBodyLower();
+    const confirms =
+      body.includes("confirm") || body.includes("explicit go-ahead") || body.includes("ask before");
+    expect(confirms).toBe(true);
+    expect(body).toContain("not_found");
+    expect(body).toContain("invalid_request");
+    const graceful =
+      body.includes("never a stack trace") || body.includes("not a stack trace") ||
+      body.includes("raw path") || body.includes("raw filesystem path") ||
+      (body.includes("stack trace") && body.includes("never"));
+    expect(graceful).toBe(true);
+  });
+
+  it("keeps the artefact-store source-of-truth framing (profile.json, never the host agent list)", () => {
+    const body = manageBodyLower();
+    const namesArtefactSource =
+      body.includes("profile.json") || body.includes("artefact store") ||
+      body.includes("sil_data_dir") || body.includes("sil data dir");
+    expect(namesArtefactSource).toBe(true);
+    const namesSourceOfTruth =
+      body.includes("source of truth") || body.includes("source-of-truth") ||
+      body.includes("never the host agent list") || body.includes("not the host agent list");
+    expect(namesSourceOfTruth).toBe(true);
+  });
+
+  it("names the manage status taxonomy (ok / not_found / invalid_request / removed / persistence_failed)", () => {
+    const body = manageBodyLower();
+    const missing = ["ok", "not_found", "invalid_request", "removed", "persistence_failed"].filter(
+      (s) => !body.includes(s),
     );
-    expect(engineHasHelper).toBe(true);
-    expect(exampleHasHelper).toBe(true);
+    expect(missing).toEqual([]);
+  });
+});
+
+/* ===========================================================================
+ * REFINE SHOPPER — refine the shared user_spec OR one domain pack (by slug);
+ * persisted whole-doc; persona → SOUL.md; confirm-subset gate.
+ * ========================================================================= */
+
+function refineBodyLower(): string {
+  return readBody(REFINE_PATH).toLowerCase();
+}
+
+function refineCorpusLower(): string {
+  return (readBody(REFINE_PATH) + "\n" + readBody(MAPPING_PATH)).toLowerCase();
+}
+
+describe("references/refine_shopper.md — exists; composes the load + persist tools", () => {
+  it("exists on disk", () => {
+    expect(existsSync(REFINE_PATH)).toBe(true);
+  });
+
+  it("names the load step `sil_profile_get` and the persist step `sil_profile_materialize`", () => {
+    const body = refineBodyLower();
+    expect(body).toContain("sil_profile_get");
+    expect(body).toContain("sil_profile_materialize");
+  });
+});
+
+describe("references/refine_shopper.md — targets the SHARED user_spec OR one DOMAIN pack (by slug)", () => {
+  it("names the two refine targets — the shared user_spec (shopper-level) OR one domain pack selected by slug", () => {
+    // NET-NEW: the retired refine targeted the four specs of one expert. The single-
+    // shopper refine targets either the SHARED user_spec (no domain) OR one domain
+    // pack (by slug — its domain_spec / intent_spec / playbook).
+    const body = refineBodyLower();
+    const namesSharedUserSpec =
+      body.includes("shared user spec") || body.includes("shared `user_spec") ||
+      (body.includes("user_spec") && body.includes("shared"));
+    expect(namesSharedUserSpec).toBe(true);
+    const namesDomainPackBySlug =
+      (body.includes("domain pack") || body.includes("one domain") || body.includes("a domain")) &&
+      (body.includes("slug") || body.includes("domainslug"));
+    expect(namesDomainPackBySlug).toBe(true);
+  });
+
+  it("frames a distinct REFINE capability (load → propose → confirm → persist), session-grounded, never a generic template", () => {
+    const body = refineBodyLower();
+    const namesRefine = body.includes("refine") || body.includes("sharpen") || body.includes("amend");
+    expect(namesRefine).toBe(true);
+    const namesObserved =
+      body.includes("observed session") || body.includes("observed shopping") ||
+      (body.includes("observed") && body.includes("session"));
+    expect(namesObserved).toBe(true);
+    const disavowsGeneric =
+      body.includes("not a generic template") || body.includes("not a generic") ||
+      body.includes("never a generic") || body.includes("ungrounded") ||
+      (body.includes("generic") && body.includes("not"));
+    expect(disavowsGeneric).toBe(true);
+  });
+
+  it("persists ONLY the confirmed subset, gated on explicit confirmation that is NEVER inferred from silence / off-topic", () => {
+    const body = refineBodyLower();
+    const namesSubset =
+      body.includes("subset") || body.includes("all, some, or none") ||
+      body.includes("per-proposal") || body.includes("which to keep");
+    expect(namesSubset).toBe(true);
+    const confirmIdx = body.indexOf("confirm");
+    const materializeIdx = body.indexOf("sil_profile_materialize");
+    expect(confirmIdx).toBeGreaterThanOrEqual(0);
+    expect(materializeIdx).toBeGreaterThanOrEqual(0);
+    expect(confirmIdx).toBeLessThan(materializeIdx);
+    const disavowsSilence =
+      body.includes("never inferred from silence") || body.includes("not inferred from silence") ||
+      (body.includes("silence") && body.includes("never"));
+    const disavowsOffTopic =
+      body.includes("off-topic") || body.includes("off topic") ||
+      body.includes("unrelated question") || body.includes("unrelated reply") || body.includes("an unrelated");
+    expect(disavowsSilence).toBe(true);
+    expect(disavowsOffTopic).toBe(true);
+  });
+});
+
+describe("references/refine_shopper.md — persist is whole-doc + atomic; failure leaves prior intact; persona → SOUL.md", () => {
+  it("persists via the whole-doc `sil_profile_materialize` re-write (no hand-rolled write, no new tool)", () => {
+    const body = refineBodyLower();
+    expect(body).toContain("sil_profile_materialize");
+    const namesAtomicRewrite =
+      body.includes("atomic") || body.includes("in-place re-write") || body.includes("in-place rewrite") ||
+      body.includes("re-materialize") || body.includes("overwrit") || body.includes("whole-doc");
+    expect(namesAtomicRewrite).toBe(true);
+  });
+
+  it("states a persist FAILURE leaves the PRIOR artefacts intact (never a half-refined shopper)", () => {
+    const body = refineBodyLower();
+    const priorSurvives =
+      body.includes("prior artefacts") || body.includes("prior state") ||
+      body.includes("left intact") || body.includes("leaves intact") ||
+      (body.includes("intact") && body.includes("prior"));
+    const neverHalf =
+      body.includes("half-refined") || body.includes("never half") ||
+      body.includes("did not stick") || body.includes("nothing partial") || body.includes("no partial");
+    expect(priorSurvives).toBe(true);
+    expect(neverHalf).toBe(true);
+  });
+
+  it("a PERSONA refinement refreshes the host SOUL.md via the host CLI — NOT a sil persona.md", () => {
+    const body = refineBodyLower();
+    const namesSoulRefresh =
+      body.includes("soul.md") &&
+      (body.includes("refresh") || body.includes("rewrite") || body.includes("re-write") ||
+        body.includes("update") || body.includes("host cli") || body.includes("host-cli"));
+    expect(namesSoulRefresh).toBe(true);
+    expect(body).not.toContain("persona.md");
+  });
+});
+
+describe("references/refine_shopper.md — per-user/local; isolation; no-signal fallback; points at the mapping", () => {
+  it("frames refinement as per-user + local under $SIL_DATA_DIR with NO server endpoint / identity round-trip", () => {
+    const body = refineBodyLower();
+    const namesPerUserLocal =
+      body.includes("per-user") || body.includes("per user") || body.includes("local") || body.includes("your own");
+    const namesDataDir =
+      body.includes("$sil_data_dir") || body.includes("sil_data_dir") ||
+      body.includes("sil data directory") || body.includes("sil data dir");
+    expect(namesPerUserLocal).toBe(true);
+    expect(namesDataDir).toBe(true);
+    expect(body).not.toContain("sil_register");
+    expect(body).not.toContain("sil_whoami");
+    expect(body).not.toContain("sil-api");
+    expect(body).not.toContain("https://");
+  });
+
+  it("isolates the refine to the targeted scope — siblings + the shared spec untouched unless they ARE the target", () => {
+    const body = refineBodyLower();
+    const namesIsolation =
+      body.includes("sibling") || body.includes("other domains") ||
+      body.includes("untouched") || body.includes("isolation") || body.includes("isolated");
+    expect(namesIsolation).toBe(true);
+  });
+
+  it("on no observed-session signal, falls back to a guided amend / invite-to-shop-first — never fabricates observations", () => {
+    const body = refineBodyLower();
+    const namesNoSignal =
+      body.includes("no observed") || body.includes("no session") ||
+      body.includes("fresh session") || body.includes("out of context") || body.includes("no signal");
+    const namesFallback =
+      body.includes("guided amend") || body.includes("ask the user what to change") ||
+      body.includes("ask what to change") || body.includes("invite") || body.includes("shop first");
+    expect(namesNoSignal).toBe(true);
+    expect(namesFallback).toBe(true);
+    const disavowsFabrication =
+      body.includes("not fabricate") || body.includes("never fabricate") ||
+      body.includes("do not fabricate") || body.includes("never invent") ||
+      (body.includes("fabricat") && body.includes("not"));
+    expect(disavowsFabrication).toBe(true);
+  });
+
+  it("points at search_param_mapping.md for the param table rather than re-carrying it (ship_to-empty rule preserved)", () => {
+    const refineOnly = readBody(REFINE_PATH).toLowerCase();
+    expect(refineOnly).toContain("search_param_mapping.md");
+    expect(refineOnly).not.toContain("price_min");
+    expect(refineOnly).not.toContain("price_max");
+    expect(refineCorpusLower()).toContain("ship_to");
+  });
+});
+
+/* ===========================================================================
+ * WORKED EXAMPLE — multi_domain_shopper_walkthrough.md demonstrates the headline:
+ * create once → shop ≥2 unrelated niches in one session, 2nd minted on the fly +
+ * announced, a shared fact reused across niches, taste isolation, a sil_remember.
+ * ========================================================================= */
+
+function exampleBodyLower(): string {
+  return readBody(EXAMPLE_PATH).toLowerCase();
+}
+
+describe("examples/multi_domain_shopper_walkthrough.md — exists; create-once, endorsement-gated", () => {
+  it("the renamed walkthrough exists on disk", () => {
+    expect(existsSync(EXAMPLE_PATH)).toBe(true);
+  });
+
+  it("walks create-ONCE of the shopper, reaching the engine only after the explicit endorsement", () => {
+    const body = exampleBodyLower();
+    expect(body).toContain("shopper");
+    expect(body).toContain("openclaw agents add");
+    const endorseIdx = body.indexOf("endorse");
+    const addIdx = body.indexOf("openclaw agents add");
+    expect(endorseIdx).toBeGreaterThanOrEqual(0);
+    expect(addIdx).toBeGreaterThanOrEqual(0);
+    expect(endorseIdx).toBeLessThan(addIdx);
+  });
+});
+
+describe("examples/multi_domain_shopper_walkthrough.md — the multi-domain headline", () => {
+  it("shops ≥2 UNRELATED niches in ONE session with no agent switch, the 2nd minted on the fly + ANNOUNCED", () => {
+    // NET-NEW: the retired example shopped one niche (road cycling) across queries.
+    // The new walkthrough demonstrates two UNRELATED niches in the same session, the
+    // second minted lazily on the fly and announced.
+    const body = exampleBodyLower();
+    const namesSecondNiche =
+      body.includes("second niche") || body.includes("another niche") ||
+      body.includes("a second, unrelated niche") || body.includes("unrelated niche") ||
+      (body.includes("two") && body.includes("niche"));
+    expect(namesSecondNiche).toBe(true);
+    const sameSession =
+      body.includes("same session") || body.includes("one session") ||
+      body.includes("no agent switch") || body.includes("without switching");
+    expect(sameSession).toBe(true);
+    const mintedAnnounced =
+      body.includes("mint") && (body.includes("announce") || body.includes("on the fly") || body.includes("on the spot"));
+    expect(mintedAnnounced).toBe(true);
+  });
+
+  it("reuses a SHARED fact captured in niche A while shopping niche B (never re-asked)", () => {
+    const body = exampleBodyLower();
+    const sharedReuse =
+      (body.includes("shared") || body.includes("across") || body.includes("every niche")) &&
+      (body.includes("reuse") || body.includes("reused") || body.includes("never re-ask") ||
+        body.includes("without re-asking") || body.includes("kept from"));
+    expect(sharedReuse).toBe(true);
+  });
+
+  it("demonstrates TASTE isolation — a taste learned in A does not leak into B", () => {
+    const body = exampleBodyLower();
+    const tasteIsolation =
+      body.includes("taste") &&
+      (body.includes("isolat") || body.includes("does not leak") || body.includes("never leak") ||
+        body.includes("never b's") || body.includes("not leak"));
+    expect(tasteIsolation).toBe(true);
+  });
+
+  it("shows a per-query sil_remember and the singleton-refusal edge (a second 'create' → 'a shopper already exists')", () => {
+    const body = exampleBodyLower();
+    expect(body).toContain("sil_remember");
+    const singletonEdge =
+      body.includes("a shopper already exists") || body.includes("already have a shopper") ||
+      body.includes("shopper already exists") || (body.includes("singleton") && body.includes("refus"));
+    expect(singletonEdge).toBe(true);
+  });
+});
+
+/* ===========================================================================
+ * HARD-CONSTRAINT ROUTING — the shared user-spec hard constraint is routed to a
+ * real filter + a reject-at-recommend rule, never only `query` text (mapping doc).
+ * ========================================================================= */
+
+describe("references/search_param_mapping.md — hard constraint → real filter + reject-at-recommend, never only query text; ship_to empty", () => {
+  it("routes a hard constraint to a real FILTER + an explicit reject-at-recommend rule, never only soft query text", () => {
+    const body = readBody(MAPPING_PATH).toLowerCase();
+    const namesHardConstraint =
+      body.includes("hard constraint") || body.includes("hard-constraint") ||
+      body.includes("hard-no") || body.includes("inviolable");
+    const routesToFilterAndReject =
+      (body.includes("filter") || body.includes("condition") || body.includes("available")) &&
+      (body.includes("reject") || body.includes("never recommend") || body.includes("rubric"));
+    const disavowsQueryOnly =
+      body.includes("not only") || body.includes("never only") ||
+      body.includes("not just query") || body.includes("not merely query");
+    expect(namesHardConstraint).toBe(true);
+    expect(routesToFilterAndReject).toBe(true);
+    expect(disavowsQueryOnly).toBe(true);
+  });
+
+  it("leaves ship_to empty by default and never round-trips sil_whoami to populate it", () => {
+    const body = readBody(MAPPING_PATH).toLowerCase();
+    expect(body).toContain("ship_to");
+    const leavesEmpty =
+      body.includes("ship_to empty") || body.includes("leave ship_to empty") ||
+      (body.includes("ship_to") && body.includes("empty"));
+    expect(leavesEmpty).toBe(true);
+    const disavowsWhoami =
+      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) ||
+      /sil_whoami[^.]*(never|not)/.test(body);
+    expect(disavowsWhoami).toBe(true);
   });
 });

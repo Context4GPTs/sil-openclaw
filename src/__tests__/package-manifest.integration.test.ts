@@ -289,7 +289,7 @@ describe("skill basename is sil-unique — no stale `./skill` literal, ships und
     ).toBe(true);
     expect(
       existsSync(
-        join(root, "examples", "road_cycling_expert_walkthrough.md"),
+        join(root, "examples", "multi_domain_shopper_walkthrough.md"),
       ),
     ).toBe(true);
   });
