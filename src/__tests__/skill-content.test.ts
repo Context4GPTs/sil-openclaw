@@ -141,8 +141,8 @@ function readBody(path: string): string {
 
 /** The set of names the real register code emits against a mock api. Mirrors
  * src/index.ts#register(): identity + catalog + profile groups, so the bundle is
- * checked against the REAL nine-tool surface (`registerProfileTools` wires the
- * four `sil_profile_*` tools AND `sil_remember`). */
+ * checked against the REAL eight-tool surface (`registerProfileTools` wires the
+ * three `sil_profile_*` tools AND `sil_remember`). */
 function registeredNames(): Set<string> {
   const api = createMockPluginApi();
   registerIdentityTools(api);
@@ -207,7 +207,7 @@ describe("sil-shopping/SKILL.md — discoverability", () => {
   });
 });
 
-describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename; description drives nine tools, shopper/domain model, NO expert vocab)", () => {
+describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename; description drives eight tools, shopper/domain model, NO expert vocab)", () => {
   it("frontmatter `name` equals the published basename `sil-shopping` (not the stale `sil`)", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     expect(fm.fields["name"]).toBe("sil-shopping");
