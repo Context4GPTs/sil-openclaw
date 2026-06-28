@@ -70,6 +70,7 @@ const SIL_TOOLS = [
   "sil_profile_materialize",
   "sil_profile_remove",
   "sil_register",
+  "sil_remember",
   "sil_search",
   "sil_whoami",
 ] as const;
