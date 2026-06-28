@@ -63,6 +63,7 @@
  */
 
 import {
+  appendFileSync,
   chmodSync,
   existsSync,
   mkdirSync,
@@ -205,6 +206,55 @@ export type MaterializeResult =
       /** "<dir>: <cause>" so recovery is actionable. */
       error: string;
       message: string;
+    };
+
+/** One typed learning the cheap per-query persist path appends — the founder's
+ * `{ kind, domain?, text, hard? }` plus the `agentId` every `sil_profile_*` tool
+ * carries (the plugin has no ambient agent identity). `kind:"fact"` is something
+ * true about the PERSON (carries across every niche → the agent-level user spec);
+ * `kind:"taste"` is how they like to buy in THIS niche (→ the active domain's
+ * playbook). `hard` qualifies a FACT only; `domain` selects the niche for a TASTE. */
+export interface RememberSpec {
+  /** Host agent id — the artefact-dir key. Lower-kebab, not `main`. Guarded. */
+  agentId: string;
+  /** `"fact"` → agent-level `user_spec.md`; `"taste"` → active domain `playbook.md`. */
+  kind: "fact" | "taste";
+  /** The ONE short learning to append. REQUIRED non-blank; well under PIPE_BUF. */
+  text: string;
+  /** TASTE only — the niche to append to. Omitted ⇒ resolve the single domain
+   * (0 → not_found, 2+ → invalid_request). A FACT carrying a `domain` is a
+   * category error (`invalid_request`). */
+  domain?: string;
+  /** FACT only — marks an inviolable user-spec hard constraint (reject-at-pick).
+   * A `hard:true` TASTE is a contradiction (`invalid_request`). */
+  hard?: boolean;
+}
+
+/** The stable, case-insensitive marker the shop loop's reject-at-pick rule greps
+ * to find an appended hard constraint (e.g. `- [hard] never leather`). */
+const HARD_MARKER = "[hard]";
+
+/** The discriminated result `appendProfileEntry` returns — never throws across the
+ * boundary; the tool maps each variant to the `jsonResult` envelope. */
+export type RememberResult =
+  | {
+      ok: true;
+      agentId: string;
+      kind: "fact" | "taste";
+      /** Absolute path of the body file the entry was appended to. */
+      target: string;
+      /** The resolved domain slug — present ONLY for a taste. */
+      domain?: string;
+    }
+  | InvalidRequest
+  | { ok: false; kind: "not_found"; agentId: string; message: string }
+  | {
+      ok: false;
+      kind: "persistence_failed";
+      /** "<path>: <cause>" so recovery is actionable (never a token/PII). */
+      error: string;
+      message: string;
+      recovery: "fix_data_dir";
     };
 
 /** A host-agent id / domain slug must be lower-kebab and is never `main`
@@ -427,6 +477,151 @@ function atomicWrite(path: string, contents: string): void {
   writeFileSync(tmp, contents, { mode: FILE_MODE });
   renameSync(tmp, path);
   chmodSync(path, FILE_MODE);
+}
+
+function notFoundRemember(agentId: string, message: string): RememberResult {
+  return { ok: false, kind: "not_found", agentId, message };
+}
+
+/**
+ * Append ONE typed learning to the shopper's behaviour artefacts — the cheap
+ * per-query persist path (the card's reason to exist). Unlike `materializeProfile`
+ * (whole-doc overwrite), this NEVER reads or re-serializes the body: a `kind:"fact"`
+ * lands at the EOF of the agent-level `user_spec.md`, a `kind:"taste"` at the EOF of
+ * the active domain's `playbook.md`.
+ *
+ * Validate-first (deterministic field order: `agentId` → `text` → the routing
+ * category errors → a taste's explicit `domain` shape): any bad field returns
+ * `invalid_request` naming it and writes NOTHING.
+ *   - `kind:"fact"` carrying a `domain` → `invalid_request(domain)` (a fact is
+ *     agent-level).
+ *   - `kind:"taste"` carrying `hard:true` → `invalid_request(hard)` (taste is soft).
+ *
+ * Active-domain resolution (taste only): explicit `domain` slug → else the single
+ * registered domain → 0 domains → `not_found` → 2+ domains → `invalid_request(domain)`
+ * (ambiguous — never a silent write to the wrong niche).
+ *
+ * Fail-closed existence gate — append NEVER creates a file: an unknown shopper (no
+ * manifest), a missing `user_spec.md` body, an unregistered domain, or a registered
+ * domain whose `playbook.md` body is gone → `not_found` (no lone-bullet seed-less
+ * doc is ever born via append).
+ *
+ * The write is `appendFileSync(target, "\n- …", { flag: "a", mode: FILE_MODE })` —
+ * O_APPEND lands the entry at EOF atomically per write (POSIX), so concurrent
+ * appenders never lose an entry. The entry is `"\n"`-prefixed (O_APPEND does not
+ * read the prior terminator) and is ONE short learning, well under PIPE_BUF (~4 KB),
+ * so the per-write atomicity holds. A hard fact carries the `[hard]` marker so the
+ * shop loop's reject-at-pick rule can grep it. No manifest rewrite — the entry is
+ * already visible to `readAgentProfile` via `userSpecPath` / `playbookPath`. The
+ * `mode` option only applies on file creation, and the gate guarantees the target
+ * already exists, so the file's `0600` mode (set at materialize) is preserved.
+ */
+export function appendProfileEntry(spec: RememberSpec): RememberResult {
+  // --- validate-first (nothing is written until every field is good) ---
+  const badId = rejectBadSegment(spec.agentId, "agentId");
+  if (badId) return badId;
+  if (!nonBlank(spec.text)) {
+    return invalid("text", "text is required and must be non-empty.");
+  }
+  // Routing category errors — fail fast, write nothing.
+  if (spec.kind === "fact" && spec.domain !== undefined) {
+    return invalid(
+      "domain",
+      "a fact is agent-level (it carries across every niche) — drop `domain`, or use kind:\"taste\".",
+    );
+  }
+  if (spec.kind === "taste" && spec.hard === true) {
+    return invalid(
+      "hard",
+      "taste is always soft/bendable — a hard taste is a contradiction; mark `hard` on FACTS only.",
+    );
+  }
+  // A taste's explicit domain slug is a NEW filesystem path segment — guard its
+  // SHAPE (field `domain`) BEFORE any resolve/read.
+  if (spec.kind === "taste" && spec.domain !== undefined) {
+    const badSlug = rejectBadSegment(spec.domain, "domain");
+    if (badSlug) return badSlug;
+  }
+
+  const profilePath = join(getAgentArtefactDir(spec.agentId), PROFILE_FILE);
+  const manifest = tryReadManifest(profilePath);
+  if (manifest === null) {
+    return notFoundRemember(
+      spec.agentId,
+      'No sil shopper "' + spec.agentId + '" to remember for — create it first with sil_profile_materialize.',
+    );
+  }
+
+  // Resolve the target body file (and, for a taste, the active domain).
+  let target: string;
+  let resolvedDomain: string | undefined;
+  if (spec.kind === "fact") {
+    target = manifest.userSpecPath;
+  } else {
+    const slugs = Object.keys(manifest.domains);
+    let slug: string;
+    if (spec.domain !== undefined) {
+      slug = spec.domain;
+    } else if (slugs.length === 1) {
+      slug = slugs[0] as string;
+    } else if (slugs.length === 0) {
+      return notFoundRemember(
+        spec.agentId,
+        'Shopper "' + spec.agentId + '" has no domains yet — mint the niche first via sil_profile_materialize.',
+      );
+    } else {
+      return invalid(
+        "domain",
+        'Shopper "' + spec.agentId + '" has ' + slugs.length + " domains (" + slugs.join(", ")
+          + ") — name the `domain` to remember a taste in (omitting it is ambiguous).",
+      );
+    }
+    const entry = manifest.domains[slug];
+    if (entry === undefined) {
+      return notFoundRemember(
+        spec.agentId,
+        'No domain "' + slug + '" on shopper "' + spec.agentId + '" — mint it first via sil_profile_materialize.',
+      );
+    }
+    target = entry.playbookPath;
+    resolvedDomain = slug;
+  }
+
+  // Fail-closed existence gate — append NEVER resurrects a seed-less doc.
+  if (!existsSync(target)) {
+    return notFoundRemember(
+      spec.agentId,
+      'The target artefact for "' + spec.agentId + '" is missing — re-materialize the shopper/domain before remembering.',
+    );
+  }
+
+  // O_APPEND write — one short entry at EOF, "\n"-prefixed. A hard fact is marked
+  // unambiguously so the reject-at-pick rule can grep it.
+  const mark = spec.kind === "fact" && spec.hard === true ? HARD_MARKER + " " : "";
+  const line = "\n- " + mark + spec.text.trim();
+  try {
+    appendFileSync(target, line, { flag: "a", mode: FILE_MODE });
+  } catch (err) {
+    return {
+      ok: false,
+      kind: "persistence_failed",
+      error: target + ": " + errCause(err),
+      message:
+        "The remembered entry could NOT be appended to the sil data directory, so it"
+        + " did not stick. Fix the data directory (it must be writable — check"
+        + " permissions / free space / that the target is a file, not a directory),"
+        + " then try again.",
+      recovery: "fix_data_dir",
+    };
+  }
+
+  return {
+    ok: true,
+    agentId: spec.agentId,
+    kind: spec.kind,
+    target,
+    ...(resolvedDomain !== undefined ? { domain: resolvedDomain } : {}),
+  };
 }
 
 // ===========================================================================

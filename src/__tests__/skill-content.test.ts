@@ -211,7 +211,9 @@ describe("sil-shopping/SKILL.md — collision-fix frontmatter (name == basename,
     expect(missing).toEqual([]);
   });
 
-  it("frontmatter `description` enumerates the eight sil_* tools it drives (reference tail, not trigger)", () => {
+  it("frontmatter `description` enumerates the nine sil_* tools it drives (reference tail, not trigger)", () => {
+    // The sil-remember-append-memory-tool card adds the 9th tool (sil_remember),
+    // so the "Drives …" enumeration in the frontmatter description must name it too.
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     const description = fm.fields["description"] ?? "";
     const missing = [
@@ -223,6 +225,7 @@ describe("sil-shopping/SKILL.md — collision-fix frontmatter (name == basename,
       "sil_profile_list",
       "sil_profile_get",
       "sil_profile_remove",
+      "sil_remember",
     ].filter((t) => !description.includes(t));
     expect(missing).toEqual([]);
   });
@@ -3374,6 +3377,75 @@ describe("SDS — every query lazily AUGMENTS the already-present user_spec.md /
       body.includes("not pooled") || body.includes("never pooled");
     expect(namesLocal).toBe(true);
     expect(namesNoServer).toBe(true);
+  });
+});
+
+/* ===========================================================================
+ * sil_remember — the lightweight per-query APPEND persist verb (card:
+ * sil-remember-append-memory-tool). The card REPLACES the heavy whole-doc
+ * sil_profile_materialize round-trip as the per-query fact/taste persistence
+ * path with a cheap single-entry append, and adds an after-recommendation
+ * trigger. These are POSITIVE pins on sil_remember — the old permissive
+ * namesPersist OR-chains above (which list sil_profile_materialize) do NOT flip
+ * on their own, so this block is the forcing function for the de-stub. RED now:
+ * `sil_remember` appears nowhere in the bundle yet.
+ * ========================================================================= */
+describe("references/expert_shopping.md — sil_remember is THE per-query persist verb (de-stub of the heavy path)", () => {
+  it("names sil_remember as the per-query persistence verb for a surfaced fact/taste", () => {
+    const body = expertShoppingBodyLower();
+    // The cheap append path is named explicitly as the per-query persist verb…
+    expect(body).toContain("sil_remember");
+    // …for BOTH routed kinds — a person FACT and a niche TASTE.
+    expect(body.includes("fact") && body.includes("taste")).toBe(true);
+  });
+
+  it("reserves sil_profile_materialize for the WHOLE-DOC paths, not per-query fact/taste learning", () => {
+    const body = expertShoppingBodyLower();
+    // Both verbs are present (materialize stays for the domain-spec web refresh /
+    // refine / contradiction-resolution), but sil_remember is the per-query one.
+    expect(body).toContain("sil_profile_materialize");
+    expect(body).toContain("sil_remember");
+    const reservesWholeDoc =
+      body.includes("whole-doc") || body.includes("whole doc") ||
+      body.includes("web refresh") || body.includes("refresh") ||
+      body.includes("refine") || body.includes("overwrite") ||
+      body.includes("re-materialize") || body.includes("contradict");
+    expect(reservesWholeDoc).toBe(true);
+  });
+
+  it("carries an after-recommendation capture step that routes each surfaced fact/taste through sil_remember", () => {
+    const body = expertShoppingBodyLower();
+    expect(body).toContain("sil_remember");
+    // The founder's "fires after every recommendation": an after-recommendation
+    // step must EXIST and route capture through sil_remember (the cheap append),
+    // NEAR the trigger phrase so the loop reads as one coherent step.
+    const triggers = [
+      "after every recommendation",
+      "after a recommendation",
+      "after the recommendation",
+      "after recommending",
+      "after you recommend",
+      "once you have recommended",
+      "once you've recommended",
+      "before the turn ends",
+      "post-recommendation",
+      "after-recommendation",
+    ];
+    const hits = triggers.map((t) => body.indexOf(t)).filter((i) => i >= 0).sort((a, b) => a - b);
+    expect(hits.length, "no after-recommendation trigger phrase found").toBeGreaterThan(0);
+    const at = hits[0] ?? 0;
+    expect(body.slice(at, at + 600)).toContain("sil_remember");
+  });
+
+  it("guards the after-recommendation capture to fire ONLY when a new fact/taste surfaced (no empty/noise entries)", () => {
+    const body = expertShoppingBodyLower();
+    expect(body).toContain("sil_remember");
+    const onlyWhenSurfaced =
+      body.includes("only when") || body.includes("only if") ||
+      body.includes("nothing surfaced") || body.includes("no new fact") ||
+      body.includes("nothing to save") || body.includes("no empty") ||
+      body.includes("noise");
+    expect(onlyWhenSurfaced).toBe(true);
   });
 });
 
