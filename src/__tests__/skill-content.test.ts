@@ -52,6 +52,10 @@ import {
   createMockPluginApi,
   registeredToolNames,
 } from "./helpers/mock-plugin-api.js";
+import {
+  PER_NICHE_EXPERT_WORD,
+  perNicheExpertOffenders,
+} from "./helpers/per-niche-expert.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..");
@@ -82,47 +86,11 @@ const RETIRED_FILENAMES = [
   "road_cycling_expert_walkthrough.md",
 ] as const;
 
-/** Whole-word "expert"/"experts" — the per-niche-expert agent noun the card
- * retires from user-facing vocabulary. Whole-word so legitimate "niche
- * expertise" / "expertly" never trips it (the false-token trap). */
-const PER_NICHE_EXPERT_WORD = /\bexperts?\b/i;
-
-/**
- * Whole-word "expert" matches that are NOT legitimate retro-references to the
- * RETIRED per-niche-expert model. The card RETIRES "expert" as user-facing
- * vocabulary for the CURRENT model (the agent is a "shopper", a niche a "domain")
- * — but it EXPLICITLY mandates retro-references to the retired model (e.g. the
- * manage reference frames a legacy flat-layout dir as "a legacy expert" and steers
- * re-create; docs name "the retired per-niche-expert model"). So an `expert`
- * occurrence is allowed iff it sits in a legacy/retired/per-niche context; any
- * other occurrence frames the CURRENT model as a per-niche expert and is
- * forbidden. Returns the offending contexts (empty ⇒ clean). This is the
- * disavowal-token discipline: a corrected doc may NAME the retired model to bury
- * it — never the bare token as a blanket forbid.
- */
-function perNicheExpertOffenders(body: string): string[] {
-  const offenders: string[] = [];
-  const re = /\bexperts?\b/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(body)) !== null) {
-    const before = body.slice(Math.max(0, m.index - 28), m.index).toLowerCase();
-    const isRetro =
-      before.includes("legacy") ||
-      before.includes("retired") ||
-      before.includes("per-niche") ||
-      before.includes("no longer") ||
-      before.includes("old ");
-    if (!isRetro) {
-      offenders.push(
-        body
-          .slice(Math.max(0, m.index - 24), m.index + m[0].length + 12)
-          .replace(/\s+/g, " ")
-          .trim(),
-      );
-    }
-  }
-  return offenders;
-}
+/* `PER_NICHE_EXPERT_WORD` + `perNicheExpertOffenders` (the disavowal-token
+ * discipline + 28-char retro-allowance) live in ./helpers/per-niche-expert.ts —
+ * a single source of truth shared with the unit tool-description vocabulary guard
+ * in tools/tool-schema-contract.unit.test.ts, so the retro-allowance can never
+ * drift between the two guards. */
 
 interface Frontmatter {
   raw: string;
@@ -347,23 +315,19 @@ describe("skill bundle — the rename retired the per-niche-expert filenames (re
     expect(offenders).toEqual([]);
   });
 
-  it("NO card-owned rewrite carries per-niche-expert user-facing vocabulary (whole-word `expert`)", () => {
+  it("NO bundle file carries per-niche-expert user-facing vocabulary (whole-word `expert`, scan derived from BUNDLE_FILES)", () => {
     // The card's headline success signal: zero surviving per-niche-expert prose. The
     // model noun is "shopper", a niche is a "domain". Whole-word `\bexperts?\b` so
     // legitimate "niche expertise" passes; "shopping expert" / "your experts" fail.
-    // search_param_mapping.md (vocab-only edits founder-de-scopable) + the untouched
-    // catalog reference are excluded — they get the link-integrity scan above.
-    const SCAN: ReadonlyArray<readonly [string, string]> = [
-      ["SKILL.md", SKILL_PATH],
-      ["agent_creation_engine.md", ENGINE_PATH],
-      ["brainstorm_interview.md", BRAINSTORM_PATH],
-      ["shop_loop.md", SHOP_LOOP_PATH],
-      ["manage_domains.md", MANAGE_PATH],
-      ["refine_shopper.md", REFINE_PATH],
-      ["multi_domain_shopper_walkthrough.md", EXAMPLE_PATH],
-    ];
+    // The scan set is DERIVED from BUNDLE_FILES (audit forward-gap 1) — not a hand-
+    // maintained subset — so NO bundle file can ever escape it again. This folds in
+    // search_param_mapping.md AND catalog_tools_reference.md, the two files that
+    // previously sat OUTSIDE the scan (covered only by the retired-filename link
+    // scan, which greps filenames, not the word "expert"). Both are clean today, so
+    // this stays GREEN; a future affirmative `expert` reintroduction in ANY bundle
+    // file — including the two newly-folded-in references — is now caught here.
     const offenders: string[] = [];
-    for (const [label, path] of SCAN) {
+    for (const [label, path] of BUNDLE_FILES) {
       for (const ctx of perNicheExpertOffenders(readBody(path))) {
         offenders.push(`${label}: …${ctx}…`);
       }
@@ -869,6 +833,59 @@ function brainstormBodyLower(): string {
   return readBody(BRAINSTORM_PATH).toLowerCase();
 }
 
+/**
+ * The affirmative create-time-niche-work STEP instructions a regression to the
+ * retired five-touchpoint interview would re-introduce: the deep niche research
+ * (old §2), the compare-a-set-of-options taste (old §4), and the intent-dimension
+ * sign-off (old §5) that the single-shopper interview RELOCATED to first-shop lazy
+ * mint. Same phrases the old bare `not.toContain(...)` forbids targeted — but now
+ * negation-aware (audit forward-gap 3): the corrected interview legitimately NAMES
+ * these to DISAVOW them ("does NOT research any niche", "never interrogated here",
+ * "deferred to first shop", "minted lazily"), so a bare forbid false-REDs the
+ * disavowal. This is the disavowal-token discipline applied to a STEP, not a noun.
+ */
+const CREATE_TIME_NICHE_STEP_RE =
+  /research (?:it|the niche) yourself|compare a set of options|ask (?:the user|you) to sign off/gi;
+
+/** Negation / deferral markers that turn an affirmative-step match into a
+ * legitimate disavowal when one sits within ~28 chars before the match (mirrors
+ * `perNicheExpertOffenders`' retro-allowance lookback). */
+const NICHE_STEP_DEFERRAL = [
+  "not ",
+  "never",
+  "no ",
+  "don't",
+  "deferred",
+  "instead",
+  "lazily",
+  "at first shop",
+] as const;
+
+/**
+ * Affirmative create-time-niche-work step instructions that are NOT preceded
+ * (within ~28 chars) by a negation/deferral token — i.e. a real regression that
+ * re-introduces the retired step, never a disavowal of it. Returns the offending
+ * contexts (empty ⇒ clean). Body is expected already-lowercased.
+ */
+function createTimeNicheStepOffenders(body: string): string[] {
+  const offenders: string[] = [];
+  CREATE_TIME_NICHE_STEP_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = CREATE_TIME_NICHE_STEP_RE.exec(body)) !== null) {
+    const before = body.slice(Math.max(0, m.index - 28), m.index);
+    const deferred = NICHE_STEP_DEFERRAL.some((t) => before.includes(t));
+    if (!deferred) {
+      offenders.push(
+        body
+          .slice(Math.max(0, m.index - 24), m.index + m[0].length + 12)
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+    }
+  }
+  return offenders;
+}
+
 describe("references/brainstorm_interview.md — open, two-sided interview that converges a shopper draft", () => {
   it("names the brainstorm/interview as an open, multi-turn conversation that is NOT a form-fill", () => {
     const body = brainstormBodyLower();
@@ -967,14 +984,15 @@ describe("references/brainstorm_interview.md — exactly TWO create touchpoints 
         body.includes("minted lazily") ||
         body.includes("minted later"));
     expect(relocates).toBe(true);
-    // NEGATIVE: the active old five-touchpoint create-STEP instructions are gone (a
-    // regression to the old model would re-introduce one of these affirmative steps).
-    expect(body).not.toContain("actively research it yourself");
-    expect(body).not.toContain("research it yourself");
-    expect(body).not.toContain("research the niche yourself");
-    expect(body).not.toContain("compare a set of options");
-    expect(body).not.toContain("ask the user to sign off");
-    expect(body).not.toContain("ask you to sign off");
+    // NEGATIVE (negation-aware — audit forward-gap 3): the active old five-touchpoint
+    // create-STEP instructions are gone. A regression re-introduces one of these
+    // affirmative steps ("research the niche yourself", "compare a set of options",
+    // "ask the user to sign off"); the corrected interview only NAMES them to disavow
+    // them. So flag a match ONLY when no negation/deferral token sits within ~28 chars
+    // before it — NEVER a bare `not.toContain(...)`, which would false-RED a future
+    // negated disavowal ("never asks you to research the niche yourself"). Matcher
+    // stays `.toEqual([])` (add-only).
+    expect(createTimeNicheStepOffenders(body)).toEqual([]);
   });
 });
 
@@ -1260,6 +1278,21 @@ describe("references/shop_loop.md — the map/search/compare/recommend loop (pre
       (body.includes("stale") && body.includes("snapshot")) ||
       body.includes("point-in-time");
     expect(neverOffStale).toBe(true);
+
+    // Two-sided contract (audit forward-gap 2): the PROSE deliberately keeps every
+    // buy-substring OUT of Steps 0–7 — it shops with "shop well" / "shopping taste",
+    // never "buy well" / "buying taste" — so the FIRST "buy" substring in the body
+    // is the real Step-8 re-fetch step. Anchor on the FIRST occurrence and assert
+    // its surrounding window co-locates with the `sil_product_get` re-fetch, so a
+    // future "buy well" in an early step moves the first buy UPSTREAM into a window
+    // that names neither `sil_product_get` nor the re-fetch → RED. This is a POSITIVE
+    // window pin, NOT a naive global indexOf("buy") vs indexOf("sil_product_get")
+    // ordering scan (which downstream "unbuyable" / "buying taste" would confound).
+    const firstBuy = body.indexOf("buy");
+    expect(firstBuy).toBeGreaterThanOrEqual(0);
+    const firstBuyWindow = body.slice(Math.max(0, firstBuy - 140), firstBuy + 20);
+    expect(firstBuyWindow).toContain("sil_product_get");
+    expect(firstBuyWindow).toMatch(/re-fetch|before any buy/);
   });
 
   it("handles ok+empty (relax + explain), the unservable 'no' (never junk), and non-ok (follow recovery, never improvise)", () => {

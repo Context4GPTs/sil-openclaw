@@ -33,12 +33,15 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { registerIdentityTools } from "../../tools/identity.js";
+import { registerCatalogTools } from "../../tools/catalog.js";
+import { registerProfileTools } from "../../tools/profile.js";
 import {
   createMockPluginApi,
   getTool,
   registeredToolNames,
   type MockPluginAPI,
 } from "../helpers/mock-plugin-api.js";
+import { perNicheExpertOffenders } from "../helpers/per-niche-expert.js";
 
 /**
  * The agent-facing tool contract for the identity surface, captured from
@@ -158,4 +161,55 @@ describe("TypeBox introspection metadata never leaks into the agent-visible sche
       expect(serialized).not.toContain("~readonly");
     });
   }
+});
+
+/* ---------------------------------------------------------------------------
+ * VOCABULARY — no registered tool DESCRIPTION frames the surface as a per-niche
+ * expert (card: audit-tool-skill-surface-for-single-shopper-pivot).
+ *
+ * The single-shopper pivot shipped as targeted slices; the four catalog/identity
+ * tools (`sil_register`, `sil_whoami`, `sil_search`, `sil_product_get`) were never
+ * opened, so their descriptions could regress to implicit per-niche-expert framing
+ * without anyone touching them — and an agent learns the model it is driving almost
+ * entirely from these descriptions. This guard runs the SHARED whole-word
+ * `\bexperts?\b` + 28-char retro-allowance check (`perNicheExpertOffenders`, the
+ * very check the skill-prose guard uses, so the discipline can never drift) over
+ * EVERY registered tool description — the four pivot-untouched tools and the five
+ * profile verbs (`sil_profile_*` + `sil_remember`). Green on the current tree; a
+ * future `expert` reintroduction into any description turns it RED.
+ *
+ * This is a VOCABULARY guard, DISTINCT from the exact-tool-SET guards (the identity
+ * set assertion above, index.test.ts, manifest-contract): it pins HOW a description
+ * talks about the model, never WHICH tools exist — so it deliberately asserts NO
+ * tool count / name set, and adding or removing a tool never turns it RED. Reuses
+ * the retro-allowance rather than a stricter matcher, so a legitimate future retro-
+ * reference ("unlike the retired per-niche expert…") would not false-RED.
+ * ------------------------------------------------------------------------- */
+
+describe("registered tool descriptions carry NO per-niche-expert vocabulary (whole-word `expert`, retro-allowance)", () => {
+  function allRegisteredTools(): MockPluginAPI {
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+    registerCatalogTools(api);
+    registerProfileTools(api);
+    return api;
+  }
+
+  it("every registered tool description scans clean — incl. the four pivot-untouched tools and the five profile verbs", () => {
+    const tools = [...allRegisteredTools()._tools.entries()];
+    // Guard against a vacuous green: descriptions must actually exist AND be
+    // non-blank to be scanned. (NOT a tool count/set pin — passes for any tool set.)
+    expect(tools.length).toBeGreaterThan(0);
+    const emptyDescriptions: string[] = [];
+    const offenders: string[] = [];
+    for (const [name, tool] of tools) {
+      const description = tool.description ?? "";
+      if (description.trim().length === 0) emptyDescriptions.push(name);
+      for (const ctx of perNicheExpertOffenders(description)) {
+        offenders.push(`${name}: …${ctx}…`);
+      }
+    }
+    expect(emptyDescriptions).toEqual([]);
+    expect(offenders).toEqual([]);
+  });
 });
