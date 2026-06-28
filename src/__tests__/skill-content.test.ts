@@ -17,17 +17,18 @@
  *   - `agent_creation_engine.md` / `brainstorm_interview.md` keep their names,
  *     rewritten in place (create ONE shopper, two-touchpoint interview).
  *
- * The tool surface is NINE tools (`registerProfileTools` adds the 5th profile
- * verb `sil_remember`): `sil_register`, `sil_whoami`, `sil_search`,
- * `sil_product_get`, `sil_profile_materialize`, `sil_profile_list`,
- * `sil_profile_get`, `sil_profile_remove`, `sil_remember`. Shapes that drive the
- * prose pins:
- *   - `sil_profile_materialize { agentId, name, userSpec, domain? }` — NO `domain`
+ * The tool surface is EIGHT tools (the consolidate-profile-tools-to-the-singleton-
+ * surface card folded `sil_profile_list` into `sil_profile_get` and dropped the
+ * caller-supplied `agentId`): `sil_register`, `sil_whoami`, `sil_search`,
+ * `sil_product_get`, `sil_profile_materialize`, `sil_profile_get`,
+ * `sil_profile_remove`, `sil_remember`. Shapes that drive the prose pins:
+ *   - `sil_profile_materialize { name, userSpec, domain? }` — NO `domain`
  *     ⇒ create the shopper (writes the SHARED `user_spec.md` + an empty `domains`
  *     map); WITH `domain` ⇒ lazily mint/refresh a niche pack;
- *   - `sil_profile_get { agentId, domainSlug? }` — overview vs one domain;
- *   - `sil_profile_remove { agentId, domainSlug }` — forget ONE domain;
- *   - `sil_remember { agentId, kind:"fact"|"taste", text, domain?, hard? }` —
+ *   - `sil_profile_get { domainSlug? }` — no-args overview (absorbs the deleted
+ *     `sil_profile_list`) vs one domain;
+ *   - `sil_profile_remove { domainSlug }` — forget ONE domain;
+ *   - `sil_remember { kind:"fact"|"taste", text, domain?, hard? }` —
  *     the cheap per-query append (fact → SHARED user spec, taste → active domain).
  *
  * THESE ASSERTIONS ARE THE SPEC. Do NOT weaken them to match the markdown — the
@@ -213,7 +214,7 @@ describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename
     expect(fm.fields["name"]).not.toBe("sil");
   });
 
-  it("frontmatter `description` enumerates the NINE sil_* tools it drives (incl. sil_remember)", () => {
+  it("frontmatter `description` enumerates the EIGHT sil_* tools it drives, and NOT the deleted sil_profile_list", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     const description = fm.fields["description"] ?? "";
     const missing = [
@@ -222,12 +223,14 @@ describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename
       "sil_search",
       "sil_product_get",
       "sil_profile_materialize",
-      "sil_profile_list",
       "sil_profile_get",
       "sil_profile_remove",
       "sil_remember",
     ].filter((t) => !description.includes(t));
     expect(missing).toEqual([]);
+    // The fold deletes sil_profile_list — the trigger description must no longer
+    // name it (a recovery/route hint to a nonexistent tool is the regression we kill).
+    expect(description).not.toContain("sil_profile_list");
   });
 
   it("frontmatter `description` presents the SHOPPER + DOMAIN model (not the retired per-niche expert)", () => {
@@ -255,11 +258,26 @@ describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename
  * BUNDLE — the tool surface + the rename retirement
  * ========================================================================= */
 
-describe("skill bundle — source of truth for the nine-tool surface", () => {
-  it("registeredNames() equals NINE (the four core tools + the five sil_profile_* / sil_remember verbs)", () => {
+describe("skill bundle — source of truth for the eight-tool surface", () => {
+  it("registeredNames() equals EIGHT (the four core tools + the four sil_profile_* / sil_remember verbs)", () => {
     const names = registeredNames();
-    expect(names.size, `registered tools: ${[...names].sort().join(", ")}`).toBe(9);
+    expect(names.size, `registered tools: ${[...names].sort().join(", ")}`).toBe(8);
     expect(names.has("sil_remember")).toBe(true);
+    // sil_profile_list was folded into sil_profile_get — it no longer registers.
+    expect(names.has("sil_profile_list")).toBe(false);
+  });
+
+  it("NO bundle file names the deleted sil_profile_list anywhere (grepped to zero across the bundle)", () => {
+    // The fold deletes sil_profile_list; a lingering mention in any reference body —
+    // a route row, a recovery hint, a taxonomy row — would point the skill at a
+    // nonexistent tool. The card's "grep sil_profile_list to zero" requirement,
+    // enforced bundle-wide (the router-glob + per-tool-present scans do NOT catch a
+    // stale tool NAME buried in a reference body).
+    const offenders: string[] = [];
+    for (const [label, path] of BUNDLE_FILES) {
+      if (readBody(path).includes("sil_profile_list")) offenders.push(label);
+    }
+    expect(offenders).toEqual([]);
   });
 
   it("names EVERY registered real tool somewhere in the bundle (router or the reference that owns it)", () => {
@@ -451,11 +469,14 @@ describe("sil-shopping/SKILL.md — routes every shop / manage / refine / create
     expect(body.toLowerCase()).toContain("sil_search");
   });
 
-  it("routes the manage intents (list/view/remove) to references/manage_domains.md, naming the three sil_profile_* tools", () => {
+  it("routes the manage intents (view/remove) to references/manage_domains.md, naming the two surviving sil_profile_* tools (no sil_profile_list)", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    for (const tool of ["sil_profile_list", "sil_profile_get", "sil_profile_remove"]) {
+    // After the fold, the "what does my shopper know / which domains" intent routes
+    // to the no-args sil_profile_get (Zoom A) — sil_profile_list is gone.
+    for (const tool of ["sil_profile_get", "sil_profile_remove"]) {
       expect(body).toContain(tool);
     }
+    expect(body).not.toContain("sil_profile_list");
     expect(body).toContain("references/manage_domains.md");
   });
 
@@ -604,9 +625,13 @@ describe("references/agent_creation_engine.md — the create call is `sil_profil
   it("names the create-materialize call with userSpec and NO `domain` (the shopper, not a domain pack)", () => {
     const body = engineBodyLower();
     expect(body).toContain("sil_profile_materialize");
-    // The exact create-call arg list — userSpec only (NET-NEW; the retired engine
-    // passed `domainSpec, intentSpec, userSpec, playbook`).
-    expect(body).toContain("agentid, name, userspec");
+    // The exact create-call arg list — `name, userSpec` only. The consolidate-
+    // profile-tools-to-the-singleton-surface card DROPS the sil-tool-call `agentId`
+    // (the store re-scopes to the singleton), so the materialize call no longer
+    // carries it. The HOST agent id survives in `openclaw agents add <id>` + the
+    // brainstorm draft (host-CLI wiring) — that distinction is per-pin, see
+    // brainstorm_interview's `{ agentId, name, persona, userSpec }` draft pin.
+    expect(body).toContain("name, userspec");
     const passesNoDomain =
       body.includes("pass no `domain`") ||
       body.includes("pass no domain") ||
@@ -1335,12 +1360,14 @@ describe("references/manage_domains.md — exists; names the three management to
     expect(existsSync(MANAGE_PATH)).toBe(true);
   });
 
-  it("names sil_profile_list, sil_profile_get, and sil_profile_remove", () => {
+  it("names the two surviving management tools sil_profile_get and sil_profile_remove (sil_profile_list folded away)", () => {
     const body = readBody(MANAGE_PATH);
-    const missing = ["sil_profile_list", "sil_profile_get", "sil_profile_remove"].filter(
+    const missing = ["sil_profile_get", "sil_profile_remove"].filter(
       (name) => !body.includes(name),
     );
     expect(missing).toEqual([]);
+    // The no-args sil_profile_get (Zoom A) absorbs the listing — sil_profile_list is gone.
+    expect(body).not.toContain("sil_profile_list");
   });
 });
 
@@ -1354,10 +1381,10 @@ describe("references/manage_domains.md — list/view/remove operate on DOMAINS; 
     expect(body).toContain("domain");
   });
 
-  it("`sil_profile_remove { agentId, domainSlug }` forgets ONE domain — the shopper, the shared user spec, and the SIBLING domains survive", () => {
+  it("`sil_profile_remove { domainSlug }` forgets ONE domain — the shopper, the shared user spec, and the SIBLING domains survive", () => {
     // NET-NEW: the retired manage flow removed a whole expert via `sil_profile_remove
-    // { agentId }`. The single-shopper flow forgets ONE domain (domainSlug REQUIRED),
-    // leaving the shopper + shared user_spec + sibling domains intact.
+    // { agentId }`. The single-shopper flow forgets ONE domain (domainSlug REQUIRED,
+    // no caller agentId), leaving the shopper + shared user_spec + sibling domains intact.
     const body = manageBodyLower();
     const namesDomainSlug =
       body.includes("domainslug") || body.includes("domain_slug") || body.includes("domain slug");

@@ -2,38 +2,33 @@
  * UNIT — the single-multi-domain shopper layout, the DEEP store semantics (tier:
  * unit, real temp dir via the SIL_DATA_DIR override, no network, no host).
  *
- * Card: single-multi-domain-sil-shopper — Slice 1. The per-niche flat layout is
- * DELETED. ONE shopper dir holds a SHARED agent-level user_spec.md + profile.json
- * (with a slug-keyed `domains` MAP), and niche packs live under
- * domains/<slug>/{domain_spec,intent_spec,playbook}.md, minted LAZILY on first
- * shop. `sil_profile_materialize` stays ONE tool with an OPTIONAL `domain`:
+ * Card: single-multi-domain-sil-shopper — Slice 1, updated for
+ * consolidate-profile-tools-to-the-singleton-surface (the caller-supplied `agentId`
+ * is dropped; the store re-scopes to the singleton `getShopperArtefactDir()`). ONE
+ * shopper dir holds a SHARED agent-level user_spec.md + profile.json (with a
+ * slug-keyed `domains` MAP), and niche packs live under
+ * domains/<slug>/{domain_spec,intent_spec,playbook}.md, minted LAZILY on first shop.
+ * `sil_profile_materialize` stays ONE store call with an OPTIONAL `domain`:
  *   - no domain  ⇒ create the shopper (shared user_spec + `domains: {}`);
  *   - with domain ⇒ ATOMIC lazy mint of domains/<slug>/* + a shared-user_spec
  *     full-body rewrite + an upsert into `domains[slug]`.
  *
  * This file pins the layout-specific contract for `src/lib/profile-store.ts`:
- *   1. SHARED vs PER-DOMAIN placement — user_spec is agent-level (read by every
- *      domain's loop, so a fact stored in niche A is reused in niche B without
- *      re-asking); the playbook/domain_spec/intent_spec are per-domain. A domain
- *      mint NEVER touches a sibling domain's pack.
- *   2. The `domains` map is the source of truth — slug-keyed, each entry carrying
- *      { slug, name, domainSpecPath, intentSpecPath, playbookPath, createdAt,
- *      updatedAt }. `domains: {}` is the HEALTHY freshly-created state.
- *   3. The slug is a NEW filesystem path segment → it MUST be validated exactly
- *      like agentId (AGENT_ID_RE + non-"main") BEFORE any join. A traversal /
- *      "main" / empty / non-kebab slug → invalid_request(field=domain.slug),
- *      writing NOTHING (validate-first). Every one of the five `domain` fields is
- *      REQUIRED non-blank.
- *   4. ATOMICITY one level deeper — write order: domains/<slug>/* → shared
- *      user_spec → profile.json LAST. A failed FIRST mint of a NEW domain tears
- *      down ONLY that leaf (the agent dir, shared user_spec, and sibling domains
- *      survive). A crash before the profile.json write leaves an ORPHANED,
+ *   1. SHARED vs PER-DOMAIN placement — user_spec is agent-level; the
+ *      playbook/domain_spec/intent_spec are per-domain; a mint never touches a
+ *      sibling.
+ *   2. The `domains` map is the source of truth — slug-keyed. `domains: {}` is the
+ *      HEALTHY freshly-created state.
+ *   3. The slug is a NEW filesystem path segment → validated (AGENT_ID_RE +
+ *      non-"main") BEFORE any join. A bad slug → invalid_request(field=domain.slug),
+ *      writing NOTHING. Every one of the five `domain` fields is REQUIRED non-blank.
+ *   4. ATOMICITY one level deeper — a failed FIRST mint of a NEW domain tears down
+ *      ONLY that leaf. A crash before the profile.json write leaves an ORPHANED,
  *      unreferenced leaf — invisible to readers (manifest-gated, fail-closed).
- *   5. FAIL-CLOSED reads — readAgentProfile(agentId, slug) returns not_found when
- *      the shared user_spec OR ANY of the 3 referenced domain bodies is missing
- *      (never a partial pack).
+ *   5. FAIL-CLOSED reads — readAgentProfile(slug) returns not_found when the shared
+ *      user_spec OR ANY of the 3 referenced domain bodies is missing.
  *
- * Hermetic via the SIL_DATA_DIR temp-dir override (mirrors profile-store.test.ts).
+ * Hermetic via the SIL_DATA_DIR temp-dir override.
  */
 
 import {
@@ -60,11 +55,10 @@ import { join } from "node:path";
 import {
   materializeProfile,
   readAgentProfile,
-  listAgentProfiles,
-  getAgentArtefactDir,
+  getShopperArtefactDir,
+  getDomainArtefactDir,
   type ProfileSpec,
 } from "../../lib/profile-store.js";
-import { getDataDir } from "../../lib/credentials.js";
 
 let dataDir: string;
 let priorSilDataDir: string | undefined;
@@ -85,8 +79,6 @@ afterEach(() => {
   }
   rmSync(dataDir, { recursive: true, force: true });
 });
-
-const AGENT_ID = "sil-shopper";
 
 const USER_SPEC_V1 =
   "# User spec (shared)\n## Standing facts\n- Ships to Berlin 10115.\n"
@@ -112,26 +104,26 @@ const RUNNING = {
   playbook: "# Taste — running\nUnder €160; neutral foam; no carbon plate.",
 } as const;
 
-/** Create the shopper (no domain). */
+/** Create the singleton shopper (no domain). */
 function createShopper(userSpec = USER_SPEC_V1): void {
-  const r = materializeProfile({ agentId: AGENT_ID, name: "sil shopper", userSpec });
+  const r = materializeProfile({ name: "sil shopper", userSpec });
   if (!r.ok) throw new Error(`createShopper failed: ${JSON.stringify(r)}`);
 }
 
 /** Mint a domain pack onto the shopper, carrying a (possibly augmented) shared spec. */
 function mint(domain: ProfileSpec["domain"], userSpec = USER_SPEC_V1): void {
-  const r = materializeProfile({ agentId: AGENT_ID, name: "sil shopper", userSpec, domain });
+  const r = materializeProfile({ name: "sil shopper", userSpec, domain });
   if (!r.ok) throw new Error(`mint failed: ${JSON.stringify(r)}`);
 }
 
-function readManifest(agentId = AGENT_ID): Record<string, unknown> {
+function readManifest(): Record<string, unknown> {
   return JSON.parse(
-    readFileSync(join(getAgentArtefactDir(agentId), "profile.json"), "utf8"),
+    readFileSync(join(getShopperArtefactDir(), "profile.json"), "utf8"),
   ) as Record<string, unknown>;
 }
 
-function domainDir(slug: string, agentId = AGENT_ID): string {
-  return join(getAgentArtefactDir(agentId), "domains", slug);
+function domainDir(slug: string): string {
+  return getDomainArtefactDir(slug);
 }
 
 function walkFiles(dir: string, base = dir): string[] {
@@ -157,16 +149,13 @@ describe("layout — the shared user_spec is agent-level; a domain mint never to
     // the SHARED user_spec — minted alongside the running pack in one call.
     mint(RUNNING, USER_SPEC_V2);
 
-    // Viewing niche A (cycling) surfaces the LATEST shared user_spec — the fact
-    // added during niche B is already there. This is the cross-niche signal as a
-    // native property of the agent-level user_spec, not a feature to build.
-    const cycling = readAgentProfile(AGENT_ID, CYCLING.slug);
+    const cycling = readAgentProfile(CYCLING.slug);
     expect(cycling.ok).toBe(true);
     if (!cycling.ok) return;
     expect(cycling.userSpec).toBe(USER_SPEC_V2);
     expect(cycling.userSpec).toContain("Allergic to wool");
     // There is ONE shared user_spec.md at the agent level — never one per domain.
-    expect(existsSync(join(getAgentArtefactDir(AGENT_ID), "user_spec.md"))).toBe(true);
+    expect(existsSync(join(getShopperArtefactDir(), "user_spec.md"))).toBe(true);
     expect(existsSync(join(domainDir(CYCLING.slug), "user_spec.md"))).toBe(false);
     expect(existsSync(join(domainDir(RUNNING.slug), "user_spec.md"))).toBe(false);
   });
@@ -180,7 +169,6 @@ describe("layout — the shared user_spec is agent-level; a domain mint never to
 
     mint(RUNNING, USER_SPEC_V2);
 
-    // The cycling pack is identical — a running mint touches only domains/running-shoes/.
     const cyclingAfter = walkFiles(domainDir(CYCLING.slug)).sort().map((rel) =>
       readFileSync(join(domainDir(CYCLING.slug), rel), "utf8"),
     );
@@ -188,7 +176,6 @@ describe("layout — the shared user_spec is agent-level; a domain mint never to
     expect(readFileSync(join(domainDir(CYCLING.slug), "domain_spec.md"), "utf8")).toBe(
       CYCLING.domainSpec,
     );
-    // Both domains are registered in the map.
     const domains = (readManifest()["domains"] ?? {}) as Record<string, unknown>;
     expect(Object.keys(domains).sort()).toEqual([CYCLING.slug, RUNNING.slug].sort());
   });
@@ -200,13 +187,10 @@ describe("layout — the shared user_spec is agent-level; a domain mint never to
       CYCLING.slug
     ]!;
 
-    // Re-mint the same slug with a refreshed domain_spec (a per-query web refresh).
     mint({ ...CYCLING, domainSpec: CYCLING.domainSpec + "\n(refreshed this query)" });
 
     const domains = readManifest()["domains"] as Record<string, Record<string, unknown>>;
-    // Still exactly one domain — an upsert by key, not a duplicate.
     expect(Object.keys(domains)).toEqual([CYCLING.slug]);
-    // createdAt is preserved; the body is overwritten in place.
     expect(domains[CYCLING.slug]!["createdAt"]).toBe(first["createdAt"]);
     expect(readFileSync(join(domainDir(CYCLING.slug), "domain_spec.md"), "utf8")).toContain(
       "(refreshed this query)",
@@ -215,7 +199,7 @@ describe("layout — the shared user_spec is agent-level; a domain mint never to
 });
 
 // ===========================================================================
-// 2 — slug is a path segment: guarded exactly like agentId
+// 2 — slug is a path segment: guarded BEFORE any join
 // ===========================================================================
 
 describe("mint — the slug is a path segment, validated BEFORE any join (write-nothing on a bad slug)", () => {
@@ -223,9 +207,8 @@ describe("mint — the slug is a path segment, validated BEFORE any join (write-
     "rejects slug %j with invalid_request(field=domain.slug) and writes NO domain pack",
     (badSlug) => {
       createShopper();
-      const before = walkFiles(getAgentArtefactDir(AGENT_ID)).sort();
+      const before = walkFiles(getShopperArtefactDir()).sort();
       const result = materializeProfile({
-        agentId: AGENT_ID,
         name: "sil shopper",
         userSpec: USER_SPEC_V1,
         domain: { ...CYCLING, slug: badSlug },
@@ -235,9 +218,8 @@ describe("mint — the slug is a path segment, validated BEFORE any join (write-
       expect(result.kind).toBe("invalid_request");
       if (result.kind !== "invalid_request") return;
       expect(result.field).toBe("domain.slug");
-      // Nothing minted — the shopper's tree is unchanged, no domains/ leaf appeared.
-      expect(walkFiles(getAgentArtefactDir(AGENT_ID)).sort()).toEqual(before);
-      expect(existsSync(join(getAgentArtefactDir(AGENT_ID), "domains"))).toBe(false);
+      expect(walkFiles(getShopperArtefactDir()).sort()).toEqual(before);
+      expect(existsSync(join(getShopperArtefactDir(), "domains"))).toBe(false);
     },
   );
 
@@ -251,7 +233,6 @@ describe("mint — the slug is a path segment, validated BEFORE any join (write-
     (_label, badDomain, field) => {
       createShopper();
       const result = materializeProfile({
-        agentId: AGENT_ID,
         name: "sil shopper",
         userSpec: USER_SPEC_V1,
         domain: badDomain,
@@ -261,7 +242,7 @@ describe("mint — the slug is a path segment, validated BEFORE any join (write-
       expect(result.kind).toBe("invalid_request");
       if (result.kind !== "invalid_request") return;
       expect(result.field).toBe(field);
-      expect(existsSync(join(getAgentArtefactDir(AGENT_ID), "domains"))).toBe(false);
+      expect(existsSync(join(getShopperArtefactDir(), "domains"))).toBe(false);
     },
   );
 });
@@ -271,21 +252,19 @@ describe("mint — the slug is a path segment, validated BEFORE any join (write-
 // ===========================================================================
 
 describe("mint atomicity — a failed FIRST mint of a NEW domain tears down ONLY that leaf", () => {
-  it("the agent dir, shared user_spec, and sibling domains all survive a failed new-domain mint", () => {
+  it("the shopper dir, shared user_spec, and sibling domains all survive a failed new-domain mint", () => {
     createShopper(USER_SPEC_V1);
     mint(CYCLING); // a sibling that must survive
 
     // Force a failure AFTER the new domain's pack is written but BEFORE the
-    // profile.json upsert: replace the shared user_spec.md with a DIRECTORY, so
-    // the store's atomic rewrite of it fails (rename-over-a-dir → EISDIR). This is
-    // perm-independent (works as root), unlike a chmod-based block.
-    const userSpecPath = join(getAgentArtefactDir(AGENT_ID), "user_spec.md");
+    // profile.json upsert: replace the shared user_spec.md with a DIRECTORY, so the
+    // atomic rewrite of it fails (rename-over-a-dir → EISDIR). Perm-independent.
+    const userSpecPath = join(getShopperArtefactDir(), "user_spec.md");
     rmSync(userSpecPath, { force: true });
     mkdirSync(userSpecPath);
     writeFileSync(join(userSpecPath, "occupant"), "make it non-empty");
 
     const result = materializeProfile({
-      agentId: AGENT_ID,
       name: "sil shopper",
       userSpec: USER_SPEC_V2,
       domain: RUNNING, // a NEW domain (not yet in the map)
@@ -296,8 +275,8 @@ describe("mint atomicity — a failed FIRST mint of a NEW domain tears down ONLY
 
     // The freshly-created NEW-domain leaf is torn down (it was ours, just created).
     expect(existsSync(domainDir(RUNNING.slug))).toBe(false);
-    // The agent dir survives, and the sibling domain's pack is intact.
-    expect(existsSync(getAgentArtefactDir(AGENT_ID))).toBe(true);
+    // The shopper dir survives, and the sibling domain's pack is intact.
+    expect(existsSync(getShopperArtefactDir())).toBe(true);
     expect(readFileSync(join(domainDir(CYCLING.slug), "domain_spec.md"), "utf8")).toBe(
       CYCLING.domainSpec,
     );
@@ -310,15 +289,11 @@ describe("mint atomicity — a failed FIRST mint of a NEW domain tears down ONLY
   it("a domains-path blocked by a regular file → persistence_failed, nothing partial, manifest unchanged", () => {
     createShopper();
     mint(CYCLING);
-    // Block the domains/ subtree with a regular file where the running leaf's
-    // parent chain expects a dir is impossible here; instead block the specific
-    // new leaf path with a FILE so mkdir(domains/<slug>) throws ENOTDIR.
     const leaf = domainDir(RUNNING.slug);
-    mkdirSync(join(getAgentArtefactDir(AGENT_ID), "domains"), { recursive: true });
+    mkdirSync(join(getShopperArtefactDir(), "domains"), { recursive: true });
     writeFileSync(leaf, "i am a file where the running leaf must go");
 
     const result = materializeProfile({
-      agentId: AGENT_ID,
       name: "sil shopper",
       userSpec: USER_SPEC_V1,
       domain: RUNNING,
@@ -326,7 +301,6 @@ describe("mint atomicity — a failed FIRST mint of a NEW domain tears down ONLY
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("persistence_failed");
-    // The blocking file is untouched; the cycling sibling + manifest are intact.
     expect(statSync(leaf).isFile()).toBe(true);
     const domains = (readManifest()["domains"] ?? {}) as Record<string, unknown>;
     expect(Object.keys(domains)).toEqual([CYCLING.slug]);
@@ -334,7 +308,7 @@ describe("mint atomicity — a failed FIRST mint of a NEW domain tears down ONLY
 });
 
 describe("mint atomicity — an ORPHANED leaf (crash before the profile.json write) is invisible to readers", () => {
-  it("a domains/<slug>/ leaf not referenced by the manifest reads as not_found and never lists", () => {
+  it("a domains/<slug>/ leaf not referenced by the manifest reads as not_found and never lists in the overview", () => {
     createShopper();
     mint(CYCLING);
 
@@ -347,19 +321,13 @@ describe("mint atomicity — an ORPHANED leaf (crash before the profile.json wri
     writeFileSync(join(zombie, "playbook.md"), "# orphan");
 
     // Manifest-gated: an unreferenced leaf is invisible.
-    const read = readAgentProfile(AGENT_ID, "zombie-niche");
+    const read = readAgentProfile("zombie-niche");
     expect(read.ok).toBe(false);
     if (read.ok) return;
     expect(read.kind).toBe("not_found");
 
-    // It never appears in the shopper's domain list either (the map is the truth).
-    const list = listAgentProfiles();
-    const shopper = list.shoppers.find((s) => s.agentId === AGENT_ID);
-    expect(shopper).toBeDefined();
-    expect(shopper!.domains.map((d) => d.slug)).toEqual([CYCLING.slug]);
-
-    // …nor in the shopper overview's domain index.
-    const overview = readAgentProfile(AGENT_ID);
+    // …nor in the shopper overview's domain index (the map is the truth).
+    const overview = readAgentProfile();
     expect(overview.ok).toBe(true);
     if (!overview.ok) return;
     expect(overview.domains.map((d) => d.slug)).toEqual([CYCLING.slug]);
@@ -370,18 +338,13 @@ describe("mint atomicity — an ORPHANED leaf (crash before the profile.json wri
 // 4 — fail-closed reads: a missing required body → not_found (never partial)
 // ===========================================================================
 
-describe("readAgentProfile(agentId, slug) — fail-closed on any missing required body", () => {
-  it("the shared user_spec body is GONE → not_found for the overview AND for a domain read", () => {
+describe("readAgentProfile(slug) — fail-closed on any missing required body", () => {
+  it("the shared user_spec body is GONE → not_found for a domain read", () => {
     createShopper();
     mint(CYCLING);
-    rmSync(join(getAgentArtefactDir(AGENT_ID), "user_spec.md"), { force: true });
+    rmSync(join(getShopperArtefactDir(), "user_spec.md"), { force: true });
 
-    const overview = readAgentProfile(AGENT_ID);
-    expect(overview.ok).toBe(false);
-    if (overview.ok) return;
-    expect(overview.kind).toBe("not_found");
-
-    const domain = readAgentProfile(AGENT_ID, CYCLING.slug);
+    const domain = readAgentProfile(CYCLING.slug);
     expect(domain.ok).toBe(false);
     if (domain.ok) return;
     expect(domain.kind).toBe("not_found");
@@ -393,7 +356,7 @@ describe("readAgentProfile(agentId, slug) — fail-closed on any missing require
       createShopper();
       mint(CYCLING);
       rmSync(join(domainDir(CYCLING.slug), file), { force: true });
-      const read = readAgentProfile(AGENT_ID, CYCLING.slug);
+      const read = readAgentProfile(CYCLING.slug);
       expect(read.ok).toBe(false);
       if (read.ok) return;
       expect(read.kind).toBe("not_found");
@@ -403,7 +366,7 @@ describe("readAgentProfile(agentId, slug) — fail-closed on any missing require
   it("a slug NOT in the domains map → not_found (manifest-gated), never a filesystem guess", () => {
     createShopper();
     mint(CYCLING);
-    const read = readAgentProfile(AGENT_ID, "never-minted");
+    const read = readAgentProfile("never-minted");
     expect(read.ok).toBe(false);
     if (read.ok) return;
     expect(read.kind).toBe("not_found");
@@ -413,7 +376,7 @@ describe("readAgentProfile(agentId, slug) — fail-closed on any missing require
     createShopper();
     mint(CYCLING);
     for (const bad of ["../escape", "road/cycling", "..", "main", "Road-Cycling"]) {
-      const read = readAgentProfile(AGENT_ID, bad);
+      const read = readAgentProfile(bad);
       expect(read.ok, `expected reject for ${JSON.stringify(bad)}`).toBe(false);
       if (read.ok) return;
       expect(read.kind).toBe("invalid_request");
@@ -427,10 +390,10 @@ describe("readAgentProfile(agentId, slug) — fail-closed on any missing require
 // 5 — empty-domains shopper reads as HEALTHY (not_found is the wrong answer)
 // ===========================================================================
 
-describe("readAgentProfile — a freshly-created shopper with `domains: {}` is HEALTHY, not not_found", () => {
-  it("the overview returns ok with the shared user_spec + an EMPTY domain index", () => {
+describe("readAgentProfile() — a freshly-created shopper with `domains: {}` is HEALTHY, not not_found", () => {
+  it("the no-args overview returns ok with the shared user_spec + an EMPTY domain index", () => {
     createShopper(USER_SPEC_V1);
-    const overview = readAgentProfile(AGENT_ID);
+    const overview = readAgentProfile();
     expect(overview.ok).toBe(true);
     if (!overview.ok) return;
     expect(overview.userSpec).toBe(USER_SPEC_V1);

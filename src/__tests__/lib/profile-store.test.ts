@@ -1,40 +1,36 @@
 /**
- * UNIT — materializeProfile() writer, after the single-multi-domain shopper
- * reshape (tier: unit, real temp dir via the SIL_DATA_DIR override, no network,
- * no host).
+ * UNIT — materializeProfile() writer, after the
+ * consolidate-profile-tools-to-the-singleton-surface re-scope (tier: unit, real
+ * temp dir via the SIL_DATA_DIR override, no network, no host).
  *
- * Card: single-multi-domain-sil-shopper — Slice 1 (store/tool plumbing). The
- * per-niche flat layout is DELETED (no backwards compat). One persistent "sil
- * shopper" now owns ONE agent dir holding a SHARED, agent-level user_spec.md +
- * profile.json, with niche packs pushed down a level under domains/<slug>/:
+ * The caller-supplied `agentId` is DROPPED: the store re-scopes to a fixed
+ * SINGLETON path (a compile-time constant sub-dir of `$SIL_DATA_DIR`, NOT caller
+ * input). ONE persistent "sil shopper" owns ONE dir holding a SHARED user_spec.md +
+ * profile.json, with niche packs under domains/<slug>/:
  *
- *   $SIL_DATA_DIR/agents/<shopperId>/
+ *   $SIL_DATA_DIR/<SHOPPER_SUBDIR>/
  *     ├─ user_spec.md            SHARED, agent-level (the one person).
- *     ├─ profile.json            manifest: identity + userSpecPath + a `domains` MAP.
+ *     ├─ profile.json            manifest: name + userSpecPath + a `domains` MAP.
  *     └─ domains/<slug>/
  *         ├─ domain_spec.md      per-domain pack (researched niche expertise)
  *         ├─ intent_spec.md      per-domain pack (decomposition dimensions)
  *         └─ playbook.md         per-domain pack (niche buying taste)
  *
- * `ProfileSpec` is reshaped to agent-level fields + an OPTIONAL `domain` pack:
- *   { agentId, name, userSpec, domain?: { slug, name, domainSpec, intentSpec, playbook } }
- *   - NO `domain`  ⇒ CREATE the shopper: write the shared user_spec.md + a
- *     profile.json with `domains: {}` (the healthy freshly-created state). NO
- *     domains/ dir exists yet.
- *   - WITH `domain` ⇒ lazily MINT/refresh that niche: write
- *     domains/<slug>/{domain_spec,intent_spec,playbook}.md, overwrite the shared
- *     user_spec.md, and upsert `domains[slug]` — all in one atomic call.
+ * `ProfileSpec` reshapes to agent-level fields + an OPTIONAL `domain` pack, with NO
+ * `agentId`:
+ *   { name, userSpec, domain?: { slug, name, domainSpec, intentSpec, playbook } }
+ *   - NO `domain`  ⇒ CREATE the shopper (shared user_spec.md + `domains: {}`).
+ *   - WITH `domain` ⇒ lazily MINT/refresh: write domains/<slug>/*, overwrite the
+ *     shared user_spec.md, upsert `domains[slug]` — one atomic call.
  *
- * This file pins the GENERIC writer invariants that survive the reshape — the
- * agentId gate, the NEW slug path-segment gate, validate-first, atomicity on a
- * blocked path, the 0600/0700 modes, no-token-coupling, the resolved-from-
- * getDataDir() dir. The deeper layout / lazy-mint / domains-map semantics live in
- * `profile-store-sds.test.ts`; list/read/remove in `profile-store-manage.test.ts`.
- *
- * The four-flat-spec-per-expert contract is GONE: ProfileSpec no longer carries
- * top-level domainSpec/intentSpec/playbook; the manifest no longer carries the
- * four flat *Path keys (it carries userSpecPath + a domains map). No assertion of
- * the old shape survives.
+ * This file pins the GENERIC writer invariants that survive the re-scope — the
+ * SINGLETON path-safety property (the keying segment is an un-spoofable constant,
+ * NOT caller input — so the agentId traversal vector is structurally eliminated),
+ * the NEW slug path-segment gate (KEPT — the slug is still caller-supplied),
+ * validate-first, atomicity on a blocked path, the 0600/0700 modes, no-token-
+ * coupling, the resolved-from-getDataDir() dir. The deeper layout / lazy-mint /
+ * domains-map semantics live in `profile-store-sds.test.ts`; the read/remove
+ * primitives in `profile-store-manage.test.ts`.
  *
  * Hermetic via the SIL_DATA_DIR temp-dir override (the repo's standard knob).
  */
@@ -58,11 +54,12 @@ import {
   chmodSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 import {
   materializeProfile,
-  getAgentArtefactDir,
+  getShopperArtefactDir,
+  getDomainArtefactDir,
   type ProfileSpec,
 } from "../../lib/profile-store.js";
 import { getDataDir, getTokensPath } from "../../lib/credentials.js";
@@ -109,9 +106,8 @@ const DOMAIN = {
     + " groupsets; Shimano over SRAM.",
 } as const;
 
-/** Create the shopper (no domain): the one-time agent-level write. */
+/** Create the singleton shopper (no domain, no agentId): the one-time agent-level write. */
 const CREATE_SHOPPER = {
-  agentId: "sil-shopper",
   name: "sil shopper",
   userSpec: USER_SPEC,
 } as const;
@@ -124,8 +120,8 @@ const MINT = {
 
 /** Raw, untyped manifest read — decoupled from the manifest field shape so a
  * RED run against the un-reshaped store never throws on a missing key. */
-function readManifest(agentId: string): Record<string, unknown> {
-  const path = join(getAgentArtefactDir(agentId), "profile.json");
+function readManifest(): Record<string, unknown> {
+  const path = join(getShopperArtefactDir(), "profile.json");
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 }
 
@@ -141,13 +137,43 @@ function walkFiles(dir: string, base = dir): string[] {
   return out;
 }
 
+// ===========================================================================
+// SINGLETON path-safety — the keying segment is a constant, NOT caller input
+// ===========================================================================
+
+describe("singleton path-safety — the shopper dir segment is an un-spoofable constant, not caller input", () => {
+  it("getShopperArtefactDir() resolves a SINGLE fixed segment directly under getDataDir() (honours $SIL_DATA_DIR)", () => {
+    const dir = getShopperArtefactDir();
+    // Resolved from getDataDir() — never hardcoded.
+    expect(dir.startsWith(getDataDir())).toBe(true);
+    // Exactly ONE path segment below the data dir — the shopper sub-dir.
+    expect(dirname(dir)).toBe(getDataDir());
+    // The segment is a safe, traversal-free constant (lower-kebab, no separators,
+    // no `..`/`.`), so there is no caller-controlled component to spoof.
+    const seg = basename(dir);
+    expect(seg).toMatch(/^[a-z0-9][a-z0-9-]*$/);
+    expect(seg).not.toContain("..");
+  });
+
+  it("is STABLE — there is no argument that can change the shopper segment (the agentId vector is gone)", () => {
+    // The function takes NO argument; two calls yield the identical, constant path.
+    expect(getShopperArtefactDir()).toBe(getShopperArtefactDir());
+  });
+
+  it("getDomainArtefactDir(slug) keys off the constant shopper dir — the slug is the ONLY caller segment", () => {
+    expect(getDomainArtefactDir("road-cycling")).toBe(
+      join(getShopperArtefactDir(), "domains", "road-cycling"),
+    );
+  });
+});
+
 describe("materializeProfile — create the shopper (no domain): shared user_spec + empty domains map", () => {
   it("writes ONLY user_spec.md + profile.json at the agent level; NO domains/ dir yet", () => {
     const result = materializeProfile({ ...CREATE_SHOPPER });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const dir = join(getDataDir(), "agents", CREATE_SHOPPER.agentId);
+    const dir = getShopperArtefactDir();
     expect(result.dir).toBe(dir);
     expect(existsSync(join(dir, "user_spec.md"))).toBe(true);
     expect(existsSync(join(dir, "profile.json"))).toBe(true);
@@ -163,24 +189,25 @@ describe("materializeProfile — create the shopper (no domain): shared user_spe
     expect(readFileSync(join(dir, "user_spec.md"), "utf8")).toBe(USER_SPEC);
   });
 
-  it("the ok result surfaces userSpecPath + profilePath (and NO old flat *Path fields)", () => {
+  it("the ok result surfaces userSpecPath + profilePath (and NO old flat *Path fields, NO agentId)", () => {
     const result = materializeProfile({ ...CREATE_SHOPPER });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const dir = getAgentArtefactDir(CREATE_SHOPPER.agentId);
+    const dir = getShopperArtefactDir();
     expect(result.userSpecPath).toBe(join(dir, "user_spec.md"));
     expect(result.profilePath).toBe(join(dir, "profile.json"));
+    // The caller-supplied agentId is gone from the result surface too.
+    expect("agentId" in result).toBe(false);
     // The four flat spec paths left the result — they are per-domain now.
     expect("domainSpecPath" in result).toBe(false);
     expect("intentSpecPath" in result).toBe(false);
     expect("playbookPath" in result).toBe(false);
   });
 
-  it("the manifest carries userSpecPath + an EMPTY domains map + identity (no flat *Path keys)", () => {
+  it("the manifest carries name + userSpecPath + an EMPTY domains map (no flat *Path keys)", () => {
     materializeProfile({ ...CREATE_SHOPPER });
-    const manifest = readManifest(CREATE_SHOPPER.agentId);
-    const dir = getAgentArtefactDir(CREATE_SHOPPER.agentId);
-    expect(manifest["agentId"]).toBe(CREATE_SHOPPER.agentId);
+    const manifest = readManifest();
+    const dir = getShopperArtefactDir();
     expect(manifest["name"]).toBe(CREATE_SHOPPER.name);
     expect(manifest["userSpecPath"]).toBe(join(dir, "user_spec.md"));
     // domains is the source of truth — present, an object, and EMPTY (healthy).
@@ -191,10 +218,6 @@ describe("materializeProfile — create the shopper (no domain): shared user_spe
     expect("domainSpecPath" in manifest).toBe(false);
     expect("intentSpecPath" in manifest).toBe(false);
     expect("playbookPath" in manifest).toBe(false);
-  });
-
-  it("resolves the artefact dir from getDataDir() — honours $SIL_DATA_DIR (never hardcoded)", () => {
-    expect(getAgentArtefactDir("x")).toBe(join(dataDir, "agents", "x"));
   });
 
   it("writes the shared user_spec + manifest owner-only (0600) inside a 0700 dir", () => {
@@ -227,7 +250,7 @@ describe("materializeProfile — mint a niche (with domain): the pack lands unde
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const domainDir = join(getAgentArtefactDir(MINT.agentId), "domains", DOMAIN.slug);
+    const domainDir = getDomainArtefactDir(DOMAIN.slug);
     expect(readFileSync(join(domainDir, "domain_spec.md"), "utf8")).toBe(DOMAIN.domainSpec);
     expect(readFileSync(join(domainDir, "intent_spec.md"), "utf8")).toBe(DOMAIN.intentSpec);
     expect(readFileSync(join(domainDir, "playbook.md"), "utf8")).toBe(DOMAIN.playbook);
@@ -235,7 +258,7 @@ describe("materializeProfile — mint a niche (with domain): the pack lands unde
     expect(statSync(join(domainDir, "domain_spec.md")).mode & 0o777).toBe(0o600);
 
     // The manifest's domains map gains the slug, with the three per-domain paths.
-    const domains = (readManifest(MINT.agentId)["domains"] ?? {}) as Record<
+    const domains = (readManifest()["domains"] ?? {}) as Record<
       string,
       Record<string, unknown>
     >;
@@ -256,7 +279,7 @@ describe("materializeProfile — mint a niche (with domain): the pack lands unde
     if (!result.ok) return;
     expect(result.domain).toBeDefined();
     expect(result.domain!.slug).toBe(DOMAIN.slug);
-    const domainDir = join(getAgentArtefactDir(MINT.agentId), "domains", DOMAIN.slug);
+    const domainDir = getDomainArtefactDir(DOMAIN.slug);
     expect(result.domain!.domainSpecPath).toBe(join(domainDir, "domain_spec.md"));
     expect(result.domain!.intentSpecPath).toBe(join(domainDir, "intent_spec.md"));
     expect(result.domain!.playbookPath).toBe(join(domainDir, "playbook.md"));
@@ -264,39 +287,7 @@ describe("materializeProfile — mint a niche (with domain): the pack lands unde
 });
 
 describe("materializeProfile — validate-first on the agent-level fields (writes NOTHING)", () => {
-  const dirExists = () => existsSync(getAgentArtefactDir(CREATE_SHOPPER.agentId));
-
-  it("missing agentId → invalid_request(field=agentId), nothing written", () => {
-    const result = materializeProfile({ ...CREATE_SHOPPER, agentId: "" });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("agentId");
-    expect(dirExists()).toBe(false);
-  });
-
-  it('reserved "main" agentId → invalid_request(field=agentId), nothing written', () => {
-    const result = materializeProfile({ ...CREATE_SHOPPER, agentId: "main" });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.kind).toBe("invalid_request");
-    if (result.kind !== "invalid_request") return;
-    expect(result.field).toBe("agentId");
-    expect(existsSync(join(getDataDir(), "agents", "main"))).toBe(false);
-  });
-
-  it("path-traversing / separator-bearing agentId → invalid_request(field=agentId), nothing escapes", () => {
-    for (const bad of ["../escape", "shop/per", "..", ".", "a/../b", "Sil-Shopper"]) {
-      const result = materializeProfile({ ...CREATE_SHOPPER, agentId: bad });
-      expect(result.ok, `expected reject for ${JSON.stringify(bad)}`).toBe(false);
-      if (result.ok) return;
-      expect(result.kind).toBe("invalid_request");
-      if (result.kind !== "invalid_request") return;
-      expect(result.field).toBe("agentId");
-    }
-    expect(walkFiles(join(getDataDir(), "agents"))).toEqual([]);
-  });
+  const dirExists = () => existsSync(getShopperArtefactDir());
 
   it("blank name → invalid_request(field=name), nothing written", () => {
     const result = materializeProfile({ ...CREATE_SHOPPER, name: "   " });
@@ -331,18 +322,18 @@ describe("materializeProfile — validate-first on the agent-level fields (write
 });
 
 describe("materializeProfile — atomic on a blocked path (persistence_failed, nothing partial)", () => {
-  it("when the agent dir path is blocked by a regular file → persistence_failed, the file untouched", () => {
-    const agentsDir = join(getDataDir(), "agents");
-    mkdirSync(agentsDir, { recursive: true });
-    // Place a regular file exactly where the agent DIR must go.
-    writeFileSync(join(agentsDir, CREATE_SHOPPER.agentId), "i am a file, not a dir");
+  it("when the shopper dir path is blocked by a regular file → persistence_failed, the file untouched", () => {
+    const shopperDir = getShopperArtefactDir();
+    mkdirSync(dirname(shopperDir), { recursive: true });
+    // Place a regular file exactly where the shopper DIR must go.
+    writeFileSync(shopperDir, "i am a file, not a dir");
 
     const result = materializeProfile({ ...CREATE_SHOPPER });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("persistence_failed");
     if (result.kind !== "persistence_failed") return;
-    expect(result.error).toContain(getAgentArtefactDir(CREATE_SHOPPER.agentId));
-    expect(statSync(join(agentsDir, CREATE_SHOPPER.agentId)).isFile()).toBe(true);
+    expect(result.error).toContain(shopperDir);
+    expect(statSync(shopperDir).isFile()).toBe(true);
   });
 });

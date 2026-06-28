@@ -30,8 +30,9 @@
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
  *     both sides equals { sil_product_get, sil_profile_get,
- *     sil_profile_list, sil_profile_materialize, sil_profile_remove,
- *     sil_register, sil_search, sil_whoami }.
+ *     sil_profile_materialize, sil_profile_remove, sil_register,
+ *     sil_remember, sil_search, sil_whoami } (the 8-tool floor after
+ *     sil_profile_list was folded into sil_profile_get).
  */
 
 import { describe, it, expect } from "vitest";
@@ -125,12 +126,12 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // The card's spine: after removing the skeleton examples, the manifest
     // AND the code both name exactly the real tools. Pinned by literal
     // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
-    // not just the symmetric drift check above. Now 9 tools — the
-    // sil-remember-append-memory-tool card adds sil_remember to the profile group.
+    // not just the symmetric drift check above. Now 8 tools — the
+    // consolidate-profile-tools-to-the-singleton-surface card folds
+    // sil_profile_list into sil_profile_get (9 → 8).
     const expected = [
       "sil_product_get",
       "sil_profile_get",
-      "sil_profile_list",
       "sil_profile_materialize",
       "sil_profile_remove",
       "sil_register",
@@ -181,12 +182,13 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(manifestToolNames().has("sil_profile_materialize")).toBe(true);
   });
 
-  it("sil_profile_list is BOTH registered by register() and declared in contracts.tools", () => {
-    // The list-view-and-remove card's enumerate tool. Added to the existing
-    // registerProfileTools group (already wired into register() + here), so it
-    // must appear on BOTH sides of the equal set — registered AND declared.
-    expect(codeRegisteredNames().has("sil_profile_list")).toBe(true);
-    expect(manifestToolNames().has("sil_profile_list")).toBe(true);
+  it("sil_profile_list is NOT registered and NOT declared (folded into sil_profile_get)", () => {
+    // The consolidate-profile-tools-to-the-singleton-surface card DELETES
+    // sil_profile_list, folding its read into sil_profile_get's no-args zoom. It
+    // must be absent on BOTH sides of the equal set — a re-introduction (in code or
+    // manifest) flips the set-equality RED, just as an addition would.
+    expect(codeRegisteredNames().has("sil_profile_list")).toBe(false);
+    expect(manifestToolNames().has("sil_profile_list")).toBe(false);
   });
 
   it("sil_profile_get is BOTH registered by register() and declared in contracts.tools", () => {
