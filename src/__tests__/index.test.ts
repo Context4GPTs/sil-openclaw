@@ -129,8 +129,8 @@ describe("plugin entry — registration contract", () => {
     // api with exactly the real tools and NO example stub. This pins the
     // wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
     // sil_profile_materialize (agent-creation engine, card:
-    // create-a-valid-sil-wired-openclaw-agent-profile) and the local expert
-    // lifecycle sil_profile_list / sil_profile_get / sil_profile_remove (card:
+    // create-a-valid-sil-wired-openclaw-agent-profile) and the single shopper's
+    // domain lifecycle sil_profile_list / sil_profile_get / sil_profile_remove (card:
     // list-view-and-remove-local-expert-agents) join the set.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
