@@ -91,13 +91,17 @@ afterEach(() => {
 });
 
 describe("the profile surface stays LEAN — no new domain-routing tool", () => {
-  it("registerProfileTools registers EXACTLY the four profile tools (routing is skill-reasoning)", () => {
+  it("registerProfileTools registers EXACTLY the profile tools incl. sil_remember (routing is skill-reasoning, memory is an append)", () => {
+    // sil_remember (card: sil-remember-append-memory-tool) joins the group as the
+    // lightweight per-query memory APPEND verb — NOT a domain-routing/classification
+    // tool, so the surface stays lean: routing is still skill-reasoning.
     expect([...registeredToolNames(api)].sort()).toEqual(
       [
         "sil_profile_get",
         "sil_profile_list",
         "sil_profile_materialize",
         "sil_profile_remove",
+        "sil_remember",
       ].sort(),
     );
   });

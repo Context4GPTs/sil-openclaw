@@ -29,11 +29,13 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
 import {
+  appendProfileEntry,
   listAgentProfiles,
   materializeProfile,
   readAgentProfile,
   removeAgentArtefacts,
   type ProfileSpec,
+  type RememberSpec,
 } from "../lib/profile-store.js";
 import { jsonResult } from "../lib/tool-result.js";
 
@@ -48,6 +50,7 @@ export function registerProfileTools(api: PluginAPI): void {
   registerList(api);
   registerGet(api);
   registerRemove(api);
+  registerRemember(api);
 }
 
 function registerMaterialize(api: PluginAPI): void {
@@ -404,6 +407,147 @@ function registerRemove(api: PluginAPI): void {
 
       // persistence_failed — the path + cause are in `error` (never a token/PII).
       api.logger.error("sil_profile_remove_persistence_failed", { error: result.error });
+      return jsonResult({
+        status: "persistence_failed",
+        error: result.error,
+        message: result.message,
+        recovery: result.recovery,
+      });
+    },
+  });
+}
+
+/**
+ * `sil_remember` — the lightweight per-query APPEND memory verb.
+ *
+ * Appends ONE typed learning without re-emitting the whole document — the cheap
+ * path the model actually takes under load (vs. the heavy whole-doc
+ * `sil_profile_materialize` round-trip). `kind:"fact"` (something true about the
+ * person) lands in the agent-level `user_spec.md` and carries across every niche;
+ * `kind:"taste"` (how they like to buy in this niche) lands in the active domain's
+ * `playbook.md`. `hard:true` marks an inviolable user-spec constraint (FACT only);
+ * `domain` selects the niche for a TASTE (omitted ⇒ the single registered domain).
+ *
+ * Thin over `appendProfileEntry`: narrow the host-validated params, call the store,
+ * map the discriminated result to the canonical envelope. The remembered `text` is
+ * user content — it is NEVER written to a log payload (only non-PII markers are).
+ */
+function registerRemember(api: PluginAPI): void {
+  api.registerTool({
+    name: "sil_remember",
+    label: "Remember one fact or taste for the sil shopper",
+    description:
+      "Append ONE typed learning to the sil shopper's behaviour artefacts — the"
+      + " CHEAP per-query persistence path (no whole-doc round-trip). Use this every"
+      + " query to capture something the interaction surfaced, in the open (never"
+      + " silently). `kind:\"fact\"` records something true about the PERSON (a"
+      + " measurement, a size, an address, an allergy/ethics rule) — it appends to the"
+      + " agent-level user spec and carries across EVERY niche; set `hard:true` to mark"
+      + " an INVIOLABLE constraint (a reject-at-pick rule, FACTS only). `kind:\"taste\"`"
+      + " records how the person likes to BUY in a niche (price band, brand leaning) —"
+      + " it appends to that niche's buying-taste playbook; pass `domain` to select the"
+      + " niche (omit it only when the shopper has exactly one). ONE discrete learning"
+      + " per call — two facts and a taste are three calls. Append-only and accretive:"
+      + " it never rewrites or de-duplicates the doc — a contradiction or a full"
+      + " refine/overwrite stays the whole-doc sil_profile_materialize path. Makes NO"
+      + " network call and reads no token; writes one short line via O_APPEND. A"
+      + " malformed/traversal/\"main\" agentId, a blank text, a fact carrying a domain,"
+      + " or a taste carrying hard:true returns invalid_request and writes nothing; an"
+      + " unknown shopper / unminted domain / missing body returns not_found (mint it"
+      + " first); a genuine write failure returns persistence_failed.",
+    parameters: Type.Object({
+      agentId: Type.String({
+        description:
+          "The shopper's host agent id (agents.list[].id), lower-kebab; not \"main\""
+          + " (host-reserved). Keys the artefact directory the entry is appended to.",
+      }),
+      kind: Type.Union([Type.Literal("fact"), Type.Literal("taste")], {
+        description:
+          "\"fact\" → the agent-level user spec (true about the person; carries across"
+          + " niches). \"taste\" → the active domain's buying-taste playbook (how they"
+          + " buy in THIS niche).",
+      }),
+      text: Type.String({
+        description:
+          "The ONE short learning to record (a single discrete fact or taste). Keep it"
+          + " to one entry — it is appended verbatim as a markdown bullet.",
+      }),
+      domain: Type.Optional(
+        Type.String({
+          description:
+            "TASTE only — the domain slug (lower-kebab; not \"main\") to append the"
+            + " taste to. Omit ONLY when the shopper has exactly one domain (it"
+            + " resolves automatically); with 2+ domains, omitting it is ambiguous and"
+            + " returns invalid_request. Ignored / a category error on a fact.",
+        }),
+      ),
+      hard: Type.Optional(
+        Type.Boolean({
+          description:
+            "FACT only — true marks an INVIOLABLE user-spec constraint (an allergy, an"
+            + " ethics rule, an age gate) the shop loop rejects candidates against."
+            + " Taste is always soft, so hard:true on a taste is a contradiction"
+            + " (invalid_request).",
+        }),
+      ),
+    }),
+    async execute(_callId, params) {
+      // Host-validated against the schema above; narrow at the read site (the SDK
+      // types params as Record<string,unknown>) and let the store do the real,
+      // structured-error validation. Only carry domain/hard when meaningfully set
+      // so a fact never carries a spurious `domain: undefined`.
+      const kind: RememberSpec["kind"] = params["kind"] === "taste" ? "taste" : "fact";
+      const rawDomain = params["domain"];
+      const domain = typeof rawDomain === "string" ? rawDomain : undefined;
+      const hard = params["hard"] === true ? true : undefined;
+
+      const spec: RememberSpec = {
+        agentId: asString(params["agentId"]),
+        kind,
+        text: asString(params["text"]),
+        ...(domain !== undefined ? { domain } : {}),
+        ...(hard !== undefined ? { hard } : {}),
+      };
+
+      const result = appendProfileEntry(spec);
+
+      if (result.ok) {
+        // Non-PII marker only — the remembered `text` is user content and is never
+        // logged.
+        api.logger.info("sil_remembered", {
+          agent_id: result.agentId,
+          kind: result.kind,
+          domain_slug: result.domain,
+        });
+        return jsonResult({
+          status: "ok",
+          agentId: result.agentId,
+          kind: result.kind,
+          ...(result.domain !== undefined ? { domain: result.domain } : {}),
+        });
+      }
+
+      if (result.kind === "invalid_request") {
+        api.logger.warn("sil_remember_invalid_request", { field: result.field });
+        return jsonResult({
+          status: "invalid_request",
+          field: result.field,
+          message: result.message,
+        });
+      }
+
+      if (result.kind === "not_found") {
+        api.logger.info("sil_remember_not_found", { agent_id: result.agentId });
+        return jsonResult({
+          status: "not_found",
+          agentId: result.agentId,
+          message: result.message,
+          recovery: "sil_profile_materialize",
+        });
+      }
+
+      // persistence_failed — the path + cause are in `error` (never a token/PII).
+      api.logger.error("sil_remember_persistence_failed", { error: result.error });
       return jsonResult({
         status: "persistence_failed",
         error: result.error,

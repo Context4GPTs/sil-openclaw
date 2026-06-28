@@ -177,6 +177,7 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       "sil_profile_materialize",
       "sil_profile_remove",
       "sil_register",
+      "sil_remember",
       "sil_search",
       "sil_whoami",
     ]);

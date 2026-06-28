@@ -123,9 +123,10 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
 
   it("both sides equal exactly the real tool set — no example tool survives", () => {
     // The card's spine: after removing the skeleton examples, the manifest
-    // AND the code both name exactly the four real tools. Pinned by literal
+    // AND the code both name exactly the real tools. Pinned by literal
     // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
-    // not just the symmetric drift check above.
+    // not just the symmetric drift check above. Now 9 tools — the
+    // sil-remember-append-memory-tool card adds sil_remember to the profile group.
     const expected = [
       "sil_product_get",
       "sil_profile_get",
@@ -133,6 +134,7 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
       "sil_profile_materialize",
       "sil_profile_remove",
       "sil_register",
+      "sil_remember",
       "sil_search",
       "sil_whoami",
     ];
@@ -200,6 +202,17 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // in openclaw.plugin.json#contracts.tools.
     expect(codeRegisteredNames().has("sil_profile_remove")).toBe(true);
     expect(manifestToolNames().has("sil_profile_remove")).toBe(true);
+  });
+
+  it("sil_remember is BOTH registered by register() and declared in contracts.tools", () => {
+    // The sil-remember-append-memory-tool card's 9th tool — the lightweight
+    // O_APPEND memory verb. Added to the existing registerProfileTools group (no
+    // new group function, no src/index.ts change), so it is auto-picked-up by
+    // codeRegisteredNames. The load-bearing 3rd "add a tool" step: it MUST also be
+    // listed in openclaw.plugin.json#contracts.tools — a forgotten manifest entry
+    // flips the set-equality RED here, before merge.
+    expect(codeRegisteredNames().has("sil_remember")).toBe(true);
+    expect(manifestToolNames().has("sil_remember")).toBe(true);
   });
 });
 
