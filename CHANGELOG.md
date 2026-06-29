@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-06-29
+
 ### Fixed
 
 - **README narrative realigned to the single multi-domain shopper.** The "Turn your
