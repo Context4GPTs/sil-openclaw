@@ -3,15 +3,18 @@
  * envelope it maps each store outcome to (tier: unit, mock api + temp data dir,
  * no network, no host).
  *
- * Card: sil-remember-append-memory-tool. `sil_remember` is added to the EXISTING
- * `registerProfileTools` group (no new file, no new group function — the store
- * and the agentId/slug gates are shared with the profile family). It is a thin
- * wrapper over `appendProfileEntry`: narrow the host-validated params, call the
- * store, map the discriminated result to the canonical `jsonResult` envelope.
+ * Card: sil-remember-append-memory-tool, updated for
+ * consolidate-profile-tools-to-the-singleton-surface. `sil_remember` is one of the
+ * four profile verbs in `registerProfileTools` — the cheap O_APPEND memory verb,
+ * NOT remerged with the whole-doc `sil_profile_materialize` (the #39 split stands).
+ * It is a thin wrapper over `appendProfileEntry`: narrow the host-validated params,
+ * call the store, map the discriminated result to the canonical `jsonResult`
+ * envelope. The consolidation DROPS the caller-supplied `agentId` (the store
+ * re-scopes to the singleton).
  *
  * This file pins the TOOL boundary:
- *   - SCHEMA — a `Type.Object` with `agentId`, `kind` ∈ {fact, taste}, `text`
- *     REQUIRED; `domain` and `hard` OPTIONAL. (The deep store mechanics live in
+ *   - SCHEMA — a `Type.Object` with `kind` ∈ {fact, taste}, `text` REQUIRED;
+ *     `domain` and `hard` OPTIONAL; NO `agentId`. (The deep store mechanics live in
  *     lib/profile-store-remember.test.ts.)
  *   - ENVELOPE — each store variant maps to the canonical status:
  *     ok / invalid_request / not_found / persistence_failed (with a fix_data_dir
@@ -21,9 +24,6 @@
  *
  * Hermetic via the SIL_DATA_DIR temp-dir override; seeded through the real
  * `sil_profile_materialize` tool so the flow is end-to-end at the tool boundary.
- *
- * RED: `sil_remember` is not yet registered by `registerProfileTools` — getTool
- * throws "Tool sil_remember not registered".
  */
 
 import {
@@ -38,7 +38,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerProfileTools } from "../../tools/profile.js";
-import { getDataDir } from "../../lib/credentials.js";
+import { getShopperArtefactDir } from "../../lib/profile-store.js";
 import {
   createMockPluginApi,
   getTool,
@@ -48,7 +48,6 @@ import {
 const REMEMBER = "sil_remember";
 const MATERIALIZE = "sil_profile_materialize";
 
-const SHOPPER = "sil-shopper";
 const USER_SPEC = "# User spec (shared)\n- Ships to Berlin.\nHARD-NO: leather.";
 const DOMAIN = {
   slug: "road-cycling",
@@ -83,14 +82,12 @@ function allLogPayloads(): string {
 
 async function seedShopper(): Promise<void> {
   await getTool(api, MATERIALIZE).execute("seed-1", {
-    agentId: SHOPPER,
     name: "sil shopper",
     userSpec: USER_SPEC,
   });
 }
 async function seedDomain(): Promise<void> {
   await getTool(api, MATERIALIZE).execute("seed-2", {
-    agentId: SHOPPER,
     name: "sil shopper",
     userSpec: USER_SPEC,
     domain: DOMAIN,
@@ -115,7 +112,7 @@ afterEach(() => {
 // registration shape
 // ===========================================================================
 
-describe("sil_remember — registered by registerProfileTools with the typed schema", () => {
+describe("sil_remember — registered by registerProfileTools with the typed schema (NO agentId)", () => {
   it("is registered with name sil_remember and an object schema", () => {
     const tool = getTool(api, REMEMBER);
     expect(tool.name).toBe(REMEMBER);
@@ -123,17 +120,18 @@ describe("sil_remember — registered by registerProfileTools with the typed sch
     expect(schema.type).toBe("object");
   });
 
-  it("requires agentId/kind/text; domain and hard are OPTIONAL", () => {
+  it("requires kind/text; domain and hard are OPTIONAL; NO agentId", () => {
     const tool = getTool(api, REMEMBER);
     const schema = tool.parameters as unknown as {
       properties?: Record<string, unknown>;
       required?: string[];
     };
     const props = Object.keys(schema.properties ?? {});
-    expect(props).toEqual(
-      expect.arrayContaining(["agentId", "kind", "text", "domain", "hard"]),
-    );
-    expect(schema.required).toEqual(expect.arrayContaining(["agentId", "kind", "text"]));
+    expect(props).toEqual(expect.arrayContaining(["kind", "text", "domain", "hard"]));
+    // The singleton re-scope drops the caller-supplied agentId.
+    expect(props).not.toContain("agentId");
+    expect(schema.required).toEqual(expect.arrayContaining(["kind", "text"]));
+    expect(schema.required ?? []).not.toContain("agentId");
     expect(schema.required ?? []).not.toContain("domain");
     expect(schema.required ?? []).not.toContain("hard");
   });
@@ -145,8 +143,6 @@ describe("sil_remember — registered by registerProfileTools with the typed sch
     };
     const kind = schema.properties?.["kind"];
     expect(kind).toBeDefined();
-    // Robust to the JSON-schema encoding of the union (anyOf of literals / enum /
-    // const): both literals must be present, and no third value.
     const kindJson = JSON.stringify(kind);
     expect(kindJson).toContain("fact");
     expect(kindJson).toContain("taste");
@@ -170,13 +166,11 @@ describe("sil_remember — maps each store outcome to the canonical envelope", (
     await seedShopper();
     const text = "Waist 34in SECRET-PII-marker-abc123";
     const payload = payloadOf(
-      await getTool(api, REMEMBER).execute("r-1", { agentId: SHOPPER, kind: "fact", text }),
+      await getTool(api, REMEMBER).execute("r-1", { kind: "fact", text }),
     );
     expect(payload["status"]).toBe("ok");
-    // A non-PII marker IS logged on success…
     expect((api.logger.info as unknown as { mock: { calls: unknown[] } }).mock.calls.length)
       .toBeGreaterThan(0);
-    // …but the remembered text never appears in any structured log payload.
     expect(allLogPayloads()).not.toContain("SECRET-PII-marker-abc123");
   });
 
@@ -184,7 +178,6 @@ describe("sil_remember — maps each store outcome to the canonical envelope", (
     await seedDomain();
     const payload = payloadOf(
       await getTool(api, REMEMBER).execute("r-2", {
-        agentId: SHOPPER,
         kind: "taste",
         text: "Leans Shimano.",
         domain: DOMAIN.slug,
@@ -193,16 +186,19 @@ describe("sil_remember — maps each store outcome to the canonical envelope", (
     expect(payload["status"]).toBe("ok");
   });
 
-  it("a malformed/traversal agentId → status invalid_request(field=agentId), warn logged", async () => {
+  it("a malformed/traversal taste `domain` slug → status invalid_request(field=domain), warn logged", async () => {
+    // The slug guard survives the agentId drop — a taste's `domain` is still a
+    // caller-supplied path segment and is validated before any resolve/read.
+    await seedDomain();
     const payload = payloadOf(
       await getTool(api, REMEMBER).execute("r-3", {
-        agentId: "../escape",
-        kind: "fact",
-        text: "a fact",
+        kind: "taste",
+        text: "a taste",
+        domain: "../escape",
       }),
     );
     expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("agentId");
+    expect(payload["field"]).toBe("domain");
     expect((api.logger.warn as unknown as { mock: { calls: unknown[] } }).mock.calls.length)
       .toBeGreaterThan(0);
   });
@@ -210,7 +206,7 @@ describe("sil_remember — maps each store outcome to the canonical envelope", (
   it("a blank text → status invalid_request(field=text)", async () => {
     await seedShopper();
     const payload = payloadOf(
-      await getTool(api, REMEMBER).execute("r-4", { agentId: SHOPPER, kind: "fact", text: "   " }),
+      await getTool(api, REMEMBER).execute("r-4", { kind: "fact", text: "   " }),
     );
     expect(payload["status"]).toBe("invalid_request");
     expect(payload["field"]).toBe("text");
@@ -220,7 +216,6 @@ describe("sil_remember — maps each store outcome to the canonical envelope", (
     await seedDomain();
     const payload = payloadOf(
       await getTool(api, REMEMBER).execute("r-5", {
-        agentId: SHOPPER,
         kind: "fact",
         text: "a fact",
         domain: DOMAIN.slug,
@@ -234,7 +229,6 @@ describe("sil_remember — maps each store outcome to the canonical envelope", (
     await seedDomain();
     const payload = payloadOf(
       await getTool(api, REMEMBER).execute("r-6", {
-        agentId: SHOPPER,
         kind: "taste",
         text: "always premium",
         domain: DOMAIN.slug,
@@ -245,13 +239,10 @@ describe("sil_remember — maps each store outcome to the canonical envelope", (
     expect(payload["field"]).toBe("hard");
   });
 
-  it("a fact for an unknown shopper → status not_found", async () => {
+  it("a fact when NO shopper exists yet → status not_found", async () => {
+    // No seed — the singleton store has no manifest, so append fails closed.
     const payload = payloadOf(
-      await getTool(api, REMEMBER).execute("r-7", {
-        agentId: "ghost-shopper",
-        kind: "fact",
-        text: "a fact",
-      }),
+      await getTool(api, REMEMBER).execute("r-7", { kind: "fact", text: "a fact" }),
     );
     expect(payload["status"]).toBe("not_found");
   });
@@ -260,13 +251,13 @@ describe("sil_remember — maps each store outcome to the canonical envelope", (
     await seedShopper();
     // Replace the user_spec.md target with a directory → the existence gate passes
     // but the O_APPEND open throws EISDIR (perm-independent / root-safe).
-    const userSpecPath = join(getDataDir(), "agents", SHOPPER, "user_spec.md");
+    const userSpecPath = join(getShopperArtefactDir(), "user_spec.md");
     rmSync(userSpecPath, { force: true });
     mkdirSync(userSpecPath);
 
     const text = "fact SECRET-PII-zzz";
     const payload = payloadOf(
-      await getTool(api, REMEMBER).execute("r-8", { agentId: SHOPPER, kind: "fact", text }),
+      await getTool(api, REMEMBER).execute("r-8", { kind: "fact", text }),
     );
     expect(payload["status"]).toBe("persistence_failed");
     expect(payload["recovery"]).toBe("fix_data_dir");

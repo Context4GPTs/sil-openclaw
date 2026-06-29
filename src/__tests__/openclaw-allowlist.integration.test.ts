@@ -66,7 +66,6 @@ const SIL_ID = "sil";
 const SIL_TOOLS = [
   "sil_product_get",
   "sil_profile_get",
-  "sil_profile_list",
   "sil_profile_materialize",
   "sil_profile_remove",
   "sil_register",

@@ -36,9 +36,10 @@ rest is augmented per query.
 
 ## Assemble + endorse — the gate
 
-Identity confirmed (`my-shopper` / "My Shopper"), the assembled draft is a valid
-`sil_profile_materialize` **create** input — persona → `SOUL.md`, the **shared
-user spec only** (no domain pack at create):
+Identity confirmed (`my-shopper` / "My Shopper"), the assembled draft splits across
+the two stores — `agentId` + `persona` drive the host wiring (`openclaw agents add`
++ `SOUL.md`); `name` + the **shared user spec only** feed the singleton
+`sil_profile_materialize` **create** (no `agentId`, no domain pack at create):
 
 ```jsonc
 {
@@ -58,8 +59,8 @@ now does the engine proceed
 validate-first → singleton check → `openclaw agents add my-shopper --workspace
 ~/.openclaw/workspace-my-shopper --non-interactive --json` (confirm the inherited
 profile grants a web tool) → write the persona into `SOUL.md` →
-`sil_profile_materialize { agentId, name, userSpec }` **(NO `domain` — writes the
-shared `user_spec.md` + `profile.json` with an empty `domains: {}`)** → wire sil:
+`sil_profile_materialize { name, userSpec }` **(NO `domain` — writes the shared
+`user_spec.md` + `profile.json` with an empty `domains: {}`)** → wire sil:
 
 ```
 openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json
@@ -99,7 +100,6 @@ the **whole-doc** mint:
 
 ```jsonc
 sil_profile_materialize {
-  agentId: "my-shopper",
   name: "My Shopper",
   userSpec: "…the current shared spec (re-persisted)…",
   domain: {
@@ -125,7 +125,7 @@ this domain:
 > **User:** "I don't chase brands — value over name."
 
 ```
-sil_remember { agentId: "my-shopper", kind: "taste", text: "Value over brand; ~€1500 band.", domain: "road-cycling" }
+sil_remember { kind: "taste", text: "Value over brand; ~€1500 band.", domain: "road-cycling" }
 ```
 
 That taste lands in **`domains/road-cycling/playbook.md`** — this niche only.
@@ -156,7 +156,7 @@ espresso starts with its own (partial) taste, learned fresh:
 > **User:** "For coffee I'll happily pay for a known reliable brand."
 
 ```
-sil_remember { agentId: "my-shopper", kind: "taste", text: "Pays up for a reliable known brand.", domain: "espresso" }
+sil_remember { kind: "taste", text: "Pays up for a reliable known brand.", domain: "espresso" }
 ```
 
 → lands in **`domains/espresso/playbook.md`** only. Road cycling's "value over
@@ -181,7 +181,7 @@ shopper, many domains; you never mint a second.
   the **existing `road-cycling` domain** (semantic dedup), never mints a near-duplicate
   `cycling` / `bikes` pack.
 - **Forget one domain ≠ decommission the shopper** — "forget espresso" runs
-  `sil_profile_remove { agentId, domainSlug: "espresso" }` (artefact-only; the shopper,
+  `sil_profile_remove { domainSlug: "espresso" }` (artefact-only; the shopper,
   the shared user spec, and the road-cycling domain survive). Tearing down the whole
   shopper is the separate host-CLI-first path.
 - **No web tool**: the shopper says so honestly at mint time and composes the domain

@@ -1,22 +1,23 @@
 /**
  * UNIT — sil_profile_materialize tool: registration shape + the structured
- * envelope it maps each store outcome to, after the single-multi-domain shopper
- * reshape (tier: unit, mock api + temp data dir, no network, no host).
+ * envelope it maps each store outcome to (tier: unit, mock api + temp data dir,
+ * no network, no host).
  *
- * Card: single-multi-domain-sil-shopper — Slice 1. The tool stays ONE tool
+ * Card: single-multi-domain-sil-shopper — Slice 1, updated for
+ * consolidate-profile-tools-to-the-singleton-surface. The tool stays ONE tool
  * (`sil_profile_materialize`) with an OPTIONAL `domain` object — the 8-tool
- * manifest is FROZEN, so no tool is added/renamed (manifest-contract stays green).
- * The flat four-spec-per-expert shape is GONE. The params are now agent-level +
- * an optional domain pack:
+ * manifest is FROZEN. The consolidation DROPS the caller-supplied `agentId`: the
+ * store re-scopes to the singleton, so the params are now the agent-level fields
+ * + an optional domain pack, with NO `agentId`:
  *
- *   { agentId, name, userSpec, domain?: { slug, name, domainSpec, intentSpec, playbook } }
+ *   { name, userSpec, domain?: { slug, name, domainSpec, intentSpec, playbook } }
  *
  *   - NO domain  ⇒ create the shopper (shared user_spec + `domains: {}`);
  *   - WITH domain ⇒ lazily mint domains/<slug>/* + a shared-user_spec rewrite +
  *     an upsert into `domains[slug]`, one atomic call.
  *
  * The pure store invariants live in lib/profile-store*.test.ts; here we pin the
- * TOOL boundary: the schema (agentId/name/userSpec required; domain optional;
+ * TOOL boundary: the schema (name/userSpec required; domain optional; NO `agentId`;
  * NO top-level domainSpec/intentSpec/playbook), and the ok / invalid_request
  * envelopes for both a create and a mint.
  *
@@ -35,7 +36,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerProfileTools } from "../../tools/profile.js";
-import { getDataDir, getTokensPath } from "../../lib/credentials.js";
+import { getTokensPath } from "../../lib/credentials.js";
+import {
+  getShopperArtefactDir,
+  getDomainArtefactDir,
+} from "../../lib/profile-store.js";
 import {
   createMockPluginApi,
   getTool,
@@ -58,9 +63,8 @@ function payloadOf(result: { content: { text?: string }[] }): Record<string, unk
 
 const USER_SPEC = "# User spec (shared)\n- Ships to Berlin.\nHARD-NO: leather (ethics).";
 
-/** Create the shopper (no domain). */
+/** Create the singleton shopper (no domain, no agentId). */
 const CREATE = {
-  agentId: "sil-shopper",
   name: "sil shopper",
   userSpec: USER_SPEC,
 };
@@ -76,9 +80,9 @@ const DOMAIN = {
 /** Mint a niche onto the shopper. */
 const MINT = { ...CREATE, domain: DOMAIN };
 
-function readManifest(agentId: string): Record<string, unknown> {
+function readManifest(): Record<string, unknown> {
   return JSON.parse(
-    readFileSync(join(getDataDir(), "agents", agentId, "profile.json"), "utf8"),
+    readFileSync(join(getShopperArtefactDir(), "profile.json"), "utf8"),
   ) as Record<string, unknown>;
 }
 
@@ -96,8 +100,8 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe("sil_profile_materialize — registration shape (agent-level + an optional domain pack)", () => {
-  it("requires agentId/name/userSpec; domain is OPTIONAL; NO top-level domainSpec/intentSpec/playbook", () => {
+describe("sil_profile_materialize — registration shape (singleton: agent-level fields + an optional domain pack, NO agentId)", () => {
+  it("requires name/userSpec; domain is OPTIONAL; NO agentId, NO top-level domainSpec/intentSpec/playbook", () => {
     const tool = getTool(api, TOOL);
     expect(tool.name).toBe(TOOL);
     const schema = tool.parameters as unknown as {
@@ -108,17 +112,18 @@ describe("sil_profile_materialize — registration shape (agent-level + an optio
     expect(schema.type).toBe("object");
 
     const props = Object.keys(schema.properties ?? {});
-    expect(props).toEqual(expect.arrayContaining(["agentId", "name", "userSpec", "domain"]));
+    expect(props).toEqual(expect.arrayContaining(["name", "userSpec", "domain"]));
+    // The singleton re-scope drops the caller-supplied agentId entirely.
+    expect(props).not.toContain("agentId");
     // The flat per-niche specs left the top level — they live inside `domain` now.
     expect(props).not.toContain("domainSpec");
     expect(props).not.toContain("intentSpec");
     expect(props).not.toContain("playbook");
     expect(props).not.toContain("persona");
 
-    // Only the three agent-level fields are required — domain is optional.
-    expect(schema.required).toEqual(
-      expect.arrayContaining(["agentId", "name", "userSpec"]),
-    );
+    // Only the two agent-level fields are required — domain is optional, agentId is gone.
+    expect(schema.required).toEqual(expect.arrayContaining(["name", "userSpec"]));
+    expect(schema.required ?? []).not.toContain("agentId");
     expect(schema.required ?? []).not.toContain("domain");
   });
 
@@ -141,16 +146,15 @@ describe("sil_profile_materialize — create the shopper (no domain): ok envelop
     const tool = getTool(api, TOOL);
     const payload = payloadOf(await tool.execute("c-1", { ...CREATE }));
     expect(payload["status"]).toBe("ok");
-    expect(payload["agentId"]).toBe(CREATE.agentId);
 
-    const dir = join(getDataDir(), "agents", CREATE.agentId);
+    const dir = getShopperArtefactDir();
     expect(payload["userSpecPath"]).toBe(join(dir, "user_spec.md"));
     expect(payload["profilePath"]).toBe(join(dir, "profile.json"));
     expect(existsSync(join(dir, "user_spec.md"))).toBe(true);
     expect(existsSync(join(dir, "domains"))).toBe(false);
     // The flat per-niche artefacts never appear at the agent level.
     expect(existsSync(join(dir, "domain_spec.md"))).toBe(false);
-    expect(readManifest(CREATE.agentId)["domains"]).toEqual({});
+    expect(readManifest()["domains"]).toEqual({});
   });
 
   it("reads no token (behaviour-artefact half only)", async () => {
@@ -168,7 +172,7 @@ describe("sil_profile_materialize — mint a niche (with domain): ok envelope + 
     const payload = payloadOf(await tool.execute("c-4", { ...MINT }));
     expect(payload["status"]).toBe("ok");
 
-    const domainDir = join(getDataDir(), "agents", CREATE.agentId, "domains", DOMAIN.slug);
+    const domainDir = getDomainArtefactDir(DOMAIN.slug);
     expect(existsSync(join(domainDir, "domain_spec.md"))).toBe(true);
     expect(existsSync(join(domainDir, "intent_spec.md"))).toBe(true);
     expect(existsSync(join(domainDir, "playbook.md"))).toBe(true);
@@ -181,7 +185,7 @@ describe("sil_profile_materialize — mint a niche (with domain): ok envelope + 
     expect(domain!["domainSpecPath"]).toBe(join(domainDir, "domain_spec.md"));
 
     // The manifest's domains map registers it.
-    const domains = (readManifest(CREATE.agentId)["domains"] ?? {}) as Record<string, unknown>;
+    const domains = (readManifest()["domains"] ?? {}) as Record<string, unknown>;
     expect(Object.keys(domains)).toEqual([DOMAIN.slug]);
   });
 });
@@ -193,23 +197,7 @@ describe("sil_profile_materialize — invalid spec → invalid_request envelope,
     const payload = payloadOf(await tool.execute("c-5", { ...noUser }));
     expect(payload["status"]).toBe("invalid_request");
     expect(payload["field"]).toBe("userSpec");
-    expect(existsSync(join(getDataDir(), "agents", CREATE.agentId))).toBe(false);
-  });
-
-  it("missing agentId → invalid_request(field=agentId), no write", async () => {
-    const tool = getTool(api, TOOL);
-    const { agentId: _a, ...noId } = CREATE;
-    const payload = payloadOf(await tool.execute("c-6", { ...noId }));
-    expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("agentId");
-  });
-
-  it('reserved "main" agentId → invalid_request(field=agentId), no write', async () => {
-    const tool = getTool(api, TOOL);
-    const payload = payloadOf(await tool.execute("c-7", { ...CREATE, agentId: "main" }));
-    expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("agentId");
-    expect(existsSync(join(getDataDir(), "agents", "main"))).toBe(false);
+    expect(existsSync(getShopperArtefactDir())).toBe(false);
   });
 
   it("a traversal-shaped domain.slug → invalid_request(field=domain.slug), no domain pack", async () => {
@@ -220,7 +208,7 @@ describe("sil_profile_materialize — invalid spec → invalid_request envelope,
     );
     expect(payload["status"]).toBe("invalid_request");
     expect(payload["field"]).toBe("domain.slug");
-    expect(existsSync(join(getDataDir(), "agents", CREATE.agentId, "domains"))).toBe(false);
+    expect(existsSync(join(getShopperArtefactDir(), "domains"))).toBe(false);
   });
 
   it("a blank domain.domainSpec → invalid_request(field=domain.domainSpec), no domain pack", async () => {
@@ -231,6 +219,6 @@ describe("sil_profile_materialize — invalid spec → invalid_request envelope,
     );
     expect(payload["status"]).toBe("invalid_request");
     expect(payload["field"]).toBe("domain.domainSpec");
-    expect(existsSync(join(getDataDir(), "agents", CREATE.agentId, "domains"))).toBe(false);
+    expect(existsSync(join(getShopperArtefactDir(), "domains"))).toBe(false);
   });
 });

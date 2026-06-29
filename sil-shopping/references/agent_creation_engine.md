@@ -32,7 +32,7 @@ The shopper **lazily mints a domain on first shop** (its research pass reaches t
 
 1. **Validate the spec FIRST — before anything is written.** Check `agentId` (present, lower-kebab, unique-looking, ≠ `main`), `name`, `persona`, `workspace`, and the **shared `userSpec` — present and non-blank** (the only sil artefact at create; it is seeded *partial* by the interview, never omitted). There is **no** `domainSpec` / `intentSpec` / `playbook` to validate here — those are minted lazily on first shop. On any failure, stop with **`invalid_request`** naming the field and **write nothing**. This runs ahead of every host command, so a bad spec never reaches the host.
 
-2. **Singleton check — a user has exactly ONE shopper.** The shopper is a singleton: a user creates it **once**, then adds domains to it. Run `openclaw agents list --json` and read the sil artefact store (`sil_profile_list`); if a sil shopper **already exists**, stop with **`collision`** — **"a shopper already exists"** — and **do not** run `openclaw agents add`. Steer the user to **shop a new niche** (which lazily mints a domain on the spot) or **refine the existing shopper** — **never mint a second shopper**. (An `agentId` that collides with any existing agent is likewise refused — never overwrite an existing agent's persona or wiring.)
+2. **Singleton check — a user has exactly ONE shopper.** The shopper is a singleton: a user creates it **once**, then adds domains to it. Run `openclaw agents list --json` and read the sil artefact store (the no-args `sil_profile_get`, whose overview is `ok` empty-is-healthy when no shopper exists); if a sil shopper **already exists**, stop with **`collision`** — **"a shopper already exists"** — and **do not** run `openclaw agents add`. Steer the user to **shop a new niche** (which lazily mints a domain on the spot) or **refine the existing shopper** — **never mint a second shopper**. (An `agentId` that collides with any existing agent is likewise refused — never overwrite an existing agent's persona or wiring.)
 
 3. **Create the agent shell (host CLI).** Run:
    ```
@@ -42,7 +42,7 @@ The shopper **lazily mints a domain on first shop** (its research pass reaches t
 
 4. **Write the persona into the workspace `SOUL.md` (host CLI).** The persona is the shopper's soul / system framing — the host's `SOUL.md`, **not** a sil artefact. Write the endorsed persona text straight into the new agent's `SOUL.md` via the host CLI. There is **no** `persona.md` in the sil store and **no** copy step — the persona lives in exactly one place.
 
-5. **Materialize the shared user spec — NO `domain`.** Call **`sil_profile_materialize`** with **`{ agentId, name, userSpec }`** — the shared `userSpec` seeded by the interview (partial, augmented per-query). **Pass NO `domain`** at create: with no `domain`, the tool writes the shared **`user_spec.md`** + **`profile.json`** (with an **empty `domains: {}` map**) into **`$SIL_DATA_DIR/agents/<agentId>/`**, atomically. There is **no** `domain_spec.md` / `intent_spec.md` / `playbook.md` yet — the first shop in a niche mints that niche's pack (with a `domain` object) lazily. There is **no `persona.md`** here. The tool's outcomes are `ok` / `invalid_request` / `persistence_failed` — on `invalid_request` it wrote nothing; on `persistence_failed` it left nothing partial.
+5. **Materialize the shared user spec — NO `domain`.** Call **`sil_profile_materialize`** with **`{ name, userSpec }`** — the shared `userSpec` seeded by the interview (partial, augmented per-query). The shopper is a singleton, so this sil-tool call takes **no `agentId`** (the host agent id lives only in the host-CLI wiring above). **Pass NO `domain`** at create: with no `domain`, the tool writes the shared **`user_spec.md`** + **`profile.json`** (with an **empty `domains: {}` map**) into the fixed **`$SIL_DATA_DIR/shopper/`**, atomically. There is **no** `domain_spec.md` / `intent_spec.md` / `playbook.md` yet — the first shop in a niche mints that niche's pack (with a `domain` object) lazily. There is **no `persona.md`** here. The tool's outcomes are `ok` / `invalid_request` / `persistence_failed` — on `invalid_request` it wrote nothing; on `persistence_failed` it left nothing partial.
 
 6. **Wire the sil skill + plugin (host CLI).** Asserted against the pinned host — **`alpine/openclaw:2026.6.9`** — both value-mode sets with `--strict-json` (the only set mode this image accepts):
    ```
@@ -72,7 +72,7 @@ The shopper **lazily mints a domain on first shop** (its research pass reaches t
 
 ## Runtime — how the shopper loads its behaviour
 
-When you (the sil skill) start a session as the shopper, the host has already injected the persona via the workspace **`SOUL.md`**. Then read `$SIL_DATA_DIR/agents/<agentId>/profile.json` and load:
+When you (the sil skill) start a session as the shopper, the host has already injected the persona via the workspace **`SOUL.md`**. Then read `$SIL_DATA_DIR/shopper/profile.json` and load:
 - the **shared `user_spec.md`** — the person's cross-niche facts + hard constraints (seeded partial, augmented per-query), reused across **every** niche;
 - the slug-keyed **`domains`** map — the niches the shopper has already learned. An **empty** map is healthy; the per-domain packs (`domains/<slug>/{domain_spec,intent_spec,playbook}.md`) load **lazily at shop time**, not here.
 

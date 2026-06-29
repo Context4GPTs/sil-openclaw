@@ -10,19 +10,20 @@
  * What the plugin DOES own is the shopper's *behaviour* layer, materialized into
  * its own disclosed `filesystemScope` — `$SIL_DATA_DIR` (the same directory
  * `lib/credentials.ts` uses for tokens/identity). There is ONE persistent shopper
- * that holds MANY domains and routes by domain at shop time. The store keeps a
- * SHARED, agent-level user spec (the one person) plus a per-domain pack that is
- * minted LAZILY on the first shop in a niche:
+ * (a SINGLETON), so its artefacts live under a fixed, compile-time-constant
+ * sub-directory — NOT a caller-supplied key. The store keeps a SHARED user spec
+ * (the one person) plus a per-domain pack that is minted LAZILY on the first shop
+ * in a niche:
  *
- *   $SIL_DATA_DIR/agents/<shopperId>/
- *     ├─ user_spec.md            SHARED, agent-level — the one person: addresses,
- *     │                          sizes, allergy/ethics HARD constraints, budget
+ *   $SIL_DATA_DIR/shopper/
+ *     ├─ user_spec.md            SHARED — the one person: addresses, sizes,
+ *     │                          allergy/ethics HARD constraints, budget
  *     │                          psychology. Read by EVERY domain's shop loop, so a
  *     │                          fact captured while shopping niche A is reused in
  *     │                          niche B without being re-asked. Overwritten
  *     │                          (full-body) on every materialize call.
  *     ├─ profile.json            the strictly-typed manifest the sil skill resolves
- *     │                          artefacts from — identity + userSpecPath + a
+ *     │                          artefacts from — name + userSpecPath + a
  *     │                          slug-keyed `domains` MAP (the source of truth; no
  *     │                          filesystem guessing). `domains: {}` is the HEALTHY
  *     │                          state of a freshly-created shopper.
@@ -55,7 +56,7 @@
  * the manifest (fail-closed). On a mid-write failure the teardown is keyed on
  * MANIFEST MEMBERSHIP, NOT filesystem pre-existence: a failed FIRST mint of a NEW
  * domain (slug ∉ the existing `domains` map) tears down ONLY that fresh leaf — the
- * agent dir, the shared user_spec, and sibling domains survive; a failed re-mint
+ * shopper dir, the shared user_spec, and sibling domains survive; a failed re-mint
  * of an EXISTING domain is dir-preserving (the prior pack is left intact and is
  * never served half-refined — a referenced-but-missing body fails the read closed,
  * see `readAgentProfile`). A leaf we did not create (the path was already occupied)
@@ -68,11 +69,9 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
   renameSync,
   rmSync,
   writeFileSync,
-  type Dirent,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -84,15 +83,18 @@ import { DIR_MODE, ensureDataDir, getDataDir } from "./credentials.js";
  * and imported, so the data-home permission lives in exactly one place. */
 const FILE_MODE = 0o600;
 
-/** The sub-tree under `$SIL_DATA_DIR` that holds per-agent behaviour artefacts. */
-const AGENTS_SUBDIR = "agents";
+/** The fixed, compile-time-constant sub-tree under `$SIL_DATA_DIR` that holds the
+ * ONE shopper's behaviour artefacts. The product is a SINGLETON, so this is a
+ * constant — NOT caller input — which makes the shopper path segment un-spoofable
+ * (no caller-controlled `agentId` traversal vector). */
+const SHOPPER_SUBDIR = "shopper";
 
-/** The sub-tree under an agent dir that holds the per-domain packs. */
+/** The sub-tree under the shopper dir that holds the per-domain packs. */
 const DOMAINS_SUBDIR = "domains";
 
 /** Artefact filenames (stable — the sil skill resolves them from profile.json,
  * but the names are also documented so a human can find them). The shared user
- * spec sits at the agent level; the three SDS pack files sit under each domain. */
+ * spec sits at the shopper level; the three SDS pack files sit under each domain. */
 const USER_SPEC_FILE = "user_spec.md";
 const DOMAIN_SPEC_FILE = "domain_spec.md";
 const INTENT_SPEC_FILE = "intent_spec.md";
@@ -102,7 +104,8 @@ const PROFILE_FILE = "profile.json";
 /** A complete per-domain pack — the niche artefacts, minted lazily on first shop. */
 export interface DomainPackSpec {
   /** The domain slug — keys the `domains/<slug>/` leaf. Lower-kebab, not `main`
-   * (host-reserved). A NEW filesystem path segment: guarded exactly like agentId. */
+   * (host-reserved). A caller-supplied filesystem path segment: guarded before any
+   * join. */
   slug: string;
   /** Human-readable domain name (recorded in the manifest entry). */
   name: string;
@@ -119,21 +122,18 @@ export interface DomainPackSpec {
 }
 
 /**
- * The validated spec the engine hands the store. `agentId` is the host agent id
- * (the `agents.list[].id` the host CLI created); the artefact directory is keyed
- * by it. `userSpec` is the SHARED, agent-level user spec — REQUIRED non-blank on
- * EVERY call (create AND mint), overwritten full-body each time. `domain` is the
- * OPTIONAL per-domain pack: absent ⇒ create the shopper; present ⇒ mint/refresh
- * that niche.
+ * The validated spec the engine hands the store. The artefact directory is the
+ * fixed SINGLETON path (no caller-supplied key). `userSpec` is the SHARED user
+ * spec — REQUIRED non-blank on EVERY call (create AND mint), overwritten full-body
+ * each time. `domain` is the OPTIONAL per-domain pack: absent ⇒ create the shopper;
+ * present ⇒ mint/refresh that niche.
  */
 export interface ProfileSpec {
-  /** Host agent id — the directory key. Lower-kebab, not `main` (host-reserved). */
-  agentId: string;
   /** Human-readable shopper name (recorded in the manifest). */
   name: string;
-  /** The SHARED, agent-level user spec — the one person's standing facts + hard
-   * constraints that carry across every niche. REQUIRED non-blank on every call;
-   * overwritten full-body so a cross-niche fact surfaced during a mint persists. */
+  /** The SHARED user spec — the one person's standing facts + hard constraints that
+   * carry across every niche. REQUIRED non-blank on every call; overwritten
+   * full-body so a cross-niche fact surfaced during a mint persists. */
   userSpec: string;
   /** The OPTIONAL per-domain pack. Absent ⇒ create the shopper (no `domains/`
    * dir). Present ⇒ lazily mint/refresh `domains/<slug>/*` and upsert the map. */
@@ -160,9 +160,8 @@ export interface DomainEntry {
 /** The strictly-typed manifest persisted as `profile.json`. The sil skill reads
  * this to locate the shared user spec + resolve each domain's pack. */
 export interface ProfileManifest {
-  agentId: string;
   name: string;
-  /** Absolute path to the SHARED, agent-level user-spec artefact. REQUIRED —
+  /** Absolute path to the SHARED user-spec artefact. REQUIRED —
    * `readManifestFile` gates on it. */
   userSpecPath: string;
   /** ISO 8601 creation timestamp of the shopper. */
@@ -174,7 +173,7 @@ export interface ProfileManifest {
 
 /** A structured invalid-request outcome, shared across every store primitive. The
  * `field` is the offending field — the DOTTED name for nested domain fields
- * (`"domain.slug"`, `"domain.domainSpec"`, …) so the agent-level `name` is never
+ * (`"domain.slug"`, `"domain.domainSpec"`, …) so the shopper-level `name` is never
  * confused with `domain.name`. */
 export interface InvalidRequest {
   ok: false;
@@ -189,8 +188,7 @@ export interface InvalidRequest {
 export type MaterializeResult =
   | {
       ok: true;
-      agentId: string;
-      /** The artefact directory ($SIL_DATA_DIR/agents/<agentId>). */
+      /** The artefact directory ($SIL_DATA_DIR/shopper). */
       dir: string;
       /** Absolute path to the SHARED user-spec artefact. */
       userSpecPath: string;
@@ -209,15 +207,12 @@ export type MaterializeResult =
     };
 
 /** One typed learning the cheap per-query persist path appends — the founder's
- * `{ kind, domain?, text, hard? }` plus the `agentId` every `sil_profile_*` tool
- * carries (the plugin has no ambient agent identity). `kind:"fact"` is something
- * true about the PERSON (carries across every niche → the agent-level user spec);
- * `kind:"taste"` is how they like to buy in THIS niche (→ the active domain's
- * playbook). `hard` qualifies a FACT only; `domain` selects the niche for a TASTE. */
+ * `{ kind, domain?, text, hard? }`. `kind:"fact"` is something true about the
+ * PERSON (carries across every niche → the shared user spec); `kind:"taste"` is how
+ * they like to buy in THIS niche (→ the active domain's playbook). `hard` qualifies
+ * a FACT only; `domain` selects the niche for a TASTE. */
 export interface RememberSpec {
-  /** Host agent id — the artefact-dir key. Lower-kebab, not `main`. Guarded. */
-  agentId: string;
-  /** `"fact"` → agent-level `user_spec.md`; `"taste"` → active domain `playbook.md`. */
+  /** `"fact"` → the shared `user_spec.md`; `"taste"` → active domain `playbook.md`. */
   kind: "fact" | "taste";
   /** The ONE short learning to append. REQUIRED non-blank; well under PIPE_BUF. */
   text: string;
@@ -239,7 +234,6 @@ const HARD_MARKER = "[hard]";
 export type RememberResult =
   | {
       ok: true;
-      agentId: string;
       kind: "fact" | "taste";
       /** Absolute path of the body file the entry was appended to. */
       target: string;
@@ -247,7 +241,7 @@ export type RememberResult =
       domain?: string;
     }
   | InvalidRequest
-  | { ok: false; kind: "not_found"; agentId: string; message: string }
+  | { ok: false; kind: "not_found"; message: string }
   | {
       ok: false;
       kind: "persistence_failed";
@@ -257,30 +251,31 @@ export type RememberResult =
       recovery: "fix_data_dir";
     };
 
-/** A host-agent id / domain slug must be lower-kebab and is never `main`
- * (host-reserved). Both are joined as filesystem path segments, so both share
- * this guard. */
+/** A domain slug must be lower-kebab and is never `main` (host-reserved). It is
+ * joined as a filesystem path segment, so it carries this guard. (The shopper dir
+ * segment is the un-spoofable constant `SHOPPER_SUBDIR` — it needs no guard.) */
 const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 
-/** Resolve the per-agent artefact directory under the plugin's data dir. Never
- * hardcoded — `getDataDir()` honors `$SIL_DATA_DIR`/`$XDG_DATA_HOME`.
+/** Resolve the SINGLETON shopper artefact directory under the plugin's data dir.
+ * Never hardcoded — `getDataDir()` honors `$SIL_DATA_DIR`/`$XDG_DATA_HOME`.
  *
- * SAFETY: this resolver does NOT guard `agentId` — it joins it as a path segment
- * verbatim. Every caller validates `agentId` with `rejectBadSegment` (`AGENT_ID_RE`
- * + non-`main`) BEFORE the join, so a traversal-shaped id never reaches here. A
- * FUTURE DIRECT CALLER would bypass the guard — re-validate before trusting the
- * returned path with any filesystem op. */
-export function getAgentArtefactDir(agentId: string): string {
-  return join(getDataDir(), AGENTS_SUBDIR, agentId);
+ * SAFETY: the shopper segment is the compile-time constant `SHOPPER_SUBDIR`, NOT
+ * caller input, so there is no path-traversal vector here (nothing to spoof). The
+ * only caller-supplied segment in the store is the domain `slug` — see
+ * `getDomainArtefactDir`, which every caller guards before the join. */
+export function getShopperArtefactDir(): string {
+  return join(getDataDir(), SHOPPER_SUBDIR);
 }
 
-/** Resolve a per-domain pack directory under an agent dir. Mirrors
- * `getAgentArtefactDir`'s SAFETY contract for the NEW path segment: `slug` is
- * joined verbatim, so every caller MUST validate it with `rejectBadSegment`
- * (`AGENT_ID_RE` + non-`main`) BEFORE the join. `agentId` is validated too — a
- * direct caller must guard BOTH segments. */
-export function getDomainArtefactDir(agentId: string, slug: string): string {
-  return join(getAgentArtefactDir(agentId), DOMAINS_SUBDIR, slug);
+/** Resolve a per-domain pack directory under the singleton shopper dir.
+ *
+ * SAFETY: `slug` is the ONLY caller-supplied path segment in the store. It is
+ * joined verbatim here, so every caller MUST validate it with `rejectBadSegment`
+ * (`AGENT_ID_RE` + non-`main`) BEFORE the join. A FUTURE DIRECT CALLER would bypass
+ * that guard — re-validate `slug` before trusting the returned path with any
+ * filesystem op. */
+export function getDomainArtefactDir(slug: string): string {
+  return join(getShopperArtefactDir(), DOMAINS_SUBDIR, slug);
 }
 
 /** True when `s` is a present, non-blank string. */
@@ -292,9 +287,9 @@ function invalid(field: string, message: string): InvalidRequest {
   return { ok: false, kind: "invalid_request", field, message };
 }
 
-/** Validate one path-segment field (agentId or a slug) the SAME way at every
- * caller: present + non-blank, never `main`, lower-kebab. Returns `null` when
- * valid, an `invalid_request` naming the field otherwise — applied BEFORE any
+/** Validate the domain-slug path-segment field the SAME way at every caller:
+ * present + non-blank, never `main`, lower-kebab. Returns `null` when valid, an
+ * `invalid_request` naming the field otherwise — applied BEFORE any
  * join/read/delete so a parent-directory traversal, an absolute path, a bare dot,
  * or `main` never becomes a filesystem path segment. */
 function rejectBadSegment(value: unknown, field: string): InvalidRequest | null {
@@ -316,8 +311,8 @@ function rejectBadSegment(value: unknown, field: string): InvalidRequest | null 
 /**
  * Materialize the shopper / a domain pack.
  *
- * Validate-first (deterministic field order: `agentId` → `name` → `userSpec` →,
- * when `domain` is present, `domain.slug` → `domain.name` → `domain.domainSpec` →
+ * Validate-first (deterministic field order: `name` → `userSpec` →, when `domain`
+ * is present, `domain.slug` → `domain.name` → `domain.domainSpec` →
  * `domain.intentSpec` → `domain.playbook`): any invalid field returns
  * `invalid_request` naming it and writes NOTHING.
  *
@@ -329,8 +324,6 @@ function rejectBadSegment(value: unknown, field: string): InvalidRequest | null 
  */
 export function materializeProfile(spec: ProfileSpec): MaterializeResult {
   // --- validate-first (nothing is written until every field is good) ---
-  const badId = rejectBadSegment(spec.agentId, "agentId");
-  if (badId) return badId;
   if (!nonBlank(spec.name)) {
     return invalid("name", "name is required and must be non-empty.");
   }
@@ -342,8 +335,8 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
 
   const domain = spec.domain;
   if (domain !== undefined) {
-    // The slug is a NEW filesystem path segment — guard it exactly like agentId
-    // BEFORE any join. All five pack fields are REQUIRED non-blank.
+    // The slug is the caller-supplied filesystem path segment — guard it BEFORE any
+    // join. All five pack fields are REQUIRED non-blank.
     const badSlug = rejectBadSegment(domain.slug, "domain.slug");
     if (badSlug) return badSlug;
     if (!nonBlank(domain.name)) {
@@ -360,7 +353,7 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
     }
   }
 
-  const dir = getAgentArtefactDir(spec.agentId);
+  const dir = getShopperArtefactDir();
   const userSpecPath = join(dir, USER_SPEC_FILE);
   const profilePath = join(dir, PROFILE_FILE);
 
@@ -381,7 +374,7 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
   let leafPreexisted = false;
 
   if (domain !== undefined) {
-    leaf = getDomainArtefactDir(spec.agentId, domain.slug);
+    leaf = getDomainArtefactDir(domain.slug);
     const prior = domains[domain.slug];
     domainIsNew = prior === undefined;
     leafPreexisted = existsSync(leaf);
@@ -399,22 +392,21 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
   }
 
   const manifest: ProfileManifest = {
-    agentId: spec.agentId,
     name: spec.name,
     userSpecPath,
     createdAt,
     domains,
   };
 
-  // Whether the agent dir already existed. A fresh CREATE that fails is torn down
-  // whole (all-or-nothing); a MINT never tears down the agent dir (it holds the
+  // Whether the shopper dir already existed. A fresh CREATE that fails is torn down
+  // whole (all-or-nothing); a MINT never tears down the shopper dir (it holds the
   // shared user_spec + sibling domains) — only the fresh leaf, and only if it is
   // ours.
   const dirPreexisted = existsSync(dir);
 
   try {
     // Ensure the data home (`$SIL_DATA_DIR`, 0700) exists first — its creation and
-    // mode are owned by credentials.ts — then the per-agent leaf.
+    // mode are owned by credentials.ts — then the shopper leaf.
     ensureDataDir();
     mkdirSync(dir, { recursive: true, mode: DIR_MODE });
     if (domain !== undefined && entry !== undefined) {
@@ -464,9 +456,9 @@ export function materializeProfile(spec: ProfileSpec): MaterializeResult {
   }
 
   if (domain !== undefined && entry !== undefined) {
-    return { ok: true, agentId: spec.agentId, dir, userSpecPath, profilePath, domain: entry };
+    return { ok: true, dir, userSpecPath, profilePath, domain: entry };
   }
-  return { ok: true, agentId: spec.agentId, dir, userSpecPath, profilePath };
+  return { ok: true, dir, userSpecPath, profilePath };
 }
 
 /** Atomic single-file write: tmp sibling → write → rename over target → chmod.
@@ -479,22 +471,22 @@ function atomicWrite(path: string, contents: string): void {
   chmodSync(path, FILE_MODE);
 }
 
-function notFoundRemember(agentId: string, message: string): RememberResult {
-  return { ok: false, kind: "not_found", agentId, message };
+function notFoundRemember(message: string): RememberResult {
+  return { ok: false, kind: "not_found", message };
 }
 
 /**
  * Append ONE typed learning to the shopper's behaviour artefacts — the cheap
  * per-query persist path (the card's reason to exist). Unlike `materializeProfile`
  * (whole-doc overwrite), this NEVER reads or re-serializes the body: a `kind:"fact"`
- * lands at the EOF of the agent-level `user_spec.md`, a `kind:"taste"` at the EOF of
- * the active domain's `playbook.md`.
+ * lands at the EOF of the shared `user_spec.md`, a `kind:"taste"` at the EOF of the
+ * active domain's `playbook.md`.
  *
- * Validate-first (deterministic field order: `agentId` → `text` → the routing
- * category errors → a taste's explicit `domain` shape): any bad field returns
- * `invalid_request` naming it and writes NOTHING.
+ * Validate-first (deterministic field order: `text` → the routing category errors →
+ * a taste's explicit `domain` shape): any bad field returns `invalid_request`
+ * naming it and writes NOTHING.
  *   - `kind:"fact"` carrying a `domain` → `invalid_request(domain)` (a fact is
- *     agent-level).
+ *     shopper-level).
  *   - `kind:"taste"` carrying `hard:true` → `invalid_request(hard)` (taste is soft).
  *
  * Active-domain resolution (taste only): explicit `domain` slug → else the single
@@ -518,8 +510,6 @@ function notFoundRemember(agentId: string, message: string): RememberResult {
  */
 export function appendProfileEntry(spec: RememberSpec): RememberResult {
   // --- validate-first (nothing is written until every field is good) ---
-  const badId = rejectBadSegment(spec.agentId, "agentId");
-  if (badId) return badId;
   if (!nonBlank(spec.text)) {
     return invalid("text", "text is required and must be non-empty.");
   }
@@ -527,7 +517,7 @@ export function appendProfileEntry(spec: RememberSpec): RememberResult {
   if (spec.kind === "fact" && spec.domain !== undefined) {
     return invalid(
       "domain",
-      "a fact is agent-level (it carries across every niche) — drop `domain`, or use kind:\"taste\".",
+      "a fact is shopper-level (it carries across every niche) — drop `domain`, or use kind:\"taste\".",
     );
   }
   if (spec.kind === "taste" && spec.hard === true) {
@@ -536,19 +526,18 @@ export function appendProfileEntry(spec: RememberSpec): RememberResult {
       "taste is always soft/bendable — a hard taste is a contradiction; mark `hard` on FACTS only.",
     );
   }
-  // A taste's explicit domain slug is a NEW filesystem path segment — guard its
-  // SHAPE (field `domain`) BEFORE any resolve/read.
+  // A taste's explicit domain slug is the caller-supplied filesystem path segment —
+  // guard its SHAPE (field `domain`) BEFORE any resolve/read.
   if (spec.kind === "taste" && spec.domain !== undefined) {
     const badSlug = rejectBadSegment(spec.domain, "domain");
     if (badSlug) return badSlug;
   }
 
-  const profilePath = join(getAgentArtefactDir(spec.agentId), PROFILE_FILE);
+  const profilePath = join(getShopperArtefactDir(), PROFILE_FILE);
   const manifest = tryReadManifest(profilePath);
   if (manifest === null) {
     return notFoundRemember(
-      spec.agentId,
-      'No sil shopper "' + spec.agentId + '" to remember for — create it first with sil_profile_materialize.',
+      "No sil shopper to remember for — create it first with sil_profile_materialize.",
     );
   }
 
@@ -566,21 +555,19 @@ export function appendProfileEntry(spec: RememberSpec): RememberResult {
       slug = slugs[0] as string;
     } else if (slugs.length === 0) {
       return notFoundRemember(
-        spec.agentId,
-        'Shopper "' + spec.agentId + '" has no domains yet — mint the niche first via sil_profile_materialize.',
+        "The shopper has no domains yet — mint the niche first via sil_profile_materialize.",
       );
     } else {
       return invalid(
         "domain",
-        'Shopper "' + spec.agentId + '" has ' + slugs.length + " domains (" + slugs.join(", ")
+        "The shopper has " + slugs.length + " domains (" + slugs.join(", ")
           + ") — name the `domain` to remember a taste in (omitting it is ambiguous).",
       );
     }
     const entry = manifest.domains[slug];
     if (entry === undefined) {
       return notFoundRemember(
-        spec.agentId,
-        'No domain "' + slug + '" on shopper "' + spec.agentId + '" — mint it first via sil_profile_materialize.',
+        'No domain "' + slug + '" on the shopper — mint it first via sil_profile_materialize.',
       );
     }
     target = entry.playbookPath;
@@ -590,8 +577,7 @@ export function appendProfileEntry(spec: RememberSpec): RememberResult {
   // Fail-closed existence gate — append NEVER resurrects a seed-less doc.
   if (!existsSync(target)) {
     return notFoundRemember(
-      spec.agentId,
-      'The target artefact for "' + spec.agentId + '" is missing — re-materialize the shopper/domain before remembering.',
+      "The target artefact is missing — re-materialize the shopper/domain before remembering.",
     );
   }
 
@@ -617,7 +603,6 @@ export function appendProfileEntry(spec: RememberSpec): RememberResult {
 
   return {
     ok: true,
-    agentId: spec.agentId,
     kind: spec.kind,
     target,
     ...(resolvedDomain !== undefined ? { domain: resolvedDomain } : {}),
@@ -625,26 +610,21 @@ export function appendProfileEntry(spec: RememberSpec): RememberResult {
 }
 
 // ===========================================================================
-// Shopper / domain lifecycle — list / view / remove the artefact half.
+// Shopper / domain lifecycle — read / remove the artefact half.
 //
-// The manifest (`profile.json`) is the source of truth: a directory under
-// `agents/<id>/` with a readable profile.json IS the shopper, and its `domains`
-// map is the authoritative niche index. The host-config (wiring) half of
-// list/remove is the host agent driving its own `openclaw …` CLI — these
-// primitives only ever touch `$SIL_DATA_DIR`.
+// The manifest (`profile.json`) is the source of truth: the singleton shopper dir
+// with a readable profile.json IS the shopper, and its `domains` map is the
+// authoritative niche index. The host-config (wiring) half of remove is the host
+// agent driving its own `openclaw …` CLI — these primitives only ever touch
+// `$SIL_DATA_DIR`.
 //
 // Each primitive returns a discriminated result and NEVER throws across the
 // boundary, so one corrupt manifest or a single failed delete degrades only its
 // own outcome — never the whole operation.
 // ===========================================================================
 
-/** Resolve the agents subtree root — the parent of every per-agent dir. */
-function getAgentsRoot(): string {
-  return join(getDataDir(), AGENTS_SUBDIR);
-}
-
-/** A domain summarized for an index view — no body read, no paths (list/overview
- * stay cheap). */
+/** A domain summarized for an index view — no body read, no paths (overview stays
+ * cheap). */
 export interface DomainSummary {
   slug: string;
   name: string;
@@ -652,50 +632,40 @@ export interface DomainSummary {
   updatedAt: string;
 }
 
-/** One listed shopper, summarized from its manifest plus its domain index. */
-export interface ListedShopper {
-  agentId: string;
-  name: string;
-  createdAt: string;
-  domains: DomainSummary[];
-}
-
-/** A `profile.json` that could not be read or parsed — surfaced inline so one
- * corrupt shopper never blinds the user to a healthy one. */
+/** A `profile.json` (or its referenced body) that could not be read or parsed —
+ * surfaced inline on the no-args read so a degraded directory never blinds the
+ * user to a healthy state nor aborts the read. */
 export interface UnreadableProfile {
-  /** The directory name (best-effort id); the manifest may be unreadable. */
-  agentId: string;
+  /** The shopper sub-dir name (best-effort id); the manifest may be unreadable. */
+  id: string;
   /** Human-readable cause (no token/PII — a parse error or fs error message). */
   error: string;
 }
 
-/** `listAgentProfiles()` result — always `ok: true` (an empty/absent store is a
- * normal, successful empty listing, not an error). */
-export interface ListResult {
-  ok: true;
-  shoppers: ListedShopper[];
-  unreadable: UnreadableProfile[];
-}
-
-/** `readAgentProfile(agentId, slug?)` result — discriminated, never throws.
+/** `readAgentProfile(slug?)` result — discriminated, never throws.
  *
- * One success variant covers BOTH the overview (no slug → `domains` index, no
- * bodies) and the per-domain read (slug → `slug` + the three bodies). The
- * per-domain-only fields are optional and present only for a per-domain read; the
- * tool decides what to expose in each envelope. `domains` (the index) is always
- * populated so an overview read can list it. */
+ * One success variant covers BOTH the no-args overview (Zoom A — `domains` index +
+ * `unreadable[]`, empty-is-healthy) and the per-domain read (slug → `slug` + the
+ * three bodies). When NO shopper exists (or its directory is degraded) the overview
+ * is still `ok` (empty-is-healthy) with the breakage surfaced in `unreadable[]` and
+ * `name`/content absent — NEVER `not_found`. The per-domain-only fields are present
+ * only for a per-domain read; the tool decides what to expose in each envelope. */
 export type ReadResult =
   | {
       ok: true;
-      agentId: string;
-      name: string;
-      /** The SHARED, agent-level user-spec body. Present for both reads; a
-       * referenced-but-missing body fails the read closed (`not_found`). */
+      /** The shopper name — present ONLY when a shopper exists and its manifest
+       * loaded. Absent on an empty or degraded store (the empty-is-healthy signal). */
+      name?: string;
+      /** The SHARED user-spec body. The body for a per-domain read and a healthy
+       * overview; `""` for an empty/degraded store. */
       userSpec: string;
-      /** The domain index (always populated). The overview view exposes this. */
+      /** The domain index (always present; `[]` for an empty store). */
       domains: DomainSummary[];
+      /** Degraded directories surfaced inline — `[]` when healthy. */
+      unreadable: UnreadableProfile[];
       profilePath: string;
-      createdAt: string;
+      /** Present only when a shopper exists. */
+      createdAt?: string;
       /** Per-domain only: the requested domain slug. */
       slug?: string;
       /** Per-domain only: the SDS domain-spec body. */
@@ -707,13 +677,13 @@ export type ReadResult =
       /** Per-domain only: the domain's last-mint timestamp. */
       updatedAt?: string;
     }
-  | { ok: false; kind: "not_found"; agentId: string; message: string }
+  | { ok: false; kind: "not_found"; message: string }
   | InvalidRequest;
 
-/** `removeAgentArtefacts(agentId, slug)` result — discriminated, never throws. */
+/** `removeAgentArtefacts(slug)` result — discriminated, never throws. */
 export type RemoveResult =
-  | { ok: true; agentId: string; domainSlug: string }
-  | { ok: false; kind: "not_found"; agentId: string; message: string }
+  | { ok: true; domainSlug: string }
+  | { ok: false; kind: "not_found"; message: string }
   | InvalidRequest
   | {
       ok: false;
@@ -724,9 +694,9 @@ export type RemoveResult =
       recovery: "fix_data_dir";
     };
 
-/** Read + parse one `agents/<id>/profile.json` into a typed manifest, or throw a
- * descriptive error the caller maps to an `unreadable`/`not_found` outcome. A
- * manifest whose JSON parses but is missing the required fields (identity +
+/** Read + parse the singleton `shopper/profile.json` into a typed manifest, or
+ * throw a descriptive error the caller maps to an `unreadable`/`not_found` outcome.
+ * A manifest whose JSON parses but is missing the required fields (name +
  * userSpecPath + createdAt + a `domains` object) is treated as corrupt — not
  * silently coerced. */
 function readManifestFile(profilePath: string): ProfileManifest {
@@ -735,7 +705,6 @@ function readManifestFile(profilePath: string): ProfileManifest {
   if (
     typeof parsed !== "object" ||
     parsed === null ||
-    typeof (parsed as { agentId?: unknown }).agentId !== "string" ||
     typeof (parsed as { name?: unknown }).name !== "string" ||
     typeof (parsed as { userSpecPath?: unknown }).userSpecPath !== "string" ||
     typeof (parsed as { createdAt?: unknown }).createdAt !== "string" ||
@@ -767,70 +736,6 @@ function toDomainSummaries(manifest: ProfileManifest): DomainSummary[] {
     .sort((a, b) => createdAtAsc(a.createdAt, b.createdAt) || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
 }
 
-/**
- * Enumerate the materialized shopper(s) under each `$SIL_DATA_DIR/agents/<id>/`.
- *
- * The manifest is the source of truth — each `agents/<id>/profile.json` is read
- * and parsed (no dirname guessing) into a shopper identity + its domain index.
- * Shoppers are returned `createdAt` DESC. An absent/empty store yields a normal
- * empty listing. One unreadable or corrupt manifest lands in `unreadable[]` and
- * never aborts the listing. Reads only; never writes, never reads a token.
- */
-export function listAgentProfiles(): ListResult {
-  const root = getAgentsRoot();
-  if (!existsSync(root)) {
-    return { ok: true, shoppers: [], unreadable: [] };
-  }
-
-  const shoppers: ListedShopper[] = [];
-  const unreadable: UnreadableProfile[] = [];
-
-  let entries: Dirent[];
-  try {
-    entries = readdirSync(root, { withFileTypes: true });
-  } catch (err) {
-    unreadable.push({ agentId: AGENTS_SUBDIR, error: errCause(err) });
-    return { ok: true, shoppers, unreadable };
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const agentId = entry.name;
-    const profilePath = join(root, agentId, PROFILE_FILE);
-    if (!existsSync(profilePath)) {
-      unreadable.push({ agentId, error: "no profile.json manifest" });
-      continue;
-    }
-    try {
-      const manifest = readManifestFile(profilePath);
-      shoppers.push({
-        agentId: manifest.agentId,
-        name: manifest.name,
-        createdAt: manifest.createdAt,
-        domains: toDomainSummaries(manifest),
-      });
-    } catch (err) {
-      unreadable.push({ agentId, error: errCause(err) });
-    }
-  }
-
-  // Most-recently-created shopper first. createdAt is ISO 8601, so a lexical
-  // compare is also chronological; fall back to it when Date.parse is NaN.
-  shoppers.sort((a, b) => createdAtDesc(a.createdAt, b.createdAt));
-
-  return { ok: true, shoppers, unreadable };
-}
-
-/** Compare two ISO 8601 createdAt strings, most-recent first. */
-function createdAtDesc(a: string, b: string): number {
-  const ta = Date.parse(a);
-  const tb = Date.parse(b);
-  if (Number.isNaN(ta) || Number.isNaN(tb)) {
-    return a < b ? 1 : a > b ? -1 : 0;
-  }
-  return tb - ta;
-}
-
 /** Compare two ISO 8601 createdAt strings, oldest first. */
 function createdAtAsc(a: string, b: string): number {
   const ta = Date.parse(a);
@@ -842,68 +747,102 @@ function createdAtAsc(a: string, b: string): number {
 }
 
 /**
- * Read the shopper overview OR one domain's full pack.
+ * Read the shopper overview (Zoom A, no args) OR one domain's full pack (slug).
  *
- * Re-runs the writer's `agentId` gate BEFORE any `join`/read (a traversal-shaped
- * id → `invalid_request`); a present-but-bad `domainSlug` is guarded the same way
- * (`field:"domainSlug"`). Fail-closed: an unknown id, an absent/corrupt manifest,
- * or a missing SHARED user-spec body → `not_found`. With a slug: a slug NOT in the
- * `domains` map (manifest-gated — an orphaned leaf is invisible) OR any of the 3
- * referenced domain bodies missing → `not_found` (never a half pack). A freshly-
- * created shopper with `domains: {}` is HEALTHY — the overview reads back `ok`
- * with an empty index, never `not_found`. Never throws; reads only.
+ * Zoom A (no slug) is the folded listing — it ABSORBS the old standalone listing
+ * surface: an empty store, or a freshly-created shopper with `domains: {}`, reads `ok`
+ * (empty-is-healthy) with an empty `domains` index and `unreadable: []` — NEVER
+ * `not_found` (the create-collision check + the "you haven't set up a shopper yet"
+ * framing + the shop-time existence check all depend on it). A corrupt manifest, or
+ * a degraded shopper directory, is surfaced inline in `unreadable[]` and never
+ * aborts the read nor downgrades to `not_found`.
+ *
+ * Per-domain (slug given) guards the `domainSlug` BEFORE any `join`/read (a
+ * traversal-shaped slug → `invalid_request(field=domainSlug)`). Fail-closed: an
+ * absent/corrupt manifest, a missing SHARED user-spec body, a slug NOT in the
+ * `domains` map (manifest-gated — an orphaned leaf is invisible), or any of the 3
+ * referenced domain bodies missing → `not_found` (never a half pack). Never throws;
+ * reads only.
  */
-export function readAgentProfile(agentId: string, domainSlug?: string): ReadResult {
-  const badId = rejectBadSegment(agentId, "agentId");
-  if (badId) return badId;
-
+export function readAgentProfile(domainSlug?: string): ReadResult {
   const wantsDomain = nonBlank(domainSlug);
   if (wantsDomain) {
     const badSlug = rejectBadSegment(domainSlug, "domainSlug");
     if (badSlug) return badSlug;
   }
 
-  const dir = getAgentArtefactDir(agentId);
+  const dir = getShopperArtefactDir();
   const profilePath = join(dir, PROFILE_FILE);
-  if (!existsSync(profilePath)) {
-    return notFoundRead(agentId);
-  }
-
-  let manifest: ProfileManifest;
-  try {
-    manifest = readManifestFile(profilePath);
-  } catch {
-    return notFoundRead(agentId);
-  }
-
-  // The SHARED user-spec body gates BOTH reads fail-closed — a manifest pointing at
-  // a user_spec.md whose body is gone is, to the viewer, a shopper that cannot load.
-  let userSpec: string;
-  try {
-    userSpec = readFileSync(manifest.userSpecPath, "utf8");
-  } catch {
-    return notFoundRead(agentId);
-  }
-
-  const domains = toDomainSummaries(manifest);
 
   if (!wantsDomain) {
+    // --- Zoom A: the no-args overview (folded listing, empty-is-healthy) ---
+    if (!existsSync(profilePath)) {
+      // Empty store — a normal, healthy empty outcome.
+      return { ok: true, userSpec: "", domains: [], unreadable: [], profilePath };
+    }
+    let manifest: ProfileManifest;
+    try {
+      manifest = readManifestFile(profilePath);
+    } catch (err) {
+      // Corrupt manifest — degraded, surfaced inline, never not_found / never throws.
+      return {
+        ok: true,
+        userSpec: "",
+        domains: [],
+        unreadable: [{ id: SHOPPER_SUBDIR, error: errCause(err) }],
+        profilePath,
+      };
+    }
+    let userSpec: string;
+    try {
+      userSpec = readFileSync(manifest.userSpecPath, "utf8");
+    } catch (err) {
+      // The shared user-spec body is gone — the shopper cannot fully load; surface
+      // the breakage as degraded rather than hiding it or aborting the read.
+      return {
+        ok: true,
+        userSpec: "",
+        domains: [],
+        unreadable: [{ id: SHOPPER_SUBDIR, error: errCause(err) }],
+        profilePath,
+      };
+    }
     return {
       ok: true,
-      agentId: manifest.agentId,
       name: manifest.name,
       userSpec,
-      domains,
+      domains: toDomainSummaries(manifest),
+      unreadable: [],
       profilePath,
       createdAt: manifest.createdAt,
     };
   }
 
-  // Per-domain: manifest-gated — a slug not in the map (incl. an orphaned on-disk
-  // leaf) is not_found, never a filesystem guess.
+  // --- Per-domain read (slug given) — fail-closed ---
+  if (!existsSync(profilePath)) {
+    return notFoundRead();
+  }
+  let manifest: ProfileManifest;
+  try {
+    manifest = readManifestFile(profilePath);
+  } catch {
+    return notFoundRead();
+  }
+
+  // The SHARED user-spec body gates the read fail-closed — a manifest pointing at a
+  // user_spec.md whose body is gone is, to the viewer, a shopper that cannot load.
+  let userSpec: string;
+  try {
+    userSpec = readFileSync(manifest.userSpecPath, "utf8");
+  } catch {
+    return notFoundRead();
+  }
+
+  // Manifest-gated — a slug not in the map (incl. an orphaned on-disk leaf) is
+  // not_found, never a filesystem guess.
   const entry = manifest.domains[domainSlug as string];
   if (entry === undefined) {
-    return notFoundRead(agentId);
+    return notFoundRead();
   }
 
   let domainSpec: string;
@@ -914,15 +853,15 @@ export function readAgentProfile(agentId: string, domainSlug?: string): ReadResu
     intentSpec = readFileSync(entry.intentSpecPath, "utf8");
     playbook = readFileSync(entry.playbookPath, "utf8");
   } catch {
-    return notFoundRead(agentId);
+    return notFoundRead();
   }
 
   return {
     ok: true,
-    agentId: manifest.agentId,
     name: manifest.name,
     userSpec,
-    domains,
+    domains: toDomainSummaries(manifest),
+    unreadable: [],
     profilePath,
     createdAt: entry.createdAt,
     slug: entry.slug,
@@ -933,12 +872,13 @@ export function readAgentProfile(agentId: string, domainSlug?: string): ReadResu
   };
 }
 
-function notFoundRead(agentId: string): ReadResult {
+function notFoundRead(): ReadResult {
   return {
     ok: false,
     kind: "not_found",
-    agentId,
-    message: 'No sil shopper "' + agentId + '" — list your shoppers to see which exist.',
+    message:
+      "No such domain on the sil shopper — call sil_profile_get with no domainSlug to see"
+      + " what the shopper has (its shared user spec + the domains it has learned).",
   };
 }
 
@@ -948,10 +888,10 @@ function notFoundRead(agentId: string): ReadResult {
  * step; the plugin cannot write `~/.openclaw`).
  *
  * Fail-closed and scoped to one domain leaf:
- *   - re-runs the `agentId` gate AND the `domainSlug` gate (never trusts the
- *     caller) — a bad/`main`/traversal/missing slug → `invalid_request`
- *     (`field:"domainSlug"`), deletes NOTHING (no omit-deletes-everything trap);
- *   - asserts the resolved leaf is strictly UNDER `<agentDir>/domains/` and is NOT
+ *   - re-runs the `domainSlug` gate (never trusts the caller) — a bad/`main`/
+ *     traversal/missing slug → `invalid_request` (`field:"domainSlug"`), deletes
+ *     NOTHING (no omit-deletes-everything trap);
+ *   - asserts the resolved leaf is strictly UNDER `<shopperDir>/domains/` and is NOT
  *     that parent, so a delete can never escape the subtree or wipe a sibling;
  *   - manifest-gated: an unregistered slug → `not_found` (idempotent);
  *   - removes the single leaf, THEN rewrites `profile.json` to de-register
@@ -960,15 +900,13 @@ function notFoundRead(agentId: string): ReadResult {
  * A genuine delete/rewrite failure → `persistence_failed` with `<dir>: <cause>`.
  * Never throws across the boundary.
  */
-export function removeAgentArtefacts(agentId: string, domainSlug: string): RemoveResult {
-  const badId = rejectBadSegment(agentId, "agentId");
-  if (badId) return badId;
+export function removeAgentArtefacts(domainSlug: string): RemoveResult {
   const badSlug = rejectBadSegment(domainSlug, "domainSlug");
   if (badSlug) return badSlug;
 
-  const agentDir = getAgentArtefactDir(agentId);
-  const domainsRoot = join(agentDir, DOMAINS_SUBDIR);
-  const leaf = getDomainArtefactDir(agentId, domainSlug);
+  const shopperDir = getShopperArtefactDir();
+  const domainsRoot = join(shopperDir, DOMAINS_SUBDIR);
+  const leaf = getDomainArtefactDir(domainSlug);
 
   // Defence in depth beyond the slug gate: the leaf must be a STRICT child of the
   // domains root and never the root itself — deleting the parent would wipe every
@@ -981,17 +919,17 @@ export function removeAgentArtefacts(agentId: string, domainSlug: string): Remov
     );
   }
 
-  const profilePath = join(agentDir, PROFILE_FILE);
+  const profilePath = join(shopperDir, PROFILE_FILE);
   const manifest = tryReadManifest(profilePath);
   // Manifest-gated: an unregistered (or absent) domain is already gone.
   if (manifest === null || !(domainSlug in manifest.domains)) {
     return {
       ok: false,
       kind: "not_found",
-      agentId,
       message:
-        'No domain "' + domainSlug + '" on shopper "' + agentId + '" to remove (already'
-        + " gone) — list the shopper's domains to see which exist. A re-run is safe.",
+        'No domain "' + domainSlug + '" on the sil shopper to remove (already gone) —'
+        + " call sil_profile_get with no domainSlug to see which domains exist. A"
+        + " re-run is safe.",
     };
   }
 
@@ -1014,7 +952,7 @@ export function removeAgentArtefacts(agentId: string, domainSlug: string): Remov
     return persistenceFailedRemove(profilePath, err);
   }
 
-  return { ok: true, agentId, domainSlug };
+  return { ok: true, domainSlug };
 }
 
 function persistenceFailedRemove(path: string, err: unknown): RemoveResult {

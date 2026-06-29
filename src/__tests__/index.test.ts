@@ -128,16 +128,14 @@ describe("plugin entry — registration contract", () => {
     // register() runs the real tool groups (no mock), so it populates the
     // api with exactly the real tools and NO example stub. This pins the
     // wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
-    // sil_profile_materialize (agent-creation engine, card:
-    // create-a-valid-sil-wired-openclaw-agent-profile) and the single shopper's
-    // domain lifecycle sil_profile_list / sil_profile_get / sil_profile_remove (card:
-    // list-view-and-remove-local-expert-agents) join the set.
+    // The consolidate-profile-tools-to-the-singleton-surface card folds
+    // sil_profile_list into sil_profile_get's no-args zoom (9 → 8), so the
+    // singleton's domain lifecycle is now sil_profile_get / sil_profile_remove.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
       "sil_product_get",
       "sil_profile_get",
-      "sil_profile_list",
       "sil_profile_materialize",
       "sil_profile_remove",
       "sil_register",

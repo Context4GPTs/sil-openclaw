@@ -12,6 +12,22 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
+- **Profile tool surface consolidated to the singleton — 9 tools → 8.** `sil_profile_list`
+  is **deleted**, folded into `sil_profile_get`: called with **no arguments**, `sil_profile_get`
+  now returns the shopper overview (the shared `userSpec` + the domains index + any degraded
+  directory in `unreadable[]`), and an empty store reads back `ok` (empty-is-healthy), never
+  `not_found`. The caller-supplied **`agentId` is dropped** from all four profile tools
+  (`sil_profile_materialize`, `sil_profile_get`, `sil_remember`, `sil_profile_remove`): the
+  product is a **singleton** shopper, so the artefact store re-scopes from the per-agent
+  `$SIL_DATA_DIR/agents/<agentId>/` to a fixed `$SIL_DATA_DIR/shopper/` — the keying segment
+  is now a compile-time constant (un-spoofable), and the only caller-supplied path segment is
+  the domain `slug`, still guarded (lower-kebab, not `main`) before any join. Slimmer
+  signatures: `sil_profile_get(domainSlug?)`, `sil_profile_materialize(name, userSpec, domain?)`,
+  `sil_remember(kind, text, domain?, hard?)`, `sil_profile_remove(domainSlug)`. `sil_remember`
+  and `sil_profile_materialize` stay two distinct tools (the #39 cheap-append / whole-doc split);
+  `sil_profile_remove` stays standalone, destructive, confirm-gated. No backwards-compat path —
+  old `agents/<id>/` data is orphaned, not migrated. Manifest `contracts.tools` + skill bundle +
+  every exact-set drift mirror updated to the 8-tool floor.
 - **`sil-shopping` skill rewritten for the single multi-domain shopper.** The skill
   bundle now drives the model shipped by Slice 1 (#38): **one** persistent shopper (a
   generalist created once) that learns **domains** (niches) on first shop, replacing

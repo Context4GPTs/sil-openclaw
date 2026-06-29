@@ -169,11 +169,12 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       .mocked(api.logger.info)
       .mock.calls.filter(([marker]) => marker === "sil_plugin_loaded");
     expect(markerCalls).toHaveLength(1);
-    // The full real tool set — creation does not add/drop a tool.
+    // The full real tool set — the data-dir creation does not add/drop a tool.
+    // 8 tools after the consolidate-profile-tools-to-the-singleton-surface card
+    // folded sil_profile_list into sil_profile_get.
     expect([...api._tools.keys()].sort()).toEqual([
       "sil_product_get",
       "sil_profile_get",
-      "sil_profile_list",
       "sil_profile_materialize",
       "sil_profile_remove",
       "sil_register",
