@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-06-29
+
 ### Changed
 
 - **Profile tool surface consolidated to the singleton — 9 tools → 8.** `sil_profile_list`
