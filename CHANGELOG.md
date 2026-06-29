@@ -10,6 +10,20 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Fixed
+
+- **README narrative realigned to the single multi-domain shopper.** The "Turn your
+  OpenClaw into a shopping expert" section still pitched the **retired per-niche-expert
+  model** — minting a **dedicated** agent that shops a **single niche** (*"make me a
+  shopping expert for road-cycling gear"* → a standalone "Road-Cycling Buyer" you open
+  and shop "inside"). It now describes the shipped model: you create **one** persistent
+  shopper once (a light persona + cross-niche interview, **no niche research up front**),
+  then shop **any** niche — it classifies, researches, and mints a reusable **domain** on
+  first shop, reuses learned domains after, and keeps your facts/taste **across all of
+  them** (a second shopper is refused). The "Today the plugin covers …" line drops
+  "dedicated shopping experts" (plural) for "a personal multi-domain shopper". Docs-only;
+  the tool surface, Tools table, and Skills section were already correct.
+
 ## [0.3.6] - 2026-06-29
 
 ### Changed

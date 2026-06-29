@@ -57,7 +57,7 @@ The agent loads the bundled skill on first commerce intent and takes it from the
 
 sil is a [UCP](https://github.com/universal-commerce-protocol/ucp) (Universal Commerce Protocol) commerce service, and `sil-openclaw` wires it into your OpenClaw agent — so it can find products, compare prices and availability, pull up full detail, and surface a checkout link the moment you say *buy*. Powered by [4GPTs](https://4gpts.com).
 
-Today the plugin covers **identity, catalog, and dedicated shopping experts**. The rest of the UCP journey (cart, checkout, order, fulfillment) lands as those domains ship, and the same plugin grows with them.
+Today the plugin covers **identity, catalog, and a personal multi-domain shopper**. The rest of the UCP journey (cart, checkout, order, fulfillment) lands as those domains ship, and the same plugin grows with them.
 
 ---
 
@@ -93,48 +93,49 @@ agent  done — here's your checkout link, ready to pay:
 
 ---
 
-## Turn your OpenClaw into a shopping expert
+## Turn your OpenClaw into your personal shopping expert
 
-So far your *general* agent did the shopping. Go one step further: mint a **dedicated** OpenClaw agent that shops a single niche like a true specialist — it **researches how to buy well in that niche itself**, then fits *you* the way an expert would.
+So far your *general* agent did the shopping. Go one step further: create **one** persistent shopper that learns *you* once, then shops **any** niche like a specialist — it researches how to buy well in each niche the first time you shop it, and gets sharper every session.
 
-**Spec-Driven Shopping (SDS).** Say *"make me a shopping expert for road-cycling gear"* and the plugin runs a **light** interview (≤10 questions) to narrow the niche and shape the persona — then **researches the niche deeply on its own** (the full how-to-buy-well: fit, gearing, geometry, the trade-offs) and derives the **dimensions** every request should be decomposed along. Open it later and on **every query** it refreshes that knowledge from the web, decomposes what you asked, and **learns your facts and taste as it goes** (your measurements, your budget, the rules it must never break) — captured once, never re-asked. It recommends with a "why" that cites *what you asked*, *a fact it remembered*, and *a niche mechanic you'd never have named*. **Nothing is created until you say "create it"** — and building one is local and offline, no sign-in required.
+**Spec-Driven Shopping (SDS).** Say *"set up my shopper"* and the plugin runs a **light** interview (≤10 questions) to shape how it should behave (the persona) and capture your **cross-niche** facts and the rules it must never break — and that's the whole setup. **No niche is researched up front.** From then on you just shop. The first time you ask for something in a new niche it **classifies** what you're buying, **researches that niche deeply on the spot** (the full how-to-buy-well: fit, gearing, geometry, the trade-offs — announced, so you can correct it), and derives the **dimensions** every request in that niche is decomposed along — minting a reusable **domain**. Ask for that niche again and it reuses what it learned; ask for a new one and it learns that too, keeping *you* the same across all of them. On **every query** it refreshes the domain knowledge from the web, decomposes what you asked, and **learns your facts and taste as it goes** (your measurements, your budget, a brand you won't touch) — captured once, never re-asked. It recommends with a "why" that cites *what you asked*, *a fact it remembered*, and *a niche mechanic you'd never have named*. **Nothing is created until you say so**, and a second shopper is refused — there is exactly one of you. Creating and running it is local and offline, no sign-in required.
 
-**1 — One light conversation builds the expert (it does the deep research itself):**
+**1 — One light conversation creates your shopper (no niche research yet):**
 
 ```text
-you    make me a shopping expert for road-cycling gear
+you    set up my shopper
 
-agent  Love it — let's shape it lightly. A complete bike, or
-       components and apparel?
+agent  Love it — let's shape it lightly. Should it shop patient and
+       thorough, or fast and decisive? Anything it must always do,
+       or never do?
 
-you    a complete road bike, my first proper one
+you    thorough, and never recommend anything I can't return
 
-agent  Got it. I've researched how to buy a first road bike well —
-       fit (size from height AND inseam, stack/reach, saddle setback),
-       endurance-vs-race geometry, gearing theory, the comfort/speed
-       trade-offs. I'll decompose every request along use-case, terrain,
-       budget, your fit envelope, timeline, and priorities.
+agent  Got it — I'll keep your cross-niche rules (free returns only)
+       and learn each niche the first time you shop it. Nothing to
+       research up front.
 
-         Road-Cycling Buyer — a patient first-bike advisor
-         · always explains fit · never carbon bars
+         Your Shopper — a thorough, returns-first buyer
+         · learns any niche on first shop · keeps your facts across all of them
 
        shall I create it?
 
 you    yes, create it
 
-agent  done — "Road-Cycling Buyer" is live. Open it anytime;
-       it shops your niche with no further setup.
+agent  done — your shopper is live. Just tell it what you want;
+       it learns the niche on the fly.
 ```
 
-**2 — The expert shops like a specialist, learning you as it goes:**
+**2 — It learns a niche the first time you shop it, and keeps *you* across all of them:**
 
 ```text
-you    (inside Road-Cycling Buyer)  find me a road bike, ~€1500
+you    find me a road bike, ~€1500
 
-agent  Before I search — two numbers I'll keep so I never re-ask:
-       your height and inseam. Any brand you won't touch?
+agent  New niche for us — road cycling. Let me learn how to buy one
+       well (fit from height AND inseam, endurance-vs-race geometry,
+       gearing, the comfort/speed trade-offs) — and two numbers I'll
+       keep so I never re-ask: your height and inseam.
 
-you    178cm, 81cm inseam. No strong feelings, secondhand is fine
+you    178cm, 81cm inseam. Secondhand is fine
 
 agent  searched sil — endurance, 54cm for your fit, ~€1500:
 
@@ -142,8 +143,14 @@ agent  searched sil — endurance, 54cm for your fit, ~€1500:
          2. Carbon endurance bike, 54cm, 105 (used)  €1610
 
        Why #1: for your 178/81 fit a 54cm endurance frame sits where a
-       first buyer wants it — fit and comfort outrank outright speed on a
-       first bike — and it's inside your budget. Want detail or a link?
+       first buyer wants it — and it honours your "free returns only"
+       rule. Want detail or a link?
+
+you    later — find me a backpacking tent for two, under €250
+
+agent  Different niche — camping. Learning how to buy a backpacking
+       tent (season rating, packed weight, floor area)… and your
+       returns rule carries straight over, no need to re-ask.
 ```
 
 > **You teach it once; it stays sharp.** It keeps your facts and taste, web-refreshes its niche knowledge each visit, and never re-asks what it already knows. See what your shopper knows and which domains it has learned, look at how a domain is set up, forget one you're done with — or **refine** the shopper or a domain from what it watched you reject, so it gets sharper every session.
