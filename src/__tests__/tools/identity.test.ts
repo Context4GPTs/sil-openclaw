@@ -318,6 +318,60 @@ describe("sil_register — already-registered short-circuit (F1)", () => {
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
     expect(payload["auth_url"]).toBeUndefined();
   });
+
+  // ── card: post-register-shopper-nudge-and-per-search-pitch (add-only) ──────
+  // The after-register offer's machine breadcrumb. `already_registered` is the
+  // SOLE agent-visible carrier of registration confirmation (the background poll
+  // is log-only; the agent learns success only by re-calling sil_register →
+  // already_registered — SA handoff), so the intent's "already_registered +
+  // poll-success" collapse to THIS one path. The literal is a contract between
+  // identity.ts (emits it) and SKILL.md (keys the after-register beat off it) —
+  // pinned byte-identical here and in skill-content.test.ts.
+  it("carries next_step: 'offer_shopper' (exact literal) — the after-register offer breadcrumb", async () => {
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+    expect(payload["status"]).toBe("already_registered");
+    // Exact literal — snake_case field, snake_case value, the locked noun "shopper".
+    expect(payload["next_step"]).toBe("offer_shopper");
+  });
+
+  it("next_step is PURELY ADDITIVE — status + surfaced identity preserved, still no auth_url", async () => {
+    // The hint must not disturb the pre-existing short-circuit shape: the same
+    // status, the same surfaced user identity, and no browser-flow auth_url. It is
+    // an unconditional additive field, never a reshape of the payload.
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+    expect(payload["status"]).toBe("already_registered");
+    expect(JSON.stringify(payload)).toContain("existing-user");
+    expect(payload["auth_url"]).toBeUndefined();
+    // The additive field rides ALONGSIDE the existing keys, never in place of them.
+    expect(payload["next_step"]).toBe("offer_shopper");
+    expect(payload["user"]).not.toBeUndefined();
+  });
+});
+
+describe("sil_whoami — the shopper offer rides ONLY the confirmed-registration path (add-only negative)", () => {
+  // Product-owner AC: "the offer rides ONLY the registered-confirmation path."
+  // `next_step: "offer_shopper"` is emitted on `sil_register` → `already_registered`
+  // and NOWHERE else. A non-confirmed identity read (here: `sil_whoami` with no
+  // stored tokens → `not_registered`) must not carry the offer breadcrumb — offering
+  // to set up a shopper to a session that is not even confirmed-registered is exactly
+  // the premature offer the SA decoupling avoids. The file-level beforeEach seeds an
+  // EMPTY $SIL_DATA_DIR (no tokens.json), so whoami short-circuits to not_registered
+  // with zero network I/O. (The `sil_register` awaiting_browser negative is pinned in
+  // register-link-presentation.test.ts; the poll terminals — timeout/expired/
+  // already_claimed/invalid_request/persist_failed — are log-only, emit NO
+  // agent-visible payload, and so have no next_step surface to assert.)
+  it("sil_whoami's not_registered payload carries NO next_step / offer_shopper", async () => {
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+    const payload = payloadOf(await getTool(api, "sil_whoami").execute("c1", {}));
+    expect(payload["status"]).toBe("not_registered");
+    expect(payload["next_step"]).toBeUndefined();
+    expect(JSON.stringify(payload)).not.toContain("offer_shopper");
+  });
 });
 
 describe("sil_register — the verifier never reaches disk (F4 invariant)", () => {

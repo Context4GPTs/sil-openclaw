@@ -1723,6 +1723,286 @@ describe("references/search_param_mapping.md — hard constraint → real filter
 });
 
 /* ===========================================================================
+ * POST-REGISTER SHOPPER NUDGE + PER-SEARCH PITCH — two add-only always-on
+ * SKILL.md beats (card: post-register-shopper-nudge-and-per-search-pitch):
+ *   (1) after a confirmed registration, offer the shopper ONCE — gated on a
+ *       no-arg sil_profile_get empty-store check, routed to brainstorm_interview
+ *       on a yes, skipped for an existing shopper (singleton);
+ *   (2) after every completed profile-less bare sil_search, append one short
+ *       POST-RESULT pitch line naming what a shopper would add — recurring by
+ *       design, Lane 1 untouched (best-first, no re-rank, no pre-search question).
+ *
+ * DISAVOWAL DISCIPLINE ([[skill-prose-drift-guard-disavowal-discipline]]): pin the
+ * NEW model POSITIVELY on NET-NEW anchor tokens (`offer_shopper`, `next_step`,
+ * `post-result`, `re-rank`, `fire-once`, … — all ABSENT from SKILL.md before this
+ * card, so RED-capable), and make EVERY negative NEGATION-AWARE — NEVER a bare
+ * not.toContain(<anti-pattern token>), because the corrected prose legitimately
+ * NAMES the anti-patterns ("never a re-rank", "no fire-once … gate") to DISAVOW
+ * them. Offender matchers stay `.toEqual([])`; no existing assertion is loosened.
+ *
+ * SECTION SCOPING is load-bearing, not decoration: the gate/route tokens the
+ * after-register beat needs (`sil_profile_get`, `references/brainstorm_interview.md`,
+ * `singleton`) ALREADY appear elsewhere in SKILL.md (the routing table + the create
+ * two-step gate), so a whole-body `body.includes(...)` would FALSE-GREEN. Each beat
+ * is isolated to its own H2 section — located by a net-new anchor unique to that
+ * beat, bounded to the enclosing `## ` heading and the next `## ` — so every pin is
+ * meaningful (and RED before the beat exists).
+ * ========================================================================= */
+
+/** The SKILL.md body H2 section that OWNS `anchor` — from its `## ` heading up to
+ * the next `## `. `anchor` is a net-new token unique to one beat, so the section is
+ * that beat and nothing else (no bleed into the adjacent beat or the routing table). */
+function sectionOwning(body: string, anchor: number): string {
+  const headingStart = body.lastIndexOf("\n## ", anchor);
+  const from = headingStart >= 0 ? headingStart + 1 : Math.max(0, anchor - 300);
+  const rest = body.slice(from);
+  const nextH2 = rest.indexOf("\n## ", anchor - from + 1);
+  return nextH2 >= 0 ? rest.slice(0, nextH2) : rest;
+}
+
+/** The after-register beat section, anchored on `offer_shopper` (net-new; appears
+ * ONLY in this beat — RED before the beat exists). */
+function afterRegisterBeat(): string {
+  const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+  const at = body.indexOf("offer_shopper");
+  expect(at, "SKILL.md must carry the after-register offer_shopper beat").toBeGreaterThanOrEqual(0);
+  return sectionOwning(body, at);
+}
+
+/** The per-search pitch beat section, anchored on `post-result`/`post result`
+ * (net-new; unique to this beat — RED before the beat exists). */
+function perSearchBeat(): string {
+  const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+  const m = /post-?result/i.exec(body);
+  expect(m, "SKILL.md must carry the per-search post-result pitch beat").not.toBeNull();
+  return sectionOwning(body, m!.index);
+}
+
+/** Negation/deferral markers that turn an affirmative anti-pattern match into a
+ * legitimate DISAVOWAL when one sits within ~28 chars before the match (mirrors
+ * `perNicheExpertOffenders` / `createTimeNicheStepOffenders`' retro-allowance).
+ * The corrected pitch beat says "never a re-rank", "no fire-once … gate" — the
+ * anti-pattern token is present ONLY to be buried, so a bare forbid false-REDs it. */
+const PITCH_DISAVOWAL = [
+  "no ", "not ", "never", "without", "don't", "do not", "n't ", "isn't", "aren't",
+] as const;
+
+/** Affirmative (non-disavowed) matches of `re` in `body` — a match is flagged ONLY
+ * when NO disavowal token sits within ~28 chars before it. Empty ⇒ clean. `body` is
+ * expected already-lowercased; `re` MUST carry the global flag. */
+function affirmativeOffenders(body: string, re: RegExp): string[] {
+  const offenders: string[] = [];
+  re.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    const before = body.slice(Math.max(0, m.index - 28), m.index);
+    const disavowed = PITCH_DISAVOWAL.some((t) => before.includes(t));
+    if (!disavowed) {
+      offenders.push(
+        body
+          .slice(Math.max(0, m.index - 24), m.index + m[0].length + 12)
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+    }
+  }
+  return offenders;
+}
+
+/** Lane-1-violation instructions — an AFFIRMATIVE re-rank of the results, or an
+ * AFFIRMATIVE pre-search question. The corrected beat disavows both ("never a
+ * pre-search question and never a re-rank"). `re-?rank` does NOT match a bare
+ * "ranked list" (no `re` prefix), so the legitimate "flat ranked list" copy is safe. */
+const LANE1_VIOLATION_RE =
+  /re-?rank|pre-?search question|ask (?:the user )?(?:a question )?before (?:the )?search/gi;
+
+/** Frequency-gate (anti-recurrence) instructions — the product-owner REGRESSION: a
+ * fire-once / seen-it / cooldown / one-shot suppression bolted onto the recurring
+ * pitch. The corrected beat disavows them ("no fire-once or seen-it gate, and no
+ * cooldown"). Generic "suppress" is DELIBERATELY excluded — the beat legitimately
+ * says a shopper-owner suppresses the pitch (the one valid STATE gate); only
+ * FREQUENCY gates are the regression this guards. */
+const FREQUENCY_GATE_RE =
+  /fire-?once|seen-?it|one-?shot|cooldown|snooze|dismiss(?:ed|es)?|show (?:it |the (?:tip|pitch|line) )?(?:only )?once|only once/gi;
+
+describe("sil-shopping/SKILL.md — after-register introduce-and-offer beat (add-only, disavowal discipline)", () => {
+  it("names the next_step: 'offer_shopper' hint (byte-identical to identity.ts's already_registered field)", () => {
+    // The SKILL keys the beat off the EXACT machine breadcrumb identity.ts emits —
+    // the two are a contract (product-marketer's naming↔code flag), pinned
+    // byte-identical on both sides. `offer_shopper`/`next_step` are net-new ⇒ RED
+    // before the beat exists.
+    const beat = afterRegisterBeat();
+    expect(beat).toContain("next_step");
+    expect(beat).toContain("offer_shopper");
+    // The breadcrumb rides the confirmed-registration outcome (allowed token —
+    // "already_registered" does not contain the forbidden "not_registered").
+    expect(beat).toContain("already_registered");
+  });
+
+  it("gates the offer on a NO-ARG sil_profile_get empty-store check (offer ONLY when no shopper)", () => {
+    // The skill owns the actual gate (identity.ts stays decoupled from the store):
+    // read shopper state with the no-arg overview, offer ONLY on an empty store.
+    // Section-scoped because `sil_profile_get` also appears in the routing table —
+    // a whole-body check would false-green.
+    const beat = afterRegisterBeat().toLowerCase();
+    expect(beat).toContain("sil_profile_get");
+    const namesNoArg =
+      beat.includes("no-arg") || beat.includes("no arg") ||
+      beat.includes("no `domainslug`") || beat.includes("no domainslug") ||
+      beat.includes("overview");
+    expect(namesNoArg).toBe(true);
+    const gatesOnEmpty =
+      beat.includes("empty store") || beat.includes("empty") ||
+      beat.includes("no shopper") || beat.includes("none yet") ||
+      beat.includes("no shopper yet");
+    expect(gatesOnEmpty).toBe(true);
+  });
+
+  it("routes to references/brainstorm_interview.md ONLY on acceptance (a yes)", () => {
+    // Section-scoped: brainstorm_interview.md also appears in the create two-step
+    // gate, so a whole-body includes would false-green the routing pin.
+    const beat = afterRegisterBeat();
+    expect(beat).toContain("references/brainstorm_interview.md");
+    const onlyOnYes =
+      /only on a yes/i.test(beat) || /on a yes/i.test(beat) ||
+      /on acceptance/i.test(beat) || /if .{0,20}\byes\b/i.test(beat) ||
+      /\baccepts?\b/i.test(beat);
+    expect(onlyOnYes).toBe(true);
+  });
+
+  it("states the SINGLETON skip — an existing shopper is never offered a second one", () => {
+    // Section-scoped: "singleton" also appears in the create two-step gate below.
+    const beat = afterRegisterBeat().toLowerCase();
+    expect(beat).toContain("singleton");
+    const skipsWhenExists =
+      beat.includes("skip this beat") || beat.includes("skip the beat") ||
+      beat.includes("never offer a second") || beat.includes("second one") ||
+      beat.includes("second shopper") ||
+      (beat.includes("already") && beat.includes("shopper") && beat.includes("skip"));
+    expect(skipsWhenExists).toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — per-search pitch beat (add-only, disavowal discipline)", () => {
+  it("describes a POST-RESULT trailing line on a completed bare sil_search, recurring by design", () => {
+    const beat = perSearchBeat();
+    const lower = beat.toLowerCase();
+    // Post-result (the anchor) + a single trailing line — not a pre-search prompt.
+    expect(/post-?result/i.test(beat)).toBe(true);
+    expect(lower).toContain("sil_search");
+    const trailingLine =
+      lower.includes("trailing line") || lower.includes("trailing tip") ||
+      lower.includes("one short") || lower.includes("a short trailing") ||
+      lower.includes("short trailing line");
+    expect(trailingLine).toBe(true);
+    // Recurring by design — the recurrence IS the feature (product-owner non-goal).
+    const recurs =
+      /recur/i.test(beat) || /every\b[\s\S]{0,30}\bsearch/i.test(beat) ||
+      /each\b[\s\S]{0,30}\bsearch/i.test(beat);
+    expect(recurs).toBe(true);
+  });
+
+  it("names ≥1 of the three levers a bare search leaves on the table (depth / memory / the why)", () => {
+    const lower = perSearchBeat().toLowerCase();
+    const levers = [
+      /niche depth|in depth|how (?:the|this) niche/i, // niche depth
+      /re-?ask|sizes and hard limits|on file|\bmemory\b/i, // memory / facts-reuse
+      /the why|explains?\b[\s\S]{0,40}\bwhy\b|\bwhy\b/i, // the why
+    ].filter((re) => re.test(lower));
+    // AC bar is ≥1 (the instruction enumerates all three for rotation).
+    expect(levers.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps Lane 1 UNTOUCHED — best-first, never a re-rank, never a pre-search question (negation-aware)", () => {
+    const lower = perSearchBeat().toLowerCase();
+    // Positive: results presented best-first / unchanged (no re-order).
+    const bestFirst =
+      /best-?first/i.test(lower) || lower.includes("unchanged") ||
+      lower.includes("exactly as they came back") || lower.includes("as they came back");
+    expect(bestFirst).toBe(true);
+    // Negation-aware: an AFFIRMATIVE re-rank or pre-search question is the Lane-1
+    // violation; the corrected beat NAMES both only to disavow them ("never a
+    // re-rank", "never a pre-search question"), so flag a match ONLY when it is NOT
+    // negated within ~28 chars. NEVER a bare not.toContain("re-rank") (that would
+    // false-RED the disavowal). Matcher stays `.toEqual([])`.
+    expect(affirmativeOffenders(lower, LANE1_VIOLATION_RE)).toEqual([]);
+  });
+
+  it("the recurrence IS the feature — no fire-once / seen-it / cooldown FREQUENCY gate (positive + negation-aware regression guard)", () => {
+    const lower = perSearchBeat().toLowerCase();
+    // Positive: recurrence is explicit; the ONLY gate is the STATE gate.
+    const recurrenceIsThePoint =
+      lower.includes("recurrence is the point") || lower.includes("the recurrence is") ||
+      /recurs on\b[\s\S]{0,24}every/i.test(lower) || lower.includes("no fire-once");
+    expect(recurrenceIsThePoint).toBe(true);
+    // Negation-aware regression guard (product-owner): a future dev reading the
+    // repetition as noise and adding a fire-once / seen-it / cooldown suppression is
+    // a REGRESSION, not a cleanup. The corrected beat DISAVOWS these by name, so a
+    // bare forbid would false-RED it — flag only the AFFIRMATIVE (non-disavowed)
+    // frequency gate. Matcher stays `.toEqual([])`.
+    expect(affirmativeOffenders(lower, FREQUENCY_GATE_RE)).toEqual([]);
+  });
+
+  it("STATE-gated symmetry — the pitch drops for a shopper-owner (profile-less only), the one legitimate suppression", () => {
+    const lower = perSearchBeat().toLowerCase();
+    // Profile-less session only …
+    const profileLess =
+      lower.includes("profile-less") || lower.includes("profileless") ||
+      (lower.includes("no shopper") && lower.includes("session"));
+    expect(profileLess).toBe(true);
+    // … and drops entirely once a shopper exists (Lane 2's session — offering a
+    // shopper they own is wrong). This is the STATE gate — never a frequency gate.
+    const dropsForOwner =
+      lower.includes("a shopper already exists") || lower.includes("once a shopper exists") ||
+      lower.includes("drop the line") || lower.includes("drop this line") ||
+      (lower.includes("shopper") && lower.includes("drop"));
+    expect(dropsForOwner).toBe(true);
+  });
+
+  it("fires ONLY on a completed ok search — a non-ok status is skipped and follows its own recovery", () => {
+    const lower = perSearchBeat().toLowerCase();
+    // Gated on status ok …
+    const okGate =
+      /status\b[\s\S]{0,6}\bok\b/i.test(lower) ||
+      /completes?\b[\s\S]{0,12}\bok\b/i.test(lower) ||
+      /complete\b[\s\S]{0,8}ok\b/i.test(lower);
+    expect(okGate).toBe(true);
+    // … a non-ok status skips the tip + follows its own recovery (never improvises).
+    const nonOkSkips =
+      (/non-?ok/i.test(lower) || lower.includes("did not complete")) &&
+      (lower.includes("recovery") || lower.includes("no tip") ||
+        lower.includes("add no tip") || lower.includes("skip"));
+    expect(nonOkSkips).toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the two new beats introduce no lean-router-forbidden token (add-only localization)", () => {
+  it("neither new beat names a forbidden status/engine token, and both stay clean under the whole-word expert guard", () => {
+    // Belt-and-braces localization of the highest-likelihood build-breaker (SA
+    // risk): the existing whole-body guards (L448-462) already forbid these tokens
+    // across the SKILL body, but scoping the check to each NEW beat points a
+    // debugging dev at the exact offending beat rather than "somewhere in SKILL.md".
+    const after = afterRegisterBeat();
+    const perSearch = perSearchBeat();
+    const FORBIDDEN = [
+      "awaiting_browser", "not_registered", "must_reregister", "retryable",
+      "sil_profile_materialize", "openclaw agents add", "openclaw config validate",
+    ];
+    const offenders: string[] = [];
+    for (const [label, region] of [
+      ["after-register", after],
+      ["per-search", perSearch],
+    ] as const) {
+      for (const tok of FORBIDDEN) {
+        if (region.includes(tok)) offenders.push(`${label}: ${tok}`);
+      }
+      for (const ctx of perNicheExpertOffenders(region)) offenders.push(`${label}: …${ctx}…`);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+/* ===========================================================================
  * ON-QUERY SDS SPINE — card: enforce-the-on-query-sds-spine-in-the-shop-loop.
  *
  * The founder is promoting the on-EVERY-query SDS sequence in shop_loop.md into a
