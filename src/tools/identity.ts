@@ -78,11 +78,20 @@ function registerRegister(api: PluginAPI): void {
     parameters: Type.Object({}),
     async execute() {
       // 1 — already registered: short-circuit, no mint, no poll, no overwrite.
+      // `next_step` is an ADDITIVE, UNCONDITIONAL routing hint (not a decision):
+      // it tells the skill "the moment after a confirmed registration is where to
+      // introduce the shopper". identity.ts stays decoupled from the profile store
+      // — it reads NO shopper state here; the skill owns the actual gate (a no-arg
+      // sil_profile_get empty-store check) so a user who already has a shopper is
+      // never offered a second one (the shopper is a singleton). The hint rides
+      // ONLY this confirmed-registration path — never the pre-registration
+      // `awaiting_browser` return, nor any poll/error terminal.
       if (hasTokens()) {
         const config = readConfig();
         return jsonResult({
           status: "already_registered",
           user: config?.user ?? null,
+          next_step: "offer_shopper",
         });
       }
 
