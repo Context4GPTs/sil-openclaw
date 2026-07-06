@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-07-06
+
 ### Added
 
 - **One-tap shopper creation via a single operator bin.** A new bin
