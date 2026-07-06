@@ -442,6 +442,41 @@ describe("sil_register — system-browser steer (bounce-webview-auth-links-to-th
   });
 });
 
+describe("sil_register — the shopper offer is strictly POST-registration (add-only negative)", () => {
+  // card: post-register-shopper-nudge-and-per-search-pitch.
+  // The after-register offer breadcrumb `next_step: "offer_shopper"` rides ONLY the
+  // CONFIRMED-registration path (`already_registered`). The fresh, pre-registration
+  // `awaiting_browser` return — the user has NOT registered yet — must carry NO
+  // `next_step`: offering the shopper before registration completes is the premature
+  // offer the SA rejected (identity.ts adds the field only to the already_registered
+  // jsonResult, never the awaiting return). This is the symmetric negative to
+  // identity.test.ts's already_registered positive — the field is REAL in the
+  // codebase, so asserting its absence on the awaiting path is a live regression
+  // guard (a dev planting next_step on the awaiting return turns it RED), not vacuous.
+  let api: MockPluginAPI;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => new Promise<Response>(() => {}),
+    );
+    api = createMockPluginApi();
+    registerIdentityTools(api);
+  });
+
+  it("the fresh awaiting_browser payload carries NO next_step / offer_shopper", async () => {
+    const payload = await freshRegister(api);
+    // Anchor on the pre-registration path so the negative is not vacuously true on
+    // some other outcome.
+    expect(payload["status"]).toBe("awaiting_browser");
+    expect(payload["next_step"]).toBeUndefined();
+    // Strong form: the offer noun appears NOWHERE in the pre-registration result
+    // (not in message/instructions prose either) — the offer is strictly deferred
+    // until registration is confirmed.
+    expect(JSON.stringify(payload)).not.toContain("offer_shopper");
+  });
+});
+
 describe("sil_register — A: the atomic-link presentation never leaks the PKCE verifier", () => {
   let api: MockPluginAPI;
   let sentVerifier: string | null;
