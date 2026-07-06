@@ -294,6 +294,15 @@ function teardown({ configPath, snapshot, mode, bakPreexisted, workspace, worksp
 
   // 3. Remove the singleton shopper dir ONLY if it did not pre-exist (the singleton
   //    pre-flight guarantees it was ours this run).
+  // KNOWN GAP (narrow): this keys on WHOLE-DIR pre-existence, not on the leaf we
+  //    wrote — it DIVERGES from `materializeProfile`'s `!leafPreexisted` discipline
+  //    (profile-store.ts). If `shopper/` pre-existed but EMPTY (no profile.json), the
+  //    singleton read passes ("no shopper") yet `shopperDirPreexisted` is true, so a
+  //    post-materialize failure leaves THIS run's profile.json/user_spec.md un-removed
+  //    and does NOT surface as residue → `teardown_failed`. Extremely narrow (normal
+  //    operation never leaves an empty `shopper/`; a materialize-STEP failure is
+  //    already covered by materializeProfile's own leaf teardown). To close it, key
+  //    this removal on "we wrote profile.json this run", mirroring `!leafPreexisted`.
   if (!shopperDirPreexisted) {
     const shopperDir = getShopperArtefactDir();
     try {
