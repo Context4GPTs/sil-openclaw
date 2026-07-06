@@ -22,6 +22,25 @@ These three principles hold on every path, before any reference is loaded:
 
 Confirm the `sil_*` tools are exposed. If they are missing from the available tool list, the host runtime is filtering them out because sil is not admitted at the host allow surfaces — run the shipped admission helper `sil-openclaw-allowlist` (it additively admits sil at `plugins.allow` + `tools.alsoAllow`, leaving any other trusted plugin untouched), then reopen the session so the tools load. Most flows need an identity: if the user has not registered this session, the catalog tools return an unregistered status whose `recovery` points at `sil_register` (the [catalog tools reference](references/catalog_tools_reference.md) has the full taxonomy) — so calling a catalog tool first lets that outcome route, or run `sil_register` up front when the user's intent clearly requires it.
 
+## After register — offer to set up the shopper (once, only when there's none)
+
+`sil_register` returns `already_registered` with `next_step: "offer_shopper"` on a confirmed registration (a fresh sign-in this session, or a returning session that was already signed in). That hint is a routing breadcrumb, not a decision — act on it by first running a no-arg `sil_profile_get` to read shopper state, then branch:
+
+- **Empty store (no shopper yet):** introduce the shopper in one short beat and offer to set it up. Name the value in its own terms — it shops each niche in depth, reuses the sizes and hard limits it already knows so nothing is re-asked, and explains why each pick fits — a standing buyer's advisor, not a one-off search. Only on a yes, load [`references/brainstorm_interview.md`](references/brainstorm_interview.md) (a two-touchpoint onboarding, never a form). Take no for an answer: bare `sil_search` stays a first-class path, so don't re-offer in the same turn.
+- **A shopper already exists:** skip this beat entirely. The shopper is a singleton — never offer a second one.
+
+## After a bare search — name what a shopper would add (recurring, by design)
+
+When a plain `sil_search` completes with status `ok` in a profile-less session, present the results best-first exactly as they came back, then append **one** short trailing line — a post-result tip with a soft CTA — naming what a shopper would add on top. It is never a pre-search question and never a re-rank: bare search stays a legitimate quick lookup, and these are the same results a shopper would start from.
+
+Name one or two of the three levers a bare search leaves on the table, and rotate which you lead with so the recurring line stays fresh:
+
+- **niche depth** — a shopper weighs these against how the niche actually buys, instead of just listing them;
+- **memory** — it keeps your sizes and hard limits on file, so no search re-asks them;
+- **the why** — it explains which pick fits you and why, instead of a flat ranked list.
+
+This line recurs on **every** completed profile-less search: there is no fire-once or seen-it gate, and no cooldown — the recurrence is the point, and brevity plus lever rotation are all that keep it from nagging. Exactly two things suppress it, and only these two: a shopper already exists (that session is the shopper's — drop the line), or the search did not complete `ok` (a non-`ok` status carries its own recovery, so follow that and add no tip).
+
 ## Routing — match intent to a tool, load its reference on demand
 
 | Intent | Tool | Reference to load |
