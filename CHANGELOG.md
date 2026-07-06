@@ -10,6 +10,61 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **One-tap shopper creation via a single operator bin.** A new bin
+  `sil-openclaw-create-shopper` (`scripts/create-shopper.mjs`, wired through
+  `package.json#bin`) runs the **whole** shopper-creation choreography atomically
+  over one stdin JSON payload — reusing `materializeProfile` and the
+  `sil-openclaw-allowlist` bin — instead of the skill hand-driving the host CLI
+  step by step. It reports a four-outcome taxonomy (`created` / `invalid_request`
+  / `collision` / `persistence_failed`) plus a louder `teardown_failed` emitted
+  only when snapshot-restore itself cannot revert; a whole-file snapshot-restore
+  teardown returns the host to its **exact** pre-run state on any failure (no
+  half-created shopper, no orphaned config/workspace). The skill references were
+  rewritten around the one command: `agent_creation_engine.md` now invokes the
+  single bin, and `brainstorm_interview.md` becomes a session-seeded, **local +
+  offline** pre-fill with the explicit endorsement gate intact — nothing is
+  created until the user endorses the assembled draft. No new plugin tool; the
+  8-tool manifest is unchanged. (#45)
+- **Post-register shopper nudge + per-search pitch.** `sil_register`'s
+  `already_registered` payload now carries an additive, unconditional
+  `next_step: "offer_shopper"` routing hint — `identity.ts` reads **no**
+  profile-store state (it stays decoupled from the store); the skill owns the
+  actual gate. The `sil-shopping` skill gains two always-on beats: an
+  after-register offer to create the shopper, gated on a no-arg `sil_profile_get`
+  empty-store check (a user who already has the singleton shopper is never offered
+  a second one), and a recurring post-result per-search pitch that introduces the
+  shopper after a bare search. Lane 1 (bare `sil_search`) stays untouched and the
+  pitch carries no frequency gate by design. (#44)
+
+### Changed
+
+- **On-query SDS spine hardened into five non-skippable beats.** The shop loop
+  (`sil-shopping/references/shop_loop.md`) is re-ordered in place into a hard,
+  ordered spine — **domain-exists → learn-on-miss → elicit-missing gate → persist
+  → search** — splitting the old Step 3 into a first-class **elicitation gate
+  (Beat 3) that runs ahead of search** and a distinct **persist beat (Beat 4)**,
+  so the shopper never searches before it has decomposed intent and captured what
+  it learned. `SKILL.md` gains one non-skippable domain-exists reinforcement line,
+  scoped "as the shopper" (Lane 1 stays bare). The first-`buy` and
+  after-recommendation windows remain downstream of the Beat-5 web re-fetch.
+  Prose-only: no tool change, `contracts.tools` byte-unchanged. (#46)
+
+### Fixed
+
+- **The version-bump gate is now immune to a stale `dist/`.** The preversion test
+  path that reads the registered tool set is now **source-authoritative** — an
+  unconditional `await import("../index.js")` with the dist-preference and
+  non-behavioural breadcrumb removed — so an out-of-date compiled artifact can no
+  longer mask a source regression (the 0.3.6 `sil_profile_list` phantom-mismatch
+  class). A new `compiled-artifact-load.integration.test.ts` plants a poisoned
+  9-tool compiled entry under a hermetic `outDir` and proves the fresh-build
+  harness wipes it and loads a source-faithful dist (registered set ==
+  runtime-read `contracts.tools`, no `sil_profile_list`, marker gone). Test-only:
+  no tool added/removed, `contracts.tools` / `manifest-contract` / `package.json`
+  / `scripts/release.mjs` byte-untouched. (#43)
+
 ## [0.3.7] - 2026-06-29
 
 ### Fixed
