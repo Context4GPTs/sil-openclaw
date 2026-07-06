@@ -17,9 +17,13 @@
  * and cannot be resolved outside a host. That is the closest a no-Docker
  * env gets to "the host loaded it without error."
  *
- * If a built dist/index.js exists it is preferred (proves the COMPILED
- * artifact loads); otherwise the TS source entry is used. Either way the
- * captured register() is driven against a real in-memory mock api.
+ * This file imports the TS source entry (`../index.js`) unconditionally,
+ * so every register-path assertion exercises CURRENT source — never a
+ * stale `dist/` that happens to sit on the checkout. The proof that the
+ * COMPILED `dist/index.js` loads and registers lives in
+ * `compiled-artifact-load.integration.test.ts`, which builds a fresh dist
+ * in its own `beforeAll`. Here the captured register() is driven against a
+ * real in-memory mock api.
  *
  * Contract this file pins for the implementation (expert-developer):
  *   the default export of the entry is produced by definePluginEntry,
@@ -31,23 +35,18 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vite
 import {
   existsSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import type { PluginAPI } from "openclaw/plugin-sdk";
 import { getDataDir } from "../lib/credentials.js";
 import { createMockPluginApi } from "./helpers/mock-plugin-api.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = join(HERE, "..", "..");
-const DIST_ENTRY = join(REPO_ROOT, "dist", "index.js");
-
 let capturedRegisterFn: ((api: PluginAPI) => void) | null = null;
-let loadedFrom: "dist" | "src" = "src";
 
 // Stub ONLY the ambient SDK entry shim — everything else (the entry
 // module, the tool group, config, tool-result) runs for real.
@@ -59,15 +58,12 @@ vi.mock("openclaw/plugin-sdk/plugin-entry", () => ({
 }));
 
 beforeAll(async () => {
-  // Prefer the built artifact if it exists; the ambient SDK import in it
-  // is satisfied by the vi.mock above. Fall back to the TS source entry.
-  if (existsSync(DIST_ENTRY)) {
-    loadedFrom = "dist";
-    await import(/* @vite-ignore */ DIST_ENTRY);
-  } else {
-    loadedFrom = "src";
-    await import("../index.js");
-  }
+  // Import the CURRENT source entry — unconditionally. The ambient SDK
+  // import inside it is satisfied by the vi.mock above. This file never
+  // reads `dist/`, so a stale/mismatched build on the checkout can neither
+  // inject a phantom tool nor mask a source/manifest regression here. The
+  // compiled-artifact proof (fresh-built dist) lives in its own file.
+  await import("../index.js");
 });
 
 // File-scoped hermetic data dir. Once register() creates the data dir
@@ -115,12 +111,6 @@ describe("plugin load (no-Docker downgrade of the e2e host-load criterion)", () 
       .mocked(api.logger.info)
       .mock.calls.filter(([marker]) => marker === "sil_plugin_loaded");
     expect(markerCalls).toHaveLength(1);
-  });
-
-  it("records which artifact was loaded (dist preferred, src fallback)", () => {
-    // Not an assertion on behavior — a visible breadcrumb so the test
-    // log says whether the COMPILED entry or the source was exercised.
-    expect(["dist", "src"]).toContain(loadedFrom);
   });
 });
 
@@ -296,5 +286,48 @@ describe("plugin load — an uncreatable data dir is a LOUD, fail-closed termina
     // a dir, and the (impossible) data dir does not exist.
     expect(statSync(blockerFile).isFile()).toBe(true);
     expect(existsSync(unwritableDataDir)).toBe(false);
+  });
+});
+
+describe("plugin load — the register path is SOURCE-authoritative, immune to a stale on-disk dist (AC3)", () => {
+  // The masked-regression instance the card exists to kill. PRE-FIX this file
+  // PREFERRED a prebuilt dist/index.js (`existsSync(DIST_ENTRY) ? import(dist)
+  // : import(src)`), so an old-correct `dist/` could mask a genuine
+  // source/manifest regression — the `preversion` gate would PASS while source
+  // was broken (the worse of the two failure modes). The fix imports
+  // `../index.js` UNCONDITIONALLY (see beforeAll), so the register path
+  // exercised across THIS whole file is current source; the set it registers
+  // must equal openclaw.plugin.json#contracts.tools regardless of whatever
+  // `dist/` sits on the checkout.
+  //
+  // Set-equality is keyed to contracts.tools read AT RUNTIME (a manifest read,
+  // not a hardcoded literal) so this pin never becomes a 7th tool-set fan-out
+  // mirror — it self-updates with the manifest. RED-capability: with the
+  // pre-fix dist-preference + a mismatched `dist/index.js` planted,
+  // capturedRegisterFn would be sourced from that dist and this set would
+  // diverge from the manifest; the sibling compiled-artifact-load proof
+  // demonstrates the live plant→wipe flip in-process.
+  function manifestToolNames(): string[] {
+    const manifest = JSON.parse(
+      readFileSync(new URL("../../openclaw.plugin.json", import.meta.url), "utf8"),
+    ) as { contracts?: { tools?: unknown } };
+    const tools = manifest.contracts?.tools;
+    if (!Array.isArray(tools)) {
+      throw new Error("openclaw.plugin.json#contracts.tools is not an array");
+    }
+    return tools as string[];
+  }
+
+  it("registers EXACTLY the manifest tool set from CURRENT source (no on-disk dist masks it)", () => {
+    const api = createMockPluginApi();
+    capturedRegisterFn!(api);
+    expect([...api._tools.keys()].sort()).toEqual([...manifestToolNames()].sort());
+  });
+
+  it("does NOT resurrect the since-deleted sil_profile_list (an old-correct dist can no longer mask a source regression)", () => {
+    const api = createMockPluginApi();
+    capturedRegisterFn!(api);
+    expect([...api._tools.keys()]).not.toContain("sil_profile_list");
+    expect(api._tools.size).toBe(manifestToolNames().length);
   });
 });
