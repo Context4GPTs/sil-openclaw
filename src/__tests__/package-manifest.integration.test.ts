@@ -43,6 +43,7 @@ interface PackageJson {
   type?: string;
   main?: string;
   files?: string[];
+  bin?: Record<string, string>;
   scripts?: Record<string, string>;
   openclaw?: {
     extensions?: string[];
@@ -302,5 +303,43 @@ describe("skill basename is sil-unique — no stale `./skill` literal, ships und
       ...skillEntries.filter((e) => e === "skill" || e === "./skill"),
     ];
     expect(stale).toEqual([]);
+  });
+});
+
+describe("package.json#bin — the shipped operator bins (exact set, add-only)", () => {
+  // Card: one-tap-shopper-create-via-a-single-wrapper-bin. The create-shopper bin
+  // ships as a `package.json#bin` sibling of `sil-openclaw-allowlist` — NOT a plugin
+  // tool (contracts.tools is unchanged; the six exact-tool-set/count mirrors are NOT
+  // triggered). This guard is the EXACT-SET drift guard on the bin surface: it
+  // set-equals the two operator bins, so a forgotten new bin OR a stray extra one
+  // FAILS. It is add-only vs today's single-bin set — asserted with `toEqual`, never
+  // loosened to a `toContain`/subset (which would silently stop catching drift).
+  const pkg = readJson<PackageJson>("package.json");
+
+  // The EXACT map the shipped package must declare. Add a bin ⇒ add it HERE too
+  // (add-only); this is the contract, not a lower bound.
+  const EXPECTED_BIN: Record<string, string> = {
+    "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs",
+    "sil-openclaw-create-shopper": "./scripts/create-shopper.mjs",
+  };
+
+  it("declares EXACTLY the two operator bins — never a subset, never a stray extra", () => {
+    expect(pkg.bin).toEqual(EXPECTED_BIN);
+  });
+
+  it("every bin target is an existing scripts/*.mjs file on disk", () => {
+    for (const target of Object.values(EXPECTED_BIN)) {
+      expect(target).toMatch(/^\.\/scripts\/[a-z][a-z0-9-]*\.mjs$/);
+      expect(existsSync(join(REPO_ROOT, target))).toBe(true);
+    }
+  });
+
+  it("`scripts` is listed in #files so the bins ship in the tarball", () => {
+    expect(pkg.files).toContain("scripts");
+  });
+
+  it("scripts/create-shopper.mjs is a node bin (starts with the `#!/usr/bin/env node` shebang, mirroring the sibling bin)", () => {
+    const src = readText("scripts/create-shopper.mjs");
+    expect(src.startsWith("#!/usr/bin/env node")).toBe(true);
   });
 });
