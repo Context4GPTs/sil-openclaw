@@ -764,6 +764,31 @@ describe("persistence_failed — snapshot-restore teardown leaves the host byte-
     expect(existsSync(spec.workspace)).toBe(false);
   });
 
+  it("a failed `config set` (skill-attach, step 8) ⇒ persistence_failed; teardown reverts; no orphans", () => {
+    // Step 8 (attach the sil skill via `openclaw config set …`) is the one enumerated
+    // fault-injection point the round-1 review flagged as never exercised. It fails
+    // AFTER agents-add + SOUL.md + materialize wrote — so the teardown path here has
+    // real accumulated state to unwind (host agent entry + shopper dir + workspace),
+    // proving the snapshot-restore reverts every earlier mutation, not just the config.
+    writeConfig(freshConfig());
+    const preConfig = readFileSync(configPath, "utf8");
+    const spec = validSpec();
+
+    const r = runBin({ spec, fail: ["config-set"] });
+
+    expect(r.status).not.toBe(0);
+    expect(parseMarker(r.stderr)["status"]).toBe("persistence_failed");
+    expect(r.stdout.includes("sil_shopper_created")).toBe(false);
+    // The skill-attach did run (writes had begun) — proving this exercises the
+    // step-8 teardown branch, not a pre-flight refusal.
+    expect(shimLog()).toContain("config set");
+    // Whole-file snapshot-restore returned the host to its EXACT pre-run bytes,
+    // and removed the shopper dir + workspace this run created.
+    expect(readFileSync(configPath, "utf8")).toBe(preConfig);
+    expect(existsSync(shopperDir())).toBe(false);
+    expect(existsSync(spec.workspace)).toBe(false);
+  });
+
   it("a failed allow-list admission (non-zero) ⇒ persistence_failed — NEVER a green created over filtered tools", () => {
     // Isolate the step-9 allowlist failure WITHOUT touching `config validate`: a
     // non-array `plugins.allow` makes the merge core throw AllowlistShapeError, so
@@ -808,6 +833,87 @@ describe("persistence_failed — snapshot-restore teardown leaves the host byte-
       expect(readFileSync(configPath, "utf8")).toBe(preConfig);
       expect(existsSync(shopperDir())).toBe(false);
       expect(existsSync(spec.workspace)).toBe(false);
+    },
+  );
+});
+
+// ===========================================================================
+// teardown_failed — the LOUDER honesty-rail outcome. When snapshot-restore itself
+// cannot revert (EBUSY/permission/disk-full analog), the bin MUST surface the
+// residue and NEVER green-wash it into `persistence_failed` — the trust hinge the
+// discovery council spent the most ink on ("a teardown that cannot fully revert is
+// a distinct louder outcome, never a green-washed persistence_failed").
+// ===========================================================================
+describe("teardown_failed — a non-revertable teardown surfaces residue, never a green-washed persistence_failed", () => {
+  it.skipIf(AS_ROOT)(
+    "an unwritable config dir fails BOTH the trust merge AND its rollback ⇒ teardown_failed(residue), no green-wash, no leak",
+    () => {
+      // Realistic fault: the host config directory is read-only. Every in-place
+      // config overwrite (agents add / config set) still works, and the workspace +
+      // shopper artefacts land in a SEPARATE writable dir (under $SIL_DATA_DIR) — so
+      // the whole choreography runs and mutates openclaw.json. Then step 9 (the
+      // shelled `sil-openclaw-allowlist` bin) fails: its `.bak` copy needs a NEW file
+      // in the read-only dir → EACCES. Teardown then tries to snapshot-restore
+      // openclaw.json — its atomic tmp write ALSO needs a NEW file in the read-only
+      // dir → EACCES → the config mutation is un-revertable → residue. The workspace
+      // + shopper-dir removals (writable dir) DO succeed, so the residue is exactly
+      // the one thing teardown could not undo: the config file.
+      writeConfig(freshConfig());
+      const preRunConfig = readFileSync(configPath, "utf8");
+      // Keep the workspace + artefacts OUT of the config dir so agents-add/SOUL.md/
+      // materialize all succeed — only the config dir is unwritable.
+      const spec = validSpec({ workspace: join(dataDir, "ws-teardown-fail") });
+      // Pre-create the shim log so the read-only dir doesn't suppress it (an existing
+      // file stays appendable); lets us prove writes began.
+      writeFileSync(logPath, "");
+
+      // Make the config directory read-only AFTER all setup writes are in place.
+      chmodSync(workdir, 0o500);
+      const r = runBin({ spec });
+      // Restore perms so afterEach can clean up regardless of assertion outcome.
+      chmodSync(workdir, 0o700);
+
+      expect(r.status).not.toBe(0);
+      const m = parseMarker(r.stderr);
+      expect(m["event"]).toBe("sil_shopper_create_failed");
+      // The LOUDER fifth outcome — NOT the four-value collapse.
+      expect(m["status"]).toBe("teardown_failed");
+      expect(m["status"]).not.toBe("persistence_failed");
+      expect(m["status"]).not.toBe("created");
+      // Never green-washed: no success marker anywhere.
+      expect(r.stdout.includes("sil_shopper_created")).toBe(false);
+
+      // The residue names WHAT could not be reverted — a populated {path, cause} list.
+      expect(Array.isArray(m["residue"])).toBe(true);
+      expect((m["residue"] as unknown[]).length).toBeGreaterThan(0);
+      for (const entry of m["residue"] as Array<Record<string, unknown>>) {
+        expect(typeof entry["path"]).toBe("string");
+        expect((entry["path"] as string).length).toBeGreaterThan(0);
+        expect(typeof entry["cause"]).toBe("string");
+        expect((entry["cause"] as string).length).toBeGreaterThan(0);
+      }
+      // The un-revertable config file is the surfaced residue.
+      expect(
+        (m["residue"] as Array<Record<string, unknown>>).some((e) => e["path"] === configPath),
+      ).toBe(true);
+      // The residue is TRUTHFUL, not a spurious claim: the host really was left
+      // un-reverted. The failed restore means openclaw.json keeps the mid-run
+      // mutations (the agents.list entry + skill + plugin/trust from steps 5–8), so
+      // it is NOT byte-identical to its pre-run snapshot — teardown_failed reflects
+      // real un-restored state, never a green-washed "nothing left" over dirty state.
+      expect(readFileSync(configPath, "utf8")).not.toBe(preRunConfig);
+      // The louder outcome voices that the host was NOT returned to pre-run state.
+      expect(typeof m["note"]).toBe("string");
+      expect((m["note"] as string).length).toBeGreaterThan(0);
+      // Writes had begun before the fault — this is a genuine mid-choreography failure,
+      // not a pre-flight refusal.
+      expect(shimLog()).toContain("agents add");
+
+      // Even on the loudest failure path, the persona/userSpec text never leaks.
+      expect(r.stdout).not.toContain(PERSONA_SECRET);
+      expect(r.stdout).not.toContain(USERSPEC_SECRET);
+      expect(r.stderr).not.toContain(PERSONA_SECRET);
+      expect(r.stderr).not.toContain(USERSPEC_SECRET);
     },
   );
 });
