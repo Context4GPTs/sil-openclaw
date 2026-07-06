@@ -27,7 +27,8 @@
   },
   "main": "./dist/index.js",
   "bin": {
-    "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs"
+    "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs",
+    "sil-openclaw-create-shopper": "./scripts/create-shopper.mjs"
   },
   "files": [
     "dist",

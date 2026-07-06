@@ -1721,3 +1721,219 @@ describe("references/search_param_mapping.md — hard constraint → real filter
     expect(disavowsWhoami).toBe(true);
   });
 });
+
+/* ===========================================================================
+ * ONE-TAP CREATE (card: one-tap-shopper-create-via-a-single-wrapper-bin) —
+ * ADD-ONLY guards. The engine rewrite centres on the ONE shipped bin
+ * `sil-openclaw-create-shopper`; the interview session-seeds the persona +
+ * shared user_spec, still gated. Every EXISTING engine/brainstorm describe above
+ * stays UNEDITED + green (the rewrite preserves their tokens/ordering); these
+ * describes are purely additive. Prose pins honour the disavowal discipline
+ * (`docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md`): positive
+ * OR-grouped tokens for the NEW model; any negative is negation-aware, never a
+ * bare `not.toContain`; matchers stay `.toEqual([])` (never loosened).
+ * ========================================================================= */
+
+/** Negation / disavowal markers that turn a `sil_whoami` mention into a legitimate
+ * "the seed does NOT pull it" disavowal when one sits within ~28 chars before —
+ * mirrors `createTimeNicheStepOffenders`' retro-allowance lookback. `\b…\b` so a
+ * markdown-bold `**not**` (asterisks are word boundaries) still counts. */
+const WHOAMI_SEED_NEGATION =
+  /\b(?:not|never|no|without|don't|reads no|offline|local|session[- ]only)\b/;
+
+/**
+ * `sil_whoami` mentions in the (already-lowercased) interview body that are NOT
+ * preceded (within ~28 chars) by a negation/disavowal token — i.e. a real
+ * regression that pulls identity to seed, never a disavowal of it. Returns the
+ * offending contexts (empty ⇒ clean: no mention, or every mention is disavowed).
+ * Never a bare `not.toContain("sil_whoami")` — the corrected interview legitimately
+ * NAMES `sil_whoami` only to disavow it.
+ */
+function whoamiSeedPullOffenders(bodyLower: string): string[] {
+  const offenders: string[] = [];
+  const re = /sil_whoami/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(bodyLower)) !== null) {
+    const before = bodyLower.slice(Math.max(0, m.index - 28), m.index);
+    if (!WHOAMI_SEED_NEGATION.test(before)) {
+      offenders.push(
+        bodyLower
+          .slice(Math.max(0, m.index - 24), m.index + 22)
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+    }
+  }
+  return offenders;
+}
+
+describe("references/agent_creation_engine.md — the ONE-command bin engine (card: one-tap create-shopper)", () => {
+  it("names the ONE shipped command `sil-openclaw-create-shopper` and frames it as the single command run after endorsement", () => {
+    // NET-NEW: the rewrite collapses the hand-run nine-step choreography into ONE
+    // shipped bin. `sil-openclaw-create-shopper` is 0 hits pre-rewrite (RED at HEAD).
+    const body = engineBodyLower();
+    expect(body).toContain("sil-openclaw-create-shopper");
+    const framesOneCommand =
+      body.includes("one command") ||
+      body.includes("one shipped command") ||
+      body.includes("single command") ||
+      body.includes("exactly one") ||
+      body.includes("exactly **one**");
+    expect(framesOneCommand).toBe(true);
+  });
+
+  it("instructs the agent to RUN the bin fed the endorsed spec as stdin / `--spec` JSON — not hand-run the nine steps", () => {
+    const body = engineBodyLower();
+    // The bin reads the endorsed spec as one JSON object on stdin (or --spec <path>).
+    const namesInputChannel = body.includes("stdin") || body.includes("--spec");
+    expect(namesInputChannel).toBe(true);
+    // Positive: the bin is the executor — it runs the choreography FOR the agent.
+    const binRunsIt =
+      body.includes("runs the whole choreography") ||
+      body.includes("runs them for you") ||
+      body.includes("the bin runs") ||
+      (body.includes("bin") && body.includes("choreography"));
+    expect(binRunsIt).toBe(true);
+  });
+
+  it("states the bin runs the whole choreography ATOMICALLY and fail-closed", () => {
+    const body = engineBodyLower();
+    const atomic =
+      body.includes("atomically") ||
+      body.includes("atomic") ||
+      body.includes("one transaction");
+    const failClosed =
+      body.includes("fail-closed") || body.includes("fail closed") || body.includes("fails closed");
+    expect(atomic).toBe(true);
+    expect(failClosed).toBe(true);
+  });
+
+  it("states a non-zero/invalid outcome reports persistence_failed and tears down, leaving NOTHING partial", () => {
+    const body = engineBodyLower();
+    expect(body).toContain("persistence_failed");
+    const tearsDown =
+      body.includes("teardown") ||
+      body.includes("tears down") ||
+      body.includes("torn down") ||
+      body.includes("restore") ||
+      body.includes("snapshot");
+    expect(tearsDown).toBe(true);
+    const nothingPartial =
+      body.includes("nothing partial") ||
+      body.includes("no partial") ||
+      body.includes("nothing is left half") ||
+      body.includes("nothing left half") ||
+      (body.includes("nothing") && body.includes("partial"));
+    expect(nothingPartial).toBe(true);
+  });
+
+  it("frames the bin as NON-INTERACTIVE + post-endorsement — it never re-runs the interview or prompts", () => {
+    const body = engineBodyLower();
+    expect(body.includes("non-interactive") || body.includes("noninteractive")).toBe(true);
+    const postEndorsement =
+      body.includes("already-assembled") ||
+      body.includes("already-endorsed") ||
+      body.includes("already endorsed") ||
+      body.includes("after the explicit endorsement") ||
+      (body.includes("endors") && body.includes("after"));
+    expect(postEndorsement).toBe(true);
+    const noReprompt =
+      body.includes("never re-runs the interview") ||
+      body.includes("never re-run the interview") ||
+      body.includes("never prompts") ||
+      body.includes("does not prompt") ||
+      (body.includes("interview") && body.includes("never"));
+    expect(noReprompt).toBe(true);
+  });
+
+  it("the rewritten engine prose stays clean under the per-niche-expert whole-word guard", () => {
+    expect(perNicheExpertOffenders(readBody(ENGINE_PATH))).toEqual([]);
+  });
+});
+
+describe("references/brainstorm_interview.md — session-seeded pre-fill, still endorsement-gated (card: one-tap create-shopper)", () => {
+  it("PRE-SEEDS / PRE-FILLS the persona + shared user_spec from what the user already said THIS SESSION", () => {
+    // NET-NEW: the rewrite opens with a session-assembled draft rather than a cold
+    // question. Positive OR-grouped tokens — the pre-seed/this-session half is 0 hits
+    // pre-rewrite (RED at HEAD).
+    const body = brainstormBodyLower();
+    const preSeeds =
+      body.includes("pre-seed") ||
+      body.includes("pre-fill") ||
+      body.includes("preseed") ||
+      body.includes("prefill");
+    expect(preSeeds).toBe(true);
+    const fromThisSession =
+      body.includes("this session") ||
+      body.includes("already said") ||
+      body.includes("already told") ||
+      body.includes("what they already said");
+    expect(fromThisSession).toBe(true);
+    // Seeds BOTH the persona and the shared user spec.
+    expect(body).toContain("persona");
+    const namesSharedUserSpec =
+      body.includes("shared user spec") ||
+      body.includes("shared `user_spec") ||
+      (body.includes("user_spec") && body.includes("shared")) ||
+      (body.includes("user spec") && body.includes("shared"));
+    expect(namesSharedUserSpec).toBe(true);
+  });
+
+  it("opens by presenting the assembled draft (reflect-back), not a cold questionnaire", () => {
+    const body = brainstormBodyLower();
+    const reflectsDraftOpen =
+      body.includes("reflect") &&
+      (body.includes("draft") ||
+        body.includes("what you've told me") ||
+        body.includes("what they already said"));
+    expect(reflectsDraftOpen).toBe(true);
+  });
+
+  it("STILL requires an explicit endorsement before any create — the pre-fill is a proposal, never consent", () => {
+    const body = brainstormBodyLower();
+    const namesEndorse =
+      body.includes("endorse") ||
+      body.includes("explicit yes") ||
+      body.includes("go-ahead") ||
+      body.includes("go ahead");
+    expect(namesEndorse).toBe(true);
+    const proposalNotConsent =
+      body.includes("proposal, never consent") ||
+      body.includes("never consent") ||
+      body.includes("not consent") ||
+      body.includes("never an auto-commit") ||
+      body.includes("not inferred from silence") ||
+      body.includes("not from silence") ||
+      (body.includes("proposal") && body.includes("endors"));
+    expect(proposalNotConsent).toBe(true);
+    // Endorsement precedes the engine handoff (ordering) — the seed never auto-runs it.
+    const endorseIdx = body.indexOf("endorse");
+    const lastEngineHandoffIdx = body.lastIndexOf("agent_creation_engine.md");
+    expect(endorseIdx).toBeGreaterThanOrEqual(0);
+    expect(lastEngineHandoffIdx).toBeGreaterThanOrEqual(0);
+    expect(endorseIdx).toBeLessThan(lastEngineHandoffIdx);
+  });
+
+  it("the session seed is LOCAL + OFFLINE — reads no token, makes no network call", () => {
+    const body = brainstormBodyLower();
+    const localOffline =
+      (body.includes("local") && body.includes("offline")) ||
+      body.includes("session-only") ||
+      body.includes("session only");
+    expect(localOffline).toBe(true);
+    const readsNoToken =
+      body.includes("no token") ||
+      body.includes("reads no token") ||
+      body.includes("no network");
+    expect(readsNoToken).toBe(true);
+  });
+
+  it("does NOT pull identity via sil_whoami to seed (negation-aware — never a bare not.toContain)", () => {
+    // The corrected interview legitimately NAMES sil_whoami only to DISAVOW it
+    // ("does NOT pull sil_whoami", "never pull sil_whoami to seed"). A bare
+    // not.toContain("sil_whoami") would false-RED that disavowal, so flag a mention
+    // ONLY when no negation sits within ~28 chars before it. [] ⇒ clean (no
+    // affirmative pull). Mirrors createTimeNicheStepOffenders' negation-awareness.
+    expect(whoamiSeedPullOffenders(brainstormBodyLower())).toEqual([]);
+  });
+});
