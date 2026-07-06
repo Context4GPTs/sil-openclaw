@@ -2003,6 +2003,293 @@ describe("sil-shopping/SKILL.md — the two new beats introduce no lean-router-f
 });
 
 /* ===========================================================================
+ * ON-QUERY SDS SPINE — card: enforce-the-on-query-sds-spine-in-the-shop-loop.
+ *
+ * The founder is promoting the on-EVERY-query SDS sequence in shop_loop.md into a
+ * hard, non-skippable FIVE-BEAT spine, splitting today's Step 3 so ELICITATION
+ * becomes a first-class ORDERED gate AHEAD of search (the headline). SKILL.md gains
+ * ONE reinforcement line making the on-every-query domain-exists check non-skippable,
+ * scoped "as the shopper" (Lane 2). Lane 1 (profile-less bare sil_search) stays bare.
+ * Skill-prose only — no tool change; the six exact-set/count mirrors are NOT triggered.
+ *
+ * These are ADD-ONLY drift guards. Every describe ABOVE stays UNEDITED and green.
+ * Disavowal discipline (docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md):
+ * positive OR-grouped semantic tokens, negation-aware negatives, offender matchers
+ * `.toEqual([])`. No `§N` anchors.
+ *
+ * RED-capability, proven against today's (pre-re-order) files by pre-flight grep:
+ *   - shop_loop.md: the beat-3 gate anchors ("gather what's missing"/"before searching"/
+ *     "elicitation gate"/"elicit the unresolved") and the beat-4 anchors ("persist what
+ *     surfaced"/"persist the surfaced") are ALL absent today (elicitation is still folded
+ *     into Step 3), so the five-beat ordering pin and the elicit-before-search gate pin RED.
+ *   - SKILL.md: the skip-family reinforcement tokens ("non-skippable"/"before any search"/…)
+ *     are absent today (grepped to zero), so the SKILL reinforcement pin REDs. The card's
+ *     fuller OR-group ("every query"/"on every"/"first") is DELIBERATELY NOT the anchor —
+ *     those already live at L43 ("learns every query", "shops every niche") and would
+ *     false-GREEN the reinforcement (content-seam-false-green trap).
+ * The regression rails (buy-window ordering, after-recommendation ordering, Lane-1 bare)
+ * are GREEN today and stay green — they guard what the re-order must NOT break.
+ * ========================================================================= */
+
+/** First index of ANY of `tokens` in the already-lowercased `body`, or -1 if none
+ * are present. Used for OR-grouped step anchors + index-ordering pins. Because it
+ * returns -1 when a NET-NEW anchor is absent, every ordering assertion below is
+ * guarded by a `toBeGreaterThanOrEqual(0)` on the anchor FIRST — so a -1 can never
+ * false-satisfy a `toBeLessThan` (−1 < any positive index). */
+function firstIndexOfAny(body: string, tokens: readonly string[]): number {
+  const idxs = tokens.map((t) => body.indexOf(t)).filter((i) => i >= 0);
+  return idxs.length ? Math.min(...idxs) : -1;
+}
+
+// OR-group anchors for the five beats (solutions-architect handoff). b3 + b4 are the
+// NET-NEW gate/persist anchors — absent in today's Step-3-folded doc.
+const SPINE_BEAT1_ANCHORS = ["domain-exists check", "classify the query's niche"] as const;
+const SPINE_BEAT2_ANCHORS = ["on a miss", "learn the domain and how", "mint the domain on the fly"] as const;
+const SPINE_BEAT3_ANCHORS = ["gather what's missing", "before searching", "elicitation gate", "elicit the unresolved"] as const;
+const SPINE_BEAT4_ANCHORS = ["persist what surfaced", "persist the surfaced"] as const;
+// The search-EXECUTION phrase, unique to the call step. NOT a bare indexOf("sil_search")
+// — that mis-anchors on the earlier layering/map prose (architect risk). Lowercased.
+const SEARCH_EXEC_ANCHOR = "call `sil_search` with the mapped";
+const SPINE_BEAT5_ANCHORS = [SEARCH_EXEC_ANCHOR, "then search"] as const;
+
+describe("references/shop_loop.md — the on-query SDS spine reads as five ordered beats (add-only; card: enforce-the-on-query-sds-spine)", () => {
+  it("presents the five beats in strict order: domain-exists → learn-on-miss → ELICIT-gate → persist → search-execution", () => {
+    const body = shopLoopBodyLower();
+    const b1 = firstIndexOfAny(body, SPINE_BEAT1_ANCHORS);
+    const b2 = firstIndexOfAny(body, SPINE_BEAT2_ANCHORS);
+    const b3 = firstIndexOfAny(body, SPINE_BEAT3_ANCHORS);
+    const b4 = firstIndexOfAny(body, SPINE_BEAT4_ANCHORS);
+    const b5 = firstIndexOfAny(body, SPINE_BEAT5_ANCHORS);
+    // Each beat present. b3 (the promoted elicit gate) and b4 (persist-what-surfaced)
+    // are NET-NEW anchors — both absent today, so these two `>= 0` checks are the RED
+    // driver: the promotion has not been done until they appear.
+    expect(b1, "beat 1 (domain-exists / classify) anchor missing").toBeGreaterThanOrEqual(0);
+    expect(b2, "beat 2 (learn-on-miss / mint) anchor missing").toBeGreaterThanOrEqual(0);
+    expect(b3, "beat 3 (elicit gate) anchor missing — elicitation is not yet a first-class ordered step").toBeGreaterThanOrEqual(0);
+    expect(b4, "beat 4 (persist-what-surfaced) anchor missing").toBeGreaterThanOrEqual(0);
+    expect(b5, "beat 5 (search-execution) anchor missing").toBeGreaterThanOrEqual(0);
+    // Strict index ordering (each guarded by the `>= 0` checks above).
+    expect(b2, "beat 2 must follow beat 1").toBeGreaterThan(b1);
+    expect(b3, "beat 3 (elicit) must follow beat 2").toBeGreaterThan(b2);
+    expect(b4, "beat 4 (persist) must follow beat 3 (elicit)").toBeGreaterThan(b3);
+    expect(b5, "beat 5 (search) must follow beat 4 (persist)").toBeGreaterThan(b4);
+  });
+});
+
+describe("references/shop_loop.md — the elicit-missing gate is a first-class step ORDERED BEFORE search (the headline promotion; add-only)", () => {
+  it("positions the elicitation gate before the search-execution call, resolving three sources + asking only genuinely-unresolved dimensions", () => {
+    const body = shopLoopBodyLower();
+    const gate = firstIndexOfAny(body, SPINE_BEAT3_ANCHORS);
+    const searchExec = body.indexOf(SEARCH_EXEC_ANCHOR);
+    // (a) the gate is a present, named step (NET-NEW → RED today).
+    expect(gate, "the standalone elicit-before-search gate is absent (still folded into Step 3)").toBeGreaterThanOrEqual(0);
+    // the search-execution anchor is present (regression: the call step keeps its unique phrasing).
+    expect(searchExec, "search-execution anchor 'call `sil_search` with the mapped' missing").toBeGreaterThanOrEqual(0);
+    // (d) ORDERED BEFORE search — guarded by gate >= 0 above so an absent gate (-1) can't
+    // false-pass (-1 < searchExec). This is the on-query-SDS headline: elicit precedes search.
+    expect(gate, "the elicit gate must be ordered before the search-execution call").toBeLessThan(searchExec);
+
+    // Scope (b)/(c)/(e) to the gate window [gate, searchExec] so they pin the GATE, not an
+    // incidental mention (the recommend "why" also cites intent/playbook/user_spec downstream).
+    const gateWindow = body.slice(Math.max(0, gate), searchExec > gate ? searchExec : body.length);
+    // (b) resolves each dimension against the THREE sources — request/intent AND the shared
+    // user_spec AND the active playbook (the "resolve first, ask only what's left" rule).
+    const namesRequest = gateWindow.includes("request") || gateWindow.includes("intent");
+    const namesUserSpec =
+      gateWindow.includes("user_spec") || gateWindow.includes("user spec") || gateWindow.includes("shared spec");
+    const namesPlaybook =
+      gateWindow.includes("playbook") || (gateWindow.includes("active domain") && gateWindow.includes("taste"));
+    expect(
+      namesRequest && namesUserSpec && namesPlaybook,
+      "the gate must resolve each dimension against the request/intent + the shared user_spec + the active playbook",
+    ).toBe(true);
+    // (c) asks ONLY genuinely-unresolved, load-bearing dimensions (need-driven, never a battery).
+    const asksOnlyUnresolved = [
+      "ask only for what",
+      "genuinely unresolved",
+      "need-driven",
+      "only a dimension missing",
+      "only when a dimension",
+      "load-bearing",
+    ].some((t) => gateWindow.includes(t));
+    expect(asksOnlyUnresolved, "the gate must state the ask-only-genuinely-unresolved / load-bearing discipline").toBe(true);
+    // (e) the per-query decompose stays EPHEMERAL (never persisted). Pinned POSITIVELY — NOT a
+    // bare forbid of the accretive-capture prose (beat 4 legitimately still handles facts/tastes);
+    // the promotion is enforced by the ORDERING above, never by a `not.toContain`.
+    const ephemeral = ["ephemeral", "never persisted"].some((t) => gateWindow.includes(t));
+    expect(ephemeral, "the per-query intent fill must be named ephemeral / never persisted").toBe(true);
+  });
+
+  it("does NOT force an always-ask — the zero-question happy path (enough resolved ⇒ straight to search) stays legal", () => {
+    // The council's product distinction: "non-skippable" governs the shopper's REASONING,
+    // not the user's inbox. The gate RUNS every query but ASKS only when a load-bearing
+    // dimension is genuinely unresolved. This guard deliberately asserts NOTHING about a
+    // question being asked (that would wrongly force an always-ask); it only pins that the
+    // straight-to-search escape hatch is documented, so a future "always ask before search"
+    // regression is not silently blessed here.
+    const body = shopLoopBodyLower();
+    const straightToSearch =
+      body.includes("straight to") ||
+      body.includes("proceed directly") ||
+      body.includes("ask nothing") ||
+      body.includes("zero question") ||
+      body.includes("no question") ||
+      body.includes("pass straight through") ||
+      (body.includes("proceed") && body.includes("search"));
+    expect(straightToSearch, "the zero-question happy path (enough resolved ⇒ straight to search) must stay documented").toBe(true);
+  });
+});
+
+// Skip-family reinforcement anchor for SKILL.md — NET-NEW (absent today, grepped to zero),
+// so it is the RED driver. The card's fuller OR-group is not used as the anchor because
+// "every query"/"on every"/"first" already live at L43 and would false-GREEN.
+const SKILL_SKIP_REINFORCE_ANCHORS = [
+  "non-skippable",
+  "non skippable",
+  "cannot be skipped",
+  "never skip",
+  "do not skip",
+  "before any search",
+] as const;
+const SKILL_DOMAIN_CHECK_TOKENS = [
+  "domain-exists",
+  "domain exists",
+  "domain-check",
+  "domain check",
+  "classify",
+  "reuse a learned domain",
+  "reuses a learned domain",
+  "reuse or mint",
+  "which domain",
+] as const;
+// The lean-router-forbidden tokens the reinforcement line must NOT introduce (mirrors the
+// pre-existing lean-router guards at :448-462 / :247-254; asserted here scoped to the new line).
+const LEAN_ROUTER_FORBIDDEN = [
+  "openclaw agents add",
+  "openclaw config validate",
+  "sil_profile_materialize",
+  "awaiting_browser",
+  "not_registered",
+  "must_reregister",
+  "retryable",
+  "sil_profile_list",
+] as const;
+
+describe("sil-shopping/SKILL.md — one reinforcement line makes the on-every-query domain-exists check non-skippable, scoped 'as the shopper' (add-only)", () => {
+  it("adds a NON-SKIPPABLE domain-exists reinforcement in the shopper (Lane 2) routing, clean of lean-router-forbidden tokens", () => {
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
+    const idx = firstIndexOfAny(body, SKILL_SKIP_REINFORCE_ANCHORS);
+    // NET-NEW anchor → RED today; GREEN once the reinforcement line lands.
+    expect(idx, "SKILL.md must add a non-skippable / before-any-search domain-exists reinforcement").toBeGreaterThanOrEqual(0);
+    // The reinforcement is ABOUT the domain-exists / classify / reuse-or-mint check.
+    const win = body.slice(Math.max(0, idx - 450), idx + 450);
+    const namesDomainCheck = SKILL_DOMAIN_CHECK_TOKENS.some((t) => win.includes(t));
+    expect(namesDomainCheck, "the reinforcement must be about the domain-exists / classify / reuse-or-mint check").toBe(true);
+    // Scoped to Lane 2 — 'as the shopper' near the reinforcement (never the general router).
+    const scopedShopper = body.slice(Math.max(0, idx - 700), idx + 700).includes("as the shopper");
+    expect(scopedShopper, "the reinforcement must be scoped 'as the shopper' (Lane 2), not the general router").toBe(true);
+    // Belt: the reinforcement window introduces NONE of the lean-router-forbidden tokens.
+    const bledForbidden = LEAN_ROUTER_FORBIDDEN.filter((t) => win.includes(t));
+    expect(bledForbidden, "the reinforcement window must stay clean of lean-router-forbidden tokens").toEqual([]);
+    // Whole-word `expert`-free around the new line (disavowal discipline).
+    expect(perNicheExpertOffenders(win)).toEqual([]);
+  });
+});
+
+// Negation-aware Lane-boundary scan (mirrors perNicheExpertOffenders' retro-allowance): a
+// pre-search-gate instruction is an OFFENDER only when NOT scoped to the shopper (Lane 2)
+// within ~200 chars before it. The card's own reinforcement IS scoped ('as the shopper'/
+// 'shopper' dense in the L43 paragraph), so it is allowed; an unscoped clarifying-question /
+// domain-check step added to the general router (breaking Lane 1) is flagged.
+const LANE1_GATE_RE =
+  /clarifying question|ask[^.]{0,40}(?:clarifying|a question|questions)|domain[- ]exists check|before any search/gi;
+const LANE2_SCOPE_TOKENS = ["as the shopper", "shopper", "loaded profile", "shop_loop"] as const;
+function laneBleedOffenders(body: string): string[] {
+  const offenders: string[] = [];
+  LANE1_GATE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = LANE1_GATE_RE.exec(body)) !== null) {
+    const before = body.slice(Math.max(0, m.index - 200), m.index);
+    const scoped = LANE2_SCOPE_TOKENS.some((t) => before.includes(t));
+    if (!scoped) {
+      offenders.push(
+        body
+          .slice(Math.max(0, m.index - 24), m.index + m[0].length + 12)
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+    }
+  }
+  return offenders;
+}
+
+describe("sil-shopping/SKILL.md — Lane 1 (profile-less bare sil_search) stays bare (add-only, negation-aware)", () => {
+  it("preserves the profile-less → 'find X' → sil_search bare boundary (unchanged)", () => {
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
+    expect(body).toContain("profile-less");
+    expect(body).toContain('"find x"');
+    const staysBare = body.includes("unchanged") || body.includes("bare") || body.includes("untouched");
+    expect(staysBare, "the profile-less Lane-1 boundary ('find X' → sil_search, unchanged) must be preserved").toBe(true);
+  });
+
+  it("keeps the Lane-1 'find X' routing ROW bare — sil_search only, no domain/elicit/gate token", () => {
+    const raw = skillBody(readFileSync(SKILL_PATH, "utf8"));
+    const rowLine = raw
+      .split(/\r?\n/)
+      .find((l) => l.trimStart().startsWith("|") && l.toLowerCase().includes('"find x"'));
+    expect(rowLine, "the 'find X' routing table row must exist").toBeTruthy();
+    const row = (rowLine ?? "").toLowerCase();
+    expect(row).toContain("sil_search");
+    // A domain check / elicitation gate / pre-search question must never enter the Lane-1 row.
+    const LANE1_ROW_FORBIDDEN = ["domain", "elicit", "clarif", "non-skippable", "before any search", " gate"];
+    const bled = LANE1_ROW_FORBIDDEN.filter((t) => row.includes(t));
+    expect(bled, "the Lane-1 'find X' row must not gain a domain-check / elicitation / pre-search-question step").toEqual([]);
+  });
+
+  it("no UNSCOPED pre-search-gate instruction bleeds into the general router (negation-aware; scoped 'as the shopper' allowed)", () => {
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
+    expect(laneBleedOffenders(body)).toEqual([]);
+  });
+});
+
+describe("references/shop_loop.md — spine re-order preserves the buy-window + after-recommendation ordering rails (add-only regression rails; MUST stay green)", () => {
+  it("keeps every 'buy' substring downstream of the sil_product_get re-fetch (first re-fetch precedes first buy — the #1 build-breaker)", () => {
+    const body = shopLoopBodyLower();
+    const firstRefetch = body.indexOf("sil_product_get");
+    const firstBuy = body.indexOf("buy");
+    expect(firstRefetch, "sil_product_get (the re-fetch step) must be present").toBeGreaterThanOrEqual(0);
+    expect(firstBuy, "'buy' substring (the re-fetch step) must be present").toBeGreaterThanOrEqual(0);
+    // The prose keeps 'buy' out of beats 1–4 and the early part of beat 5 ("shop well" /
+    // "shopping taste" / "before searching" / "before purchase"), so the FIRST sil_product_get
+    // and the FIRST 'buy' co-locate at the re-fetch step. A 'buy' planted upstream (e.g.
+    // "before buying") moves firstBuy above firstRefetch → RED — which would also flip the
+    // pre-existing first-buy-window pin (:1316). This is the reciprocal ordering assertion.
+    expect(firstRefetch, "the first sil_product_get (re-fetch) must precede the first 'buy'").toBeLessThan(firstBuy);
+  });
+
+  it("keeps the after-recommendation capture DOWNSTREAM of the search-execution call (beat-5 tail, not stolen into beat 4)", () => {
+    const body = shopLoopBodyLower();
+    const searchExec = body.indexOf(SEARCH_EXEC_ANCHOR);
+    const AFTER_REC_TRIGGERS = [
+      "after every recommendation",
+      "after a recommendation",
+      "after the recommendation",
+      "after recommending",
+      "before the turn ends",
+      "post-recommendation",
+      "after-recommendation",
+    ];
+    const afterRec = firstIndexOfAny(body, AFTER_REC_TRIGGERS);
+    expect(searchExec, "search-execution anchor missing").toBeGreaterThanOrEqual(0);
+    expect(afterRec, "after-recommendation trigger phrase missing").toBeGreaterThanOrEqual(0);
+    // The after-recommendation capture (today's Step 9) is the beat-5 tail — it must stay
+    // AFTER the search call, never pulled up into the beat-4 persist step (which would also
+    // move the trigger phrase and break the pre-existing after-recommendation window pin :1220).
+    expect(searchExec, "the search-execution call must precede the after-recommendation capture").toBeLessThan(afterRec);
+  });
+});
+
+/* ===========================================================================
  * ONE-TAP CREATE (card: one-tap-shopper-create-via-a-single-wrapper-bin) —
  * ADD-ONLY guards. The engine rewrite centres on the ONE shipped bin
  * `sil-openclaw-create-shopper`; the interview session-seeds the persona +
