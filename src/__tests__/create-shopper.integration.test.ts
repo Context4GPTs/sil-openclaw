@@ -1220,6 +1220,11 @@ describe("bind-the-channel — fail-open: an undetermined channel still creates 
     expect(m["status"]).toBe("created");
     // Fail-open: the shopper is real, but the channel could not be auto-routed.
     expect(hasManualBindWarning(m["warnings"]), "expected a manual-bind warning").toBe(true);
+    // The hint must (a) name the shopper and (b) name a concrete one-command manual
+    // step — never imply a broken create (product business rules).
+    const hint = (m["warnings"] as string[]).find((w) => /\bbind\b/i.test(w)) ?? "";
+    expect(hint).toContain(spec.agentId);
+    expect(hint).toMatch(/agents bind|\/agent/i);
     // No routing written, and the bind was never even attempted (no channel to bind).
     expect(readConfig().bindings ?? []).toEqual([]);
     expect(shimLog()).not.toContain("agents bind --agent");
