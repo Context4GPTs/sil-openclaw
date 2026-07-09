@@ -72,7 +72,7 @@ import {
   chmodSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -81,6 +81,21 @@ const REPO_ROOT = join(HERE, "..", "..");
 const SCRIPT = join(REPO_ROOT, "scripts", "create-shopper.mjs");
 
 const SIL_ID = "sil";
+/** The bundled skill's PUBLISHED name = the basename of the manifest's skills
+ * ref (`./sil-shopping` → `sil-shopping`) — the key the host attaches a skill by
+ * at `agents.list[i].skills`. Single-sourced from openclaw.plugin.json so a skill
+ * rename tracks here automatically, and so this pins the create bin against the
+ * manifest rather than a second literal. It is the skill NAME, NEVER the plugin
+ * id `sil` — attaching the plugin id is the total skill-load failure this card
+ * kills (the host looks up a skill named `sil`, finds none, `sil-shopping` never
+ * loads). */
+const SIL_SKILL = basename(
+  (
+    JSON.parse(
+      readFileSync(join(REPO_ROOT, "openclaw.plugin.json"), "utf8"),
+    ) as { skills: string[] }
+  ).skills[0]!,
+);
 /** Running as root bypasses filesystem permission bits, so the chmod-based
  * "unwritable $SIL_DATA_DIR" fault-injection cannot fire — skip it there. */
 const AS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
@@ -546,10 +561,13 @@ describe("created — one valid run wires every surface and returns the identity
     expect(c.tools.alsoAllow).toContain(SIL_ID);
     expect(c.plugins.entries[SIL_ID]).toBeTruthy();
     expect(c.plugins.entries[SIL_ID].enabled).toBe(true);
-    // Wiring — the host agent exists with the sil skill attached.
+    // Wiring — the host agent exists with the sil skill attached BY ITS PUBLISHED
+    // NAME (`sil-shopping` = manifest skills basename), the key the host resolves a
+    // skill by — NEVER the plugin id `sil` (attaching the plugin id is the bug this
+    // card kills: the host finds no skill named `sil` and `sil-shopping` never loads).
     const agent = c.agents.list.find((a: any) => a.id === spec.agentId);
     expect(agent).toBeTruthy();
-    expect(agent.skills).toEqual([SIL_ID]);
+    expect(agent.skills).toEqual([SIL_SKILL]);
   });
 
   it("carries an EMPTY warnings array when there is no web-capability gap AND the channel binds cleanly", () => {

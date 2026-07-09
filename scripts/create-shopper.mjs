@@ -75,7 +75,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
@@ -89,6 +89,9 @@ import { resolveBindChannel } from "../dist/lib/bind-channel.js";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The sibling operator bin that performs the additive, self-validating trust merge. */
 const ALLOWLIST_BIN = resolve(ROOT, "scripts", "allowlist-openclaw.mjs");
+/** The shipped plugin manifest — the single source of truth for sil's facts (id,
+ * skill name), read the same way `scripts/allowlist-openclaw.mjs` reads it. */
+const MANIFEST_PATH = resolve(ROOT, "openclaw.plugin.json");
 
 /** A shopper id path-segment shape — lower-kebab, never `main` (host-reserved). */
 const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -239,6 +242,32 @@ function readConfig(configPath) {
   } catch {
     return null;
   }
+}
+
+/** Resolve the sil SKILL's published name to attach at `agents.list[i].skills`,
+ * single-sourced from the shipped manifest (mirrors `allowlist-openclaw.mjs`'s
+ * `readSilFacts`). A skill attaches by its PUBLISHED name = the skill-dir basename
+ * = `basename(openclaw.plugin.json#skills[0])` (`sil-shopping`) — NOT the plugin id
+ * (`sil`), which is the tools/trust key. The per-agent attach is the ONLY skill
+ * surface (no global skill allow-list), so the plugin id here loads no skill at
+ * all. Fail-closed: an unreadable manifest or a blank/absent `skills[0]` returns
+ * `{ error }` so the create errors rather than attaching `[""]`. */
+function readSkillAttachName() {
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(MANIFEST_PATH, "utf8"));
+  } catch (err) {
+    return { error: "the shipped manifest " + MANIFEST_PATH + " is not readable/parseable JSON: " + errCause(err) };
+  }
+  const ref = Array.isArray(manifest.skills) ? manifest.skills[0] : undefined;
+  if (!nonBlank(ref)) {
+    return { error: "the shipped manifest " + MANIFEST_PATH + " declares no skills[0] — cannot resolve the sil skill name to attach" };
+  }
+  const name = basename(ref);
+  if (!nonBlank(name)) {
+    return { error: "the shipped manifest skills[0] " + JSON.stringify(ref) + " has no usable basename" };
+  }
+  return { name };
 }
 
 /** The agentId path-segment ids already registered in the host config's
@@ -428,6 +457,15 @@ function main() {
     });
   }
 
+  // --- 2b. Resolve the sil skill's published name to attach (shipped manifest is the
+  //     single source of truth) — a packaging defect fails closed BEFORE any host
+  //     write, so nothing is attempted. Reused at step 8. ---
+  const skill = readSkillAttachName();
+  if (skill.error) {
+    emitFailure("persistence_failed", { path: MANIFEST_PATH, cause: skill.error });
+  }
+  const skillAttachName = skill.name;
+
   // --- 3. Singleton + agentId pre-flight (nothing written; inconclusive → fail closed) ---
   // The sil artefact store is the source of truth for "a shopper exists".
   const overview = readAgentProfile();
@@ -529,8 +567,11 @@ function main() {
   if (idx < 0) {
     failAndTeardown(configPath, "the created agent " + JSON.stringify(agentId) + " is not in agents.list after `openclaw agents add`");
   }
+  // Attach the skill by its PUBLISHED name (`sil-shopping`), NOT the plugin id
+  // (`sil`) — a skill and the plugin are two distinct host keys, and the per-agent
+  // attach is the only skill surface, so the plugin id here would load no skill.
   const skillRes = runOpenclaw(
-    ["config", "set", `agents.list[${idx}].skills`, '["sil"]', "--strict-json"],
+    ["config", "set", `agents.list[${idx}].skills`, JSON.stringify([skillAttachName]), "--strict-json"],
     configPath,
   );
   if (!skillRes.ok) {
