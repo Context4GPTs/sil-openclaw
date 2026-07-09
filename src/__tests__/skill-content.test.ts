@@ -44,7 +44,7 @@
 
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
@@ -62,6 +62,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..");
 const SKILL_DIR = join(REPO_ROOT, "sil-shopping");
 const SKILL_PATH = join(SKILL_DIR, "SKILL.md");
+const MANIFEST_PATH = join(REPO_ROOT, "openclaw.plugin.json");
 
 // The progressive-disclosure reference + example files that own the detailed
 // procedures the router points at. The four RENAMED files carry the single-
@@ -251,6 +252,58 @@ describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     const description = fm.fields["description"] ?? "";
     expect(PER_NICHE_EXPERT_WORD.test(description)).toBe(false);
+  });
+});
+
+/* ===========================================================================
+ * NAME-AGREEMENT DRIFT GUARD [unit] — the skill's PUBLISHED name is ONE value
+ * across the shipped manifest + SKILL.md, and it is NEVER the plugin id.
+ *
+ * A skill attaches to an agent by its PUBLISHED name = directory basename =
+ * `openclaw.plugin.json#skills[0]` basename = SKILL.md frontmatter `name`. The
+ * create-shopper bin must write THAT name into `agents.list[i].skills` — NEVER the
+ * plugin id `openclaw.plugin.json#id` (`sil`). That plugin-id ⇄ skill-name
+ * conflation is the TOTAL skill-load failure this card kills: create-shopper.mjs
+ * attached `["sil"]`, the host found no skill named `sil`, and `sil-shopping`
+ * never entered the runtime skill list. This is a PURE STATIC check — no
+ * create-shopper flow — that fails the build if that conflation ever reappears,
+ * pinning the invariant the integration attach-value assertion in
+ * create-shopper.integration.test.ts depends on: attach-name == registered name.
+ * ========================================================================= */
+
+interface SkillManifest {
+  id: string;
+  skills: string[];
+}
+
+function readSkillManifest(): SkillManifest {
+  return JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) as SkillManifest;
+}
+
+describe("skill name-agreement drift guard — published name is one value across manifest + SKILL.md, and never the plugin id", () => {
+  it("basename(openclaw.plugin.json#skills[0]) EQUALS the SKILL.md frontmatter `name`", () => {
+    const manifest = readSkillManifest();
+    expect(Array.isArray(manifest.skills)).toBe(true);
+    expect(manifest.skills.length).toBeGreaterThan(0);
+
+    const manifestSkillName = basename(manifest.skills[0]!);
+    const frontmatterName = parseFrontmatter(readFileSync(SKILL_PATH, "utf8")).fields[
+      "name"
+    ];
+
+    expect(manifestSkillName).toBe(frontmatterName);
+  });
+
+  it("the published skill name is NOT the plugin id — the plugin-id/skill-name conflation this card kills", () => {
+    const manifest = readSkillManifest();
+    const manifestSkillName = basename(manifest.skills[0]!);
+
+    // The anti-conflation invariant: the skill-attach key (published name) and the
+    // trust key (plugin id) are two DISTINCT host surfaces and must never collapse
+    // onto one value. `id` is anchored to `sil` (the named plugin id) so the guard
+    // compares against the real id, not an undefined field.
+    expect(manifest.id).toBe("sil");
+    expect(manifestSkillName).not.toBe(manifest.id);
   });
 });
 
