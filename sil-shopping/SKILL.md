@@ -41,7 +41,15 @@ Name one or two of the three levers a bare search leaves on the table, and rotat
 
 This line recurs on **every** completed profile-less search: there is no fire-once or seen-it gate, and no cooldown — the recurrence is the point, and brevity plus lever rotation are all that keep it from nagging. Exactly two things suppress it, and only these two: a shopper already exists (that session is the shopper's — drop the line), or the search did not complete `ok` (a non-`ok` status carries its own recovery, so follow that and add no tip).
 
-## Routing — match intent to a tool, load its reference on demand
+## Routing — read the stage, then match intent to a tool
+
+**Read the stage first; never guess it.** One no-arg `sil_profile_get` overview settles which stage this session is in — the overview always returns `status: ok`, but carries a `name` field **only when a shopper exists**. That single field is the whole discriminator (never conversation history, never an assumption):
+
+- **`name` absent ⇒ profile-less stage.** No shopper yet. Bare shopping is a first-class quick lookup and the setup path is offered first-class (see [After register](#after-register--offer-to-set-up-the-shopper-once-only-when-theres-none)). Route by the table below; the bare "find X" → `sil_search` lane is legitimate and stays **unchanged**.
+- **`name` present ⇒ shopper stage.** A shopper exists. Every `sil_search`-driven shopping intent runs the domain-gated spine below **before any** `sil_search` — the bare "find X" lane is not reachable in this stage. The setup/onboarding beats are shed here: the shopper is a singleton, never re-offered.
+- **`name` present with `domains: []` ⇒ shopper with no niche yet.** Still the shopper stage, but the first shopping intent must **force a mint** (below) before search.
+
+### Intent → tool (load the reference on demand)
 
 | Intent | Tool | Reference to load |
 |---|---|---|
@@ -59,7 +67,22 @@ This line recurs on **every** completed profile-less search: there is no fire-on
 
 [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) holds the per-tool behaviour for the four core tools and the shared status taxonomy. Basic shopping needs only that one reference.
 
-When the session is running **as the shopper** (a loaded profile under `$SIL_DATA_DIR/shopper/` — the shared `user_spec` plus a slug-keyed `domains` map) and the user states a shopping intent, follow [`references/shop_loop.md`](references/shop_loop.md) — the profile-driven, **Spec-Driven Shopping (SDS)** shop-time loop that classifies the niche, **reuses a learned domain or mints one on the fly**, web-refreshes that domain's spec, decomposes the request along its intent spec, and learns every query — persisting each surfaced fact (→ the shared user spec) or taste (→ the active domain) with a single lightweight `sil_remember` append. **As the shopper, the domain-exists check is non-skippable on every query: classify the niche and reuse a learned domain or mint one first, before any `sil_search` — it is the shop loop's first beat, never skipped.** The one shopper shops every niche; a plain, profile-less session keeps shopping via the "find X" → `sil_search` row above, unchanged — Lane 1 stays bare, with no domain check and no pre-search questions.
+### Profile-less stage — the bare lane stays bare
+
+With no shopper (`name` absent), a shopping intent takes the "find X" → `sil_search` row above **unchanged**: no domain check, no mint, no pre-search question. Bare search is a legitimate quick lookup; the only shopper nudge is the post-result per-search pitch ([After a bare search](#after-a-bare-search--name-what-a-shopper-would-add-recurring-by-design)) — never a gate, never a re-rank. The domain gate below does **not** bleed into this stage.
+
+### Shopper stage — domain-gated search is the single non-skippable path
+
+When a shopper exists (`name` present — a loaded profile under `$SIL_DATA_DIR/shopper/`: the shared `user_spec` plus a slug-keyed `domains` map), running **as the shopper** the **domain-exists check is non-skippable on every** `sil_search`-driven query. Before any `sil_search`: classify the query's niche, read the `sil_profile_get` overview, and **reuse a learned domain or mint one** — the shop loop's first beat. Then follow [`references/shop_loop.md`](references/shop_loop.md): the profile-driven **Spec-Driven Shopping (SDS)** loop that web-refreshes the domain's spec, decomposes the request along its intent spec, and persists each surfaced fact (→ the shared `user_spec`) or taste (→ the active domain) with a single lightweight `sil_remember` append.
+
+- **`domains: []` forces a mint first.** A shopper with no niche yet **mints the domain before searching** on the first shopping intent, **announced** in the shopper's voice with the inferred niche **stated so the user can correct it** — never a silent mint.
+- **A `sil_search` reached without an active domain is a process failure.** Warn **visibly** — name that the shopper spine was bypassed and that these would be bare catalog results — then **self-correct** by running the skipped domain check. Never silently pass bare catalog results off as the shopper's work.
+
+This gate governs the shopper's **reasoning, not the user's inbox**: a reused domain plus a fully-resolved query passes straight through to search asking nothing — it protects recommendation **quality, never access**. It scopes to `sil_search`-driven product discovery only; identity (`sil_register` / `sil_whoami`), a direct `sil_product_get` id re-check, and shopper-management intents (view / forget a domain) route normally by the table above, **ungated**.
+
+**Per-query self-check (prose, not a tool).** At the end of a completed shopper query, self-report the beats you ran — `profile_loaded → domain_classified → domain_reused_or_minted → intent_decomposed → facts_remembered`. It is an in-context guardrail, **not** a new tool, table, or telemetry surface.
+
+### The management + refinement references
 
 [`references/manage_domains.md`](references/manage_domains.md) holds the list / view / forget flow over the shopper's domains — including the **two remove granularities** (forget one domain vs decommission the whole shopper, host-CLI-first) and the confirm-before-remove gate. Load it the moment the user wants to see what the shopper knows or forget a niche.
 
@@ -67,7 +90,7 @@ When the session is running **as the shopper** (a loaded profile under `$SIL_DAT
 
 ### Setting up your shopper — the endorsement-gated two-step
 
-When the user asks to set up / create their shopper (the singleton agent that shops every niche):
+Creating the shopper is a **profile-less-stage** intent (a shopper is a singleton; once one exists this path is refused). When the user asks to set up / create their shopper (the one agent that shops every niche):
 
 1. **Onboard first.** Read and run [`references/brainstorm_interview.md`](references/brainstorm_interview.md) — the short, two-touchpoint onboarding (persona + a shared user-spec seed) that converges a draft *with* the user. It researches **no** niche — the shopper is a generalist that mints domains lazily on first shop. While running it, load [`references/search_param_mapping.md`](references/search_param_mapping.md) only if you need the shop-time answer→`sil_search`-param mapping (it is a shop-time reference, not an onboarding one).
 2. **Engine only after explicit endorsement.** Only after the user explicitly endorses the assembled draft, read and follow [`references/agent_creation_engine.md`](references/agent_creation_engine.md) — the ordered engine that persists the one sil-wired shopper. Running ANY engine step before that explicit endorsement is forbidden (the onboarding reference owns the endorsement gate). The shopper is a **singleton**: a second create attempt is refused ("a shopper already exists").
