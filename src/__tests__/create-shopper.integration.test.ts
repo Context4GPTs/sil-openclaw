@@ -117,6 +117,8 @@ interface Spec {
   workspace: string;
   persona: string;
   userSpec: string;
+  /** Optional current-channel override for the step-10 bind (fail-open when absent). */
+  channel?: string;
 }
 
 /**
@@ -133,6 +135,27 @@ interface Spec {
  *   config set <path> <v>  → apply the set to openclaw.json, exit 0      [fail: config-set]
  *   config validate --json → {valid:true,path}                          [fail: config-validate
  *                            ⇒ {valid:false,path,issues,error}, exit 0]
+ *   agents bind --agent <id> --bind <ch> --json
+ *                          → push {type:route,agentId,match:{channel}} to bindings[]
+ *                            + report {added:[ch]}; if <ch> is already bound to a
+ *                            DIFFERENT agent, write NOTHING + report {conflicts:[…]}
+ *                            (no --force, no auto-steal); ALWAYS exits 0 — the bin
+ *                            reads the JSON verdict, never the exit code.  [fail:
+ *                            bind-fail ⇒ persist the partial route but report a
+ *                            NON-verifying verdict {added:[],updated:[],conflicts:[]}
+ *                            — the "verdict says nothing applied ⇒ revert" case]
+ *   agents bindings [--agent <id>] --json
+ *                          → the bindings[] array as [{agentId,match,description}]
+ *                            (filtered by --agent); the bind read-back / verify.
+ *                            [read-back knob: OPENCLAW_SHIM_BINDINGS_EMPTY=1 ⇒ "[]"
+ *                            even though the route was written — the "route absent on
+ *                            read-back ⇒ unverifiable ⇒ revert the partial write" case]
+ * config-validate fail knobs: `config-validate` (always fail) OR
+ *   OPENCLAW_SHIM_VALIDATE_FAIL_BOUND_NTH=<N> ⇒ fail the Nth validate that sees a
+ *   NON-EMPTY bindings[] (robust to the allowlist bin's own validate, which runs
+ *   BEFORE the bind with bindings[] still empty). N=2 targets the final step-11
+ *   validate while the step-10 bind-verify validate (N=1) passes — the "verified
+ *   route, later step fails, teardown reverses the live route" case.
  * Every invocation's argv is appended to $OPENCLAW_SHIM_LOG so a test can prove
  * WHICH host commands ran (e.g. "agents add NEVER ran" on a collision).
  */
@@ -213,8 +236,64 @@ if (a0 === "config" && a1 === "set") {
   process.exit(0);
 }
 
+if (a0 === "agents" && a1 === "bind") {
+  const agIdx = argv.indexOf("--agent");
+  const agentId = agIdx >= 0 ? argv[agIdx + 1] : null;
+  const bIdx = argv.indexOf("--bind");
+  const channel = bIdx >= 0 ? argv[bIdx + 1] : null;
+  const c = readCfg();
+  if (!Array.isArray(c.bindings)) c.bindings = [];
+  const existing = c.bindings.find((b) => b && b.match && b.match.channel === channel);
+  // A channel already routed to a DIFFERENT agent conflicts — write NOTHING, keep the
+  // prior owner. No --force, no auto-steal. Still exits 0 (verdict, not exit code).
+  if (existing && existing.agentId !== agentId) {
+    process.stdout.write(JSON.stringify({ agentId, added: [], updated: [], skipped: [], conflicts: [channel + " (agent=" + existing.agentId + ")"] }) + "\n");
+    process.exit(0);
+  }
+  if (existing && existing.agentId === agentId) {
+    process.stdout.write(JSON.stringify({ agentId, added: [], updated: [channel], skipped: [], conflicts: [] }) + "\n");
+    process.exit(0);
+  }
+  if (fails.includes("bind-fail")) {
+    // A partial write that does NOT verify: persist the route (so there is a partial
+    // binding to revert) but report NOTHING applied — empty added+updated, no conflict.
+    // The bind exits 0 regardless, so the bin must reject this on the JSON verdict.
+    c.bindings.push({ type: "route", agentId: agentId, match: { channel: channel } });
+    writeCfg(c);
+    process.stdout.write(JSON.stringify({ agentId, added: [], updated: [], skipped: [], conflicts: [] }) + "\n");
+    process.exit(0);
+  }
+  c.bindings.push({ type: "route", agentId: agentId, match: { channel: channel } });
+  writeCfg(c);
+  process.stdout.write(JSON.stringify({ agentId, added: [channel], updated: [], skipped: [], conflicts: [] }) + "\n");
+  process.exit(0);
+}
+
+if (a0 === "agents" && a1 === "bindings") {
+  // The unverifiable-bind knob: the route was written, but the read-back doesn't
+  // reflect it ⇒ the bin cannot verify ⇒ it reverts the partial write.
+  if (process.env.OPENCLAW_SHIM_BINDINGS_EMPTY === "1") { process.stdout.write("[]\n"); process.exit(0); }
+  let list = [];
+  try { const c = readCfg(); if (Array.isArray(c.bindings)) list = c.bindings; } catch (e) {}
+  const agIdx = argv.indexOf("--agent");
+  const agentId = agIdx >= 0 ? argv[agIdx + 1] : null;
+  const filtered = agentId ? list.filter((b) => b && b.agentId === agentId) : list;
+  process.stdout.write(JSON.stringify(filtered.map((b) => ({ agentId: b.agentId, match: b.match, description: b.description || "" }))) + "\n");
+  process.exit(0);
+}
+
 if (a0 === "config" && a1 === "validate") {
-  if (fails.includes("config-validate")) {
+  let hasRoute = false;
+  try { const c = readCfg(); hasRoute = Array.isArray(c.bindings) && c.bindings.length > 0; } catch (e) {}
+  const failBoundNth = Number(process.env.OPENCLAW_SHIM_VALIDATE_FAIL_BOUND_NTH || "0");
+  let boundN = 0;
+  if (hasRoute && failBoundNth > 0) {
+    const counterPath = cfgPath + ".vcount";
+    try { boundN = Number(readFileSync(counterPath, "utf8")) || 0; } catch (e) { boundN = 0; }
+    boundN += 1;
+    try { writeFileSync(counterPath, String(boundN)); } catch (e) {}
+  }
+  if (fails.includes("config-validate") || (failBoundNth > 0 && hasRoute && boundN === failBoundNth)) {
     process.stdout.write(JSON.stringify({ valid: false, path: cfgPath, issues: ["shim: forced invalid config"], error: "shim forced the config invalid" }) + "\n");
     process.exit(0);
   }
@@ -310,16 +389,20 @@ function readConfig(): Record<string, any> {
   return JSON.parse(readFileSync(configPath, "utf8"));
 }
 
-/** A valid, endorsed spec (secrets planted in persona/userSpec). */
+/** A valid, endorsed spec (secrets planted in persona/userSpec). Channel-less by
+ * default — the fail-open "undetermined channel" baseline; pass `channel` to drive
+ * the step-10 bind. */
 function validSpec(overrides: Partial<Spec> = {}): Spec {
   const agentId = overrides.agentId ?? "my-shopper";
-  return {
+  const spec: Spec = {
     agentId,
     name: overrides.name ?? "My Shopper",
     workspace: overrides.workspace ?? join(workdir, `workspace-${agentId}`),
     persona: overrides.persona ?? `A careful generalist buyer. ${PERSONA_SECRET}`,
     userSpec: overrides.userSpec ?? `Ships to Athens; UK size 10; ${USERSPEC_SECRET}`,
   };
+  if (overrides.channel !== undefined) spec.channel = overrides.channel;
+  return spec;
 }
 
 interface RunOpts {
@@ -487,9 +570,11 @@ describe("created — one valid run wires every surface and returns the identity
     expect(agent.skills).toEqual([SIL_SKILL]);
   });
 
-  it("carries a warnings array (empty on a config with no web-capability gap)", () => {
+  it("carries an EMPTY warnings array when there is no web-capability gap AND the channel binds cleanly", () => {
+    // With a resolvable channel that binds + verifies, the manual-bind hint is absent;
+    // freshConfig has no agents.defaults gap ⇒ no web-capability warning either.
     writeConfig(freshConfig());
-    const r = runBin({ spec: validSpec() });
+    const r = runBin({ spec: validSpec({ channel: "telegram" }) });
     expect(r.status).toBe(0);
     const m = parseMarker(r.stdout);
     expect(Array.isArray(m["warnings"])).toBe(true);
@@ -528,12 +613,15 @@ describe("created — a web-capability gap warns but never blocks (bare sil_sear
     // agents.defaults is present but grants NO web/fetch/browse/http capability.
     cfg.agents = { defaults: { tools: { profile: "coding", alsoAllow: [] } } };
     writeConfig(cfg);
-    const r = runBin({ spec: validSpec() });
+    // Bind a channel cleanly so the only warning is the web-capability one — the
+    // assertion stays sharp now that a channel-less create ALSO carries a bind hint.
+    const r = runBin({ spec: validSpec({ channel: "telegram" }) });
     expect(r.status).toBe(0);
     const m = parseMarker(r.stdout);
     expect(m["status"]).toBe("created");
     expect(Array.isArray(m["warnings"])).toBe(true);
     expect((m["warnings"] as string[]).length).toBeGreaterThan(0);
+    expect((m["warnings"] as string[]).some((w) => w.includes("agents.defaults"))).toBe(true);
   });
 });
 
@@ -1048,5 +1136,225 @@ describe("precondition — no resolvable host config fails closed", () => {
     // Nothing fabricated, nothing created.
     expect(existsSync(missingConfig)).toBe(false);
     expect(existsSync(shopperDir())).toBe(false);
+  });
+});
+
+// ===========================================================================
+// bind-the-channel — creating a shopper from a channel session re-routes THAT
+// channel to the new shopper by DEFAULT, FAIL-OPEN. The route lives in
+// openclaw.json `bindings[]` (the same whole-file teardown anchor), so every
+// reversal is the existing snapshot-restore — no orphaned routing ever survives.
+//
+// The five behaviours pinned here (the card's acceptance criteria):
+//   1. bound-on-create   — a resolvable channel binds + VERIFIES ⇒ created, route
+//                          present, config valid, `boundChannel` named, NO warning.
+//   2. fail-open         — no resolvable channel ⇒ created(exit 0) + manual-bind
+//                          warning + NO bindings[] entry (bind never attempted).
+//   3. unverifiable      — bind can't be verified ⇒ partial route reverted, config
+//                          valid, STILL created + warning (never a torn-down shopper).
+//   4. conflict/no-steal — channel already owned ⇒ no --force, prior owner kept,
+//                          created + warning.
+//   5. whole-create revert — a VERIFIED route then a later step fails ⇒ the whole-
+//                          create teardown restores openclaw.json BYTE-IDENTICAL.
+//
+// THESE ASSERTIONS ARE THE SPEC. Do NOT weaken them to match the bin.
+// ===========================================================================
+
+/** The `<agentId> → <channel>` route the shim persists into `bindings[]`, or undefined. */
+function routeFor(bindings: unknown, agentId: string, channel: string): any {
+  return (Array.isArray(bindings) ? bindings : []).find(
+    (b: any) => b && b.agentId === agentId && b.match && b.match.channel === channel,
+  );
+}
+
+/** Does any created warning name the manual-bind fallback? (intent, not exact copy) */
+function hasManualBindWarning(warnings: unknown): boolean {
+  return (
+    Array.isArray(warnings) && warnings.some((w) => typeof w === "string" && /\bbind\b/i.test(w))
+  );
+}
+
+describe("bind-the-channel — a resolvable channel binds the new shopper by default (verified)", () => {
+  it("spec.channel supplied ⇒ created, route present in bindings[], config valid, boundChannel named, NO manual-bind warning", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec({ channel: "telegram" });
+
+    const r = runBin({ spec });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    // The route was actually written into openclaw.json bindings[] …
+    const route = routeFor(readConfig().bindings, spec.agentId, "telegram");
+    expect(route, "expected a bindings[] route <shopper> → telegram").toBeTruthy();
+    expect(route.match.channel).toBe("telegram");
+    expect(route.agentId).toBe(spec.agentId);
+    // … the bind WRITE was actually issued against the host …
+    expect(shimLog()).toContain("agents bind --agent");
+    // … the created result NAMES the bound channel (honesty rail: reported ⇒ verified) …
+    expect(m["boundChannel"]).toBe("telegram");
+    // … and carries NO manual-bind warning (a verified bind never warns).
+    expect(m["warnings"]).toEqual([]);
+  });
+
+  it("OPENCLAW_MCP_MESSAGE_CHANNEL supplies the channel when spec omits it (env auto-detect path)", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec(); // no spec.channel — the env is the only source
+
+    const r = runBin({ spec, env: { OPENCLAW_MCP_MESSAGE_CHANNEL: "telegram" } });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    expect(routeFor(readConfig().bindings, spec.agentId, "telegram")).toBeTruthy();
+    expect(m["boundChannel"]).toBe("telegram");
+    expect(m["warnings"]).toEqual([]);
+  });
+
+  it("spec.channel WINS over the env channel (precedence: spec > env) — only the spec channel is bound", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec({ channel: "telegram" });
+
+    const r = runBin({ spec, env: { OPENCLAW_MCP_MESSAGE_CHANNEL: "whatsapp" } });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["boundChannel"]).toBe("telegram");
+    expect(routeFor(readConfig().bindings, spec.agentId, "telegram")).toBeTruthy();
+    // The env channel was NOT bound — spec took precedence, and there is no second route.
+    expect(routeFor(readConfig().bindings, spec.agentId, "whatsapp")).toBeFalsy();
+  });
+});
+
+describe("bind-the-channel — fail-open: an undetermined channel still creates (warning, no routing)", () => {
+  it("no spec.channel and no env channel ⇒ created(exit 0) + manual-bind warning + NO bindings[] entry, bind never attempted", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec(); // no channel anywhere
+
+    const r = runBin({ spec });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    // Fail-open: the shopper is real, but the channel could not be auto-routed.
+    expect(hasManualBindWarning(m["warnings"]), "expected a manual-bind warning").toBe(true);
+    // The hint must (a) name the shopper and (b) name a concrete one-command manual
+    // step — never imply a broken create (product business rules).
+    const hint = (m["warnings"] as string[]).find((w) => /\bbind\b/i.test(w)) ?? "";
+    expect(hint).toContain(spec.agentId);
+    expect(hint).toMatch(/agents bind|\/agent/i);
+    // No routing written, and the bind was never even attempted (no channel to bind).
+    expect(readConfig().bindings ?? []).toEqual([]);
+    expect(shimLog()).not.toContain("agents bind --agent");
+    // boundChannel is NOT claimed when nothing was bound (honesty rail).
+    expect(m["boundChannel"] ?? null).toBeNull();
+  });
+
+  it("a blank/whitespace spec.channel with no env ⇒ treated as undetermined (fail-open warning, no routing)", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec({ channel: "   " });
+
+    const r = runBin({ spec });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    expect(hasManualBindWarning(m["warnings"])).toBe(true);
+    expect(readConfig().bindings ?? []).toEqual([]);
+    expect(shimLog()).not.toContain("agents bind --agent");
+    expect(m["boundChannel"] ?? null).toBeNull();
+  });
+});
+
+describe("bind-the-channel — an unverifiable bind reverts the partial route (fail-open + honesty rail)", () => {
+  it("the bind verdict reports NOTHING applied (bind-fail) ⇒ partial route reverted, config valid, created + warning, NO bindings[]", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec({ channel: "telegram" });
+
+    const r = runBin({ spec, fail: ["bind-fail"] });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    // Never a torn-down shopper over a convenience shortfall.
+    expect(m["status"]).toBe("created");
+    // The bind WAS attempted (proving this exercises the revert path) …
+    expect(shimLog()).toContain("agents bind --agent");
+    // … but the unverifiable partial route was reverted — none survives.
+    expect(readConfig().bindings ?? []).toEqual([]);
+    // … the honesty rail holds: a warning, and NO claimed boundChannel.
+    expect(hasManualBindWarning(m["warnings"])).toBe(true);
+    expect(m["boundChannel"] ?? null).toBeNull();
+  });
+
+  it("the read-back does NOT show the route (write didn't stick) ⇒ reverted, created + warning, NO bindings[]", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec({ channel: "telegram" });
+
+    // The write reports success but the read-back is empty — the bin must not trust
+    // the write alone; it verifies via read-back and reverts when the route is absent.
+    const r = runBin({ spec, env: { OPENCLAW_SHIM_BINDINGS_EMPTY: "1" } });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    expect(shimLog()).toContain("agents bind --agent");
+    expect(readConfig().bindings ?? []).toEqual([]);
+    expect(hasManualBindWarning(m["warnings"])).toBe(true);
+    expect(m["boundChannel"] ?? null).toBeNull();
+  });
+});
+
+describe("bind-the-channel — a conflicting channel is NOT stolen (no --force; prior owner kept)", () => {
+  it("channel already bound to another agent ⇒ created + manual-bind warning, no steal, prior binding intact, shopper gets NO route", () => {
+    const cfg = freshConfig() as any;
+    cfg.bindings = [{ type: "route", agentId: "other-agent", match: { channel: "telegram" } }];
+    writeConfig(cfg);
+    const spec = validSpec({ channel: "telegram" });
+
+    const r = runBin({ spec });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    // No steal: the bin never passes --force, and never claims the channel.
+    expect(shimLog()).not.toContain("--force");
+    expect(m["boundChannel"] ?? null).toBeNull();
+    expect(hasManualBindWarning(m["warnings"])).toBe(true);
+    // The prior owner's route survives EXACTLY; the shopper got NO route.
+    const bindings = readConfig().bindings;
+    expect(routeFor(bindings, "other-agent", "telegram")).toBeTruthy();
+    expect(routeFor(bindings, spec.agentId, "telegram")).toBeFalsy();
+    expect(bindings).toEqual([
+      { type: "route", agentId: "other-agent", match: { channel: "telegram" } },
+    ]);
+  });
+});
+
+describe("bind-the-channel — a VERIFIED route is reversed by whole-create teardown (no orphaned routing)", () => {
+  it("channel bound + verified, then a LATER step fails ⇒ openclaw.json byte-identical to pre-run, no route left pointing at the absent shopper", () => {
+    // The bind at step 10 persists + VERIFIES (its own bind-verify validate passes),
+    // then the FINAL step-11 validate is the one that fails — a failure strictly AFTER
+    // a live, verified route. The shim's OPENCLAW_SHIM_VALIDATE_FAIL_BOUND_NTH=2 fails
+    // only the 2nd validate that SEES a non-empty bindings[] (N=1 = the bind-verify,
+    // which passes; N=2 = the final validate, which fails) — so the route genuinely
+    // survives into teardown and the whole-file snapshot-restore must reverse it.
+    writeConfig(freshConfig());
+    const preConfig = readFileSync(configPath, "utf8");
+    const spec = validSpec({ channel: "telegram" });
+
+    const r = runBin({ spec, env: { OPENCLAW_SHIM_VALIDATE_FAIL_BOUND_NTH: "2" } });
+
+    expect(r.status).not.toBe(0);
+    const m = parseMarker(r.stderr);
+    expect(m["status"]).toBe("persistence_failed");
+    expect(r.stdout.includes("sil_shopper_created")).toBe(false);
+    // The bind WRITE was applied this run — a real post-bind failure, not a pre-bind one.
+    expect(shimLog()).toContain("agents bind --agent");
+    // Whole-file snapshot-restore returned openclaw.json byte-identical to pre-run …
+    expect(readFileSync(configPath, "utf8")).toBe(preConfig);
+    // … leaving NO orphaned route pointing at the now-absent shopper.
+    expect(readConfig().bindings ?? []).toEqual([]);
+    expect(existsSync(shopperDir())).toBe(false);
+    expect(existsSync(spec.workspace)).toBe(false);
   });
 });

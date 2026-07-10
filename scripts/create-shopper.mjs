@@ -13,10 +13,11 @@
  * consent gate; this bin executes an already-assembled, already-endorsed spec
  * non-interactively. It never prompts, never re-runs the interview.
  *
- * Input — ONE JSON object `{ agentId, name, workspace, persona, userSpec }`, read
- * from stdin (primary) or `--spec <path>` (fallback). Passing multiline
+ * Input — ONE JSON object `{ agentId, name, workspace, persona, userSpec, channel? }`,
+ * read from stdin (primary) or `--spec <path>` (fallback). Passing multiline
  * persona/userSpec as JSON dodges shell-arg escaping. Unparseable/blank input →
- * `invalid_request`, nothing attempted.
+ * `invalid_request`, nothing attempted. `channel` is OPTIONAL — the current-channel
+ * override for the step-10 bind; absent/blank is fail-open, never invalid_request.
  *
  * Choreography (validate-first, then atomic, fail-closed):
  *   1. validate the spec           — bad/blank field ⇒ invalid_request, nothing attempted
@@ -32,8 +33,13 @@
  *   8. attach the sil skill + enable the sil plugin (openclaw config set --strict-json)
  *   9. sil-openclaw-allowlist      — REUSED whole; additive/idempotent/atomic three-surface
  *                                    trust merge (plugins.allow + tools.alsoAllow + plugins.entries.sil)
- *  10. openclaw config validate    — success keys off `.valid`, never an `ok` field
- *  11. one { status, … } JSON result; exit 0 ONLY on `created`.
+ *  10. bind the current channel    — FAIL-OPEN convenience, NOT fail-closed: resolve the channel
+ *                                    (spec.channel > OPENCLAW_MCP_MESSAGE_CHANNEL), bind + VERIFY
+ *                                    from the JSON verdict (never the exit code), keep a verified
+ *                                    route, revert an unverifiable one; an undetermined/unverifiable
+ *                                    channel degrades to a manual-bind hint — it NEVER fails creation
+ *  11. openclaw config validate    — success keys off `.valid`, never an `ok` field
+ *  12. one { status, … } JSON result; exit 0 ONLY on `created`.
  *
  * Teardown on ANY failure after step 5 = whole-file snapshot-restore of
  * openclaw.json (reverses the agents.list entry + skill + plugin + trust in ONE
@@ -44,6 +50,12 @@
  * trusted pre-run stays trusted. A teardown that CANNOT fully revert is a distinct,
  * LOUDER outcome (`teardown_failed`) that names the residue — never a green-washed
  * `persistence_failed`.
+ *
+ * The step-10 channel bind is the ONE step that never routes into teardown: it is
+ * fail-open by design (a convenience, not a precondition), so it self-reverts a bad
+ * bind in place and continues. Because a VERIFIED route lives in openclaw.json, the
+ * step-4 snapshot restore reverses it FOR FREE if any earlier-or-later step then
+ * fails — no `agents unbind`, no bind-specific teardown code.
  *
  * Outcome taxonomy (four terminal, + the louder teardown_failed), in sil's
  * `snake_case_marker` NDJSON style (no api.logger outside the gateway). No PII, no
@@ -72,6 +84,7 @@ import {
   readAgentProfile,
   getShopperArtefactDir,
 } from "../dist/lib/profile-store.js";
+import { resolveBindChannel } from "../dist/lib/bind-channel.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The sibling operator bin that performs the additive, self-validating trust merge. */
@@ -164,12 +177,15 @@ function readSpecRaw() {
 
 /** Validate the endorsed spec — deterministic field order (agentId → name →
  * workspace → persona → userSpec). Returns `{ field, message }` on the FIRST bad
- * field, or null when the whole spec is good. Writes/attempts nothing. */
+ * field, or null when the whole spec is good. Writes/attempts nothing. `channel`
+ * is deliberately NOT validated: it is an optional fail-open convenience, so an
+ * absent/blank/malformed channel is never invalid_request — it folds to `null` in
+ * `resolveBindChannel` and degrades to a manual-bind hint at step 10. */
 function validateSpec(spec) {
   if (typeof spec !== "object" || spec === null || Array.isArray(spec)) {
     return {
       field: "spec",
-      message: "spec must be a JSON object with { agentId, name, workspace, persona, userSpec }.",
+      message: "spec must be a JSON object with { agentId, name, workspace, persona, userSpec, channel? }.",
     };
   }
   if (!nonBlank(spec.agentId)) {
@@ -285,6 +301,64 @@ function webCapabilityWarnings(config) {
   ];
 }
 
+/** True iff `openclaw config validate --json` reported `{valid:true}`. The host
+ * writes its verdict to stdout even on a non-zero exit, so read stdout, never the
+ * exit code (fail closed if it is not JSON). */
+function configValidates(stdout) {
+  try {
+    const verdict = JSON.parse(stdout);
+    return verdict !== null && verdict.valid === true;
+  } catch {
+    return false;
+  }
+}
+
+/** True iff `openclaw agents bind --json` reported the channel APPLIED — landed in
+ * `added` or `updated`, with an EMPTY `conflicts`. `agents bind` exits 0 even on a
+ * conflict or an empty `--bind`, so the JSON verdict — never the exit code — is the
+ * source of truth (the same discipline the bin applies to `config validate.valid`). */
+function bindApplied(stdout) {
+  let v;
+  try {
+    v = JSON.parse(stdout);
+  } catch {
+    return false;
+  }
+  if (v === null || typeof v !== "object") return false;
+  const added = Array.isArray(v.added) ? v.added : [];
+  const updated = Array.isArray(v.updated) ? v.updated : [];
+  const conflicts = Array.isArray(v.conflicts) ? v.conflicts : [];
+  return (added.length > 0 || updated.length > 0) && conflicts.length === 0;
+}
+
+/** True iff the `openclaw agents bindings --json` read-back (an ARRAY of
+ * `{agentId, match:{channel}}`) actually shows the route `<channel> → <agentId>`.
+ * This is the honesty rail: a bind is only "verified" once the read-back proves the
+ * write stuck — issuing the write is not the same as the next message reaching it. */
+function bindingPresent(stdout, agentId, channel) {
+  let v;
+  try {
+    v = JSON.parse(stdout);
+  } catch {
+    return false;
+  }
+  if (!Array.isArray(v)) return false;
+  return v.some((b) => b?.agentId === agentId && b?.match?.channel === channel);
+}
+
+/** The fail-open manual-bind hint appended to `created` warnings when the channel
+ * could not be auto-routed (undetermined) or the bind could not be verified. It
+ * states the shopper WAS created, names the one-command manual bind, and never
+ * implies a broken create — a convenience that didn't fire, not an error. */
+function manualBindHint(agentId, channel) {
+  const target = channel ? `the "${channel}" channel` : "the current channel";
+  return (
+    `the shopper "${agentId}" was created but ${target} was not auto-routed to it. `
+    + `To route it manually, run: openclaw agents bind --agent ${agentId} --bind <channel> `
+    + `(or switch in-chat with /agent ${agentId}). The shopper is fully created and ready.`
+  );
+}
+
 /**
  * Whole-file snapshot-restore teardown. Reverses everything this run created and
  * returns the residue it could NOT revert (empty ⇒ clean, host at exact pre-run
@@ -363,7 +437,7 @@ function main() {
   if (bad) {
     emitFailure("invalid_request", { field: bad.field, cause: bad.message });
   }
-  const { agentId, name, workspace, persona, userSpec } = spec;
+  const { agentId, name, workspace, persona, userSpec, channel } = spec;
 
   // --- 2. Resolve the host config (precondition — nothing written yet) ---
   const configPath = resolveConfigPath();
@@ -531,7 +605,54 @@ function main() {
     failAndTeardown(configPath, "the sil-openclaw-allowlist admission helper failed: " + allowlistCause);
   }
 
-  // --- 10. Validate with the host's OWN check — success keys off `.valid` ---
+  // --- 10. Bind the current channel to the new shopper (FAIL-OPEN convenience) ---
+  // Route the channel the user is talking on to the new shopper by default, so their
+  // next message reaches it with no manual bind. This step NEVER fails creation: an
+  // undetermined channel, a conflict (already owned by another agent — no auto-steal),
+  // or an unverifiable bind all degrade to a manual-bind hint. The bind lands in
+  // openclaw.json `bindings[]`, so a VERIFIED route is reversed for free by the
+  // step-4 snapshot if a later step tears the whole create down.
+  const bindWarnings = [];
+  // The channel the route was VERIFIED-bound to (null ⇒ nothing bound). It rides in
+  // `created` as the honesty rail: a bound channel is named ONLY when the read-back +
+  // config validate confirm it — issuing the write is never enough.
+  let boundChannel = null;
+  const channelToBind = resolveBindChannel({
+    specChannel: channel,
+    envChannel: process.env["OPENCLAW_MCP_MESSAGE_CHANNEL"],
+  });
+  if (channelToBind === null) {
+    bindWarnings.push(manualBindHint(agentId, null));
+  } else {
+    // Snapshot BEFORE the bind so an unverifiable write reverts to a valid config —
+    // never falling through to the fail-closed step-11 validate (which would tear
+    // down a fully-created shopper over a convenience shortfall).
+    const bindSnapshot = readFileSync(configPath, "utf8");
+    const bindRes = runOpenclaw(["agents", "bind", "--agent", agentId, "--bind", channelToBind, "--json"], configPath);
+    const readBack = runOpenclaw(["agents", "bindings", "--agent", agentId, "--json"], configPath);
+    const bindValidateRes = runOpenclaw(["config", "validate", "--json"], configPath);
+    const verified =
+      bindRes.ok
+      && bindApplied(bindRes.stdout)
+      && readBack.ok
+      && bindingPresent(readBack.stdout, agentId, channelToBind)
+      && configValidates(bindValidateRes.stdout);
+    if (verified) {
+      boundChannel = channelToBind;
+    } else {
+      // Revert JUST the route (config back to its pre-bind valid state) and degrade
+      // to the manual-bind hint. A failed revert is still fail-open: a well-formed
+      // bind is validation-safe, so step 11 certifies the config either way.
+      try {
+        atomicWrite(configPath, bindSnapshot, mode);
+      } catch {
+        // best-effort — never escalate a convenience revert into a torn-down create
+      }
+      bindWarnings.push(manualBindHint(agentId, channelToBind));
+    }
+  }
+
+  // --- 11. Validate with the host's OWN check — success keys off `.valid` ---
   // The shim/host writes its structured verdict to stdout even on a non-zero exit,
   // so read stdout regardless of the exit code (fail closed if it is not JSON).
   const validateRes = runOpenclaw(["config", "validate", "--json"], configPath);
@@ -549,9 +670,9 @@ function main() {
     failAndTeardown(configPath, issues ? cause + " — issues: " + issues : cause);
   }
 
-  // --- 11. Declare created — carry the identity so the agent can open the shopper ---
-  const warnings = webCapabilityWarnings(readConfig(configPath) ?? postAddConfig);
-  emitCreated({ name, agentId, workspace, warnings });
+  // --- 12. Declare created — carry the identity + the bound channel (honesty rail) ---
+  const warnings = [...webCapabilityWarnings(readConfig(configPath) ?? postAddConfig), ...bindWarnings];
+  emitCreated({ name, agentId, workspace, boundChannel, warnings });
 }
 
 main();
