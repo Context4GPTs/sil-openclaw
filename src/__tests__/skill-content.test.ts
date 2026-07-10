@@ -2208,12 +2208,11 @@ describe("references/shop_loop.md — the elicit-missing gate is a first-class s
 // so it is the RED driver. The card's fuller OR-group is not used as the anchor because
 // "every query"/"on every"/"first" already live at L43 and would false-GREEN.
 const SKILL_SKIP_REINFORCE_ANCHORS = [
-  "non-skippable",
-  "non skippable",
-  "cannot be skipped",
-  "never skip",
-  "do not skip",
   "before any search",
+  "before searching",
+  "before any sil_search",
+  "before recommending",
+  "reuse a learned domain or mint",
 ] as const;
 const SKILL_DOMAIN_CHECK_TOKENS = [
   "domain-exists",
@@ -2244,7 +2243,7 @@ describe("sil-shopping/SKILL.md — one reinforcement line makes the on-every-qu
     const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
     const idx = firstIndexOfAny(body, SKILL_SKIP_REINFORCE_ANCHORS);
     // NET-NEW anchor → RED today; GREEN once the reinforcement line lands.
-    expect(idx, "SKILL.md must add a non-skippable / before-any-search domain-exists reinforcement").toBeGreaterThanOrEqual(0);
+    expect(idx, "SKILL.md must add a domain-exists reinforcement (resolve the domain before searching), scoped as the shopper").toBeGreaterThanOrEqual(0);
     // The reinforcement is ABOUT the domain-exists / classify / reuse-or-mint check.
     const win = body.slice(Math.max(0, idx - 450), idx + 450);
     const namesDomainCheck = SKILL_DOMAIN_CHECK_TOKENS.some((t) => win.includes(t));
@@ -2570,36 +2569,33 @@ describe("references/brainstorm_interview.md — session-seeded pre-fill, still 
 });
 
 /* ===========================================================================
- * STAGE-AWARE ROUTING THAT GATES SEARCH ON A DOMAIN
- * card: stage-aware-skill-md-that-gates-search-on-a-domain (BR1–BR7 / AC1–AC8)
+ * STAGE-AWARE ROUTING — the shopper shops through a domain (de-rigidified)
+ * cards: stage-aware-skill-md-that-gates-search-on-a-domain, then
+ *        derigidify-sil-shopping-skill (scolding → guidance).
  *
- * The `## Routing` slice is rewritten DELETE-FIRST so it OPENS with a stage gate
- * keyed on the no-arg `sil_profile_get` `name`-presence, then branches:
+ * The `## Routing` slice OPENS with a stage read keyed on the no-arg
+ * `sil_profile_get` `name`-presence, then branches:
  *   - name ABSENT  ⇒ profile-less: the bare "find X" → sil_search lane, unchanged.
- *   - name PRESENT ⇒ shopper: the domain-gated spine runs BEFORE any sil_search;
- *     the bare lane is not reachable; `domains: []` forces an announced/correctable
- *     mint; a sil_search reached without an active domain is a LOUD process-failure
- *     that self-corrects (never bare results passed off as the shopper's work).
- * A per-query FIVE-BEAT self-check rides the shopper branch as PROSE (no new tool).
+ *   - name PRESENT ⇒ shopper: shop through what you know — classify the niche and
+ *     reuse-or-mint its domain BEFORE recommending; an empty `domains` map mints
+ *     the first domain, announced with the inferred niche stated so the user can
+ *     correct it. Identity / a direct id re-check / management route normally.
+ * A lightweight per-query self-check rides the shopper branch as PROSE — an
+ * in-context orientation aid, no new tool/table/telemetry.
  *
- * ADD-ONLY. Every describe ABOVE stays UNEDITED + green — including the spine-order
- * pin (:2055), the Lane-1-stays-bare pins (:2226), and the buy-window rail (:1287).
- * Disavowal discipline (docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md):
- * positive NET-NEW anchors, section-scoped, negation-aware negatives, `.toEqual([])`.
+ * These pins assert PRESERVED BEHAVIOUR, not the retired scolding vocabulary. The
+ * de-rigidify removed "the bare lane is not reachable", "process failure", "warn
+ * visibly", the "non-skippable" framing, and the rote five-verb self-check recital
+ * (`profile_loaded → domain_classified → …`) — so this block pins the
+ * domain-before-recommend behaviour, the announced/correctable mint, the no-friction
+ * pass-through, the ungated non-shopping intents, and a labelled (but un-recited)
+ * self-check — never the deleted tokens. Behaviour anchors are OR-grouped intent
+ * substrings, section/heading-scoped, negation-aware where negative, `.toEqual([])`.
  *
- * RED-capability (proven against the card base HEAD 8d163ea via `git show`): every
- * NET-NEW anchor below — "stage"/"read the stage", the `name`-discriminator, "not
- * reachable", "domains: []"/"force a mint", "process failure"/"warn"/"self-correct",
- * the five self-check verbs, "quality, {not|never} access"/"governs … reasoning",
- * "ungated", the `### Profile-less stage` H3 — is grepped to ZERO in HEAD:SKILL.md,
- * so each positive anchor fails against the pristine base (RED). The recurring
- * `sil_profile_get` / `sil_search` / "shopper" / "profile-less" tokens are
- * DELIBERATELY not used as RED anchors (they already appear → would false-GREEN);
- * they are only asserted WITHIN a net-new-anchored, heading-scoped window.
- *
- * The `[e2e]` behavioural ACs (the agent actually OBEYS the gate at runtime) are
- * DEFERRED — no host-load gate exists in this repo — and are NOT faked here: these
- * pins assert only that the ROUTER PROSE ships the instruction, never a runtime claim.
+ * ADD-ONLY over the blocks ABOVE (all stay green). The `[e2e]` behavioural ACs (the
+ * agent OBEYS the gate at runtime) stay DEFERRED — no host-load gate in this repo —
+ * and are NOT faked: these pins assert only that the ROUTER PROSE ships the
+ * instruction, never a runtime claim.
  * ========================================================================= */
 
 /** The `## Routing` H2 region — from the `## Routing` heading to the next `## ` (or
@@ -2631,32 +2627,24 @@ function headingScopedSection(body: string, anchor: number): string {
   return body.slice(start, end);
 }
 
-// ---- NET-NEW positive anchors (all 0 in HEAD:SKILL.md — the RED drivers) ----
+// ---- Behaviour anchors for the shopper stage (preserved behaviour, de-rigidified) ----
 const NAME_DISCRIMINATOR_RE =
   /`?name`?\s*(?:field\b|absent|present|is present|is absent|-?presence)|carries a `?name`?|(?:the )?(?:whole|single) discriminator|presence of (?:a |the )?`?name`?/i;
 const STAGE_READ_RE =
   /read the stage|settles which stage|reads? the stage|derive[sd]? the stage|keyed (?:on|off)|(?:the )?(?:whole|single) discriminator/i;
-const BARE_LANE_CLOSED_RE =
-  /not reachable|unreachable|not (?:presented|offered|available|a legitimate)|no bare lane/i;
 const EMPTY_DOMAINS_RE =
   /domains?\s*:?\s*\[\s*\]|domains?\s*==\s*\[\s*\]|no niche yet|empty domains/i;
-const FORCE_MINT_RE =
-  /force[sd]?\s+(?:a |the |one )?mint|forces? a mint|mint (?:the domain|a domain|one)[^.]{0,20}(?:first|before)|mints? the domain before/i;
-const PROCESS_FAILURE_RE = /process[- ]failure|warn (?:visibly|loudly)|\bwarn\b/i;
-const SELF_CORRECT_RE = /self-correct|self correct|run(?:ning|s)? the skipped|corrects? itself/i;
-const ZERO_FRICTION_RE =
-  /quality,?\s*(?:not|never)\s*access|governs[^.]{0,40}reasoning|not the user'?s inbox|ask(?:s|ing)? nothing|passes? straight through|zero questions?/i;
+// No-friction: a reused domain + fully-resolved query asks nothing / passes straight
+// through. The retired defensive framing ("quality, not access" / "governs … reasoning")
+// is NOT required — only the behaviour that a resolved query adds no friction.
+const NO_FRICTION_RE =
+  /ask(?:s|ing)? nothing|passes? straight through|zero questions?|no (?:further )?questions?/i;
+// The non-shopping intents route normally (not subject to the domain-resolve step).
+// Anchored on the scope STATEMENT's own phrasing ("route normally" / "ungated"); a bare
+// "no domain check" is deliberately NOT an alternative — it also names the profile-less
+// arm's bare lane, which precedes this statement and would mis-anchor the window scan.
 const UNGATED_RE =
-  /ungated|no domain gate|not gated|without (?:a |the |any )?domain gate|no (?:domain )?gate (?:is )?imposed/i;
-
-// The five self-check beats — the most distinctive NET-NEW anchor (all 0 in HEAD).
-const SELF_CHECK_VERBS = [
-  "profile_loaded",
-  "domain_classified",
-  "domain_reused_or_minted",
-  "intent_decomposed",
-  "facts_remembered",
-] as const;
+  /ungated|route[s]? normally|not (?:subject to|gated)|without (?:a |the |any )?domain (?:check|gate)/i;
 
 /** AFFIRMATIVE domain-gate STEP instructions (a real gate, not a disavowal of one).
  * Bare "domain gate" / "domain" are DELIBERATELY excluded — a legit profile-less
@@ -2697,62 +2685,33 @@ describe("sil-shopping/SKILL.md — Routing opens with a stage gate read from si
   });
 });
 
-describe("sil-shopping/SKILL.md — shopper stage: domain resolved BEFORE any search; the bare lane is not reachable (BR4/AC1; add-only)", () => {
-  it("routes every shopper-stage sil_search intent through sil_profile_get → reuse-or-mint a domain before any sil_search", () => {
+describe("sil-shopping/SKILL.md — shopper stage: the domain is resolved BEFORE recommending; scoped 'as the shopper' (BR4/AC1; add-only)", () => {
+  it("routes every shopper-stage sil_search intent through sil_profile_get → reuse-or-mint a domain before searching, scoped 'as the shopper'", () => {
     const lower = routingLower();
-    // Precondition prose present in the shopper branch (scoped by the net-new anchors).
     expect(lower).toContain("sil_profile_get");
     expect(lower).toContain("sil_search");
     const reuseOrMint =
       /reuse[^.]{0,20}(?:or )?mint|reuse a learned domain or mint|reuse-or-mint|reuse or mint/i.test(lower);
     expect(reuseOrMint, "the shopper branch must reuse-or-mint a domain").toBe(true);
-    const beforeSearch = /before any (?:sil_search|search)/i.test(lower);
-    expect(beforeSearch, "the domain must resolve BEFORE any sil_search").toBe(true);
+    const beforeSearch = /before (?:any )?(?:sil_search|search|searching|recommend)/i.test(lower);
+    expect(beforeSearch, "the domain must resolve BEFORE searching / recommending").toBe(true);
     // The precondition is scoped to the shopper (Lane 2), never the general router.
     expect(lower).toContain("as the shopper");
   });
-
-  it("closes the bare 'find X' lane in the shopper-present path — it is NOT reachable once a shopper exists (NET-NEW)", () => {
-    const lower = routingLower();
-    // NET-NEW RED driver: "not reachable" / "unreachable" (0 in HEAD).
-    const m = BARE_LANE_CLOSED_RE.exec(lower);
-    expect(m, "the shopper path must state the bare 'find X' lane is not reachable (NET-NEW — 0 in HEAD)").not.toBeNull();
-    // The closure is ABOUT the bare / Lane-1 / 'find X' lane, in a shopper-scoped window.
-    const at = m!.index;
-    const win = lower.slice(Math.max(0, at - 220), at + 60);
-    const namesBareLane = win.includes("bare") || win.includes('"find x"') || win.includes("find x") || win.includes("lane");
-    expect(namesBareLane, "the not-reachable statement must be about the bare 'find X' lane").toBe(true);
-    const scopedShopper = win.includes("shopper") || win.includes("name` present") || win.includes("name present");
-    expect(scopedShopper, "the closure must be scoped to the shopper stage").toBe(true);
-  });
 });
 
-describe("sil-shopping/SKILL.md — `domains: []` forces an announced, correctable mint before search (BR5/AC2; add-only)", () => {
-  it("a shopper with an empty domains map forces a mint FIRST, announced with the inferred niche stated so the user can correct it", () => {
+describe("sil-shopping/SKILL.md — an empty domains map mints the first domain before search, announced + correctable (BR5/AC2; add-only)", () => {
+  it("a shopper with no niche yet mints the domain before searching, announced with the inferred niche stated so the user can correct it", () => {
     const lower = routingLower();
-    // NET-NEW RED drivers: the empty-domains condition + the forced mint (0 in HEAD).
     expect(EMPTY_DOMAINS_RE.test(lower), "the empty-domains condition (`domains: []` / no niche yet) must be named").toBe(true);
-    expect(FORCE_MINT_RE.test(lower), "an empty domains map must FORCE a mint before searching (NET-NEW)").toBe(true);
-    // Announced + correctable (the mint is never silent).
+    const mints = /\bmint/i.test(lower);
+    expect(mints, "an empty domains map must mint the first domain").toBe(true);
     const announced = /announce[sd]?/i.test(lower);
-    expect(announced, "the forced mint must be announced").toBe(true);
+    expect(announced, "the mint must be announced (never silent)").toBe(true);
     const correctable = /correct it|can correct|so the user can correct|user can correct/i.test(lower);
     expect(correctable, "the inferred niche must be stated so the user can correct it").toBe(true);
     const beforeSearch = /before (?:searching|any (?:sil_search|search))/i.test(lower);
-    expect(beforeSearch, "the forced mint must precede search").toBe(true);
-  });
-});
-
-describe("sil-shopping/SKILL.md — a domain-less sil_search is a loud process-failure that self-corrects, never bare results (BR1/AC3; add-only)", () => {
-  it("directs a visible warn + self-correct when sil_search is reached without an active domain — never silently returns bare catalog results", () => {
-    const lower = routingLower();
-    // NET-NEW RED drivers: the process-failure framing + the self-correct step (0 in HEAD).
-    expect(PROCESS_FAILURE_RE.test(lower), "a domain-less sil_search must be framed a loud process-failure / warn visibly (NET-NEW)").toBe(true);
-    expect(SELF_CORRECT_RE.test(lower), "the backstop must self-correct (run the skipped domain check) (NET-NEW)").toBe(true);
-    // The honesty rail (BR1): never silently pass bare results off as the shopper's work.
-    const neverSilentBare =
-      /(?:never|not) silently[^.]{0,60}bare|bare catalog results[^.]{0,40}(?:never|not)|never[^.]{0,40}bare catalog/i.test(lower);
-    expect(neverSilentBare, "the backstop must never silently return bare catalog results as the shopper's work").toBe(true);
+    expect(beforeSearch, "the mint must precede search").toBe(true);
   });
 });
 
@@ -2776,21 +2735,21 @@ describe("sil-shopping/SKILL.md — the profile-less stage keeps the bare lane b
   });
 });
 
-describe("sil-shopping/SKILL.md — the per-query five-beat self-check ships as PROSE, no new tool/table/telemetry (BR6/AC6; add-only)", () => {
-  it("carries the five self-check beats in one in-context guardrail line, disavowing any new machinery", () => {
+describe("sil-shopping/SKILL.md — the per-query self-check is a lightweight PROSE orientation aid, no new tool/table/telemetry (BR6/AC6; §3a — de-rigidified)", () => {
+  it("carries a labelled per-query self-check that keeps the shopper oriented (which beat / domain resolved before searching), disavowing any new machinery", () => {
     const lower = routingLower();
-    // NET-NEW RED driver: the five verb tokens (all 0 in HEAD).
-    const missing = SELF_CHECK_VERBS.filter((v) => !lower.includes(v));
-    expect(missing, `self-check beats missing from SKILL.md: ${missing.join(", ")}`).toEqual([]);
-    // The five beats co-locate as ONE self-check line (not scattered).
-    const first = lower.indexOf(SELF_CHECK_VERBS[0]!);
-    const win = lower.slice(Math.max(0, first - 200), first + 500);
-    const allInWindow = SELF_CHECK_VERBS.every((v) => win.includes(v));
-    expect(allInWindow, "the five self-check beats must appear together as one self-check line").toBe(true);
-    const labelledSelfCheck = /self-check/i.test(win) || win.includes("guardrail") || win.includes("self-report");
-    expect(labelledSelfCheck, "the beat line must be labelled an in-context self-check / guardrail").toBe(true);
-    // No new machinery — POSITIVELY pin the disavowal (avoids the negation-lookback trap
-    // of a bare offender scan across "not a new tool, table, or telemetry surface").
+    // A labelled self-check / guardrail line exists (the rote profile_loaded → … recital
+    // is retired; a lightweight "know where you are in the flow" aid stays).
+    const at = lower.search(/self-check|self-report|guardrail/);
+    expect(at, "SKILL.md must keep a labelled per-query self-check / guardrail line").toBeGreaterThanOrEqual(0);
+    const win = lower.slice(Math.max(0, at - 200), at + 500);
+    // It is about knowing where you are in the flow — the beat/stage, and that the domain
+    // was resolved before searching — NOT a fixed five-verb recital.
+    const orients =
+      win.includes("beat") || win.includes("stage") || win.includes("where you are") ||
+      win.includes("which step") || (win.includes("domain") && win.includes("before"));
+    expect(orients, "the self-check must orient the shopper (which beat/stage; domain resolved before searching)").toBe(true);
+    // No new machinery — POSITIVELY pin the disavowal.
     const disavowsNewMachinery =
       /not (?:a )?(?:new )?tool/i.test(win) && /telemetry|table/i.test(win);
     expect(disavowsNewMachinery, "the self-check must disavow being a new tool / table / telemetry surface").toBe(true);
@@ -2803,26 +2762,21 @@ describe("sil-shopping/SKILL.md — the per-query five-beat self-check ships as 
   });
 });
 
-describe("sil-shopping/SKILL.md — the gate governs reasoning, not access: a reused domain + resolved query passes straight through (AC7; add-only)", () => {
-  it("states the non-skippable gate asks nothing on a resolved reused-domain query — quality, not access", () => {
+describe("sil-shopping/SKILL.md — a reused domain + fully-resolved query passes straight through, asking nothing (AC7; add-only)", () => {
+  it("states the shopper stage adds no friction on a resolved reused-domain query — it asks nothing and passes straight through", () => {
     const lower = routingLower();
-    // NET-NEW RED driver: "quality, {not|never} access" / "governs … reasoning" / "not the
-    // user's inbox" / "asks nothing" / "straight through" (all 0 in HEAD).
-    expect(ZERO_FRICTION_RE.test(lower), "the gate must be framed quality-not-access / asks-nothing on a resolved query (NET-NEW)").toBe(true);
-    // The zero-friction claim is anchored to a reused domain + resolved query passing through.
+    expect(NO_FRICTION_RE.test(lower), "a resolved query must ask nothing / pass straight through (no added friction)").toBe(true);
     const reusedResolved =
       /reused domain[^.]{0,80}(?:straight through|asks? nothing|no question|zero question)|passes? straight through|ask(?:s|ing)? nothing/i.test(lower);
     expect(reusedResolved, "a reused domain + fully-resolved query must pass straight through with no questions").toBe(true);
   });
 });
 
-describe("sil-shopping/SKILL.md — the domain gate scopes to sil_search discovery only; identity / id re-check / management stay ungated (BR4/AC8; add-only)", () => {
+describe("sil-shopping/SKILL.md — the domain step scopes to sil_search shopping only; identity / id re-check / management route normally (BR4/AC8; add-only)", () => {
   it("leaves identity, direct sil_product_get id re-checks, and shopper-management intents ungated", () => {
     const lower = routingLower();
-    // NET-NEW RED driver: the "ungated" scoping statement (0 in HEAD).
     const m = UNGATED_RE.exec(lower);
-    expect(m, "Routing must state the non-shopping intents stay ungated (NET-NEW — 0 in HEAD)").not.toBeNull();
-    // The ungated scope names identity, a direct sil_product_get id re-check, and management.
+    expect(m, "Routing must state the non-shopping intents route normally / ungated").not.toBeNull();
     const at = m!.index;
     const win = lower.slice(Math.max(0, at - 320), at + 60);
     const namesIdentity = win.includes("sil_register") || win.includes("sil_whoami") || win.includes("identity");
@@ -2831,9 +2785,8 @@ describe("sil-shopping/SKILL.md — the domain gate scopes to sil_search discove
     expect(namesIdRecheck, "the ungated scope must name a direct sil_product_get id re-check").toBe(true);
     const namesManagement = win.includes("management") || win.includes("forget") || win.includes("view");
     expect(namesManagement, "the ungated scope must name shopper-management intents").toBe(true);
-    // The gate is positively scoped to sil_search-driven product discovery.
-    const scopedToDiscovery = /scopes? to [^.]{0,30}sil_search|sil_search-driven (?:product )?discovery|product discovery only/i.test(lower);
-    expect(scopedToDiscovery, "the gate must be scoped to sil_search-driven product discovery only").toBe(true);
+    const scopedToDiscovery = /scopes? (?:to|only to)[^.]{0,40}sil_search|sil_search-driven (?:product )?(?:discovery|shopping)|(?:product )?discovery only/i.test(lower);
+    expect(scopedToDiscovery, "the domain step must be scoped to sil_search-driven shopping only").toBe(true);
   });
 });
 

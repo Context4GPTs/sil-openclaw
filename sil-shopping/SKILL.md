@@ -14,121 +14,105 @@ identity, help them find purchasable products — and, when asked, set up their
 view or forget a domain, or refine it. Read intent, route to the matching tool
 (loading its reference on demand), call it, and report what came back.
 
-## Always-on behavioural contract
-
-Three principles hold on every path, before any reference loads:
+## Always-on contract
 
 - **Act, don't narrate.** When intent maps to a tool, call it — don't re-confirm
   what was already stated.
-- **Fail visibly, recover correctly.** Every tool returns a `status`. On a
-  non-`ok` status, say what happened and follow the tool's own `recovery` hint —
-  never improvise a different one.
-- **Relay prices as point-in-time.** A price, availability, and `checkout_url`
-  are a snapshot. Before the user buys, re-fetch with `sil_product_get` rather
-  than trusting an earlier `sil_search` result.
+- **Follow the tool's own `recovery`.** Every tool returns a `status`; on a
+  non-`ok` one, say what happened and follow that tool's `recovery` hint, never
+  improvise another. The taxonomy lives in
+  [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md).
+- **Prices are point-in-time.** Before the user buys, re-fetch the item with
+  `sil_product_get` rather than trusting an earlier `sil_search` snapshot.
 
 ## Session start
 
-Confirm the `sil_*` tools are exposed. If they are missing from the tool list,
-the host is filtering them because sil is not admitted at the host allow
-surfaces — run the shipped admission helper `sil-openclaw-allowlist` (it
-additively admits sil at `plugins.allow` + `tools.alsoAllow`, leaving other
-trusted plugins untouched), then reopen the session so the tools load. Most flows
-need an identity: calling a catalog tool first lets an unregistered outcome route
-to `sil_register` (the [catalog tools reference](references/catalog_tools_reference.md)
-has the taxonomy), or run `sil_register` up front when intent clearly requires it.
+Confirm the `sil_*` tools are exposed. If they are missing, the host is filtering
+them — run the shipped admission helper `sil-openclaw-allowlist` (it additively
+admits sil at `plugins.allow` + `tools.alsoAllow`), then reopen the session. Most
+flows need an identity: calling a catalog tool first lets an unregistered outcome
+route to `sil_register`, or run `sil_register` up front when intent requires it.
 
 ## Routing — read the stage, then match intent to a tool
 
-**Read the stage from state — never guess it.** Two cheap session-level reads
-settle it: `sil_whoami` (is a sil **identity** **registered** yet?) and the no-arg
+**Read the stage from state — never guess it.** Two cheap reads settle it:
+`sil_whoami` (is a sil identity **registered** yet?) and the no-arg
 `sil_profile_get` overview (its **`name` field** is the whole discriminator —
-present only when a shopper exists). Branch on the two, nothing else:
+present only once a shopper exists).
 
-- **No identity** ⇒ setup starts here — guide the user to register.
+- **No identity** ⇒ guide the user to register.
 - **`name` absent ⇒ profile-less stage** — bare shopping is a first-class quick
-  lookup; the setup path is offered first-class.
-- **`name` present ⇒ shopper stage** — the domain gate governs every
-  `sil_search`-driven intent.
+  lookup; the setup path is offered alongside it.
+- **`name` present ⇒ shopper stage** — shop through what you know about the person.
 
 [`references/setup_onboarding.md`](references/setup_onboarding.md) owns the setup
-script — the staged ladder, the after-register offer, and the per-search pitch.
-Load it while setup is incomplete; it sheds once a shopper exists.
+script — the staged ladder, the after-register offer, the per-search pitch. Load
+it while setup is incomplete; it sheds once a shopper exists.
 
 ### Intent → tool (load the reference on demand)
 
 | Intent | Tool | Reference |
 |---|---|---|
-| "sign me up" / "log me in" / "register" | `sil_register` | [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) |
-| "who am I?" / show my saved name + addresses | `sil_whoami` | [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) |
-| "find X" / "search for X" / browse a category or price range | `sil_search` | [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) |
-| "look up these items" / re-check ids from a prior result | `sil_product_get` | [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md) |
+| "sign me up" / "log me in" / "register" | `sil_register` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
+| "who am I?" / show my saved name + addresses | `sil_whoami` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
+| "find X" / "search for X" / browse a category or price range | `sil_search` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
+| "look up these items" / re-check ids from a prior result | `sil_product_get` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
 | "set up an agent that shops for me" / "create my shopper" | (onboarding, then the engine) | the two-step below |
-| "what does my shopper know?" / "which domains has it learned?" | `sil_profile_get` (no `domainSlug`) | [`references/manage_domains.md`](references/manage_domains.md) |
-| "show me the &lt;niche&gt; domain" | `sil_profile_get` (`domainSlug`) | [`references/manage_domains.md`](references/manage_domains.md) |
-| "forget the &lt;niche&gt; domain" | `sil_profile_remove` | [`references/manage_domains.md`](references/manage_domains.md) |
-| (as the shopper) a shopping intent on any niche | `sil_search` → `sil_product_get` | [`references/shop_loop.md`](references/shop_loop.md) |
-| "remember this" — a fact or taste the shopper surfaced | `sil_remember` | [`references/shop_loop.md`](references/shop_loop.md) |
-| "refine / sharpen my shopper" / fix a niche | (load → propose → confirm → persist) | [`references/refine_shopper.md`](references/refine_shopper.md) |
+| "what does my shopper know?" / "which domains has it learned?" | `sil_profile_get` (no `domainSlug`) | [`manage_domains.md`](references/manage_domains.md) |
+| "show me the &lt;niche&gt; domain" | `sil_profile_get` (`domainSlug`) | [`manage_domains.md`](references/manage_domains.md) |
+| "forget the &lt;niche&gt; domain" | `sil_profile_remove` | [`manage_domains.md`](references/manage_domains.md) |
+| (as the shopper) a shopping intent on any niche | `sil_search` → `sil_product_get` | [`shop_loop.md`](references/shop_loop.md) |
+| "remember this" — a fact or taste the shopper surfaced | `sil_remember` | [`shop_loop.md`](references/shop_loop.md) |
+| "refine / sharpen my shopper" / fix a niche | (load → propose → confirm → persist) | [`refine_shopper.md`](references/refine_shopper.md) |
 
 [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md)
-holds the per-tool behaviour and the shared status taxonomy — basic shopping needs
-only that one. The shop-time answer→`sil_search`-param mapping lives in
+holds the per-tool behaviour + status taxonomy — basic shopping needs only that.
+The answer→`sil_search`-param mapping is
 [`references/search_param_mapping.md`](references/search_param_mapping.md); a full
-worked run is
+run is
 [`examples/multi_domain_shopper_walkthrough.md`](examples/multi_domain_shopper_walkthrough.md).
 
-**Setting up the shopper — the endorsement-gated two-step.** Creating the shopper
-is a profile-less-stage intent (a singleton — refused once one exists). (1)
-**Onboard first:** run
+**Setting up the shopper — the endorsement-gated two-step.** The shopper is a
+singleton (refused once one exists). (1) **Onboard first:** run
 [`references/brainstorm_interview.md`](references/brainstorm_interview.md), the
 two-touchpoint onboarding. (2) **Only after** the user explicitly **endorses** the
 assembled draft, run
-[`references/agent_creation_engine.md`](references/agent_creation_engine.md) — the
-ordered engine that persists the one sil-wired shopper. Running any engine step
-before that endorsement is forbidden.
+[`references/agent_creation_engine.md`](references/agent_creation_engine.md), the
+engine that persists the one sil-wired shopper. No engine step runs before that
+endorsement.
 
 ### Profile-less stage — the bare lane stays bare
 
 **`name` absent.** A shopping intent takes the "find X" → `sil_search` row above
 **unchanged** — no domain check, no mint, no pre-search question. Bare search is a
-legitimate quick lookup; the only shopper nudge is the profile-less per-search
-pitch ([`references/setup_onboarding.md`](references/setup_onboarding.md)). The
-domain gate below does **not** bleed into this stage.
+legitimate quick lookup; the only nudge is the profile-less per-search pitch
+([`references/setup_onboarding.md`](references/setup_onboarding.md)).
 
-### Shopper stage — domain-gated search, non-skippable
+### Shopper stage — shop through what you know
 
-**`name` present.** Running **as the shopper**, the **domain-exists check is
-non-skippable on every** `sil_search`-driven query, and the bare 'find X' lane is
-**not reachable** in this stage. Before any search, read the `sil_profile_get`
-overview, classify the query's niche, and **reuse a learned domain or mint one** —
-the shop loop's first beat. Then follow
-[`references/shop_loop.md`](references/shop_loop.md): the profile-driven
+**`name` present.** As the shopper, shop through what you know about the person:
+classify the query's niche and **reuse a learned domain or mint one before
+searching** — the shop loop's first beat — then follow
+[`references/shop_loop.md`](references/shop_loop.md), the profile-driven
 **Spec-Driven Shopping** loop that web-refreshes the domain, decomposes the
 request, and persists each surfaced fact or taste with a single `sil_remember`.
 
-- **`domains: []` forces a mint first.** A shopper with no niche yet **mints the
-  domain before searching** on the first shopping intent, **announced** with the
-  inferred niche **stated so the user can correct it** — never a silent mint.
-- **A domain-less `sil_search` is a process failure.** **Warn visibly** — name
-  that the shopper spine was bypassed and these would be bare catalog results —
-  then **self-correct** by running the skipped domain check. Never silently pass
-  bare catalog results off as the shopper's work.
+- **An empty `domains` map means no niche yet:** the first shopping intent **mints
+  the domain before searching**, **announced** with the inferred niche stated so
+  the user can correct it — never a silent mint.
 
-This gate governs the shopper's **reasoning, not the user's inbox**: a reused
-domain plus a fully-resolved query passes straight through, asking nothing — it
-protects recommendation **quality, never access**. It scopes to
-`sil_search`-driven product discovery only; identity (`sil_register` /
+This shapes the shopper's **reasoning, not the user's inbox**: a reused domain plus
+a fully-resolved query **passes straight through, asking nothing**. It scopes to
+`sil_search`-driven product discovery only — identity (`sil_register` /
 `sil_whoami`), a direct `sil_product_get` id re-check, and shopper-management
 intents (view / forget a domain) route normally, **ungated**.
 
-**Per-query self-check (prose, not a tool).** At the end of a completed shopper
-query, self-report the beats you ran — `profile_loaded → domain_classified →
-domain_reused_or_minted → intent_decomposed → facts_remembered`. It is an
-in-context guardrail, not a new tool, table, or telemetry surface.
+**Per-query self-check (prose, not a tool).** As you shop, keep track of which
+beat you're on and that you resolved the domain before searching — an in-context
+guardrail, not a new tool, table, or telemetry surface.
 
-The management + refinement flows load on demand:
-[`references/manage_domains.md`](references/manage_domains.md) for view/forget over
-the shopper's domains (two remove granularities, confirm-before-remove), and
-[`references/refine_shopper.md`](references/refine_shopper.md) for sharpening the
-shopper or one domain from observed sessions (confirm-before-persist).
+Management + refinement load on demand:
+[`references/manage_domains.md`](references/manage_domains.md) (view/forget,
+confirm-before-remove) and
+[`references/refine_shopper.md`](references/refine_shopper.md) (sharpen from observed
+sessions, confirm-before-persist).
