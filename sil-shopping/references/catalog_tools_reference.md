@@ -1,3 +1,8 @@
+---
+name: catalog-tools-reference
+description: Per-tool behaviour of the four core sil tools (register, whoami, search, product-get) and the shared status taxonomy. Load when driving any core catalog or identity tool.
+---
+
 # sil catalog + identity tools — per-tool behaviour and the shared status taxonomy
 
 Load this reference when driving any of the four core tools — `sil_register`,

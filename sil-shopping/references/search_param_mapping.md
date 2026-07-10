@@ -1,3 +1,8 @@
+---
+name: search-param-mapping
+description: The shop-time answer→sil_search parameter mapping — real params only, hard-constraint routing, the ship_to rule. Load when mapping a decomposed request into a sil_search call.
+---
+
 # Answer→`sil_search`-param mapping (the mapping is real)
 
 Load this at shop time, when the shop loop maps a decomposed request into a `sil_search` call ([`shop_loop.md`](shop_loop.md) Step 4). The mapping must target the **real `sil_search` parameters** (the shopping loop's catalog tool, named in `SKILL.md`) and nothing else — never invent a filter. (Under SDS there is no stored "answer→param mapping" seller artefact — the niche knowledge of *what* to search on lives in the active domain's domain spec; this reference is the generic param table the mapping draws on.)

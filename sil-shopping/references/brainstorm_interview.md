@@ -1,3 +1,8 @@
+---
+name: brainstorm-interview
+description: The two-touchpoint shopper onboarding — persona + shared user-spec seed, converged with the user and endorsement-gated. Load when the user asks to set up or create their shopper.
+---
+
 # Set up your shopper — the onboarding interview
 
 When the user asks to **set up shopping** — "create my shopper", "set up an agent that shops for me", "I want something that shops for me" — do **not** jump to the engine. Run a short, **two-touchpoint** onboarding that shapes the shopper *with* the user — **pre-seeded from what they already said this session** — then **create nothing** until the user endorses the assembled draft. The agent-creation engine ([`agent_creation_engine.md`](agent_creation_engine.md)) only runs **after** that explicit endorsement.
