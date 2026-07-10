@@ -10,6 +10,60 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **A new shopper is auto-bound to the current channel — fail-open, verified.**
+  Creation grew a final bind beat: `resolveBindChannel` picks the channel
+  (`spec.channel` > `OPENCLAW_MCP_MESSAGE_CHANNEL` > none), and
+  `create-shopper.mjs` binds the freshly-minted shopper to it and **verifies the
+  bind from the host's own JSON** before declaring success (the `created` outcome
+  now carries `boundChannel`). The bind is **fail-open**: a bind or verify
+  failure never fails the create and never leaves a half-bound agent — it
+  self-reverts and returns a manual-bind hint naming the shopper and the exact
+  step to run. No channel resolvable is a clean no-op, not an error. (#48)
+- **`SKILL.md` is now stage-aware and gates the shopper's search on a learned
+  domain.** The always-loaded router reads two live signals — registration
+  (`sil_whoami`) and shopper state (the no-arg `sil_profile_get` overview) — and
+  presents a **five-stage onboarding progression** while setup is incomplete,
+  then **sheds to usage-only** once complete, so a steady-state session isn't
+  taxed with setup prose. When acting *as the shopper*, search is gated behind a
+  learned domain (classify → learn-on-miss before any `sil_search`); the
+  profile-less **Lane 1 bare search stays untouched**. Prose-only — no tool
+  change, `contracts.tools` byte-unchanged. (#49)
+
+### Changed
+
+- **The `sil-shopping` skill bundle was refactored to progressive disclosure and
+  de-rigidified** — same SDS state machine and file-creation flow, leaner and
+  more legible. The one-time onboarding script was **evicted from the
+  always-loaded `SKILL.md`** into `references/setup_onboarding.md` (loads on
+  demand, shed once setup completes); the router collapses to a **pure state
+  branch** (no identity / no shopper / shopper) — body **2394 → 1042 words
+  (−56%)**, description **917 → 622 chars**. Language firmness was then matched to
+  the task: firm only at the genuine cliffs (endorsement gate, singleton refusal,
+  confirm-before-remove/persist, hard-constraint reject-at-pick,
+  re-fetch-before-buy, follow-the-tool's-recovery), plain heuristics everywhere
+  else. The **whole 10-file bundle** was rewritten leaner (**15,644 → 9,101
+  words, −41%**; `shop_loop` −56%): killed tool↔skill and cross-file duplication
+  and dropped the `sil_search` param-catalog table (the tool description owns it —
+  the mapping now points there). Skill prose + tests only; the 8-tool floor and
+  `contracts.tools` are unchanged. (#50, #51)
+
+### Fixed
+
+- **The `sil-shopping` skill now actually loads into the created shopper agent.**
+  `create-shopper.mjs` attached the **plugin id** (`["sil"]`) at
+  `agents.list[i].skills`, but a skill attaches by its **published name** — the
+  skill-dir basename `sil-shopping` (`basename(openclaw.plugin.json#skills[0])`,
+  == the `SKILL.md` frontmatter `name`) — so the host looked up a skill named
+  `sil`, found none, and the shopper ran with **no skill driving its `sil_*`
+  tools**. The `["sil"]` literal is deleted; the attach value is now
+  **single-sourced from the shipped manifest** and resolved as a fail-closed
+  precondition (a blank/absent `skills[0]` attaches nothing, never `[""]`). A
+  static name-agreement drift guard (`basename(skills[0]) == SKILL.md name !=
+  plugin id`) keeps the plugin-id/skill-name conflation from silently returning.
+  (#47)
+
 ## [0.3.8] - 2026-07-06
 
 ### Added
