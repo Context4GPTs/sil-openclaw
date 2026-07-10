@@ -41,18 +41,19 @@ has the taxonomy), or run `sil_register` up front when intent clearly requires i
 ## Routing — read the stage, then match intent to a tool
 
 **Read the stage from state — never guess it.** Two cheap session-level reads
-settle which **stage** this session is in: the no-arg `sil_profile_get` overview
-(its **`name` field** is the whole discriminator — present only when a shopper
-exists) and `sil_whoami` (whether a sil **identity** is **registered** yet). Setup
-is a **five-stage** onboarding **progression**;
-[`references/setup_onboarding.md`](references/setup_onboarding.md) carries its full
-script — the staged ladder, the after-register offer, and the per-search pitch —
-so present only the current stage, and once setup is complete, shed all of it.
+settle it: `sil_whoami` (is a sil **identity** **registered** yet?) and the no-arg
+`sil_profile_get` overview (its **`name` field** is the whole discriminator —
+present only when a shopper exists). Branch on the two, nothing else:
 
+- **No identity** ⇒ setup starts here — guide the user to register.
 - **`name` absent ⇒ profile-less stage** — bare shopping is a first-class quick
-  lookup; the setup path is offered first-class (see setup_onboarding).
+  lookup; the setup path is offered first-class.
 - **`name` present ⇒ shopper stage** — the domain gate governs every
-  `sil_search`-driven intent; setup stages 3–5 live here.
+  `sil_search`-driven intent.
+
+[`references/setup_onboarding.md`](references/setup_onboarding.md) owns the setup
+script — the staged ladder, the after-register offer, and the per-search pitch.
+Load it while setup is incomplete; it sheds once a shopper exists.
 
 ### Intent → tool (load the reference on demand)
 

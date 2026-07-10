@@ -26,11 +26,12 @@ stage's beat and its single next step**, never the whole ladder at once.
    shopper's setup and anything it remembers live in a **local profile store**
    under `$SIL_DATA_DIR`, never leaving the device via the plugin; catalog
    **search** queries sil's product catalog. Next step: `sil_register`.
-2. **Registered, no shopper** — a sil identity exists but the overview carries no
-   `name`. Bare `sil_search` works now, but this is not the finished state. Guide
-   the user to **set up their shopper**: name up front, before the onboarding
-   starts, that it takes a **couple of minutes and a few questions**. Next step:
-   the after-register offer below, then — on a yes — the create two-step in SKILL.md.
+2. **Registered, no shopper** — a sil identity exists, but no shopper yet. Bare
+   `sil_search` works now, though this is not the finished state. Guide the user
+   to **set up their shopper**: name up front, before the onboarding starts, that
+   it takes a **couple of minutes and a few questions**. The after-register offer
+   below owns the gate — it reads the store once and offers only on an empty one;
+   on a yes it runs the create two-step in SKILL.md.
 3. **Shopper, no domain yet** — `name` present, `domains: []` (no niche yet). The
    first shopping intent **mints the first domain**, announced in the shopper's
    voice with the inferred niche stated so the user can correct it. Next step:
