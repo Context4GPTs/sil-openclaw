@@ -1,3 +1,8 @@
+---
+name: agent-creation-engine
+description: The ordered, one-command engine that persists the single sil-wired shopper after the user endorses the assembled draft. Load only after explicit endorsement in the interview.
+---
+
 # Create your sil-wired shopper — the agent-creation engine
 
 **Precondition: run this ONLY after the user has explicitly endorsed the assembled draft from [`brainstorm_interview.md`](brainstorm_interview.md).** Anything below before that endorsement is forbidden — the interview owns the gate.

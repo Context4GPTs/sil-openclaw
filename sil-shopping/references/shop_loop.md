@@ -1,3 +1,8 @@
+---
+name: shop-loop
+description: The Spec-Driven Shopping loop — the shopper shops any niche, minting domains on the fly, over a five-beat spine. Load when running as the shopper and the user states a shopping intent.
+---
+
 # Shop-time loop — how the one shopper shops any niche, minting domains on the fly
 
 Load this when you (the sil skill) are running as the user's **shopper** and they state a shopping intent ("find me something for a steak dinner around $40"). There is **ONE shopper** — a generalist that goes deep on whatever the user shops for — and it holds **many domains** (niches it has learned), each **minted lazily on first shop**. The [engine's Runtime hook](agent_creation_engine.md) ends where this loop begins: the host has injected the shopper's persona via the workspace **`SOUL.md`** (voice, standing rules, hard-no's), and the sil skill has read `$SIL_DATA_DIR/shopper/profile.json` — the **shared `user_spec.md`** (the person's cross-niche facts + hard constraints) plus the slug-keyed **`domains`** map. The per-niche packs load lazily, at shop time, per the beats below.

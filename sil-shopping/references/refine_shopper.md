@@ -1,3 +1,8 @@
+---
+name: refine-shopper
+description: The refinement loop — sharpen the shopper or one domain from observed sessions, confirm-before-persist. Load when the user asks to refine, sharpen, or amend their shopper or a niche.
+---
+
 # Refine your shopper or one of its domains — the refinement loop
 
 When the user wants to **sharpen their shopper** — "refine my shopper", "the cycling domain keeps surfacing the wrong stuff, let's fix it", "amend what you know about me" — do **not** re-onboard from scratch and do **not** quietly mutate anything. Run this **targeted-amend** loop: load the relevant artefact, propose concrete refinements drawn from what the shopper actually **observed** in real shopping sessions, let the user **confirm a subset**, and persist **only** the confirmed subset by re-running the existing persist step. Nothing changes silently; nothing persists without the user's explicit confirmation.

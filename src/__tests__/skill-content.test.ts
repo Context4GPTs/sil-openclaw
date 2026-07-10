@@ -76,6 +76,14 @@ const MAPPING_PATH = join(SKILL_DIR, "references", "search_param_mapping.md");
 const MANAGE_PATH = join(SKILL_DIR, "references", "manage_domains.md");
 const SHOP_LOOP_PATH = join(SKILL_DIR, "references", "shop_loop.md");
 const REFINE_PATH = join(SKILL_DIR, "references", "refine_shopper.md");
+// The one-time SETUP script the thin router evicts to a reference (progressive-
+// disclosure rewrite). The lean SKILL.md keeps the STEADY-STATE decision logic (the
+// stage read, the shopper-stage domain gate, the five-beat self-check); the one-time
+// setup SCRIPT — the five-stage staged-progression detail, the after-register
+// `offer_shopper` beat, and the `post-result` per-search pitch — moves HERE. The
+// `stagedBodyLower` / `afterRegisterBeat` / `perSearchBeat` extractors read THIS
+// file; `routingRaw` / `sessionStartLower` stay pointed at SKILL.md.
+const SETUP_ONBOARDING_PATH = join(SKILL_DIR, "references", "setup_onboarding.md");
 const EXAMPLE_PATH = join(SKILL_DIR, "examples", "multi_domain_shopper_walkthrough.md");
 
 /** The pre-rewrite filenames the rename retired. Must be gone from disk AND from
@@ -166,6 +174,7 @@ function bundleCorpus(): string {
     readBody(MANAGE_PATH),
     readBody(SHOP_LOOP_PATH),
     readBody(REFINE_PATH),
+    readBody(SETUP_ONBOARDING_PATH),
     readBody(EXAMPLE_PATH),
   ].join("\n");
 }
@@ -180,6 +189,7 @@ const BUNDLE_FILES: ReadonlyArray<readonly [string, string]> = [
   ["manage_domains.md", MANAGE_PATH],
   ["shop_loop.md", SHOP_LOOP_PATH],
   ["refine_shopper.md", REFINE_PATH],
+  ["setup_onboarding.md", SETUP_ONBOARDING_PATH],
   ["multi_domain_shopper_walkthrough.md", EXAMPLE_PATH],
 ];
 
@@ -467,6 +477,7 @@ describe("sil-shopping/SKILL.md — lean router routes to the renamed references
       "references/shop_loop.md",
       "references/manage_domains.md",
       "references/refine_shopper.md",
+      "references/setup_onboarding.md",
       "examples/multi_domain_shopper_walkthrough.md",
     ];
     const missing = expected.filter((rel) => !body.includes(rel));
@@ -1816,18 +1827,18 @@ function sectionOwning(body: string, anchor: number): string {
 /** The after-register beat section, anchored on `offer_shopper` (net-new; appears
  * ONLY in this beat — RED before the beat exists). */
 function afterRegisterBeat(): string {
-  const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+  const body = readBody(SETUP_ONBOARDING_PATH);
   const at = body.indexOf("offer_shopper");
-  expect(at, "SKILL.md must carry the after-register offer_shopper beat").toBeGreaterThanOrEqual(0);
+  expect(at, "setup_onboarding.md must carry the after-register offer_shopper beat").toBeGreaterThanOrEqual(0);
   return sectionOwning(body, at);
 }
 
 /** The per-search pitch beat section, anchored on `post-result`/`post result`
  * (net-new; unique to this beat — RED before the beat exists). */
 function perSearchBeat(): string {
-  const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+  const body = readBody(SETUP_ONBOARDING_PATH);
   const m = /post-?result/i.exec(body);
-  expect(m, "SKILL.md must carry the per-search post-result pitch beat").not.toBeNull();
+  expect(m, "setup_onboarding.md must carry the per-search post-result pitch beat").not.toBeNull();
   return sectionOwning(body, m!.index);
 }
 
@@ -1915,7 +1926,7 @@ describe("sil-shopping/SKILL.md — after-register introduce-and-offer beat (add
     // Section-scoped: brainstorm_interview.md also appears in the create two-step
     // gate, so a whole-body includes would false-green the routing pin.
     const beat = afterRegisterBeat();
-    expect(beat).toContain("references/brainstorm_interview.md");
+    expect(beat).toContain("brainstorm_interview.md");
     const onlyOnYes =
       /only on a yes/i.test(beat) || /on a yes/i.test(beat) ||
       /on acceptance/i.test(beat) || /if .{0,20}\byes\b/i.test(beat) ||
@@ -2874,7 +2885,7 @@ describe("sil-shopping/SKILL.md — the domain gate scopes to sil_search discove
  * the per-stage anchors scan the whole body; only the progression-gate structure
  * (below) is scoped to `## Routing`, where the founder's delete-first rewrite lands. */
 function stagedBodyLower(): string {
-  return skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
+  return readBody(SETUP_ONBOARDING_PATH).toLowerCase();
 }
 
 // ---- NET-NEW positive anchors for the staged progression (all 0 in shipped SKILL.md) ----
@@ -2888,14 +2899,16 @@ const STAGE4_ACTIVE_RE = /shopper active|milestone|first domain created/i;
 const STAGE5_COMPLETE_RE =
   /setup (?:is )?complete|setup-complete|once setup is (?:complete|done)|setup (?:done|finished)/i;
 
-describe("sil-shopping/SKILL.md — Routing presents a five-stage staged onboarding progression, read from sil_whoami + sil_profile_get (founder round-2; add-only)", () => {
-  it("opens Routing with a STAGED progression (not a binary name-presence gate), with the stage read from BOTH sil_whoami and sil_profile_get", () => {
+describe("sil-shopping/SKILL.md — Routing branches on sil_whoami + sil_profile_get; the staged progression lives in setup_onboarding.md (progressive-disclosure rewrite; add-only)", () => {
+  it("reads the stage from BOTH sil_whoami and sil_profile_get; the staged-progression naming lives in the on-demand setup reference", () => {
     const raw = routingRaw();
     const lower = raw.toLowerCase();
-    // NET-NEW RED driver: staged-progression vocabulary (the shipped router was binary — 0 in HEAD).
+    // The router thinned to a pure state branch (no identity / no shopper / shopper);
+    // the staged-progression NAMING moved to the on-demand setup reference, alongside
+    // the five-stage enumeration the sibling `stagedBodyLower` assertions already read there.
     expect(
-      STAGED_PROGRESSION_RE.test(raw),
-      "Routing must present a STAGED onboarding progression (NET-NEW — the shipped router was a binary `name`-presence gate)",
+      STAGED_PROGRESSION_RE.test(readBody(SETUP_ONBOARDING_PATH)),
+      "the staged onboarding progression must be presented in setup_onboarding.md (the router only branches + reads state)",
     ).toBe(true);
     // The stage is the JOINT signal — sil_whoami (registered?) + sil_profile_get (shopper?). The
     // whoami→registration tie is the NET-NEW RED driver (in the binary router whoami is only a

@@ -1,3 +1,8 @@
+---
+name: manage-domains
+description: View or forget the shopper's learned domains — the two sil_profile tools, the two remove granularities, confirm-before-remove. Load when the user wants to see what the shopper knows or forget a niche.
+---
+
 # Manage your shopper's domains — view, forget
 
 Load this when the user wants to see what their **shopper** knows or **forget a domain** (a niche) — "what does my shopper know?", "which domains has it learned?", "show me the cycling domain", "forget the grocery niche". The router in `SKILL.md` names which `sil_profile_*` tool each intent maps to; this reference is what those tools do, plus the **two remove granularities** and the confirm-before-remove gate.

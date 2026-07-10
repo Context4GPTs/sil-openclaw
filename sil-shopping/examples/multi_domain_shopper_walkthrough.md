@@ -1,3 +1,8 @@
+---
+name: multi-domain-shopper-walkthrough
+description: Worked end-to-end example — create one shopper, then shop two unrelated niches in one session with a shared fact reused across both and per-domain taste kept isolated.
+---
+
 # Worked example — one shopper, two unrelated niches, one session
 
 A short walkthrough of the **headline capability**: create **ONE shopper**
