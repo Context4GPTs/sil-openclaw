@@ -2557,3 +2557,496 @@ describe("references/brainstorm_interview.md — session-seeded pre-fill, still 
     expect(whoamiSeedPullOffenders(brainstormBodyLower())).toEqual([]);
   });
 });
+
+/* ===========================================================================
+ * STAGE-AWARE ROUTING THAT GATES SEARCH ON A DOMAIN
+ * card: stage-aware-skill-md-that-gates-search-on-a-domain (BR1–BR7 / AC1–AC8)
+ *
+ * The `## Routing` slice is rewritten DELETE-FIRST so it OPENS with a stage gate
+ * keyed on the no-arg `sil_profile_get` `name`-presence, then branches:
+ *   - name ABSENT  ⇒ profile-less: the bare "find X" → sil_search lane, unchanged.
+ *   - name PRESENT ⇒ shopper: the domain-gated spine runs BEFORE any sil_search;
+ *     the bare lane is not reachable; `domains: []` forces an announced/correctable
+ *     mint; a sil_search reached without an active domain is a LOUD process-failure
+ *     that self-corrects (never bare results passed off as the shopper's work).
+ * A per-query FIVE-BEAT self-check rides the shopper branch as PROSE (no new tool).
+ *
+ * ADD-ONLY. Every describe ABOVE stays UNEDITED + green — including the spine-order
+ * pin (:2055), the Lane-1-stays-bare pins (:2226), and the buy-window rail (:1287).
+ * Disavowal discipline (docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md):
+ * positive NET-NEW anchors, section-scoped, negation-aware negatives, `.toEqual([])`.
+ *
+ * RED-capability (proven against the card base HEAD 8d163ea via `git show`): every
+ * NET-NEW anchor below — "stage"/"read the stage", the `name`-discriminator, "not
+ * reachable", "domains: []"/"force a mint", "process failure"/"warn"/"self-correct",
+ * the five self-check verbs, "quality, {not|never} access"/"governs … reasoning",
+ * "ungated", the `### Profile-less stage` H3 — is grepped to ZERO in HEAD:SKILL.md,
+ * so each positive anchor fails against the pristine base (RED). The recurring
+ * `sil_profile_get` / `sil_search` / "shopper" / "profile-less" tokens are
+ * DELIBERATELY not used as RED anchors (they already appear → would false-GREEN);
+ * they are only asserted WITHIN a net-new-anchored, heading-scoped window.
+ *
+ * The `[e2e]` behavioural ACs (the agent actually OBEYS the gate at runtime) are
+ * DEFERRED — no host-load gate exists in this repo — and are NOT faked here: these
+ * pins assert only that the ROUTER PROSE ships the instruction, never a runtime claim.
+ * ========================================================================= */
+
+/** The `## Routing` H2 region — from the `## Routing` heading to the next `## ` (or
+ * EOF; Routing is the last major area). The delete-first rewrite keeps the `## Routing`
+ * heading, so this never errors post-rewrite; a rename would (correctly) RED here. */
+function routingRaw(): string {
+  const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+  const at = body.toLowerCase().indexOf("## routing");
+  expect(at, "SKILL.md must keep a `## Routing` section (delete-first rewrite of the routing slice)").toBeGreaterThanOrEqual(0);
+  const rest = body.slice(at + 3);
+  const next = rest.indexOf("\n## ");
+  return next >= 0 ? body.slice(at, at + 3 + next) : body.slice(at);
+}
+function routingLower(): string {
+  return routingRaw().toLowerCase();
+}
+
+/** The tightest heading-bounded section (H2 OR H3) containing `anchor` — from the
+ * nearest preceding `## `/`### ` heading to the next `## `/`### `. Isolates a single
+ * stage ARM (e.g. `### Profile-less stage`) so an offender scan cannot leak into the
+ * sibling `### Shopper stage` arm (which legitimately carries affirmative gate steps). */
+function headingScopedSection(body: string, anchor: number): string {
+  const before = Math.max(body.lastIndexOf("\n## ", anchor), body.lastIndexOf("\n### ", anchor));
+  const start = before >= 0 ? before + 1 : 0;
+  const nextH2 = body.indexOf("\n## ", anchor + 1);
+  const nextH3 = body.indexOf("\n### ", anchor + 1);
+  const ends = [nextH2, nextH3].filter((i) => i >= 0);
+  const end = ends.length ? Math.min(...ends) : body.length;
+  return body.slice(start, end);
+}
+
+// ---- NET-NEW positive anchors (all 0 in HEAD:SKILL.md — the RED drivers) ----
+const NAME_DISCRIMINATOR_RE =
+  /`?name`?\s*(?:field\b|absent|present|is present|is absent|-?presence)|carries a `?name`?|(?:the )?(?:whole|single) discriminator|presence of (?:a |the )?`?name`?/i;
+const STAGE_READ_RE =
+  /read the stage|settles which stage|reads? the stage|derive[sd]? the stage|keyed (?:on|off)|(?:the )?(?:whole|single) discriminator/i;
+const BARE_LANE_CLOSED_RE =
+  /not reachable|unreachable|not (?:presented|offered|available|a legitimate)|no bare lane/i;
+const EMPTY_DOMAINS_RE =
+  /domains?\s*:?\s*\[\s*\]|domains?\s*==\s*\[\s*\]|no niche yet|empty domains/i;
+const FORCE_MINT_RE =
+  /force[sd]?\s+(?:a |the |one )?mint|forces? a mint|mint (?:the domain|a domain|one)[^.]{0,20}(?:first|before)|mints? the domain before/i;
+const PROCESS_FAILURE_RE = /process[- ]failure|warn (?:visibly|loudly)|\bwarn\b/i;
+const SELF_CORRECT_RE = /self-correct|self correct|run(?:ning|s)? the skipped|corrects? itself/i;
+const ZERO_FRICTION_RE =
+  /quality,?\s*(?:not|never)\s*access|governs[^.]{0,40}reasoning|not the user'?s inbox|ask(?:s|ing)? nothing|passes? straight through|zero questions?/i;
+const UNGATED_RE =
+  /ungated|no domain gate|not gated|without (?:a |the |any )?domain gate|no (?:domain )?gate (?:is )?imposed/i;
+
+// The five self-check beats — the most distinctive NET-NEW anchor (all 0 in HEAD).
+const SELF_CHECK_VERBS = [
+  "profile_loaded",
+  "domain_classified",
+  "domain_reused_or_minted",
+  "intent_decomposed",
+  "facts_remembered",
+] as const;
+
+/** AFFIRMATIVE domain-gate STEP instructions (a real gate, not a disavowal of one).
+ * Bare "domain gate" / "domain" are DELIBERATELY excluded — a legit profile-less
+ * disavowal reads "the domain gate below does not bleed" (negation AFTER the token,
+ * out of the 28-char pre-lookback), which would false-flag. Only the affirmative
+ * STEP verbs are scanned, and `affirmativeOffenders`' pre-negation lookback clears
+ * the profile-less arm's "no domain check, no mint, no pre-search question". */
+const AFFIRMATIVE_DOMAIN_GATE_RE =
+  /classify the (?:query'?s )?niche|reuse[- ](?:a |the |one )?(?:learned )?domain|reuse-or-mint|reuse or mint|\bmint\b|domain-exists check|domain check|pre-?search question|before any (?:sil_search|search)|non-?skippable|\belicit/gi;
+
+/** AFFIRMATIVE "guess the stage" (BR2 forbids it). The corrected prose NAMES it only
+ * to disavow it ("never guess it", "never an assumption") — negation-aware clears
+ * those; a real "guess/assume the stage" regression is flagged. */
+const STAGE_GUESS_RE =
+  /guess(?:ed|es|ing)?|assum(?:e|es|ed|ption)|infer(?:red|s|ring)?[^.]{0,20}(?:conversation|history)/gi;
+
+describe("sil-shopping/SKILL.md — Routing opens with a stage gate read from sil_profile_get `name`-presence, never guessed (BR2/AC5; add-only)", () => {
+  it("derives the stage from the no-arg sil_profile_get overview's `name` field — names both the profile-less and shopper stages", () => {
+    const raw = routingRaw();
+    const lower = raw.toLowerCase();
+    // NET-NEW RED driver: a "stage" gate now heads Routing (0 in HEAD).
+    expect(lower.includes("stage"), "Routing must open with a stage gate (NET-NEW 'stage' — 0 in HEAD)").toBe(true);
+    // The stage is DERIVED (read), not guessed.
+    expect(STAGE_READ_RE.test(raw), "the stage must be READ from state (read the stage / settles which stage / the discriminator)").toBe(true);
+    // The discriminator IS the no-arg sil_profile_get `name` field.
+    expect(lower).toContain("sil_profile_get");
+    expect(NAME_DISCRIMINATOR_RE.test(raw), "the discriminator must be the sil_profile_get `name` field (present/absent)").toBe(true);
+    // Both stages named as outcomes of the gate.
+    expect(lower).toContain("profile-less");
+    expect(lower).toContain("shopper");
+  });
+
+  it("BR2 negation-aware: the stage is never guessed / assumed from conversation history (offender scan, disavowals allowed)", () => {
+    // The corrected prose says "never guess it" / "never an assumption" (guess/assume
+    // NAMED only to bury them). A bare not.toContain would false-RED that; flag only an
+    // AFFIRMATIVE (non-negated within ~28 chars) guess-the-stage instruction. `.toEqual([])`.
+    expect(affirmativeOffenders(routingLower(), STAGE_GUESS_RE)).toEqual([]);
+  });
+});
+
+describe("sil-shopping/SKILL.md — shopper stage: domain resolved BEFORE any search; the bare lane is not reachable (BR4/AC1; add-only)", () => {
+  it("routes every shopper-stage sil_search intent through sil_profile_get → reuse-or-mint a domain before any sil_search", () => {
+    const lower = routingLower();
+    // Precondition prose present in the shopper branch (scoped by the net-new anchors).
+    expect(lower).toContain("sil_profile_get");
+    expect(lower).toContain("sil_search");
+    const reuseOrMint =
+      /reuse[^.]{0,20}(?:or )?mint|reuse a learned domain or mint|reuse-or-mint|reuse or mint/i.test(lower);
+    expect(reuseOrMint, "the shopper branch must reuse-or-mint a domain").toBe(true);
+    const beforeSearch = /before any (?:sil_search|search)/i.test(lower);
+    expect(beforeSearch, "the domain must resolve BEFORE any sil_search").toBe(true);
+    // The precondition is scoped to the shopper (Lane 2), never the general router.
+    expect(lower).toContain("as the shopper");
+  });
+
+  it("closes the bare 'find X' lane in the shopper-present path — it is NOT reachable once a shopper exists (NET-NEW)", () => {
+    const lower = routingLower();
+    // NET-NEW RED driver: "not reachable" / "unreachable" (0 in HEAD).
+    const m = BARE_LANE_CLOSED_RE.exec(lower);
+    expect(m, "the shopper path must state the bare 'find X' lane is not reachable (NET-NEW — 0 in HEAD)").not.toBeNull();
+    // The closure is ABOUT the bare / Lane-1 / 'find X' lane, in a shopper-scoped window.
+    const at = m!.index;
+    const win = lower.slice(Math.max(0, at - 220), at + 60);
+    const namesBareLane = win.includes("bare") || win.includes('"find x"') || win.includes("find x") || win.includes("lane");
+    expect(namesBareLane, "the not-reachable statement must be about the bare 'find X' lane").toBe(true);
+    const scopedShopper = win.includes("shopper") || win.includes("name` present") || win.includes("name present");
+    expect(scopedShopper, "the closure must be scoped to the shopper stage").toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — `domains: []` forces an announced, correctable mint before search (BR5/AC2; add-only)", () => {
+  it("a shopper with an empty domains map forces a mint FIRST, announced with the inferred niche stated so the user can correct it", () => {
+    const lower = routingLower();
+    // NET-NEW RED drivers: the empty-domains condition + the forced mint (0 in HEAD).
+    expect(EMPTY_DOMAINS_RE.test(lower), "the empty-domains condition (`domains: []` / no niche yet) must be named").toBe(true);
+    expect(FORCE_MINT_RE.test(lower), "an empty domains map must FORCE a mint before searching (NET-NEW)").toBe(true);
+    // Announced + correctable (the mint is never silent).
+    const announced = /announce[sd]?/i.test(lower);
+    expect(announced, "the forced mint must be announced").toBe(true);
+    const correctable = /correct it|can correct|so the user can correct|user can correct/i.test(lower);
+    expect(correctable, "the inferred niche must be stated so the user can correct it").toBe(true);
+    const beforeSearch = /before (?:searching|any (?:sil_search|search))/i.test(lower);
+    expect(beforeSearch, "the forced mint must precede search").toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — a domain-less sil_search is a loud process-failure that self-corrects, never bare results (BR1/AC3; add-only)", () => {
+  it("directs a visible warn + self-correct when sil_search is reached without an active domain — never silently returns bare catalog results", () => {
+    const lower = routingLower();
+    // NET-NEW RED drivers: the process-failure framing + the self-correct step (0 in HEAD).
+    expect(PROCESS_FAILURE_RE.test(lower), "a domain-less sil_search must be framed a loud process-failure / warn visibly (NET-NEW)").toBe(true);
+    expect(SELF_CORRECT_RE.test(lower), "the backstop must self-correct (run the skipped domain check) (NET-NEW)").toBe(true);
+    // The honesty rail (BR1): never silently pass bare results off as the shopper's work.
+    const neverSilentBare =
+      /(?:never|not) silently[^.]{0,60}bare|bare catalog results[^.]{0,40}(?:never|not)|never[^.]{0,40}bare catalog/i.test(lower);
+    expect(neverSilentBare, "the backstop must never silently return bare catalog results as the shopper's work").toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the profile-less stage keeps the bare lane bare; the domain gate does not bleed in (BR3/AC4; add-only)", () => {
+  it("routes name-absent → the profile-less stage arm, which keeps the bare 'find X' → sil_search path with NO affirmative domain gate", () => {
+    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
+    const lower = body.toLowerCase();
+    // NET-NEW RED driver: a dedicated `### Profile-less stage` arm (0 in HEAD).
+    const at = lower.indexOf("\n### profile-less");
+    expect(at, "SKILL.md must carry a dedicated `### Profile-less stage` arm (NET-NEW — absent in HEAD)").toBeGreaterThanOrEqual(0);
+    const arm = headingScopedSection(body, at + 1).toLowerCase();
+    // The arm keeps the bare path (names sil_search + the 'find X' lane, unchanged).
+    expect(arm).toContain("sil_search");
+    const namesBareRow = arm.includes('"find x"') || arm.includes("find x");
+    expect(namesBareRow, "the profile-less arm must keep the bare 'find X' lane").toBe(true);
+    const unchanged = arm.includes("unchanged") || arm.includes("bare") || arm.includes("untouched");
+    expect(unchanged, "the profile-less bare lane must be stated unchanged").toBe(true);
+    // Negation-aware: NO AFFIRMATIVE domain-gate STEP bleeds into the profile-less arm
+    // (the arm's "no domain check, no mint, no pre-search question" are all disavowed). []
+    expect(affirmativeOffenders(arm, AFFIRMATIVE_DOMAIN_GATE_RE)).toEqual([]);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the per-query five-beat self-check ships as PROSE, no new tool/table/telemetry (BR6/AC6; add-only)", () => {
+  it("carries the five self-check beats in one in-context guardrail line, disavowing any new machinery", () => {
+    const lower = routingLower();
+    // NET-NEW RED driver: the five verb tokens (all 0 in HEAD).
+    const missing = SELF_CHECK_VERBS.filter((v) => !lower.includes(v));
+    expect(missing, `self-check beats missing from SKILL.md: ${missing.join(", ")}`).toEqual([]);
+    // The five beats co-locate as ONE self-check line (not scattered).
+    const first = lower.indexOf(SELF_CHECK_VERBS[0]!);
+    const win = lower.slice(Math.max(0, first - 200), first + 500);
+    const allInWindow = SELF_CHECK_VERBS.every((v) => win.includes(v));
+    expect(allInWindow, "the five self-check beats must appear together as one self-check line").toBe(true);
+    const labelledSelfCheck = /self-check/i.test(win) || win.includes("guardrail") || win.includes("self-report");
+    expect(labelledSelfCheck, "the beat line must be labelled an in-context self-check / guardrail").toBe(true);
+    // No new machinery — POSITIVELY pin the disavowal (avoids the negation-lookback trap
+    // of a bare offender scan across "not a new tool, table, or telemetry surface").
+    const disavowsNewMachinery =
+      /not (?:a )?(?:new )?tool/i.test(win) && /telemetry|table/i.test(win);
+    expect(disavowsNewMachinery, "the self-check must disavow being a new tool / table / telemetry surface").toBe(true);
+  });
+
+  it("the tool surface stays at EIGHT — the self-check adds no registered tool (belt-and-braces rail)", () => {
+    // AC6's "no new machinery" tied to the real registration surface: the self-check is
+    // prose only, so registeredNames() is byte-unchanged at 8 (green today, stays green).
+    expect(registeredNames().size).toBe(8);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the gate governs reasoning, not access: a reused domain + resolved query passes straight through (AC7; add-only)", () => {
+  it("states the non-skippable gate asks nothing on a resolved reused-domain query — quality, not access", () => {
+    const lower = routingLower();
+    // NET-NEW RED driver: "quality, {not|never} access" / "governs … reasoning" / "not the
+    // user's inbox" / "asks nothing" / "straight through" (all 0 in HEAD).
+    expect(ZERO_FRICTION_RE.test(lower), "the gate must be framed quality-not-access / asks-nothing on a resolved query (NET-NEW)").toBe(true);
+    // The zero-friction claim is anchored to a reused domain + resolved query passing through.
+    const reusedResolved =
+      /reused domain[^.]{0,80}(?:straight through|asks? nothing|no question|zero question)|passes? straight through|ask(?:s|ing)? nothing/i.test(lower);
+    expect(reusedResolved, "a reused domain + fully-resolved query must pass straight through with no questions").toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the domain gate scopes to sil_search discovery only; identity / id re-check / management stay ungated (BR4/AC8; add-only)", () => {
+  it("leaves identity, direct sil_product_get id re-checks, and shopper-management intents ungated", () => {
+    const lower = routingLower();
+    // NET-NEW RED driver: the "ungated" scoping statement (0 in HEAD).
+    const m = UNGATED_RE.exec(lower);
+    expect(m, "Routing must state the non-shopping intents stay ungated (NET-NEW — 0 in HEAD)").not.toBeNull();
+    // The ungated scope names identity, a direct sil_product_get id re-check, and management.
+    const at = m!.index;
+    const win = lower.slice(Math.max(0, at - 320), at + 60);
+    const namesIdentity = win.includes("sil_register") || win.includes("sil_whoami") || win.includes("identity");
+    expect(namesIdentity, "the ungated scope must name identity (sil_register / sil_whoami)").toBe(true);
+    const namesIdRecheck = win.includes("sil_product_get") && (win.includes("re-check") || win.includes("recheck") || win.includes("id "));
+    expect(namesIdRecheck, "the ungated scope must name a direct sil_product_get id re-check").toBe(true);
+    const namesManagement = win.includes("management") || win.includes("forget") || win.includes("view");
+    expect(namesManagement, "the ungated scope must name shopper-management intents").toBe(true);
+    // The gate is positively scoped to sil_search-driven product discovery.
+    const scopedToDiscovery = /scopes? to [^.]{0,30}sil_search|sil_search-driven (?:product )?discovery|product discovery only/i.test(lower);
+    expect(scopedToDiscovery, "the gate must be scoped to sil_search-driven product discovery only").toBe(true);
+  });
+});
+
+/* ===========================================================================
+ * STAGED ONBOARDING PROGRESSION (founder redesign — round 2, 2026-07-10)
+ * card: stage-aware-skill-md-that-gates-search-on-a-domain
+ *
+ * The shipped router (round 1) gates on a BINARY discriminator — shopper `name`
+ * absent/present. The founder bounced it: the always-loaded SKILL.md (the FIRST
+ * file loaded into a sil-shopping session) must present the whole setup as a
+ * FIVE-STAGE onboarding PROGRESSION while setup is incomplete, then SHED all of it
+ * once complete (usage-only). Every stage is READ from state (`sil_whoami` + the
+ * no-arg `sil_profile_get` overview), never guessed:
+ *   1. unregistered            → guide register + a data-use statement (how 4GPTs &
+ *                                SIL use the user's data), grounded in real surfaces.
+ *   2. registered, no shopper  → guide shopper setup, naming up front that it takes
+ *                                "a couple of minutes and a few questions".
+ *   3. shopper, no domain      → first intent mints the first domain (announced —
+ *                                the round-1 `domains: []` force-mint pin, kept).
+ *   4. shopper active          → check off completion milestones: first domain
+ *                                created + (softer) the memory/reinforcement tool used.
+ *   5. setup complete          → SHED every setup/onboarding beat; usage-only (the
+ *                                domain-gated shop loop + Spec-Driven Shopping).
+ *
+ * ADD-ONLY. Every describe ABOVE stays UNEDITED + green — including the round-1
+ * stage-gate pins (the `name`-discriminator, the domain gate, the loud-warn backstop,
+ * the five self-check verbs, the `### Profile-less stage` arm), the Lane-1-stays-bare
+ * pins, the spine-order pin, and the buy-window rail. No existing pin is loosened.
+ *
+ * Disavowal discipline (docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md):
+ * positive NET-NEW anchors, window-scoped; the SHED stage is pinned with a POSITIVE
+ * shed statement, NEVER a bare not.toContain("setup"/"onboarding") — the shed stage
+ * legitimately NAMES setup/onboarding to say they are shed.
+ *
+ * RED-capability (grepped to ZERO in the shipped SKILL.md, 2026-07-10): "progression"/
+ * "five stage(s)", "registered … no shopper", "4gpts", "couple of minutes", "a few
+ * questions", "milestone"/"check off", "first domain", "setup complete", "sheds",
+ * "usage". The recurring tokens ("stage", "sil_whoami", "sil_profile_get", "shopper",
+ * "onboarding") are DELIBERATELY not used as RED anchors (they already appear → would
+ * false-GREEN); they are only asserted WITHIN a net-new-anchored window.
+ *
+ * The `[e2e]` behavioural outcome (the agent actually reads state + sheds at runtime)
+ * is DEFERRED — no host-load gate in this repo — and is NOT faked: these pins assert
+ * only that the ROUTER PROSE ships the staged progression, never a runtime claim.
+ * ========================================================================= */
+
+/** The SKILL.md body below the frontmatter, lowercased — the staged progression may
+ * span the Session-start / after-register beats AND the `## Routing` stage gate, so
+ * the per-stage anchors scan the whole body; only the progression-gate structure
+ * (below) is scoped to `## Routing`, where the founder's delete-first rewrite lands. */
+function stagedBodyLower(): string {
+  return skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
+}
+
+// ---- NET-NEW positive anchors for the staged progression (all 0 in shipped SKILL.md) ----
+const STAGED_PROGRESSION_RE =
+  /progression|five stages?|five-stage|staged (?:onboarding|setup|progression)|stage 1|stage 5/i;
+const STAGE1_UNREG_RE =
+  /unregistered|no (?:sil )?identity|not (?:yet )?registered|no identity yet/i;
+const STAGE2_REGNOSHOP_RE =
+  /registered[^.]{0,60}no shopper|no shopper[^.]{0,60}registered|registered,?\s*(?:but )?no shopper/i;
+const STAGE4_ACTIVE_RE = /shopper active|milestone|first domain created/i;
+const STAGE5_COMPLETE_RE =
+  /setup (?:is )?complete|setup-complete|once setup is (?:complete|done)|setup (?:done|finished)/i;
+
+describe("sil-shopping/SKILL.md — Routing presents a five-stage staged onboarding progression, read from sil_whoami + sil_profile_get (founder round-2; add-only)", () => {
+  it("opens Routing with a STAGED progression (not a binary name-presence gate), with the stage read from BOTH sil_whoami and sil_profile_get", () => {
+    const raw = routingRaw();
+    const lower = raw.toLowerCase();
+    // NET-NEW RED driver: staged-progression vocabulary (the shipped router was binary — 0 in HEAD).
+    expect(
+      STAGED_PROGRESSION_RE.test(raw),
+      "Routing must present a STAGED onboarding progression (NET-NEW — the shipped router was a binary `name`-presence gate)",
+    ).toBe(true);
+    // The stage is the JOINT signal — sil_whoami (registered?) + sil_profile_get (shopper?). The
+    // whoami→registration tie is the NET-NEW RED driver (in the binary router whoami is only a
+    // routing-table row, never tied to `regist`/`identit` — so this fired RED against HEAD).
+    expect(
+      lower.includes("sil_profile_get"),
+      "the staged progression must read the stage from sil_profile_get (the shopper signal)",
+    ).toBe(true);
+    // Tie whoami to the REGISTRATION *state* — "registered"/"registration" or a
+    // "finds/reports … (no) identity" read — NOT the bare tool-name `sil_register`
+    // nor the AC8 ungated-scope list "identity (`sil_register` / `sil_whoami`)", which
+    // is pre-existing and would false-GREEN a loose `sil_whoami…regist` scan.
+    const readsWhoamiForStage =
+      /sil_whoami[^.]{0,90}(?:registered|registration)|sil_whoami[^.]{0,50}(?:finds|reports|reads|tells)[^.]{0,40}(?:no )?(?:sil )?identity|(?:registered|registration)[^.]{0,90}sil_whoami/i.test(
+        lower,
+      );
+    expect(
+      readsWhoamiForStage,
+      "the staged progression must read sil_whoami as the REGISTRATION signal (NET-NEW — whoami is only a routing-table row / ungated-scope mention in the binary router), not just sil_profile_get",
+    ).toBe(true);
+  });
+
+  it("enumerates all five stages — unregistered → registered-no-shopper → shopper-no-domain → shopper-active(milestones) → setup-complete", () => {
+    const lower = stagedBodyLower();
+    const missing: string[] = [];
+    if (!STAGE1_UNREG_RE.test(lower)) missing.push("stage1 (unregistered)");
+    if (!STAGE2_REGNOSHOP_RE.test(lower)) missing.push("stage2 (registered, no shopper)");
+    if (!EMPTY_DOMAINS_RE.test(lower)) missing.push("stage3 (shopper, no domain)");
+    if (!STAGE4_ACTIVE_RE.test(lower)) missing.push("stage4 (shopper active / milestones)");
+    if (!STAGE5_COMPLETE_RE.test(lower)) missing.push("stage5 (setup complete)");
+    // stage3 (`domains: []`) is round-1 GREEN — the RED drivers are stages 2/4/5, all NET-NEW.
+    expect(
+      missing,
+      `staged progression missing stages (NET-NEW — the binary router names only profile-less/shopper): ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the register stage states a data-use statement: how 4GPTs & SIL use the user's data (founder round-2; add-only)", () => {
+  it("names 4GPTs & SIL as the parties that use the user's data, grounded in the plugin's real surfaces (sil identity / local profile store / catalog search)", () => {
+    const lower = stagedBodyLower();
+    // NET-NEW RED driver: names the data controllers 4GPTs (& SIL) — 0 in shipped SKILL.md.
+    const at = lower.search(/4\s?gpts/);
+    expect(
+      at,
+      "the register stage must name 4GPTs as a party that uses the user's data (NET-NEW — 0 in HEAD)",
+    ).toBeGreaterThanOrEqual(0);
+    const win = lower.slice(Math.max(0, at - 300), at + 600);
+    // Both parties named together (4GPTs & SIL), not just 4GPTs.
+    const namesBothParties = /4\s?gpts[^.]{0,40}\bsil\b|\bsil\b[^.]{0,40}4\s?gpts/i.test(win);
+    expect(namesBothParties, "the data-use statement must name BOTH 4GPTs and SIL").toBe(true);
+    // It is a DATA-USE statement (states how the data is used), not a bare brand mention.
+    const namesDataUse =
+      /use[sd]?[^.]{0,40}data|data[^.]{0,40}(?:use[sd]?|handle)|what registering does|how (?:your |their )?data/i.test(
+        win,
+      );
+    expect(namesDataUse, "the register stage must STATE how the user's data is used (a data-use statement)").toBe(true);
+    // Grounded strictly in the plugin's real surfaces — no invented policy.
+    const groundedInRealSurfaces =
+      (win.includes("identity") || win.includes("regist")) &&
+      (win.includes("profile") || win.includes("catalog") || win.includes("search") || win.includes("local"));
+    expect(
+      groundedInRealSurfaces,
+      "the data-use statement must be grounded in the plugin's real surfaces (sil identity / local profile store / catalog search)",
+    ).toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the shopper-setup stage sets a 'couple of minutes / a few questions' expectation up front (founder round-2; add-only)", () => {
+  it("names the time-and-questions expectation for shopper setup, up front, before the onboarding starts", () => {
+    const lower = stagedBodyLower();
+    // NET-NEW RED drivers: the time + question-count expectation (0 in HEAD).
+    const t = /couple of minutes|few minutes|minute or two/i.exec(lower);
+    expect(t, "the shopper-setup stage must set a 'couple of minutes' time expectation (NET-NEW — 0 in HEAD)").not.toBeNull();
+    const q = /few questions|handful of questions|couple of questions/i.exec(lower);
+    expect(q, "the shopper-setup stage must set a 'few questions' expectation (NET-NEW — 0 in HEAD)").not.toBeNull();
+    // Both belong to the shopper-setup guidance (co-located, about setting up the shopper).
+    const at = Math.min(t!.index, q!.index);
+    const win = lower.slice(Math.max(0, at - 300), at + 500);
+    const aboutShopperSetup =
+      (win.includes("set up") || win.includes("setup") || win.includes("create")) && win.includes("shopper");
+    expect(aboutShopperSetup, "the minutes/questions expectation must be about setting up the shopper").toBe(true);
+    // Stated up front — before the onboarding/interview begins.
+    const upFront =
+      win.includes("up front") ||
+      win.includes("upfront") ||
+      win.includes("before the onboarding") ||
+      win.includes("before onboarding") ||
+      win.includes("before it starts") ||
+      win.includes("before starting") ||
+      win.includes("before the interview");
+    expect(upFront, "the expectation must be named up front, before the onboarding starts").toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the setup-complete stage sheds every setup/onboarding beat; usage-only (founder round-2; add-only)", () => {
+  it("carries a terminal setup-complete stage that sheds the setup/onboarding beats and presents only usage (the domain-gated shop loop + SDS)", () => {
+    const lower = stagedBodyLower();
+    // NET-NEW RED driver: the terminal 'setup complete' stage exists (0 in HEAD).
+    expect(STAGE5_COMPLETE_RE.test(lower), "SKILL.md must carry a terminal 'setup complete' stage (NET-NEW — 0 in HEAD)").toBe(true);
+    // Anchor on the usage-only statement UNIQUE to stage 5 (NET-NEW — 0 in HEAD). Anchoring on
+    // the first 'setup complete' mention was a bug: that occurrence is the progression's INTRO
+    // line, whose window does not reach the stage-5 usage content further down.
+    const at = lower.search(/show only how to use|only how to use the plugin|use the plugin well|usage[- ]only/);
+    expect(at, "the setup-complete stage must present ONLY usage (a 'show only how to use' statement — NET-NEW — 0 in HEAD)").toBeGreaterThanOrEqual(0);
+    const win = lower.slice(Math.max(0, at - 400), at + 300);
+    // POSITIVE shed statement — NEVER a bare not.toContain("onboarding"); the shed stage
+    // legitimately NAMES setup/onboarding/progression to say they are shed (disavowal discipline).
+    const shedsSetup =
+      /shed[s]?|drop(?:s|ped)?|no longer (?:show|present|carry|appl)|fall[s]? away|remove[sd]?|gone once|no onboarding beat applies/i.test(win) &&
+      (win.includes("setup") || win.includes("onboarding") || win.includes("progression"));
+    expect(shedsSetup, "the setup-complete stage must state the setup/onboarding beats are shed (POSITIVE shed statement)").toBe(true);
+    // The usage content is the domain-gated shop loop + Spec-Driven Shopping.
+    const usageContent =
+      win.includes("shop loop") ||
+      win.includes("shop_loop") ||
+      win.includes("spec-driven shopping") ||
+      win.includes("sds") ||
+      win.includes("domain-gated");
+    expect(usageContent, "the usage-only stage must name the domain-gated shop loop + Spec-Driven Shopping").toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — stage 4 checks off completion milestones from state: first domain created + memory tool used (founder round-2; add-only)", () => {
+  it("checks off the completion milestones — first domain created (domains non-empty) and (softer) the memory/reinforcement tool used", () => {
+    const lower = stagedBodyLower();
+    // NET-NEW RED driver: milestone check-off vocabulary (0 in HEAD).
+    const at = lower.search(/milestone|check(?:ed|s)? (?:them )?off/);
+    expect(
+      at,
+      "SKILL.md must check off completion milestones (NET-NEW 'milestone' / 'check off' — 0 in HEAD)",
+    ).toBeGreaterThanOrEqual(0);
+    // The hard milestone: the first domain created (domains non-empty).
+    const firstDomainMilestone =
+      /first domain[^.]{0,40}(?:created|minted|exists|non-?empty)|domains?[^.]{0,20}non-?empty|a (?:learned )?domain (?:now )?exists/i.test(
+        lower,
+      );
+    expect(
+      firstDomainMilestone,
+      "a completion milestone must be 'first domain created' (domains non-empty) (NET-NEW — 0 in HEAD)",
+    ).toBe(true);
+    // The softer milestone: the memory/reinforcement tool has been used.
+    const win = lower.slice(Math.max(0, at - 200), at + 700);
+    const memoryMilestone =
+      win.includes("sil_remember") ||
+      win.includes("remember") ||
+      win.includes("memory") ||
+      win.includes("reinforcement");
+    expect(
+      memoryMilestone,
+      "the milestone check-off must include the memory/reinforcement tool having been used (softer milestone)",
+    ).toBe(true);
+  });
+});

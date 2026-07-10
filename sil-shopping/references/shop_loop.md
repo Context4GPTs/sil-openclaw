@@ -8,6 +8,8 @@ This is **Spec-Driven Shopping (SDS)** over **one shopper, many domains**. The *
 
 The router's three always-on rules still hold (act-don't-narrate, follow the tool's own `recovery`, re-check the chosen item before commit) — this loop layers on top, it does not restate them.
 
+**The router owns the entry gate; this file is the procedure it hard-routes into.** A reference binds only once it is loaded, so a shopper-present session's non-skippability is enforced **upstream, at the routing fork** — the stage gate in `SKILL.md` reads `sil_profile_get`, sees a shopper, and routes every `sil_search`-driven intent here before any bare search can run. Beat 1 below is that domain check as the *procedure to execute*, not the mechanism that catches a skip — the skip is already foreclosed by the always-loaded router.
+
 ## The five-beat spine — the order IS the spec, non-skippable on every query
 
 Every shopping query runs these five beats **in order**; the order is not a suggestion. "Non-skippable" governs your **reasoning**, not the user's inbox — every beat RUNS every query, but a beat only ASKS the user when something is genuinely unresolved (a fully-resolved query asks nothing and passes straight through):
