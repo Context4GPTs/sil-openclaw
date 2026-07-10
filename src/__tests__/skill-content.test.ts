@@ -2825,3 +2825,228 @@ describe("sil-shopping/SKILL.md — the domain gate scopes to sil_search discove
     expect(scopedToDiscovery, "the gate must be scoped to sil_search-driven product discovery only").toBe(true);
   });
 });
+
+/* ===========================================================================
+ * STAGED ONBOARDING PROGRESSION (founder redesign — round 2, 2026-07-10)
+ * card: stage-aware-skill-md-that-gates-search-on-a-domain
+ *
+ * The shipped router (round 1) gates on a BINARY discriminator — shopper `name`
+ * absent/present. The founder bounced it: the always-loaded SKILL.md (the FIRST
+ * file loaded into a sil-shopping session) must present the whole setup as a
+ * FIVE-STAGE onboarding PROGRESSION while setup is incomplete, then SHED all of it
+ * once complete (usage-only). Every stage is READ from state (`sil_whoami` + the
+ * no-arg `sil_profile_get` overview), never guessed:
+ *   1. unregistered            → guide register + a data-use statement (how 4GPTs &
+ *                                SIL use the user's data), grounded in real surfaces.
+ *   2. registered, no shopper  → guide shopper setup, naming up front that it takes
+ *                                "a couple of minutes and a few questions".
+ *   3. shopper, no domain      → first intent mints the first domain (announced —
+ *                                the round-1 `domains: []` force-mint pin, kept).
+ *   4. shopper active          → check off completion milestones: first domain
+ *                                created + (softer) the memory/reinforcement tool used.
+ *   5. setup complete          → SHED every setup/onboarding beat; usage-only (the
+ *                                domain-gated shop loop + Spec-Driven Shopping).
+ *
+ * ADD-ONLY. Every describe ABOVE stays UNEDITED + green — including the round-1
+ * stage-gate pins (the `name`-discriminator, the domain gate, the loud-warn backstop,
+ * the five self-check verbs, the `### Profile-less stage` arm), the Lane-1-stays-bare
+ * pins, the spine-order pin, and the buy-window rail. No existing pin is loosened.
+ *
+ * Disavowal discipline (docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md):
+ * positive NET-NEW anchors, window-scoped; the SHED stage is pinned with a POSITIVE
+ * shed statement, NEVER a bare not.toContain("setup"/"onboarding") — the shed stage
+ * legitimately NAMES setup/onboarding to say they are shed.
+ *
+ * RED-capability (grepped to ZERO in the shipped SKILL.md, 2026-07-10): "progression"/
+ * "five stage(s)", "registered … no shopper", "4gpts", "couple of minutes", "a few
+ * questions", "milestone"/"check off", "first domain", "setup complete", "sheds",
+ * "usage". The recurring tokens ("stage", "sil_whoami", "sil_profile_get", "shopper",
+ * "onboarding") are DELIBERATELY not used as RED anchors (they already appear → would
+ * false-GREEN); they are only asserted WITHIN a net-new-anchored window.
+ *
+ * The `[e2e]` behavioural outcome (the agent actually reads state + sheds at runtime)
+ * is DEFERRED — no host-load gate in this repo — and is NOT faked: these pins assert
+ * only that the ROUTER PROSE ships the staged progression, never a runtime claim.
+ * ========================================================================= */
+
+/** The SKILL.md body below the frontmatter, lowercased — the staged progression may
+ * span the Session-start / after-register beats AND the `## Routing` stage gate, so
+ * the per-stage anchors scan the whole body; only the progression-gate structure
+ * (below) is scoped to `## Routing`, where the founder's delete-first rewrite lands. */
+function stagedBodyLower(): string {
+  return skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
+}
+
+// ---- NET-NEW positive anchors for the staged progression (all 0 in shipped SKILL.md) ----
+const STAGED_PROGRESSION_RE =
+  /progression|five stages?|five-stage|staged (?:onboarding|setup|progression)|stage 1|stage 5/i;
+const STAGE1_UNREG_RE =
+  /unregistered|no (?:sil )?identity|not (?:yet )?registered|no identity yet/i;
+const STAGE2_REGNOSHOP_RE =
+  /registered[^.]{0,60}no shopper|no shopper[^.]{0,60}registered|registered,?\s*(?:but )?no shopper/i;
+const STAGE4_ACTIVE_RE = /shopper active|milestone|first domain created/i;
+const STAGE5_COMPLETE_RE =
+  /setup (?:is )?complete|setup-complete|once setup is (?:complete|done)|setup (?:done|finished)/i;
+
+describe("sil-shopping/SKILL.md — Routing presents a five-stage staged onboarding progression, read from sil_whoami + sil_profile_get (founder round-2; add-only)", () => {
+  it("opens Routing with a STAGED progression (not a binary name-presence gate), with the stage read from BOTH sil_whoami and sil_profile_get", () => {
+    const raw = routingRaw();
+    const lower = raw.toLowerCase();
+    // NET-NEW RED driver: staged-progression vocabulary (the shipped router was binary — 0 in HEAD).
+    expect(
+      STAGED_PROGRESSION_RE.test(raw),
+      "Routing must present a STAGED onboarding progression (NET-NEW — the shipped router was a binary `name`-presence gate)",
+    ).toBe(true);
+    // The stage is the JOINT signal — sil_whoami (registered?) + sil_profile_get (shopper?). The
+    // whoami→registration tie is the NET-NEW RED driver (in the binary router whoami is only a
+    // routing-table row, never tied to `regist`/`identit` — so this fired RED against HEAD).
+    expect(
+      lower.includes("sil_profile_get"),
+      "the staged progression must read the stage from sil_profile_get (the shopper signal)",
+    ).toBe(true);
+    // Tie whoami to the REGISTRATION *state* — "registered"/"registration" or a
+    // "finds/reports … (no) identity" read — NOT the bare tool-name `sil_register`
+    // nor the AC8 ungated-scope list "identity (`sil_register` / `sil_whoami`)", which
+    // is pre-existing and would false-GREEN a loose `sil_whoami…regist` scan.
+    const readsWhoamiForStage =
+      /sil_whoami[^.]{0,90}(?:registered|registration)|sil_whoami[^.]{0,50}(?:finds|reports|reads|tells)[^.]{0,40}(?:no )?(?:sil )?identity|(?:registered|registration)[^.]{0,90}sil_whoami/i.test(
+        lower,
+      );
+    expect(
+      readsWhoamiForStage,
+      "the staged progression must read sil_whoami as the REGISTRATION signal (NET-NEW — whoami is only a routing-table row / ungated-scope mention in the binary router), not just sil_profile_get",
+    ).toBe(true);
+  });
+
+  it("enumerates all five stages — unregistered → registered-no-shopper → shopper-no-domain → shopper-active(milestones) → setup-complete", () => {
+    const lower = stagedBodyLower();
+    const missing: string[] = [];
+    if (!STAGE1_UNREG_RE.test(lower)) missing.push("stage1 (unregistered)");
+    if (!STAGE2_REGNOSHOP_RE.test(lower)) missing.push("stage2 (registered, no shopper)");
+    if (!EMPTY_DOMAINS_RE.test(lower)) missing.push("stage3 (shopper, no domain)");
+    if (!STAGE4_ACTIVE_RE.test(lower)) missing.push("stage4 (shopper active / milestones)");
+    if (!STAGE5_COMPLETE_RE.test(lower)) missing.push("stage5 (setup complete)");
+    // stage3 (`domains: []`) is round-1 GREEN — the RED drivers are stages 2/4/5, all NET-NEW.
+    expect(
+      missing,
+      `staged progression missing stages (NET-NEW — the binary router names only profile-less/shopper): ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the register stage states a data-use statement: how 4GPTs & SIL use the user's data (founder round-2; add-only)", () => {
+  it("names 4GPTs & SIL as the parties that use the user's data, grounded in the plugin's real surfaces (sil identity / local profile store / catalog search)", () => {
+    const lower = stagedBodyLower();
+    // NET-NEW RED driver: names the data controllers 4GPTs (& SIL) — 0 in shipped SKILL.md.
+    const at = lower.search(/4\s?gpts/);
+    expect(
+      at,
+      "the register stage must name 4GPTs as a party that uses the user's data (NET-NEW — 0 in HEAD)",
+    ).toBeGreaterThanOrEqual(0);
+    const win = lower.slice(Math.max(0, at - 300), at + 600);
+    // Both parties named together (4GPTs & SIL), not just 4GPTs.
+    const namesBothParties = /4\s?gpts[^.]{0,40}\bsil\b|\bsil\b[^.]{0,40}4\s?gpts/i.test(win);
+    expect(namesBothParties, "the data-use statement must name BOTH 4GPTs and SIL").toBe(true);
+    // It is a DATA-USE statement (states how the data is used), not a bare brand mention.
+    const namesDataUse =
+      /use[sd]?[^.]{0,40}data|data[^.]{0,40}(?:use[sd]?|handle)|what registering does|how (?:your |their )?data/i.test(
+        win,
+      );
+    expect(namesDataUse, "the register stage must STATE how the user's data is used (a data-use statement)").toBe(true);
+    // Grounded strictly in the plugin's real surfaces — no invented policy.
+    const groundedInRealSurfaces =
+      (win.includes("identity") || win.includes("regist")) &&
+      (win.includes("profile") || win.includes("catalog") || win.includes("search") || win.includes("local"));
+    expect(
+      groundedInRealSurfaces,
+      "the data-use statement must be grounded in the plugin's real surfaces (sil identity / local profile store / catalog search)",
+    ).toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the shopper-setup stage sets a 'couple of minutes / a few questions' expectation up front (founder round-2; add-only)", () => {
+  it("names the time-and-questions expectation for shopper setup, up front, before the onboarding starts", () => {
+    const lower = stagedBodyLower();
+    // NET-NEW RED drivers: the time + question-count expectation (0 in HEAD).
+    const t = /couple of minutes|few minutes|minute or two/i.exec(lower);
+    expect(t, "the shopper-setup stage must set a 'couple of minutes' time expectation (NET-NEW — 0 in HEAD)").not.toBeNull();
+    const q = /few questions|handful of questions|couple of questions/i.exec(lower);
+    expect(q, "the shopper-setup stage must set a 'few questions' expectation (NET-NEW — 0 in HEAD)").not.toBeNull();
+    // Both belong to the shopper-setup guidance (co-located, about setting up the shopper).
+    const at = Math.min(t!.index, q!.index);
+    const win = lower.slice(Math.max(0, at - 300), at + 500);
+    const aboutShopperSetup =
+      (win.includes("set up") || win.includes("setup") || win.includes("create")) && win.includes("shopper");
+    expect(aboutShopperSetup, "the minutes/questions expectation must be about setting up the shopper").toBe(true);
+    // Stated up front — before the onboarding/interview begins.
+    const upFront =
+      win.includes("up front") ||
+      win.includes("upfront") ||
+      win.includes("before the onboarding") ||
+      win.includes("before onboarding") ||
+      win.includes("before it starts") ||
+      win.includes("before starting") ||
+      win.includes("before the interview");
+    expect(upFront, "the expectation must be named up front, before the onboarding starts").toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — the setup-complete stage sheds every setup/onboarding beat; usage-only (founder round-2; add-only)", () => {
+  it("carries a terminal setup-complete stage that sheds the setup/onboarding beats and presents only usage (the domain-gated shop loop + SDS)", () => {
+    const lower = stagedBodyLower();
+    // NET-NEW RED driver: the terminal 'setup complete' stage exists (0 in HEAD).
+    expect(STAGE5_COMPLETE_RE.test(lower), "SKILL.md must carry a terminal 'setup complete' stage (NET-NEW — 0 in HEAD)").toBe(true);
+    // Anchor on the usage-only statement UNIQUE to stage 5 (NET-NEW — 0 in HEAD). Anchoring on
+    // the first 'setup complete' mention was a bug: that occurrence is the progression's INTRO
+    // line, whose window does not reach the stage-5 usage content further down.
+    const at = lower.search(/show only how to use|only how to use the plugin|use the plugin well|usage[- ]only/);
+    expect(at, "the setup-complete stage must present ONLY usage (a 'show only how to use' statement — NET-NEW — 0 in HEAD)").toBeGreaterThanOrEqual(0);
+    const win = lower.slice(Math.max(0, at - 400), at + 300);
+    // POSITIVE shed statement — NEVER a bare not.toContain("onboarding"); the shed stage
+    // legitimately NAMES setup/onboarding/progression to say they are shed (disavowal discipline).
+    const shedsSetup =
+      /shed[s]?|drop(?:s|ped)?|no longer (?:show|present|carry|appl)|fall[s]? away|remove[sd]?|gone once|no onboarding beat applies/i.test(win) &&
+      (win.includes("setup") || win.includes("onboarding") || win.includes("progression"));
+    expect(shedsSetup, "the setup-complete stage must state the setup/onboarding beats are shed (POSITIVE shed statement)").toBe(true);
+    // The usage content is the domain-gated shop loop + Spec-Driven Shopping.
+    const usageContent =
+      win.includes("shop loop") ||
+      win.includes("shop_loop") ||
+      win.includes("spec-driven shopping") ||
+      win.includes("sds") ||
+      win.includes("domain-gated");
+    expect(usageContent, "the usage-only stage must name the domain-gated shop loop + Spec-Driven Shopping").toBe(true);
+  });
+});
+
+describe("sil-shopping/SKILL.md — stage 4 checks off completion milestones from state: first domain created + memory tool used (founder round-2; add-only)", () => {
+  it("checks off the completion milestones — first domain created (domains non-empty) and (softer) the memory/reinforcement tool used", () => {
+    const lower = stagedBodyLower();
+    // NET-NEW RED driver: milestone check-off vocabulary (0 in HEAD).
+    const at = lower.search(/milestone|check(?:ed|s)? (?:them )?off/);
+    expect(
+      at,
+      "SKILL.md must check off completion milestones (NET-NEW 'milestone' / 'check off' — 0 in HEAD)",
+    ).toBeGreaterThanOrEqual(0);
+    // The hard milestone: the first domain created (domains non-empty).
+    const firstDomainMilestone =
+      /first domain[^.]{0,40}(?:created|minted|exists|non-?empty)|domains?[^.]{0,20}non-?empty|a (?:learned )?domain (?:now )?exists/i.test(
+        lower,
+      );
+    expect(
+      firstDomainMilestone,
+      "a completion milestone must be 'first domain created' (domains non-empty) (NET-NEW — 0 in HEAD)",
+    ).toBe(true);
+    // The softer milestone: the memory/reinforcement tool has been used.
+    const win = lower.slice(Math.max(0, at - 200), at + 700);
+    const memoryMilestone =
+      win.includes("sil_remember") ||
+      win.includes("remember") ||
+      win.includes("memory") ||
+      win.includes("reinforcement");
+    expect(
+      memoryMilestone,
+      "the milestone check-off must include the memory/reinforcement tool having been used (softer milestone)",
+    ).toBe(true);
+  });
+});
