@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-07-10
+
 ### Added
 
 - **A new shopper is auto-bound to the current channel — fail-open, verified.**
