@@ -107,6 +107,15 @@ const DELETED_STORE_TOKENS = ["profile.json", "domain_spec", "intent_spec", "pla
 /** Deleted / never-existed tool names — must be absent from the whole bundle. */
 const DELETED_TOOLS = ["sil_remember", "sil_profile_list", "sil_ping", "sil_echo"] as const;
 
+/** Deleted redesign terminology. The redesign DELETED the client-side ranking
+ * "rubric" (shop_loop.md asserts "never re-rank") and renamed the reasoning step
+ * "reflection over fitness". Any lingering `rubric` labels a mechanism that no
+ * longer exists — a stale noun for the reject-at-pick / recommendation behavior.
+ * Scanned CASE-INSENSITIVELY — UNLIKE the two case-sensitive `.includes()` guards
+ * above — so a capitalized reintroduction (`Rubric`/`RUBRIC`) can't slip back in.
+ * Entries here MUST be lower-case: each body is lower-cased before the match. */
+const DELETED_TERMINOLOGY = ["rubric"] as const;
+
 interface Frontmatter {
   raw: string;
   fields: Record<string, string>;
@@ -325,6 +334,21 @@ describe("skill bundle — source of truth for the ten-tool surface", () => {
     for (const [label, path] of BUNDLE_FILES) {
       const body = readBody(path);
       for (const dead of DELETED_STORE_TOKENS) {
+        if (body.includes(dead)) offenders.push(`${label} → ${dead}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("NO bundle file names DELETED redesign terminology (case-insensitive `rubric` — the client re-rank is gone)", () => {
+    // The redesign deleted the client-side ranking rubric (no client re-rank —
+    // shop_loop.md asserts "never re-rank"). The noun leaked into search_param_mapping.md
+    // where it now mislabels the reject-at-pick / recommendation behavior. Grepped to
+    // zero bundle-wide, CASE-INSENSITIVELY — a capitalized reintroduction must FAIL too.
+    const offenders: string[] = [];
+    for (const [label, path] of BUNDLE_FILES) {
+      const body = readBody(path).toLowerCase();
+      for (const dead of DELETED_TERMINOLOGY) {
         if (body.includes(dead)) offenders.push(`${label} → ${dead}`);
       }
     }

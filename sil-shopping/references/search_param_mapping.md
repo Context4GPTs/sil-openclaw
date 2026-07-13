@@ -35,7 +35,7 @@ precedence — see [`fill_and_feedback.md`](fill_and_feedback.md) — is
 
 These layers are inputs to the same params, not new params. A stated taste with **no
 matching param** (a colour, a brand, "eco-friendly") folds into the `query` text or the
-recommendation rubric — **never a new filter**. There is no `color` or `brand` param;
+recommendation reflection — **never a new filter**. There is no `color` or `brand` param;
 inventing one emits invalid `sil_search` calls.
 
 ## Hard constraints — a real filter AND a reject-at-recommend rule, NEVER only `query`
@@ -49,7 +49,7 @@ Route each to **two** points, **not merely `query`** (see
 1. **A real `sil_search` filter where one exists** — "new/secondhand only" →
    `condition`; "in stock only" → `available` (omit for the in-stock default). Where a
    param matches, set it so the catalog never returns the violating item.
-2. **An explicit reject-at-pick rubric rule** for a constraint with no matching param
+2. **An explicit reject-at-pick rule** for a constraint with no matching param
    (no `material` filter for "never leather"): the constraint **rejects** any violating
    candidate outright, never down-weights it. A hard constraint is a reject, not a
    weight.
@@ -76,5 +76,5 @@ local_merchants: true          # ranking bias; optionally query in French to sur
 # ship_to: OMITTED — server resolves the registered default address
 ```
 
-A non-param taste ("understated colours") folds into `query` or the rubric, never a new
-filter.
+A non-param taste ("understated colours") folds into `query` or the recommendation
+reflection, never a new filter.
