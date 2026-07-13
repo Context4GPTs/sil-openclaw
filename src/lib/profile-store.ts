@@ -34,7 +34,6 @@ import {
   readdirSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -892,13 +891,4 @@ export function removeArtefact(domainSlug: string, prd?: string): RemoveResult {
     return persistenceFailed(domainLeaf, err);
   }
   return { ok: true, domainSlug };
-}
-
-/** True when `path` is an existing directory (used by the operator bin's teardown). */
-export function isDirectory(path: string): boolean {
-  try {
-    return statSync(path).isDirectory();
-  } catch {
-    return false;
-  }
 }
