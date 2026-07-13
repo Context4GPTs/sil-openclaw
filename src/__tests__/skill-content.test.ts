@@ -225,7 +225,7 @@ describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename
     expect(fm.fields["name"]).not.toBe("sil");
   });
 
-  it("frontmatter `description` enumerates the EIGHT sil_* tools it drives, and NOT the deleted sil_profile_list", () => {
+  it("frontmatter `description` enumerates the NINE sil_* tools it drives, and NOT the deleted sil_profile_list / sil_remember", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     const description = fm.fields["description"] ?? "";
     const missing = [
@@ -236,12 +236,17 @@ describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename
       "sil_profile_materialize",
       "sil_profile_get",
       "sil_profile_remove",
-      "sil_remember",
+      // spec-driven-shopping-redesign: sil_remember → sil_learn (the target+change
+      // feedback verb) and the NEW sil_profile_search (frontmatter-as-truth query).
+      "sil_learn",
+      "sil_profile_search",
     ].filter((t) => !description.includes(t));
     expect(missing).toEqual([]);
-    // The fold deletes sil_profile_list — the trigger description must no longer
-    // name it (a recovery/route hint to a nonexistent tool is the regression we kill).
+    // sil_profile_list (folded away) and sil_remember (renamed to sil_learn) are
+    // DELETED — a recovery/route hint to either nonexistent tool is the regression
+    // this pins away.
     expect(description).not.toContain("sil_profile_list");
+    expect(description).not.toContain("sil_remember");
   });
 
   it("frontmatter `description` presents the SHOPPER + DOMAIN model (not the retired per-niche expert)", () => {
@@ -321,12 +326,16 @@ describe("skill name-agreement drift guard — published name is one value acros
  * BUNDLE — the tool surface + the rename retirement
  * ========================================================================= */
 
-describe("skill bundle — source of truth for the eight-tool surface", () => {
-  it("registeredNames() equals EIGHT (the four core tools + the four sil_profile_* / sil_remember verbs)", () => {
+describe("skill bundle — source of truth for the nine-tool surface", () => {
+  it("registeredNames() equals NINE (the four core tools + the five sil_profile_* / sil_learn verbs)", () => {
     const names = registeredNames();
-    expect(names.size, `registered tools: ${[...names].sort().join(", ")}`).toBe(8);
-    expect(names.has("sil_remember")).toBe(true);
-    // sil_profile_list was folded into sil_profile_get — it no longer registers.
+    expect(names.size, `registered tools: ${[...names].sort().join(", ")}`).toBe(9);
+    // spec-driven-shopping-redesign: sil_learn replaces sil_remember, and
+    // sil_profile_search is added (frontmatter-as-truth query).
+    expect(names.has("sil_learn")).toBe(true);
+    expect(names.has("sil_profile_search")).toBe(true);
+    // sil_remember (renamed to sil_learn) and sil_profile_list (folded) no longer register.
+    expect(names.has("sil_remember")).toBe(false);
     expect(names.has("sil_profile_list")).toBe(false);
   });
 
@@ -2755,10 +2764,11 @@ describe("sil-shopping/SKILL.md — the per-query self-check is a lightweight PR
     expect(disavowsNewMachinery, "the self-check must disavow being a new tool / table / telemetry surface").toBe(true);
   });
 
-  it("the tool surface stays at EIGHT — the self-check adds no registered tool (belt-and-braces rail)", () => {
+  it("the tool surface stays at NINE — the self-check adds no registered tool (belt-and-braces rail)", () => {
     // AC6's "no new machinery" tied to the real registration surface: the self-check is
-    // prose only, so registeredNames() is byte-unchanged at 8 (green today, stays green).
-    expect(registeredNames().size).toBe(8);
+    // prose only, so registeredNames() is byte-unchanged at the 9-tool floor
+    // (spec-driven-shopping-redesign: sil_remember → sil_learn + sil_profile_search).
+    expect(registeredNames().size).toBe(9);
   });
 });
 

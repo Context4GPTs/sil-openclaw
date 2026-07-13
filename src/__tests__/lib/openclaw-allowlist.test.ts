@@ -54,16 +54,20 @@ import {
 // unit core takes them as an argument so the test pins behaviour, not wiring).
 const SIL: SilAllowlistFacts = {
   id: "sil",
-  // The real 8-tool floor: consolidate-profile-tools-to-the-singleton-surface
-  // folded sil_profile_list into sil_profile_get, leaving the four profile verbs
-  // sil_profile_get / sil_profile_materialize / sil_profile_remove / sil_remember.
+  // The real 9-tool floor after spec-driven-shopping-redesign renamed
+  // sil_remember → sil_learn and added sil_profile_search — the five profile
+  // verbs sil_profile_get / sil_profile_materialize / sil_profile_remove /
+  // sil_profile_search / sil_learn plus the four core tools. (This carrier is
+  // the SILENT 7th — a stale entry stays GREEN here, so it is bumped for hygiene
+  // in lockstep with the six that bite.)
   tools: [
+    "sil_learn",
     "sil_product_get",
     "sil_profile_get",
     "sil_profile_materialize",
     "sil_profile_remove",
+    "sil_profile_search",
     "sil_register",
-    "sil_remember",
     "sil_search",
     "sil_whoami",
   ],

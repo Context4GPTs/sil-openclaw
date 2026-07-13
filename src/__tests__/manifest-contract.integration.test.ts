@@ -29,10 +29,11 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals { sil_product_get, sil_profile_get,
- *     sil_profile_materialize, sil_profile_remove, sil_register,
- *     sil_remember, sil_search, sil_whoami } (the 8-tool floor after
- *     sil_profile_list was folded into sil_profile_get).
+ *     both sides equals { sil_learn, sil_product_get, sil_profile_get,
+ *     sil_profile_materialize, sil_profile_remove, sil_profile_search,
+ *     sil_register, sil_search, sil_whoami } (the 9-tool floor after the
+ *     spec-driven-shopping-redesign card renamed sil_remember → sil_learn
+ *     and ADDED sil_profile_search — the frontmatter-as-truth query tool).
  */
 
 import { describe, it, expect } from "vitest";
@@ -126,16 +127,18 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // The card's spine: after removing the skeleton examples, the manifest
     // AND the code both name exactly the real tools. Pinned by literal
     // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
-    // not just the symmetric drift check above. Now 8 tools — the
-    // consolidate-profile-tools-to-the-singleton-surface card folds
-    // sil_profile_list into sil_profile_get (9 → 8).
+    // not just the symmetric drift check above. Now 9 tools — the
+    // spec-driven-shopping-redesign card renames sil_remember → sil_learn
+    // (the target+change feedback verb) and ADDS sil_profile_search (the
+    // frontmatter-as-truth discovery/query tool): 8 → 9, add-only.
     const expected = [
+      "sil_learn",
       "sil_product_get",
       "sil_profile_get",
       "sil_profile_materialize",
       "sil_profile_remove",
+      "sil_profile_search",
       "sil_register",
-      "sil_remember",
       "sil_search",
       "sil_whoami",
     ];
@@ -206,15 +209,37 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(manifestToolNames().has("sil_profile_remove")).toBe(true);
   });
 
-  it("sil_remember is BOTH registered by register() and declared in contracts.tools", () => {
-    // The sil-remember-append-memory-tool card's 9th tool — the lightweight
-    // O_APPEND memory verb. Added to the existing registerProfileTools group (no
-    // new group function, no src/index.ts change), so it is auto-picked-up by
-    // codeRegisteredNames. The load-bearing 3rd "add a tool" step: it MUST also be
-    // listed in openclaw.plugin.json#contracts.tools — a forgotten manifest entry
-    // flips the set-equality RED here, before merge.
-    expect(codeRegisteredNames().has("sil_remember")).toBe(true);
-    expect(manifestToolNames().has("sil_remember")).toBe(true);
+  it("sil_remember is NOT registered and NOT declared (DELETED, renamed to sil_learn — not aliased)", () => {
+    // The spec-driven-shopping-redesign card DELETES sil_remember and replaces it
+    // with the target+change feedback verb sil_learn. No backwards compat, no
+    // alias: sil_remember must be absent on BOTH sides of the equal set. A
+    // re-introduction (in code or manifest) — including a compat alias kept alive
+    // beside sil_learn — flips the set-equality RED, exactly as the sil_profile_list
+    // removal is guarded above.
+    expect(codeRegisteredNames().has("sil_remember")).toBe(false);
+    expect(manifestToolNames().has("sil_remember")).toBe(false);
+  });
+
+  it("sil_learn is BOTH registered by register() and declared in contracts.tools", () => {
+    // The spec-driven-shopping-redesign card's target+change feedback verb — the
+    // single write tool for the whole method/PRD lifecycle (create + append/amend/
+    // retract/attach-asset), replacing sil_remember. Added to the existing
+    // registerProfileTools group (no new group, no src/index.ts change), so it is
+    // auto-picked-up by codeRegisteredNames. The load-bearing 3rd "add a tool"
+    // step: it MUST also be listed in openclaw.plugin.json#contracts.tools — a
+    // forgotten manifest entry flips the set-equality RED here, before merge.
+    expect(codeRegisteredNames().has("sil_learn")).toBe(true);
+    expect(manifestToolNames().has("sil_learn")).toBe(true);
+  });
+
+  it("sil_profile_search is BOTH registered by register() and declared in contracts.tools", () => {
+    // The spec-driven-shopping-redesign card's NEW frontmatter-as-truth query tool
+    // — the local discovery / reuse-before-mint primitive that returns artefact
+    // coordinates (no bodies) and replaces the deleted profile.json manifest's
+    // index role. Added to registerProfileTools; it must appear on BOTH sides of
+    // the equal set: registered by the group AND listed in contracts.tools.
+    expect(codeRegisteredNames().has("sil_profile_search")).toBe(true);
+    expect(manifestToolNames().has("sil_profile_search")).toBe(true);
   });
 });
 

@@ -28,8 +28,9 @@
  *   4. snapshot openclaw.json      — the whole-file teardown anchor, taken BEFORE step 5
  *   5. openclaw agents add         — create the real agents.list entry + workspace bootstrap
  *   6. write <workspace>/SOUL.md   — the persona (atomic tmp→rename); never a sil artefact
- *   7. materializeProfile          — REUSED; { name, userSpec }, NO domain ⇒ shared user_spec.md
- *                                    + profile.json with an empty `domains: {}` map
+ *   7. materializeProfile          — REUSED; SETUP-ONLY { name, userSpec } ⇒ shared
+ *                                    user_spec.md (its frontmatter carries the name);
+ *                                    NO manifest, no domain minted at create
  *   8. attach the sil skill + enable the sil plugin (openclaw config set --strict-json)
  *   9. sil-openclaw-allowlist      — REUSED whole; additive/idempotent/atomic three-surface
  *                                    trust merge (plugins.allow + tools.alsoAllow + plugins.entries.sil)
@@ -81,7 +82,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   materializeProfile,
-  readAgentProfile,
+  readShopperIdentity,
   getShopperArtefactDir,
 } from "../dist/lib/profile-store.js";
 import { resolveBindChannel } from "../dist/lib/bind-channel.js";
@@ -398,14 +399,12 @@ function teardown({ configPath, snapshot, mode, bakPreexisted, workspace, worksp
   // 3. Remove the singleton shopper dir ONLY if it did not pre-exist (the singleton
   //    pre-flight guarantees it was ours this run).
   // KNOWN GAP (narrow): this keys on WHOLE-DIR pre-existence, not on the leaf we
-  //    wrote — it DIVERGES from `materializeProfile`'s `!leafPreexisted` discipline
-  //    (profile-store.ts). If `shopper/` pre-existed but EMPTY (no profile.json), the
+  //    wrote. If `shopper/` pre-existed but held no readable user_spec.md, the
   //    singleton read passes ("no shopper") yet `shopperDirPreexisted` is true, so a
-  //    post-materialize failure leaves THIS run's profile.json/user_spec.md un-removed
-  //    and does NOT surface as residue → `teardown_failed`. Extremely narrow (normal
-  //    operation never leaves an empty `shopper/`; a materialize-STEP failure is
-  //    already covered by materializeProfile's own leaf teardown). To close it, key
-  //    this removal on "we wrote profile.json this run", mirroring `!leafPreexisted`.
+  //    post-materialize failure leaves THIS run's user_spec.md un-removed and does NOT
+  //    surface as residue → `teardown_failed`. Extremely narrow (normal operation
+  //    never leaves an empty `shopper/`). To close it, key this removal on "we wrote
+  //    user_spec.md this run".
   if (!shopperDirPreexisted) {
     const shopperDir = getShopperArtefactDir();
     try {
@@ -467,14 +466,9 @@ function main() {
   const skillAttachName = skill.name;
 
   // --- 3. Singleton + agentId pre-flight (nothing written; inconclusive → fail closed) ---
-  // The sil artefact store is the source of truth for "a shopper exists".
-  const overview = readAgentProfile();
-  if (!overview.ok) {
-    emitFailure("persistence_failed", {
-      path: getShopperArtefactDir(),
-      cause: "could not read the sil shopper store to check the singleton — failing closed rather than risk a second shopper",
-    });
-  }
+  // The sil artefact store is the source of truth for "a shopper exists": user_spec.md
+  // present + its frontmatter `name` reads (frontmatter-as-truth, no manifest).
+  const overview = readShopperIdentity();
   if (Array.isArray(overview.unreadable) && overview.unreadable.length > 0) {
     // A degraded store is INCONCLUSIVE — never fabricate a "no shopper" verdict.
     emitFailure("persistence_failed", {

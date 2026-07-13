@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use for any sil shopping, identity, or shopper-setup intent: register or sign in, check the account, search the sil catalog for purchasable products, or look up products by id — plus the single-shopper lifecycle: create the shopper (a short two-touchpoint onboarding), see what it knows or which domains (niches) it has learned, view or forget a domain, refine it — or, as the shopper, run a Spec-Driven Shopping query on any niche and remember a fact or buying taste it surfaces. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_get, sil_profile_remove, and sil_remember.'
+description: 'Use for any sil shopping, identity, or shopper-setup intent: register or sign in, check the account, search the sil catalog for purchasable products, or look up products by id — plus the single-shopper lifecycle: create the shopper (a short two-touchpoint onboarding), search what it knows or which domains (niches) it has learned, view or forget a domain, refine it — or, as the shopper, run a Spec-Driven Shopping query on any niche and learn a fact or buying taste it surfaces. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, and sil_learn.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -58,11 +58,11 @@ it while setup is incomplete; it sheds once a shopper exists.
 | "find X" / "search for X" / browse a category or price range | `sil_search` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
 | "look up these items" / re-check ids from a prior result | `sil_product_get` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
 | "set up an agent that shops for me" / "create my shopper" | (onboarding, then the engine) | the two-step below |
-| "what does my shopper know?" / "which domains has it learned?" | `sil_profile_get` (no `domainSlug`) | [`manage_domains.md`](references/manage_domains.md) |
-| "show me the &lt;niche&gt; domain" | `sil_profile_get` (`domainSlug`) | [`manage_domains.md`](references/manage_domains.md) |
-| "forget the &lt;niche&gt; domain" | `sil_profile_remove` | [`manage_domains.md`](references/manage_domains.md) |
+| "what does my shopper know?" / "which domains / PRDs has it learned?" | `sil_profile_search` | [`manage_domains.md`](references/manage_domains.md) |
+| "show me the &lt;niche&gt; domain" (method or one PRD) | `sil_profile_get` (`domainSlug`, `prd?`) | [`manage_domains.md`](references/manage_domains.md) |
+| "forget the &lt;niche&gt; domain" (or one PRD) | `sil_profile_remove` | [`manage_domains.md`](references/manage_domains.md) |
 | (as the shopper) a shopping intent on any niche | `sil_search` → `sil_product_get` | [`shop_loop.md`](references/shop_loop.md) |
-| "remember this" — a fact or taste the shopper surfaced | `sil_remember` | [`shop_loop.md`](references/shop_loop.md) |
+| "learn this" — a fact or taste the shopper surfaced | `sil_learn` | [`shop_loop.md`](references/shop_loop.md) |
 | "refine / sharpen my shopper" / fix a niche | (load → propose → confirm → persist) | [`refine_shopper.md`](references/refine_shopper.md) |
 
 [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md)
@@ -95,7 +95,7 @@ classify the query's niche and **reuse a learned domain or mint one before
 searching** — the shop loop's first beat — then follow
 [`references/shop_loop.md`](references/shop_loop.md), the profile-driven
 **Spec-Driven Shopping** loop that web-refreshes the domain, decomposes the
-request, and persists each surfaced fact or taste with a single `sil_remember`.
+request, and persists each surfaced fact or taste with a single `sil_learn`.
 
 - **An empty `domains` map means no niche yet:** the first shopping intent **mints
   the domain before searching**, **announced** with the inferred niche stated so

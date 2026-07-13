@@ -128,18 +128,19 @@ describe("plugin entry — registration contract", () => {
     // register() runs the real tool groups (no mock), so it populates the
     // api with exactly the real tools and NO example stub. This pins the
     // wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
-    // The consolidate-profile-tools-to-the-singleton-surface card folds
-    // sil_profile_list into sil_profile_get's no-args zoom (9 → 8), so the
-    // singleton's domain lifecycle is now sil_profile_get / sil_profile_remove.
+    // The spec-driven-shopping-redesign card renames sil_remember → sil_learn
+    // and ADDS sil_profile_search (frontmatter-as-truth query) → 8 → 9,
+    // add-only; sil_remember is gone (deleted, not aliased).
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
+      "sil_learn",
       "sil_product_get",
       "sil_profile_get",
       "sil_profile_materialize",
       "sil_profile_remove",
+      "sil_profile_search",
       "sil_register",
-      "sil_remember",
       "sil_search",
       "sil_whoami",
     ]);
