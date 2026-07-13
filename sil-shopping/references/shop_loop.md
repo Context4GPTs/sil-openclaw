@@ -61,13 +61,28 @@ call is a round-trip + tokens):
   order, concatenation **never re-ranks** a backend list nor lifts a peripheral
   hit above a core one — the engine owns order *within* each call, the fan-out
   owns order *across* calls.
-- **Project onto existing params + query enrichment now.** Map each requirement
-  onto the **existing** `sil_search` **param** where one fits (`category`,
-  `price_min`/`price_max`, `condition`, `available`, `local_merchants`); a
-  requirement with no param folds into the free-text `query`. Leave **`ship_to`**
-  empty (the server resolves the registered default). **Never invent** a filter
-  that isn't a real param — see
-  [`search_param_mapping.md`](search_param_mapping.md).
+- **Project each requirement onto existing params, then `specs` predicates, then
+  query enrichment — in that order.** Map each requirement onto the tightest real
+  channel:
+  1. an **existing** `sil_search` **param** where one fits (`category`,
+     `price_min`/`price_max`, `condition`, `available`, `local_merchants`);
+  2. else a structured **`filters.specs` predicate**, built from the method's
+     Beat-2 canonical `## Search vocabulary` (the `sil_specs`-coined names) — one
+     `{ns, key, op, value, unit?, hard?}` per annotated requirement, marking an
+     inviolable one `hard:true`. **Prefer a dedicated param over a predicate** for
+     the SAME attribute — never send both (a `price_max` param OR a price spec, not
+     both);
+  3. else — a purely descriptive residue (a colour, a phrasing) — fold it into the
+     free-text `query`, which **you author yourself**. The plugin is **pure
+     transport**: it never folds a predicate into `query`, so a requirement that
+     belongs in `filters.specs` stays a predicate, never `query` prose.
+  Leave **`ship_to`** empty (the server resolves the registered default). **Never
+  invent** a param or a predicate that isn't real — the params live in the
+  `sil_search` description, the predicate vocabulary in the domain method (see
+  [`search_param_mapping.md`](search_param_mapping.md)). Then read the per-predicate
+  **`specs_status`** the response returns (each `{ns, key, applied}`) — it feeds
+  Beat 5's honesty pass, which rejects at pick any `hard` predicate the backend left
+  `applied:false`.
 
 ## Beat 5 — Reflect: honesty pass first, judgment not threshold, propose-and-wait
 
