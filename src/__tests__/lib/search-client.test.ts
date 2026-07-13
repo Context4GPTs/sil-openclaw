@@ -57,9 +57,9 @@ interface Captured {
 }
 
 /** Spy `fetch` and capture the single outbound request, replying 200 with a real
- * (empty-match) envelope so the wrapper resolves cleanly. The reply is the FLAT
- * sil-api envelope (`{ ucp, products, pagination }` — top level, no `result`
- * wrapper; `withUcpMeta(body)`), the only shape sil-api emits. */
+ * (empty-match) body so the wrapper resolves cleanly. The reply is the FLAT sil-api
+ * body (`{ products, pagination }` — top level, no `result` wrapper), the only shape
+ * sil-api emits. */
 function spyFetch(captured: Captured[]): void {
   vi.spyOn(globalThis, "fetch").mockImplementation(
     (input: unknown, init?: RequestInit) => {
@@ -82,7 +82,6 @@ function spyFetch(captured: Captured[]): void {
       return Promise.resolve(
         new Response(
           JSON.stringify({
-            ucp: { version: "0.1", status: "success" },
             products: [],
             pagination: { has_next_page: false },
           }),

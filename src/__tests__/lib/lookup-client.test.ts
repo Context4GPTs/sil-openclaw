@@ -57,13 +57,12 @@ interface Captured {
   body: unknown;
 }
 
-/** The REAL sil-api lookup envelope, one product whose featured variant carries the
+/** The REAL sil-api lookup body, one product whose featured variant carries the
  * required `inputs` correlation — so a forwarded request resolves cleanly through the
- * classifier and the wrapper returns `ok`. FLAT shape (`{ ucp, products }` — top
- * level, no `result` wrapper; `withUcpMeta(body)`), the only shape sil-api emits. */
+ * classifier and the wrapper returns `ok`. FLAT shape (`{ products }` — top level, no
+ * `result` wrapper), the only shape sil-api emits. */
 function lookupEnvelope(): unknown {
   return {
-    ucp: { version: "0.1", status: "success" },
     products: [
       {
         id: "gid://product/a",

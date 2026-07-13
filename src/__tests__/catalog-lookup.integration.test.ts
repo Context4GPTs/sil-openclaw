@@ -24,9 +24,9 @@
  * (PR #18; sil-services `@sil/schemas` catalog.ts + envelope.ts) and the UCP
  * catalog-lookup spec:
  *   request body (CatalogLookupRequest): { ids: string[] }  (no envelope, no defaults)
- *   response (200): the FLAT UCP envelope sil-api emits (`withUcpMeta(body) →
- *     { ucp, ...body }`), carrying a CatalogLookupResult at the TOP LEVEL:
- *     { ucp, products: SilCatalogProduct[], messages? } — no `result` wrapper. Each
+ *   response (200): the FLAT body sil-api emits, carrying a CatalogLookupResult at
+ *     the TOP LEVEL: { products: SilCatalogProduct[], messages? } — no `result`
+ *     wrapper. Each
  *     product with a required `source`, each variant with a non-empty `checkout_url`,
  *     an `availability` object, and the REQUIRED lookup `inputs` correlation.
  *     `messages` carries one { type:"info", code:"not_found", content:<id> } per
@@ -154,16 +154,14 @@ const PRODUCT_B = {
   source: "uplift",
 };
 
-/** The REAL sil-api lookup envelope — the FLAT shape sil-api actually emits
- * (`withUcpMeta(body) → { ucp, ...body }`: `products`/`messages` at the TOP LEVEL
- * beside `ucp`, NOT under a `result` wrapper). The presence of a required `source`
- * per product, a non-empty `checkout_url` + an `inputs` correlation per variant is
- * what makes the suite anti-false-green: a `{ stub: true }` echo carries none of
- * these, so the assertions below cannot pass against the skeleton stub. `messages`
- * is included only when there are misses. */
+/** The REAL sil-api lookup body — the FLAT shape sil-api actually emits
+ * (`products`/`messages` at the TOP LEVEL, NOT under a `result` wrapper). The
+ * presence of a required `source` per product, a non-empty `checkout_url` + an
+ * `inputs` correlation per variant is what makes the suite anti-false-green: a
+ * `{ stub: true }` echo carries none of these, so the assertions below cannot pass
+ * against the skeleton stub. `messages` is included only when there are misses. */
 function lookupEnvelope(products: unknown[], messages?: unknown[]): unknown {
   const envelope: Record<string, unknown> = {
-    ucp: { version: "0.1", status: "success" },
     products,
   };
   if (messages !== undefined) envelope["messages"] = messages;
@@ -2013,7 +2011,6 @@ describe("sil_product_get vs sil_search — the SAME wire product surfaces the S
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
         new Response(
           JSON.stringify({
-            ucp: { version: "0.1", status: "success" },
             products: [{ ...sharedProductWire, variants: [sharedVariantWire] }],
             pagination: { has_next_page: false },
           }),

@@ -23,7 +23,7 @@
  *
  *   2. The empty-match-is-SUCCESS vs the anti-false-green guard (the subtlest
  *      pair, mirroring `extractIdentity`'s `name`-gate at sil-client.ts:340-357):
- *        200 { ucp, products: [] }         → ok + empty list   (a VALID empty match,
+ *        200 { products: [] }              → ok + empty list   (a VALID empty match,
  *                                            NOT an error — UCP "this is not an error")
  *        200 with NO usable top-level `products` array (partial / garbage / `{stub:true}`)
  *                                          → retryable, NEVER ok (the false-green guard:
@@ -55,7 +55,7 @@
  *     source: string;
  *   }
  *   The classifier branches on `status` (and, for 200, the body shape) — NEVER on
- *   `res.ok`. It reads `products` off the FLAT sil-api envelope (`{ ucp, products,
+ *   `res.ok`. It reads `products` off the FLAT sil-api body (`{ products,
  *   pagination? }` — top level, no `result` wrapper). The exact field/variant
  *   projection is the dev's to shape, but the FIELD NAMES below and the cursor-hoist
  *   + empty-vs-error split ARE the immutable spec (assert the projected
@@ -130,16 +130,13 @@ const PRODUCT_B = {
   source: "uplift",
 };
 
-/** Wrap a `CatalogSearchResult` in the FLAT UCP envelope sil-api actually emits —
- * `withUcpMeta(body) → { ucp, ...body }` (sil-services `.../sil-api/src/envelope.ts`):
- * the result body's fields (`products`, `pagination`) sit at the TOP LEVEL beside
- * `ucp`, NOT under a `result` wrapper. The `result` arg here IS a CatalogSearchResult
- * object whose keys are spread onto the envelope. A non-object `result` is spread as
- * nothing (the flat body then carries only `ucp`) — exactly the malformed/garbage
- * case the anti-false-green gate must still reject. */
+/** Wrap a `CatalogSearchResult` in the FLAT body sil-api actually emits — the result
+ * body's fields (`products`, `pagination`) sit at the TOP LEVEL, NOT under a `result`
+ * wrapper. The `result` arg here IS a CatalogSearchResult object whose keys are spread
+ * onto the body. A non-object `result` is spread as nothing (the body is then empty) —
+ * exactly the malformed/garbage case the anti-false-green gate must still reject. */
 function envelope(result: unknown): unknown {
   return {
-    ucp: { version: "0.1", status: "success" },
     ...(result !== null && typeof result === "object" ? (result as Record<string, unknown>) : {}),
   };
 }
@@ -620,7 +617,7 @@ describe("classifySearchResponse — a 422 source_rejected is INVALID_REQUEST ca
 });
 
 describe("classifySearchResponse — empty match is SUCCESS, not error", () => {
-  it("200 { ucp, products: [] } → ok with an EMPTY products list and NO cursor", () => {
+  it("200 { products: [] } → ok with an EMPTY products list and NO cursor", () => {
     // UCP: an empty search returns an empty array — "this is not an error". The
     // agent must see status ok + an empty list, never an error branch.
     const out = classifySearchResponse(
@@ -1080,7 +1077,7 @@ describe("classifySearchResponse — specs_status narrowing: no fabrication, dro
     // signal can never manufacture a false empty-match success.
     const out = classifySearchResponse(
       200,
-      { ucp: { version: "0.1", status: "success" }, specs_status: [{ ns: "p", key: "k", applied: false }] },
+      { specs_status: [{ ns: "p", key: "k", applied: false }] },
     );
     expect(out.kind).not.toBe("ok");
     expect(out.kind).toBe("retryable");

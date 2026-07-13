@@ -36,23 +36,22 @@
  *
  *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
  *                               (no body, no content-type)
- *     200 <UCP envelope>{ result: { name, addresses } }  → ok (carries identity)
+ *     200 { name, addresses }                             → ok (carries identity)
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     5xx / network / abort                               → retryable
  *
  * Wire contract for the sil-API catalog search (SAME origin as the identity
  * read — sil-api, bare path, NOT /api/v1; see the sil-search card). A simplified
- * structured query in, ranked purchasable products out. sil-api owns the UCP
- * envelope + enrichment; the plugin sends NO envelope and fills NO defaults:
+ * structured query in, ranked purchasable products out. sil-api owns the
+ * enrichment; the plugin sends NO envelope and fills NO defaults:
  *
  *   POST <silApiUrl>/catalog/search   Authorization: Bearer <access_token>
  *     body { query?, filters?:{ categories?, price?:{ min?, max? } },
  *            pagination?:{ cursor?, limit? } }       (no context, no envelope)
- *     200 <FLAT UCP envelope>{ ucp, products: SilCatalogProduct[],
- *                              pagination?:{ has_next_page, cursor? } } → ok
- *         (sil-api's `withUcpMeta(body) → { ucp, ...body }`: `products`/`pagination`
- *          at the TOP LEVEL beside `ucp`, NO `result` wrapper)
+ *     200 { products: SilCatalogProduct[],
+ *           pagination?:{ has_next_page, cursor? } } → ok
+ *         (`products`/`pagination` at the TOP LEVEL, NO `result` wrapper)
  *     400 { error:"empty_search_input", message }    → invalid_request
  *     401                                            → unauthorized (→ refresh)
  *     5xx / network / abort                          → retryable
@@ -61,16 +60,15 @@
  * sil-api, bare `/catalog/lookup`, NOT /api/v1; see the sil-product-get card). The
  * lookup COMPANION to search: an agent passes ids it already holds and gets fresh
  * RICH detail back (search is LEAN). sil-api owns enrichment + the `not_found`
- * messaging + the envelope; the plugin sends just `{ ids }` (NO filters/context,
+ * messaging; the plugin sends just `{ ids }` (NO filters/context,
  * NO envelope). The two structural deltas from search's response: NO `pagination`
  * (a batch resolve, not a list) and a `messages[]` carrying the misses:
  *
  *   POST <silApiUrl>/catalog/lookup   Authorization: Bearer <access_token>
  *     body { ids: string[] }                         (≥1; no filters/context)
- *     200 <FLAT UCP envelope>{ ucp, products: SilCatalogProduct[],
- *            messages?:[{ type:"info", code:"not_found", content:<id> }] } → ok
- *         (same flat `withUcpMeta` shape: `products`/`messages` at the TOP LEVEL
- *          beside `ucp`, NO `result` wrapper)
+ *     200 { products: SilCatalogProduct[],
+ *           messages?:[{ type:"info", code:"not_found", content:<id> }] } → ok
+ *         (`products`/`messages` at the TOP LEVEL, NO `result` wrapper)
  *     400 (schema: empty `ids` / request_too_large)  → invalid_request
  *     401                                            → unauthorized (→ refresh)
  *     5xx / network / abort                          → retryable
@@ -652,11 +650,11 @@ export function classifyIdentityResponse(status: number, body: unknown): Identit
  *         shared forbidden envelope, never the false-transient `retryable`, and a
  *         valid-but-unprovisioned token gains nothing from a refresh.
  *   5xx / other non-200 → retryable
- *   200 → read `products` off sil-api's FLAT envelope (`{ ucp, products,
- *         pagination? }` — top level, no `result` wrapper), normalize, and require
+ *   200 → read `products` off sil-api's FLAT body (`{ products, pagination? }` —
+ *         top level, no `result` wrapper), normalize, and require
  *         `products` to be a real ARRAY. A 200 that yields no usable top-level
- *         products array (a partial / garbage / stub-shaped body, or one carrying
- *         only `ucp` metadata) is `retryable`, NEVER `ok` — the
+ *         products array (a partial / garbage / stub-shaped body) is `retryable`,
+ *         NEVER `ok` — the
  *         `Array.isArray(products)` gate is the anti-false-green guard, the
  *         analogue of the identity `name`-gate. A genuine empty match (200 whose
  *         top-level `products` IS `[]`) is `ok` with an empty product list: a
@@ -711,8 +709,8 @@ export function classifySearchResponse(status: number, body: unknown): SearchOut
  *         envelope, never the false-transient `retryable`; it is NOT a 401, so no
  *         refresh is triggered.
  *   5xx / other non-200 → retryable
- *   200 → read `products` off sil-api's FLAT envelope (`{ ucp, products,
- *         messages? }` — top level, no `result` wrapper), normalize, and require
+ *   200 → read `products` off sil-api's FLAT body (`{ products, messages? }` —
+ *         top level, no `result` wrapper), normalize, and require
  *         `products` to be a real ARRAY. A 200 that yields no usable top-level
  *         products array (a partial / garbage / stub-shaped body) is `retryable`,
  *         NEVER `ok` — the `Array.isArray(products)` gate is the anti-false-green
@@ -799,9 +797,9 @@ export async function refreshSession(
  * Fastify domain service, NOT sil-web). This is a bodyless `GET <silApiUrl>/identity`:
  * sil-api's authenticated self-read derives the principal from the JWT `sub`
  * (the `Authorization: Bearer <token>` header), loads that user's addresses,
- * and returns `{ id, name, addresses }` in the UCP envelope's `result`
- * (sil-api `handlers/identity.ts` GET route — declares only a response schema,
- * takes no request body). The verb is the whole point: POST hits the agent
+ * and returns `{ id, name, addresses }` (sil-api `handlers/identity.ts` GET route —
+ * declares only a response schema, takes no request body). The verb is the whole
+ * point: POST hits the agent
  * enrich-STUB (no name/addresses), GET hits the real self-read. No `agent_id`
  * or `on_behalf_of` is sent — the GET self-read has no body, so the principal
  * is unambiguously the token subject and the `principal_mismatch` 403 path is
@@ -1029,9 +1027,9 @@ export async function refreshAndRetryOnce<O>(
 /**
  * Unwrap + narrow a sil-api identity response body to a typed `Identity`, or
  * null if it carries no usable identity. Defends against the latent wire shape:
- * the identity may be wrapped in the UCP envelope's `result` OR (if the
- * follow-on returns it bare) at the top level, so we try `result` first and
- * fall back to the body itself.
+ * the identity may be wrapped in a `result` field OR (if the follow-on returns it
+ * bare) at the top level, so we try `result` first and fall back to the body
+ * itself.
  *
  * A usable identity REQUIRES a non-empty `name` string (the authoritative human
  * name) and that `addresses` is an ARRAY — but the array may be EMPTY. sil-api
@@ -1170,9 +1168,8 @@ function withUppercaseCountry<T extends { country: string }>(value: T): T {
 /**
  * Unwrap + narrow a sil-api catalog-search response body to a typed
  * {@link SearchResult}, or null if it carries no usable products array. sil-api
- * emits a FLAT UCP envelope (`withUcpMeta(body) → { ucp, ...body }` —
- * sil-services `.../sil-api/src/envelope.ts`): `products` and `pagination` sit at
- * the TOP LEVEL beside `ucp`, there is NO `result` wrapper. Read them straight
+ * emits a FLAT body: `products` and `pagination` sit at the TOP LEVEL, there is
+ * NO `result` wrapper. Read them straight
  * off the body. (There is no nested-`result` fallback to keep: search has no
  * second route that ever returns one, so a `result`-wrapper expectation would be
  * dead weight and — worse — a latent false-green a stray `result` key could shadow
@@ -1180,7 +1177,7 @@ function withUppercaseCountry<T extends { country: string }>(value: T): T {
  *
  * The load-bearing anti-false-green guard is the `Array.isArray(products)` check:
  * a 200 lacking a real top-level `products` array (a partial / garbage / stub
- * `{ stub: true }` body, or one carrying only `ucp` metadata) returns null →
+ * `{ stub: true }` body) returns null →
  * `retryable`, never a false-green empty match. An EMPTY array is a VALID empty
  * match (a genuine "nothing matched") and returns an empty `products` list —
  * distinct from the no-array guard. Individual products that are unusable (no
@@ -1309,14 +1306,13 @@ function projectVariant(raw: unknown): SearchVariant | null {
 /**
  * Unwrap + narrow a sil-api catalog-LOOKUP response body to a typed
  * {@link LookupResult}, or null if it carries no usable products array. Like
- * `extractSearchResult`, it reads sil-api's FLAT UCP envelope
- * (`withUcpMeta(body) → { ucp, ...body }`): `products` and `messages` sit at the
- * TOP LEVEL beside `ucp`, there is NO `result` wrapper — read them straight off
+ * `extractSearchResult`, it reads sil-api's FLAT body: `products` and `messages`
+ * sit at the TOP LEVEL, there is NO `result` wrapper — read them straight off
  * the body (no nested-`result` fallback; lookup has no route that returns one).
  *
  * It shares search's load-bearing anti-false-green guard — `Array.isArray(products)`
  * on the TOP-LEVEL `products`; a 200 lacking it (partial / garbage / stub
- * `{ stub: true }`, or only `ucp` metadata) returns null → `retryable`. An EMPTY
+ * `{ stub: true }`) returns null → `retryable`. An EMPTY
  * array is a VALID all-missed lookup (the products gate passes; `not_found`
  * carries the ids) — distinct from the no-array guard. The two structural deltas
  * from search:
