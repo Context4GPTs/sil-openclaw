@@ -3030,7 +3030,9 @@ describe("sil_search — the enriched projection is read-side only: request body
  * PLUGIN contract against that boundary:
  *   - the request forwards the predicates under ONE namespaced `filters.specs` key
  *     (the predicates ride the already-open SearchFilters, exactly as `ships_to` did);
- *   - the products still move (via the query fold) even at `applied:false`;
+ *   - the tool is PURE TRANSPORT — it forwards the agent's free-text `query` unchanged
+ *     and does NOT fold predicates into it; results move via the agent's authored
+ *     free-text (here, the mocked sil-api simply returns a matching product);
  *   - `specs_status` surfaces on the `ok` payload FAITHFULLY, per-predicate, all
  *     `applied:false` — never collapsed to a boolean, never dropped — INCLUDING on an
  *     empty match.
@@ -3040,10 +3042,6 @@ describe("sil_search — the enriched projection is read-side only: request body
  * non-empty `checkout_url`) PLUS a top-level `specs_status`. Nothing here asserts the
  * backend FILTERS on any `ns.key`, and nothing asserts a stubbed tool — it asserts the
  * client BUILDS the contract and READS the honest status.
- *
- * EXPECT RED today: `readSearchParams`/`buildSearchBody` ignore `specs` (no
- * `filters.specs` reaches the wire) and `classifySearchResponse` never reads
- * `specs_status` (the `ok` payload omits it) — so both halves fail.
  */
 describe("sil_search — all-applied:false is a NORMAL success with an OBSERVABLE per-predicate specs_status (AC-P3)", () => {
   const SPECS = [
@@ -3088,7 +3086,8 @@ describe("sil_search — all-applied:false is a NORMAL success with an OBSERVABL
     expect(body).not.toHaveProperty("specs");
     expect(filters).not.toHaveProperty("waterproof_rating");
 
-    // (2) A NORMAL success — products moved (via the query fold) even at applied:false.
+    // (2) A NORMAL success — products present even at applied:false (the mocked
+    //     sil-api returns a match; the tool does not fold specs into the query).
     expect(payload["status"]).toBe("ok");
     expect((payload["products"] as unknown[]).length).toBeGreaterThan(0);
 

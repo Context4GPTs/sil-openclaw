@@ -220,12 +220,10 @@ export interface ShipTo {
   postal_code?: string;
 }
 
-/** The comparison operator on a spec predicate. The seven split by their effect
- * on the query FOLD (see {@link buildSearchBody}): the POSITIVE ops (`eq`/`gte`/
- * `lte`/`in`) render their value into `query` text as a backstop; the negation +
- * existence ops (`neq`/`nin`/`exists`) render NOTHING (a negation as a bare
- * positive token would surface exactly what it excludes — fail-worse). All seven
- * forward unchanged on the wire `filters.specs`; only the fold is op-aware. */
+/** The comparison operator on a spec predicate. All seven forward UNCHANGED on the
+ * wire `filters.specs` — the plugin is pure transport and never interprets an op.
+ * The op→value shape validity is a READ-SITE rule (`readSpecs` in catalog.ts), not
+ * a wire concern. */
 export type SpecOp = "eq" | "neq" | "gte" | "lte" | "in" | "nin" | "exists";
 
 /** The value a spec predicate carries. A scalar for `eq`/`neq`, a number for
@@ -252,10 +250,9 @@ export interface SpecPredicate {
 
 /** The per-predicate applied-status the backend reports on the `ok` response —
  * the OBSERVABLE fail-green signal. `applied:true` = the backend indexed it and
- * truly filtered; `applied:false` = not indexed yet (it moved results only via the
- * query fold), and that `applied:false` set is EXACTLY what reflection's
- * hard-constraint honesty check polices. Surfaced verbatim, per-predicate — never
- * collapsed to one boolean, never dropped. */
+ * truly filtered; `applied:false` = not indexed yet, and that `applied:false` set
+ * is EXACTLY what reflection's hard-constraint honesty check polices. Surfaced
+ * verbatim, per-predicate — never collapsed to one boolean, never dropped. */
 export interface SpecStatus {
   ns: string;
   key: string;
@@ -293,10 +290,11 @@ export interface SearchParams {
   available?: boolean;
   local_merchants?: boolean;
   /** The structured requirement predicates ({@link SpecPredicate}) projected from a
-   * filled PRD — the open long-tail channel with no dedicated param. Each is
-   * DUAL-projected in `buildSearchBody`: it rides a single namespaced `filters.specs`
-   * key AND folds its value into `query` (positive ops only). Present-but-empty `[]`
-   * is a benign no-op (omits `filters.specs`, does not count as usable input); the
+   * filled PRD — the open long-tail channel with no dedicated param. Each rides a
+   * single namespaced `filters.specs` key in `buildSearchBody`, forwarded VERBATIM:
+   * the plugin is pure transport and NEVER folds a predicate into `query` (the agent
+   * authors free-text from the requirements itself). Present-but-empty `[]` is a
+   * benign no-op (omits `filters.specs`, does not count as usable input); the
    * per-predicate validity is enforced at the read site (`readSpecs`). */
   specs?: SpecPredicate[];
 }
@@ -1114,12 +1112,10 @@ function extractForbiddenReason(body: unknown): string {
  */
 function buildSearchBody(params: SearchParams): Record<string, unknown> {
   const body: Record<string, unknown> = {};
-  // The agent's free-text `query` is PRIMARY; each POSITIVE spec predicate folds
-  // its value(+unit) in as a backstop (deduped case-insensitively) so a structured
-  // requirement still moves results at `applied:false`. `renderSpecQuery` returns
-  // the base query verbatim when there are no specs (behaviour-preserving).
-  const query = renderSpecQuery(params.query, params.specs ?? []);
-  if (query !== undefined) body["query"] = query;
+  // The agent's free-text `query` is forwarded VERBATIM. The plugin is pure
+  // transport — a `specs` predicate NEVER folds into `query` (that lossy/unsafe job
+  // belongs to the agent, which authors the free-text from the requirements).
+  if (typeof params.query === "string") body["query"] = params.query;
 
   const filters: Record<string, unknown> = {};
   if (typeof params.category === "string") {
@@ -1161,69 +1157,6 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   if (Object.keys(pagination).length > 0) body["pagination"] = pagination;
 
   return body;
-}
-
-/** The POSITIVE spec ops whose value folds into the free-text query. The rest
- * (`neq`/`nin`/`exists`) render NOTHING — a negation as a bare positive token
- * would surface exactly what it EXCLUDES, failing worse than a silent no-op. */
-const POSITIVE_SPEC_OPS: ReadonlySet<SpecOp> = new Set(["eq", "gte", "lte", "in"]);
-
-/**
- * Fold the POSITIVE spec predicates into the agent's free-text `query` as a
- * backstop so a structured requirement still moves results while the backend
- * reports it `applied:false`. The agent's phrasing stays PRIMARY and un-mangled:
- * its tokens are kept, and each spec token is appended ONLY when not already
- * present (case-insensitive, whitespace-tokenized) so the fold never duplicates
- * what the agent already wrote nor what an earlier predicate rendered.
- *
- * A predicate renders `value` immediately followed by `unit` (`16` + `GB` →
- * `16GB`, matching the design's rendered-form example — NO separating space); an
- * `in` array renders one token per element. Negation/existence ops and BOOLEAN
- * values render nothing (see {@link POSITIVE_SPEC_OPS}).
- *
- * Behaviour-preserving when `specs` is empty: returns the base `query` verbatim
- * (including an empty string, kept present), or `undefined` when there is no base
- * query and nothing to fold (so `buildSearchBody` omits the key).
- */
-function renderSpecQuery(query: string | undefined, specs: SpecPredicate[]): string | undefined {
-  const hasBase = typeof query === "string";
-  const base = hasBase ? query : "";
-  const seen = new Set(tokenizeQuery(base));
-  const additions: string[] = [];
-  for (const spec of specs) {
-    for (const token of renderSpecTokens(spec)) {
-      const lower = token.toLowerCase();
-      if (seen.has(lower)) continue;
-      seen.add(lower);
-      additions.push(token);
-    }
-  }
-  if (additions.length === 0) return hasBase ? base : undefined;
-  return [base, ...additions].filter((token) => token.length > 0).join(" ");
-}
-
-/** The free-text query as lower-cased, whitespace-split tokens — the dedup set the
- * spec fold checks each rendered token against. */
-function tokenizeQuery(query: string): string[] {
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((token) => token.length > 0);
-}
-
-/** Render one predicate to its query token(s), or none. Only POSITIVE ops render;
- * `value` is stringified with `unit` appended (no space), an array value yields one
- * token per element, and a boolean/absent value renders nothing. */
-function renderSpecTokens(spec: SpecPredicate): string[] {
-  if (!POSITIVE_SPEC_OPS.has(spec.op)) return [];
-  const unit = typeof spec.unit === "string" ? spec.unit : "";
-  const values = Array.isArray(spec.value) ? spec.value : [spec.value];
-  const tokens: string[] = [];
-  for (const value of values) {
-    if (typeof value !== "string" && typeof value !== "number") continue;
-    tokens.push(`${value}${unit}`);
-  }
-  return tokens;
 }
 
 /** Emit a ship-to object with its alpha-2 `country` UPPERCASED on the wire

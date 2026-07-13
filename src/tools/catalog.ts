@@ -314,7 +314,7 @@ function registerSearch(api: PluginAPI): void {
               Type.String({
                 description:
                   "The value's unit (e.g. \"mm\", \"GB\", \"days\") — optional context"
-                  + " carried on the wire and folded into the query text.",
+                  + " carried on the wire.",
               }),
             ),
             hard: Type.Optional(
@@ -330,7 +330,7 @@ function registerSearch(api: PluginAPI): void {
               "Structured requirement predicates for the OPEN LONG-TAIL of attributes"
               + " with no dedicated param (product.capacity_gb, seller.rating_average,"
               + " shipping.delivery_max_days). Each { ns, key, op, value, unit?, hard? }"
-              + " both rides the request AND folds into the query text. PREFER a"
+              + " rides the request under one namespaced `filters.specs` key. PREFER a"
               + " dedicated param (price_min/price_max, category, condition, available,"
               + " ship_to) over a `specs` predicate for the SAME attribute — never send"
               + " both. Omit when there are no structured requirements.",
