@@ -61,9 +61,6 @@ import {
   type SearchOutcome,
   type SearchParams,
   type ShipTo,
-  type SpecOp,
-  type SpecPredicate,
-  type SpecValue,
 } from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
 
@@ -146,17 +143,7 @@ function registerSearch(api: PluginAPI): void {
       + " results are all local. To surface MORE local shops you MAY also issue the"
       + " `query` in that country's language (a Greek-language query surfaces Greek"
       + " shops) — optional, and never an override of a language the user deliberately"
-      + " chose; pass NO country — sil resolves it server-side. `specs` is the"
-      + " STRUCTURED requirement channel — a list of typed predicates ({ ns, key, op,"
-      + " value, unit?, hard? }) for the OPEN LONG-TAIL of attributes that have no"
-      + " dedicated param (e.g. product.capacity_gb, seller.rating_average,"
-      + " shipping.delivery_max_days). PREFER A DEDICATED PARAM OVER A `specs`"
-      + " PREDICATE FOR THE SAME ATTRIBUTE: route price to price_min/price_max,"
-      + " category to category, condition to condition, availability to available,"
-      + " and the delivery destination to ship_to — never send both a dedicated"
-      + " param and a `specs` predicate for the one attribute (that risks an"
-      + " over-narrow or divergent result). Mark a predicate `hard: true` when the"
-      + " requirement is inviolable. Requires registration (run"
+      + " chose; pass NO country — sil resolves it server-side. Requires registration (run"
       + " sil_register first).",
     parameters: Type.Object({
       query: Type.Optional(
@@ -266,77 +253,6 @@ function registerSearch(api: PluginAPI): void {
             + " to keep the default (available only).",
         }),
       ),
-      specs: Type.Optional(
-        Type.Array(
-          Type.Object({
-            ns: Type.String({
-              description:
-                "The predicate NAMESPACE (e.g. \"product\", \"seller\", \"shipping\")"
-                + " — a free string, coined bottom-up; NOT dotted with the key.",
-            }),
-            key: Type.String({
-              description:
-                "The predicate KEY within the namespace (e.g. \"capacity_gb\","
-                + " \"rating_average\") — a free string, coined bottom-up.",
-            }),
-            op: Type.Union(
-              [
-                Type.Literal("eq"),
-                Type.Literal("neq"),
-                Type.Literal("gte"),
-                Type.Literal("lte"),
-                Type.Literal("in"),
-                Type.Literal("nin"),
-                Type.Literal("exists"),
-              ],
-              {
-                description:
-                  "The comparison operator. `gte`/`lte` need a number `value`;"
-                  + " `in`/`nin` need an array `value`; `eq`/`neq` need a scalar"
-                  + " `value`; `exists` takes NO `value`.",
-              },
-            ),
-            value: Type.Optional(
-              Type.Union(
-                [
-                  Type.Number(),
-                  Type.String(),
-                  Type.Boolean(),
-                  Type.Array(Type.Union([Type.String(), Type.Number()])),
-                ],
-                {
-                  description:
-                    "The compared value, matching the op (omit it for `exists`).",
-                },
-              ),
-            ),
-            unit: Type.Optional(
-              Type.String({
-                description:
-                  "The value's unit (e.g. \"mm\", \"GB\", \"days\") — optional context"
-                  + " carried on the wire.",
-              }),
-            ),
-            hard: Type.Optional(
-              Type.Boolean({
-                description:
-                  "Set true when the requirement is INVIOLABLE (a hard constraint the"
-                  + " result must satisfy), false/omit for a soft preference.",
-              }),
-            ),
-          }),
-          {
-            description:
-              "Structured requirement predicates for the OPEN LONG-TAIL of attributes"
-              + " with no dedicated param (product.capacity_gb, seller.rating_average,"
-              + " shipping.delivery_max_days). Each { ns, key, op, value, unit?, hard? }"
-              + " rides the request under one namespaced `filters.specs` key. PREFER a"
-              + " dedicated param (price_min/price_max, category, condition, available,"
-              + " ship_to) over a `specs` predicate for the SAME attribute — never send"
-              + " both. Omit when there are no structured requirements.",
-          },
-        ),
-      ),
     }),
     async execute(_callId, params) {
       // 1 — not registered: terminal, zero network calls.
@@ -353,10 +269,6 @@ function registerSearch(api: PluginAPI): void {
       // `invalid_filter` beats an opaque, fail-late sil-api 400 (re-spec).
       const read = readSearchParams(params);
       if (read.kind === "invalid") {
-        if (read.code === "invalid_spec") {
-          api.logger.info("sil_search_invalid_spec", { field: read.field });
-          return invalidSpec(read.field);
-        }
         api.logger.info("sil_search_invalid_filter", { field: read.field });
         return invalidFilter(read.field);
       }
@@ -649,14 +561,12 @@ type FilterRead<T> =
   | { kind: "invalid"; field: string };
 
 /** The outcome of narrowing the whole param object: either the typed
- * {@link SearchParams} to forward, or the FIRST bad field that rejects the request
- * client-side. `code` names WHICH reject envelope the tool emits — a bad-FORMAT
- * location filter (`invalid_filter`) or a malformed spec predicate
- * (`invalid_spec`) — so the two client-side rejects stay distinguishable (the read
- * site owns FORMAT + op→value rejection; the wire owns country-case normalization). */
+ * {@link SearchParams} to forward, or the FIRST bad-format field that rejects the
+ * request client-side (the read site owns FORMAT rejection; the wire owns
+ * country-case normalization). */
 type SearchParamsRead =
   | { kind: "ok"; params: SearchParams }
-  | { kind: "invalid"; field: string; code: "invalid_filter" | "invalid_spec" };
+  | { kind: "invalid"; field: string };
 
 /** Narrow the untrusted `params` to the simplified {@link SearchParams}, or report
  * the first bad-FORMAT filter field. A field of the wrong type is dropped (treated
@@ -695,9 +605,7 @@ function readSearchParams(params: Record<string, unknown>): SearchParamsRead {
   if (typeof limit === "number") result.limit = limit;
 
   const shipTo = readShipTo(params["ship_to"]);
-  if (shipTo.kind === "invalid") {
-    return { kind: "invalid", field: shipTo.field, code: "invalid_filter" };
-  }
+  if (shipTo.kind === "invalid") return { kind: "invalid", field: shipTo.field };
   if (shipTo.kind === "ok") result.ship_to = shipTo.value;
 
   const condition = readCondition(params["condition"]);
@@ -711,16 +619,6 @@ function readSearchParams(params: Record<string, unknown>): SearchParamsRead {
   // unlike `available:false`, a false bias carries no ranking signal.
   const localMerchants = params["local_merchants"];
   if (typeof localMerchants === "boolean") result.local_merchants = localMerchants;
-
-  // `specs` is a THIRD input class (a real constraint, not a refinement): a
-  // malformed predicate rejects the whole request client-side (`invalid_spec`,
-  // zero network — the `invalid_filter` twin); a non-array is DROPPED (the
-  // `readIds` discipline); a benign empty `[]` reads `ok` and no-ops downstream.
-  const specs = readSpecs(params["specs"]);
-  if (specs.kind === "invalid") {
-    return { kind: "invalid", field: specs.field, code: "invalid_spec" };
-  }
-  if (specs.kind === "ok") result.specs = specs.value;
 
   return { kind: "ok", params: result };
 }
@@ -784,111 +682,9 @@ function readCondition(raw: unknown): string[] | null {
   return values.length === 0 ? null : values;
 }
 
-/** The seven spec ops, the ONLY closed part of the predicate contract (the `ns`/
- * `key` vocabulary is deliberately open — [[sds-specs-vocabulary-is-bottom-up]]). */
-const SPEC_OPS: readonly SpecOp[] = ["eq", "neq", "gte", "lte", "in", "nin", "exists"];
-
-function isSpecOp(op: string): op is SpecOp {
-  return (SPEC_OPS as readonly string[]).includes(op);
-}
-
-/** The op→value validity rule, enforced at the READ SITE (the flat-schema +
- * read-site idiom — the schema keeps `value` optional so `exists` fits; the
- * per-op requirement lives here, not in TypeBox):
- *   - `exists` carries NO value;
- *   - `in`/`nin` need a NON-EMPTY array of string|number;
- *   - `gte`/`lte` need a number;
- *   - `eq`/`neq` need a scalar (string|number|boolean).
- * Exhaustive over {@link SpecOp} — a new op forces a case here. */
-function specValueMatchesOp(op: SpecOp, value: unknown): boolean {
-  switch (op) {
-    case "exists":
-      return value === undefined;
-    case "in":
-    case "nin":
-      return (
-        Array.isArray(value)
-        && value.length > 0
-        && value.every((v) => typeof v === "string" || typeof v === "number")
-      );
-    case "gte":
-    case "lte":
-      return typeof value === "number";
-    case "eq":
-    case "neq":
-      return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
-  }
-}
-
-/** The outcome of narrowing ONE untrusted predicate: the typed {@link SpecPredicate}
- * to forward, or the offending index/field that rejects the whole request. */
-type SpecRead =
-  | { kind: "ok"; value: SpecPredicate }
-  | { kind: "invalid"; field: string };
-
-/** The outcome of narrowing the whole `specs` arg. `absent` covers both a missing
- * arg AND a non-array (DROPPED — the `readIds` discipline); an empty array reads
- * `ok` with an empty value (a benign no-op downstream). The FIRST malformed
- * predicate wins the `invalid`. */
-type SpecsRead =
-  | { kind: "ok"; value: SpecPredicate[] }
-  | { kind: "absent" }
-  | { kind: "invalid"; field: string };
-
-/** Narrow the untrusted `specs` arg to {@link SpecPredicate}[], or report the FIRST
- * malformed predicate. A non-array is DROPPED (treated absent — the `readIds`
- * discipline; a drifted on-disk call must not slip a non-array through). Each entry
- * must be an object with a non-blank `ns` and `key`, an `op` in the seven, and a
- * `value` matching the op ({@link specValueMatchesOp}) — else the WHOLE request is
- * rejected client-side (`invalid_spec`, zero network — the `invalid_filter` twin),
- * because a malformed hard predicate silently dropped would be a fail-worse honesty
- * hole. `unit`/`hard` are carried when the right type, dropped otherwise. No `any`,
- * no unchecked `as` (the one cast is gated by {@link specValueMatchesOp}). */
-function readSpecs(raw: unknown): SpecsRead {
-  if (!Array.isArray(raw)) return { kind: "absent" };
-  const specs: SpecPredicate[] = [];
-  for (let index = 0; index < raw.length; index++) {
-    const read = readSpec(raw[index], index);
-    if (read.kind === "invalid") return read;
-    specs.push(read.value);
-  }
-  return { kind: "ok", value: specs };
-}
-
-/** Narrow ONE untrusted predicate to {@link SpecPredicate}, or report the offending
- * field (`specs[i]`, `specs[i].ns`, `specs[i].op`, `specs[i].value`, …) for a clear
- * client-side reject. */
-function readSpec(raw: unknown, index: number): SpecRead {
-  const at = (suffix: string): string => `specs[${index}]${suffix}`;
-  const obj = asRecord(raw);
-  if (obj === null) return { kind: "invalid", field: at("") };
-
-  const ns = obj["ns"];
-  if (typeof ns !== "string" || ns.trim().length === 0) return { kind: "invalid", field: at(".ns") };
-  const key = obj["key"];
-  if (typeof key !== "string" || key.trim().length === 0) return { kind: "invalid", field: at(".key") };
-
-  const op = obj["op"];
-  if (typeof op !== "string" || !isSpecOp(op)) return { kind: "invalid", field: at(".op") };
-
-  const value = obj["value"];
-  if (!specValueMatchesOp(op, value)) return { kind: "invalid", field: at(".value") };
-
-  const spec: SpecPredicate = { ns, key, op };
-  // `exists` carries no value (validated above); the others carry the op-checked value.
-  if (op !== "exists") spec.value = value as SpecValue;
-  const unit = obj["unit"];
-  if (typeof unit === "string") spec.unit = unit;
-  const hard = obj["hard"];
-  if (typeof hard === "boolean") spec.hard = hard;
-  return { kind: "ok", value: spec };
-}
-
 /** The one client-side invariant the tool owns: at least one recognized input.
- * A non-whitespace `query`, any filter (`category` / `price_min` / `price_max`),
- * OR a non-empty well-formed `specs` list suffices — a spec is a real constraint
- * (it renders + filters), not a refinement. A bare `{}`, a whitespace-only `query`
- * with no filter, or a present-but-EMPTY `specs: []` with nothing else is rejected;
+ * A non-whitespace `query` OR any filter (`category` / `price_min` / `price_max`)
+ * suffices. A bare `{}` or a whitespace-only `query` with no filter is rejected;
  * pagination params alone (`cursor`/`limit`) are NOT inputs — they refine an
  * existing search, they do not constitute one. */
 function hasUsableInput(params: SearchParams): boolean {
@@ -897,8 +693,7 @@ function hasUsableInput(params: SearchParams): boolean {
     typeof params.category === "string"
     || typeof params.price_min === "number"
     || typeof params.price_max === "number";
-  const hasSpecs = Array.isArray(params.specs) && params.specs.length > 0;
-  return hasQuery || hasFilter || hasSpecs;
+  return hasQuery || hasFilter;
 }
 
 /** Success: the ranked products + optional cursor — no token, no Bearer header.
@@ -951,23 +746,6 @@ function invalidFilter(field: string) {
       + " free-text names: country as a 2-letter ISO 3166-1 alpha-2 code (e.g."
       + " \"US\"), region as an ISO 3166-2 subdivision code (e.g. \"CA\"), and"
       + " postal_code as a destination postal/ZIP code.",
-  });
-}
-
-/** Client-side validation: a `specs` predicate is malformed (blank `ns`/`key`, an
- * `op` outside the seven, or a value shape contradicting the op) — rejected BEFORE
- * any network call, the twin of {@link invalidFilter} for `ship_to`. Distinct
- * machine code `invalid_spec`; `field` names the offending predicate index/field.
- * No `recovery: sil_register` — auth is fine; the predicate is the problem. */
-function invalidSpec(field: string) {
-  return jsonResult({
-    status: "invalid_request",
-    error: "invalid_spec",
-    message:
-      `The \`${field}\` spec predicate is malformed. Each predicate needs a`
-      + " non-empty `ns` and `key`, an `op` of eq/neq/gte/lte/in/nin/exists, and a"
-      + " `value` matching the op: a number for gte/lte, a non-empty array for"
-      + " in/nin, a scalar for eq/neq, and NO value for exists.",
   });
 }
 
