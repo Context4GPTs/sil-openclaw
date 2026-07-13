@@ -153,7 +153,8 @@ function readBody(path: string): string {
 }
 
 /** The names the real register code emits (identity + catalog + profile groups) —
- * the REAL nine-tool surface (Step A: sil_learn + sil_profile_search). */
+ * the REAL ten-tool surface (the sds-specs-client-tool card added sil_specs to the
+ * catalog group, beside sil_learn + sil_profile_search from the prior card). */
 function registeredNames(): Set<string> {
   const api = createMockPluginApi();
   registerIdentityTools(api);
@@ -203,16 +204,18 @@ describe("sil-shopping/SKILL.md — discoverability", () => {
   });
 });
 
-describe("sil-shopping/SKILL.md — frontmatter drives the NINE tools + shopper/domain model, no expert / deleted-tool vocab", () => {
+describe("sil-shopping/SKILL.md — frontmatter drives the TEN tools + shopper/domain model, no expert / deleted-tool vocab", () => {
   it("frontmatter `name` equals the published basename `sil-shopping` (not the plugin id `sil`)", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     expect(fm.fields["name"]).toBe("sil-shopping");
     expect(fm.fields["name"]).not.toBe("sil");
   });
 
-  it("frontmatter `description` enumerates the NINE sil_* tools it drives, and NOT the deleted sil_profile_list / sil_remember", () => {
-    // TOOL-SET MIRROR #6 — add-only, kept exact. Step A renamed sil_remember →
-    // sil_learn and added sil_profile_search (frontmatter-as-truth query).
+  it("frontmatter `description` enumerates the TEN sil_* tools it drives, and NOT the deleted sil_profile_list / sil_remember", () => {
+    // TOOL-SET MIRROR #6 — add-only, kept exact. The sds-specs-client-tool card ADDS
+    // sil_specs (the coin/dedupe/register canonicalization primitive the method drives
+    // at Beat 2), paired with the SKILL.md frontmatter `description` edit — so this
+    // presence pin stays RED until the description names sil_specs.
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     const description = fm.fields["description"] ?? "";
     const missing = [
@@ -225,6 +228,7 @@ describe("sil-shopping/SKILL.md — frontmatter drives the NINE tools + shopper/
       "sil_profile_remove",
       "sil_learn",
       "sil_profile_search",
+      "sil_specs",
     ].filter((t) => !description.includes(t));
     expect(missing).toEqual([]);
     expect(description).not.toContain("sil_profile_list");
@@ -271,16 +275,18 @@ describe("skill name-agreement drift guard — one published name across manifes
 });
 
 /* ===========================================================================
- * BUNDLE — the nine-tool surface, deleted-token retirement, canonical file set
+ * BUNDLE — the ten-tool surface, deleted-token retirement, canonical file set
  * ========================================================================= */
 
-describe("skill bundle — source of truth for the nine-tool surface", () => {
-  it("registeredNames() equals NINE (the four core tools + the five sil_profile_* / sil_learn verbs)", () => {
-    // TOOL-SET MIRROR #6 (count). Add-only, kept exact.
+describe("skill bundle — source of truth for the ten-tool surface", () => {
+  it("registeredNames() equals TEN (the four core tools + the five sil_profile_* / sil_learn verbs + sil_specs)", () => {
+    // TOOL-SET MIRROR #6 (count). Add-only, kept exact — the sds-specs-client-tool
+    // card added sil_specs to the catalog group (9 → 10).
     const names = registeredNames();
-    expect(names.size, `registered tools: ${[...names].sort().join(", ")}`).toBe(9);
+    expect(names.size, `registered tools: ${[...names].sort().join(", ")}`).toBe(10);
     expect(names.has("sil_learn")).toBe(true);
     expect(names.has("sil_profile_search")).toBe(true);
+    expect(names.has("sil_specs")).toBe(true);
     expect(names.has("sil_remember")).toBe(false);
     expect(names.has("sil_profile_list")).toBe(false);
   });

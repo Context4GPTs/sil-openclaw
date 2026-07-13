@@ -160,8 +160,8 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       .mock.calls.filter(([marker]) => marker === "sil_plugin_loaded");
     expect(markerCalls).toHaveLength(1);
     // The full real tool set — the data-dir creation does not add/drop a tool.
-    // 9 tools after the spec-driven-shopping-redesign card renamed sil_remember →
-    // sil_learn and added sil_profile_search (frontmatter-as-truth query).
+    // 10 tools after the sds-specs-client-tool card added sil_specs (the
+    // coin/dedupe/register canonicalization primitive) to the catalog group.
     expect([...api._tools.keys()].sort()).toEqual([
       "sil_learn",
       "sil_product_get",
@@ -171,6 +171,7 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       "sil_profile_search",
       "sil_register",
       "sil_search",
+      "sil_specs",
       "sil_whoami",
     ]);
   });

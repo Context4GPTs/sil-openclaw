@@ -29,9 +29,18 @@ create`**, never the **setup-only** `sil_profile_materialize` (which writes only
 shared `user_spec.md` and mints no domain). Then **announce** the inferred domain so
 the buyer can correct it.
 
-The coined vocabulary is canonicalized via `sil_specs` only where that endpoint
-exists (Phase 3). Until then it is **coined-and-used raw** — every predicate reads
-`applied:false`, so `sil_specs` is **not** called and nothing is stubbed.
+The coined vocabulary is **canonicalized before persist**. Submit the coined spec
+definitions to **`sil_specs`** (dedupe-or-create) and adopt the returned **canonical**
+`ns.key` for every spec: a **`matched`** result means an equivalent canonical spec
+already exists — **drop your coined synonym and adopt the canonical name**; a
+**`created`** result means yours is novel and is canonical going forward (keep it).
+Rewrite the method's `## Search vocabulary` and any PRD `specs` predicates to those
+canonical names, then persist — the method is **born canonical**, never
+write-then-amend. This convergence is what makes `filters.specs` actually filter
+across methods. If `sil_specs` is **not `ok`** (a registry blip), **do not block the
+mint**: persist with the **raw coined names** (every predicate reads `applied:false`)
+and shop on — convergence retries on the next mint/refresh. Canonicalization is
+**silent to the buyer**: never surface `ns.key` plumbing.
 
 ## REFRESH — signal-driven (HIT, stale)
 
@@ -47,6 +56,10 @@ re-emit the whole body via `sil_learn create` (overwrite), and announce the delt
 The merge **preserves** every **buyer** `sil_learn` edit — it rewrites stale
 *research* claims and **never clobbers** a buyer edit. The method is fully
 buyer-mutable at any time via `sil_learn` append/amend/retract.
+
+Canonicalize any **newly-coined** specs via `sil_specs` before persisting the
+refreshed method — resubmit **only** the specs not yet carrying a canonical name
+(already-canonical names are stable; do not resubmit them).
 
 ## Intent-keyed PRDs
 

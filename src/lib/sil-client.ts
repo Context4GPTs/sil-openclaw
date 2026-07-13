@@ -86,6 +86,32 @@
  * `not_found` → `ok` (success: "none of these exist anymore"), the discriminator
  * being array PRESENCE, never length.
  *
+ * Wire contract for the sil-API spec REGISTRY (SAME origin/path style as search —
+ * sil-api, bare `/catalog/specs`, NOT /api/v1; see the sds-specs-client-tool card).
+ * The dedupe-or-create up-flow: at method mint/refresh the method submits its coined
+ * spec DEFINITIONS and gets back the canonical `ns.key` to adopt (born canonical,
+ * BEFORE persist). sil-api owns the dedupe authority; the plugin sends `{ query,
+ * specs }` (NO envelope) and reads the resolutions straight off the body:
+ *
+ *   POST <silApiUrl>/catalog/specs   Authorization: Bearer <access_token>
+ *     body { query, specs: SpecDefinition[] }        (both required; specs ≥1)
+ *     200 { resolved: SpecResolution[] }             → ok
+ *         (BARE `{ resolved }` at the TOP LEVEL — NO `ucp` meta, NO `result`
+ *          wrapper; specs is an INTERNAL agent↔service op, not a UCP message)
+ *     400 (schema: empty specs / blank query)        → invalid_request
+ *     401                                            → unauthorized (→ refresh)
+ *     403 { error }                                  → forbidden (terminal)
+ *     5xx / network / abort                          → retryable
+ *
+ * The error arms are a STRICT SUBSET of search's: there is NO 422 SourceError arm
+ * and NO `source` attribution — the registry is sil's OWN Postgres, not an external
+ * source (handlers/specs.ts), so a specs `retryable` is always BARE. Every
+ * well-formed request resolves EVERY submitted spec 1:1 (`matched`|`created`);
+ * `classifySpecsResponse` gates `ok` on `Array.isArray(resolved)` AND a NON-EMPTY
+ * array of fully-formed resolutions — a partial / garbage / EMPTY-`resolved` 200
+ * falls WHOLE to `retryable` (the method can't adopt a canonical name it never got
+ * back, and there is NO valid empty-match success here, unlike search's empty list).
+ *
  * `SilCatalogProduct` = a UCP product PLUS a required `source`; each variant PLUS
  * a required non-empty `checkout_url` (sil-services `@sil/schemas` catalog.ts —
  * the byte-shape of truth; `@ucp-js/sdk` carries ZERO catalog types). The plugin
@@ -542,6 +568,83 @@ export type LookupOutcome =
   | { kind: "invalid_request"; error: string; message: string }
   | { kind: "retryable"; source?: string; detail?: string };
 
+/** The closed value-type a coined spec declares (mirrors `@sil/schemas`
+ * `SpecDataType` — re-declared locally, the same no-cross-repo-import discipline as
+ * the `Search*` read-subset). A bad value 400s at the sil-api TypeBox boundary. */
+export type SpecDataType = "number" | "text" | "boolean" | "enum";
+
+/** One coined spec DEFINITION the method submits to `/catalog/specs` for
+ * canonicalization. Closed SHAPE, open `namespace`/`key` VOCABULARY (coined
+ * bottom-up). Mirrors `@sil/schemas` `SpecDefinition` — the read-subset the plugin
+ * sends and echoes back. `data_type` is the closed enum; `description`/`unit`/
+ * `allowed_values` are optional context that sharpens the backend's dedupe. */
+export interface SpecDefinition {
+  namespace: string;
+  key: string;
+  display_name: string;
+  description?: string;
+  data_type: SpecDataType;
+  unit?: string;
+  allowed_values?: string[];
+}
+
+/** A `{ namespace, key }` reference — a resolution carries both the `submitted`
+ * echo and the `canonical` name the method adopts. */
+export interface SpecRef {
+  namespace: string;
+  key: string;
+}
+
+/** The two per-spec resolution classes: `matched` = deduped to an existing
+ * canonical row (`canonical` MAY differ from `submitted` — adopt it, drop the
+ * synonym); `created` = newly registered as canonical (`canonical === submitted`).
+ * NOT named `SpecStatus` — that is the search `specs_status` entry above. */
+export type SpecResolutionStatus = "matched" | "created";
+
+/** The canonical resolution of ONE submitted spec (mirrors `@sil/schemas`
+ * `SpecResolution`). Carries the canonical definition FLAT (a {@link SpecDefinition})
+ * plus the `submitted` echo, the `canonical` ref to adopt, the `status`, and the two
+ * capability flags. The method adopts `canonical.namespace`/`canonical.key`.
+ *
+ * Also spreads `Record<string, unknown>` — the wire-read discipline the `Search*`
+ * opaque types follow: a resolution is surfaced FAITHFULLY (the client trusts the
+ * backend's dedupe verdict, never second-guessing it), so callers read it by dynamic
+ * key without a double-`unknown` cast. The real shape is enforced at RUNTIME by
+ * `projectResolution` (the request `SpecDefinition` stays strictly closed). */
+export interface SpecResolution extends SpecDefinition, Record<string, unknown> {
+  submitted: SpecRef;
+  canonical: SpecRef;
+  status: SpecResolutionStatus;
+  is_filterable: boolean;
+  is_comparable: boolean;
+}
+
+/** The spec-registry request an agent sends: the motivating `query`
+ * (governance/dedupe context) + the non-empty coined `specs`. Maps 1:1 to the
+ * sil-api `SpecsRequest` body — the tool builds NO envelope and NO filter mapping;
+ * the wire body is EXACTLY `{ query, specs }`. */
+export interface SpecsParams {
+  query: string;
+  specs: SpecDefinition[];
+}
+
+/**
+ * Outcome of a single `/catalog/specs` canonicalization (classified by status +
+ * body). A STRICT SUBSET of {@link SearchOutcome}: there is NO 422 arm and the
+ * `retryable` variant is BARE — no `source`/`detail`, because the registry is sil's
+ * OWN Postgres, not an external catalog source (so a fabricated `source` on a specs
+ * 5xx would be wrong attribution). `unauthorized` (401) is the refresh trigger
+ * (routed through {@link refreshAndRetryOnce}, parity with search); `forbidden`
+ * (403) is terminal-but-recoverable carrying the actionable `reason`. The `ok`
+ * variant carries the projected `resolved` array DIRECTLY.
+ */
+export type SpecsOutcome =
+  | { kind: "ok"; resolved: SpecResolution[] }
+  | { kind: "unauthorized" }
+  | { kind: "forbidden"; reason: string }
+  | { kind: "invalid_request"; error: string; message: string }
+  | { kind: "retryable" };
+
 /**
  * Classify a claim response from its HTTP status AND body. The discriminant for
  * the two-200s split is the PRESENCE OF BOTH TOKENS in the body — never the
@@ -752,6 +855,42 @@ export function classifyLookupResponse(status: number, body: unknown): LookupOut
 }
 
 /**
+ * Classify a sil-api spec-REGISTRY response from its HTTP status AND body. A STRICT
+ * SUBSET of `classifySearchResponse` — same 400/401/403 arms, but NO 422 arm and a
+ * BARE `retryable` (the registry has no external source to attribute):
+ *   400 → invalid_request (schema reject: empty `specs` / blank `query` — surface
+ *         the server's `{ error, message }`; NOT retryable, NOT re-register)
+ *   401 → unauthorized (the refresh trigger — the caller drives transparent
+ *         refresh-and-retry-once via `refreshAndRetryOnce`, parity with search)
+ *   403 → forbidden (terminal-but-recoverable; carries the actionable reason
+ *         `user_not_provisioned`/`principal_mismatch`, defaulting to `"forbidden"`)
+ *   5xx / other non-200 → retryable (BARE — no `source`/`detail`; the registry is
+ *         sil's own Postgres, so there is nothing external to name)
+ *   200 → read `resolved` off the FLAT body (`{ resolved }` — top level, NO `ucp`
+ *         meta, NO `result` wrapper) and require a NON-EMPTY array of fully-formed
+ *         resolutions via {@link extractSpecsResult}. A 200 with no usable array (a
+ *         partial / garbage / stub / EMPTY-`resolved` body) is `retryable`, NEVER
+ *         `ok` — `Array.isArray(resolved)` is the anti-false-green gate. Unlike
+ *         search there is NO valid empty-match: the server owes a 1:1 resolution, so
+ *         an empty or short `resolved` is a malformed 200, not a success.
+ *
+ * Pure and exported — unit-tested in isolation like `classifySearchResponse`.
+ */
+export function classifySpecsResponse(status: number, body: unknown): SpecsOutcome {
+  if (status === 400) {
+    const { error, message } = extractApiError(body);
+    return { kind: "invalid_request", error, message };
+  }
+  if (status === 401) return { kind: "unauthorized" };
+  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
+  if (status !== 200) return { kind: "retryable" };
+
+  const resolved = extractSpecsResult(body);
+  if (resolved === null) return { kind: "retryable" };
+  return { kind: "ok", resolved };
+}
+
+/**
  * Attempt to claim the token pair for `sessionId` with `verifier`. The verifier
  * is sent in the body; sil-web derives the same challenge server-side and the
  * CAS compares digest-to-digest (the plugin sends the verifier, not the digest).
@@ -883,6 +1022,38 @@ export async function lookupCatalog(
   }
   const body = await readJsonBody(res);
   return classifyLookupResponse(res.status, body);
+}
+
+/**
+ * Canonicalize coined spec definitions against sil-api's registry (the SAME origin
+ * as the identity read / `searchCatalog` / `lookupCatalog` — NOT sil-web; bare
+ * `/catalog/specs`, no `/api/v1`). The method submits `{ query, specs }` at mint/
+ * refresh and gets back the canonical `ns.key` per submitted spec — building NO UCP
+ * envelope and NO filter mapping (the wire body is EXACTLY `{ query, specs }`).
+ *
+ * The Bearer header is built HERE and never logged; the token travels only in the
+ * outbound request, never into the returned union. A network error / timeout maps
+ * to `retryable` (bare) so the method degrades gracefully to raw coined names — a
+ * registry hiccup never blocks the mint.
+ */
+export async function specsCatalog(
+  silApiUrl: string,
+  token: string,
+  params: SpecsParams,
+): Promise<SpecsOutcome> {
+  const url = `${stripTrailingSlash(silApiUrl)}/catalog/specs`;
+  let res: Response;
+  try {
+    res = await postJson(
+      url,
+      { query: params.query, specs: params.specs },
+      { authorization: `Bearer ${token}` },
+    );
+  } catch {
+    return { kind: "retryable" };
+  }
+  const body = await readJsonBody(res);
+  return classifySpecsResponse(res.status, body);
 }
 
 /** Result of the high-level refresh orchestration (read → refresh → rotate). */
@@ -1339,6 +1510,116 @@ function extractLookupResult(body: unknown): LookupResult | null {
 
   const notFound = extractNotFound(envelope["messages"]);
   return notFound.length === 0 ? { products } : { products, not_found: notFound };
+}
+
+/** The closed spec value-types, the anti-false-green enum for a resolution's
+ * `data_type` (the vocabulary `namespace`/`key` stay open). */
+const SPEC_DATA_TYPES: readonly SpecDataType[] = ["number", "text", "boolean", "enum"];
+
+function isSpecDataType(value: unknown): value is SpecDataType {
+  return typeof value === "string" && (SPEC_DATA_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * Narrow a sil-api spec-registry response body to the typed {@link SpecResolution}[],
+ * or null if it carries no usable resolution array. sil-api emits a FLAT body:
+ * `resolved` sits at the TOP LEVEL, there is NO `ucp` meta and NO `result` wrapper —
+ * read it straight off the body.
+ *
+ * The load-bearing anti-false-green guard is `Array.isArray(resolved)` AND a
+ * NON-EMPTY array. This is STRICTER than search's products gate: the server owes a
+ * 1:1 resolution for every submitted spec, so there is NO valid empty-match — an
+ * empty `resolved: []` is itself a malformed 200 and returns null → `retryable`.
+ *
+ * FAIL-WHOLE (design decision, product-owner AC1/AC9 "no partial adopt"): because
+ * the method cannot adopt a canonical name it never got back, a SINGLE malformed
+ * entry (missing/blank `canonical` ref, bad `status`, bad `data_type`, missing flag)
+ * falls the WHOLE 200 to `retryable` — unlike search, which drops one unusable
+ * product from a best-effort list. Every entry must project cleanly or none do.
+ */
+function extractSpecsResult(body: unknown): SpecResolution[] | null {
+  const envelope = asRecord(body);
+  if (envelope === null) return null;
+
+  const rawResolved = envelope["resolved"];
+  if (!Array.isArray(rawResolved) || rawResolved.length === 0) return null;
+
+  const resolved: SpecResolution[] = [];
+  for (const raw of rawResolved) {
+    const one = projectResolution(raw);
+    if (one === null) return null; // fail-whole: no half-canonical vocabulary
+    resolved.push(one);
+  }
+  return resolved;
+}
+
+/**
+ * Project ONE wire resolution to the typed {@link SpecResolution}, or null if any
+ * required field is malformed (fail-whole, per {@link extractSpecsResult}). Requires
+ * the flat canonical definition (`namespace`/`key`/`display_name` non-empty,
+ * `data_type` in the closed enum), the `submitted`/`canonical` refs, a valid
+ * `status`, and both boolean capability flags. Optional `description`/`unit`/
+ * `allowed_values` pass through when the right type. No `any`, no unchecked `as`.
+ */
+function projectResolution(raw: unknown): SpecResolution | null {
+  const obj = asRecord(raw);
+  if (obj === null) return null;
+
+  const namespace = obj["namespace"];
+  const key = obj["key"];
+  const displayName = obj["display_name"];
+  if (typeof namespace !== "string" || namespace.length === 0) return null;
+  if (typeof key !== "string" || key.length === 0) return null;
+  if (typeof displayName !== "string" || displayName.length === 0) return null;
+
+  const dataType = obj["data_type"];
+  if (!isSpecDataType(dataType)) return null;
+
+  const submitted = extractSpecRef(obj["submitted"]);
+  const canonical = extractSpecRef(obj["canonical"]);
+  if (submitted === null || canonical === null) return null;
+
+  const status = obj["status"];
+  if (status !== "matched" && status !== "created") return null;
+
+  const isFilterable = obj["is_filterable"];
+  const isComparable = obj["is_comparable"];
+  if (typeof isFilterable !== "boolean" || typeof isComparable !== "boolean") return null;
+
+  const result: SpecResolution = {
+    namespace,
+    key,
+    display_name: displayName,
+    data_type: dataType,
+    submitted,
+    canonical,
+    status,
+    is_filterable: isFilterable,
+    is_comparable: isComparable,
+  };
+  const description = obj["description"];
+  if (typeof description === "string") result.description = description;
+  const unit = obj["unit"];
+  if (typeof unit === "string") result.unit = unit;
+  const allowedValues = obj["allowed_values"];
+  if (Array.isArray(allowedValues)) {
+    const values = allowedValues.filter((v): v is string => typeof v === "string");
+    if (values.length > 0) result.allowed_values = values;
+  }
+  return result;
+}
+
+/** Narrow a wire `{ namespace, key }` reference (the `submitted` / `canonical`
+ * fields), or null if either is missing/blank — the load-bearing gate a resolution
+ * needs so the method can adopt the canonical name. */
+function extractSpecRef(raw: unknown): SpecRef | null {
+  const obj = asRecord(raw);
+  if (obj === null) return null;
+  const namespace = obj["namespace"];
+  const key = obj["key"];
+  if (typeof namespace !== "string" || namespace.length === 0) return null;
+  if (typeof key !== "string" || key.length === 0) return null;
+  return { namespace, key };
 }
 
 /**

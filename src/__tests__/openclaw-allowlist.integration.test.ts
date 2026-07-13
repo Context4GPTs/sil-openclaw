@@ -63,9 +63,9 @@ const SCRIPT = join(REPO_ROOT, "scripts", "allowlist-openclaw.mjs");
 
 // sil's real facts (asserted against, sourced from the manifest the script reads).
 const SIL_ID = "sil";
-// The real 9-tool floor after the spec-driven-shopping-redesign card renamed
-// sil_remember → sil_learn and added sil_profile_search (frontmatter-as-truth
-// query). Drives `tools_added === SIL_TOOLS.length` and the per-tool
+// The real 10-tool floor after the sds-specs-client-tool card added sil_specs
+// (the coin/dedupe/register canonicalization primitive) to the catalog group.
+// Drives `tools_added === SIL_TOOLS.length` and the per-tool
 // not-enumerated-into-config scan below.
 const SIL_TOOLS = [
   "sil_learn",
@@ -76,6 +76,7 @@ const SIL_TOOLS = [
   "sil_profile_search",
   "sil_register",
   "sil_search",
+  "sil_specs",
   "sil_whoami",
 ] as const;
 
@@ -217,7 +218,7 @@ describe("AC1 / AC3 — fresh merge writes sil into all three surfaces (no-warni
     expect(m["plugins_allow_size"] as number).toBeGreaterThan(0);
   });
 
-  it("does NOT enumerate the 9 tool NAMES into the written config (plugin-id admission only)", () => {
+  it("does NOT enumerate the 10 tool NAMES into the written config (plugin-id admission only)", () => {
     writeConfig(freshConfig());
     runHelper({ OPENCLAW_CONFIG_PATH: configPath });
     const raw = readFileSync(configPath, "utf8");

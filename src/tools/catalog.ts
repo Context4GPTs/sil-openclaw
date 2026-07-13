@@ -44,6 +44,15 @@
  * result; logs carry only non-credential status markers (search params are not
  * credentials, but are not logged either — nothing here needs them).
  *
+ * The group hosts THREE catalog tools sharing this origin, Bearer, and 401
+ * choreography: `sil_search` (discovery), `sil_product_get` (the lookup companion),
+ * and `sil_specs` (the spec-REGISTRY dedupe-or-create up-flow — the method
+ * canonicalizes its coined `ns.key` vocabulary at Beat-2 mint/refresh, so
+ * `filters.specs` converges). The structured-error envelope helpers (`notRegistered`
+ * / `mustReregister` / `transient` / `forbidden` / `invalidRequest`) are
+ * tool-parameterized and shared across all three — a new catalog tool reuses them,
+ * it does not fork them.
+ *
  * `register()` stays synchronous and side-effect-free beyond registering tools —
  * no fetch, no timer, no unawaited promise. All I/O is inside `execute()`.
  */
@@ -57,12 +66,17 @@ import {
   lookupCatalog,
   refreshAndRetryOnce,
   searchCatalog,
+  specsCatalog,
   type LookupOutcome,
   type SearchOutcome,
   type SearchParams,
   type ShipTo,
+  type SpecDataType,
+  type SpecDefinition,
   type SpecOp,
   type SpecPredicate,
+  type SpecsOutcome,
+  type SpecsParams,
   type SpecValue,
 } from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
@@ -88,9 +102,64 @@ const COUNTRY_PATTERN = "^[A-Za-z]{2}$";
 const REGION_PATTERN = "^[A-Za-z0-9]{1,3}$";
 const POSTAL_PATTERN = "^(?=[A-Za-z0-9 -]{2,12}$)[A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*$";
 
+/** The `sil_specs` coined-definition schema. Unlike the search predicate's `value`
+ * (an op→value read-site rule the schema can't express), a `SpecDefinition` is
+ * FULLY TypeBox-expressible — a closed `data_type` union of four literals plus
+ * `minLength:1` identity fields and optional context — so the host validates the
+ * shape directly. Mirrors `@sil/schemas` `SpecDefinition` (the frozen wire contract). */
+const SPEC_DEFINITION_SCHEMA = Type.Object({
+  namespace: Type.String({
+    minLength: 1,
+    description:
+      "The spec NAMESPACE (e.g. \"product\", \"seller\", \"shipping\") — a free"
+      + " string coined bottom-up; NOT dotted with the key.",
+  }),
+  key: Type.String({
+    minLength: 1,
+    description:
+      "The spec KEY within the namespace (e.g. \"waterproof_rating\","
+      + " \"rating_average\") — a free string coined bottom-up.",
+  }),
+  display_name: Type.String({
+    minLength: 1,
+    description: "A short human label for the spec (e.g. \"Waterproof rating\").",
+  }),
+  data_type: Type.Union(
+    [
+      Type.Literal("number"),
+      Type.Literal("text"),
+      Type.Literal("boolean"),
+      Type.Literal("enum"),
+    ],
+    {
+      description:
+        "The spec's value type: number, text, boolean, or enum (use enum with"
+        + " allowed_values for a closed set).",
+    },
+  ),
+  description: Type.Optional(
+    Type.String({
+      description:
+        "Optional prose describing what the spec means — sharpens the registry's"
+        + " dedupe (a clearer definition reduces false matches).",
+    }),
+  ),
+  unit: Type.Optional(
+    Type.String({
+      description: "Optional unit for a numeric spec (e.g. \"mm\", \"GB\", \"days\").",
+    }),
+  ),
+  allowed_values: Type.Optional(
+    Type.Array(Type.String(), {
+      description: "For an enum spec, the closed set of permitted values.",
+    }),
+  ),
+});
+
 export function registerCatalogTools(api: PluginAPI): void {
   registerSearch(api);
   registerProductGet(api);
+  registerSpecs(api);
 }
 
 function registerSearch(api: PluginAPI): void {
@@ -603,6 +672,165 @@ function mapLookupOutcome(api: PluginAPI, outcome: LookupOutcome) {
   }
 }
 
+/**
+ * `sil_specs` — the spec-REGISTRY canonicalize-or-create tool. Driven by the
+ * sil-shopping method at Beat 2 (mint/refresh), NOT directly by the buyer: the
+ * method coins its niche `ns.key` vocabulary bottom-up from research, submits the
+ * coined DEFINITIONS here, and gets back the canonical name per spec to adopt BEFORE
+ * it persists — so the method is born speaking canonical names and the whole
+ * catalog's `filters.specs` vocabulary converges (that convergence is what makes
+ * `filters.specs` actually filter). A `matched` spec adopts the existing canonical
+ * name (drop the private synonym); a `created` spec keeps its own (it is canonical
+ * going forward).
+ *
+ * `execute()` flow (ALL I/O here; `register()` opens nothing — a synchronous
+ * request/response, NOT a poll). MIRRORS `sil_search` and shares its taxonomy, minus
+ * search's 422 arm and source attribution (the registry is sil's own Postgres):
+ *   1. Not registered (no stored tokens) → terminal `not_registered` + a
+ *      `recovery: sil_register` hint, ZERO network calls. Mirrors `sil_whoami`.
+ *   2. Client-side guard: a blank/absent `query` OR an empty/all-dropped `specs`
+ *      array → `invalid_request` (`empty_specs_input`), NO network call (sil-api's
+ *      `minLength`/`minItems` schema 400 is the authoritative backstop). A single
+ *      MALFORMED definition rejects the WHOLE request (`invalid_spec`) — a silently
+ *      dropped coined spec would never canonicalize and never converge.
+ *   3. specsCatalog(getApiUrl(), token, params) → map the `SpecsOutcome`:
+ *        ok            → the `resolved` array (one resolution per submitted spec);
+ *        invalid_request (400) → surface sil-api's `{ error, message }`;
+ *        unauthorized  (401)   → refresh-and-retry ONCE via the shared
+ *                                `refreshAndRetryOnce` choreography (parity with
+ *                                `sil_search`/`sil_product_get`/`sil_whoami` — 401
+ *                                recovery is uniform). Recovered 401 is invisible;
+ *                                second 401 / dead refresh is terminal re-register
+ *                                (tokens cleared);
+ *        retryable (5xx/net)   → transient "try again", NO re-register hint (BARE —
+ *                                no source; the method degrades to raw coined names).
+ *
+ * GRACEFUL DEGRADATION is the load-bearing product invariant (AC14): a non-`ok`
+ * outcome never blocks the mint — the method proceeds with the RAW coined names
+ * (every predicate `applied:false`) and converges on the next mint/refresh. The tool
+ * only surfaces the registry's verdict; the method decides to degrade.
+ *
+ * Privacy: the session token and Bearer header never reach a log line or the result.
+ */
+function registerSpecs(api: PluginAPI): void {
+  api.registerTool({
+    name: "sil_specs",
+    label: "Canonicalize coined spec definitions",
+    description:
+      "Canonicalize the coined spec DEFINITIONS a shopping method invents for a"
+      + " niche — the dedupe-or-create registry call at method mint/refresh (Beat 2)."
+      + " Pass the motivating `query` (what the shopper is buying — governance /"
+      + " dedupe context) and `specs`, a list of coined definitions ({ namespace,"
+      + " key, display_name, data_type, description?, unit?, allowed_values? }). Each"
+      + " submitted spec resolves 1:1: a `matched` result means an equivalent"
+      + " canonical spec already exists — ADOPT its `canonical` { namespace, key }"
+      + " and DROP your coined synonym (this convergence is what makes filters.specs"
+      + " actually filter across methods); a `created` result means yours is novel and"
+      + " registered as canonical (`canonical` === `submitted`, keep it). Rewrite the"
+      + " method's `## Search vocabulary` and any PRD `specs` predicates to the"
+      + " returned canonical names BEFORE persisting — the method is born canonical,"
+      + " never write-then-amend. On REFRESH submit ONLY the specs that do not yet"
+      + " carry a canonical name; already-canonical names are stable, do not resubmit"
+      + " them. This is INTERNAL plumbing: never surface `ns.key` names or"
+      + " \"converged your specs\" to the buyer. If the call is not `ok` (retryable /"
+      + " forbidden / must_reregister), do NOT block the mint — persist the method"
+      + " with the raw coined names and shop on; convergence retries on the next"
+      + " mint/refresh. Requires registration (run sil_register first).",
+    parameters: Type.Object({
+      query: Type.String({
+        description:
+          "The motivating shopping query — what the shopper is buying. Governance /"
+          + " dedupe context for the registry; required and non-empty.",
+      }),
+      specs: Type.Array(SPEC_DEFINITION_SCHEMA, {
+        minItems: 1,
+        description:
+          "The coined spec definitions to canonicalize (at least one). Each is a"
+          + " { namespace, key, display_name, data_type, description?, unit?,"
+          + " allowed_values? } the method coined bottom-up from research.",
+      }),
+    }),
+    async execute(_callId, params) {
+      // 1 — not registered: terminal, zero network calls.
+      const stored = readTokens();
+      if (stored === null) {
+        return notRegistered("sil_specs");
+      }
+
+      // 2 — client-side guard (defensive drifted-call backstop; the host validates
+      // the schema, but a blank query / empty specs / malformed definition is
+      // rejected BEFORE any network call). An empty input is `empty_specs_input`; a
+      // present-but-malformed definition rejects the WHOLE request (`invalid_spec`) —
+      // a silently dropped coined spec never canonicalizes → never converges.
+      const read = readSpecsParams(params);
+      if (read.kind === "invalid") {
+        if (read.code === "invalid_spec") {
+          api.logger.info("sil_specs_invalid_spec", { field: read.field });
+          return invalidSpecDefinition(read.field);
+        }
+        api.logger.info("sil_specs_invalid_request", { error: "empty_specs_input" });
+        return invalidSpecsInput();
+      }
+      const specsParams = read.params;
+
+      // 3 — canonicalize; on a 401 refresh-and-retry ONCE via the shared
+      // choreography (the SAME path sil_whoami / sil_search / sil_product_get use).
+      const first = await specsCatalog(getApiUrl(), stored.access_token, specsParams);
+      const recovered = await refreshAndRetryOnce(
+        first,
+        (o): boolean => o.kind === "unauthorized",
+        (accessToken) => specsCatalog(getApiUrl(), accessToken, specsParams),
+      );
+      switch (recovered.kind) {
+        case "result":
+          if (recovered.refreshed) api.logger.info("sil_specs_refreshed", {});
+          return mapSpecsOutcome(api, recovered.outcome);
+        case "must_reregister":
+          if (recovered.reason === "invalid_grant") clearTokens();
+          api.logger.info("sil_specs_must_reregister", { cause: recovered.reason });
+          return mustReregister("sil_specs");
+        case "second_unauthorized":
+          clearTokens();
+          api.logger.info("sil_specs_must_reregister", { cause: "retry_unauthorized" });
+          return mustReregister("sil_specs");
+        case "retryable":
+          api.logger.info("sil_specs_refresh_retryable", {});
+          return transient("sil_specs");
+      }
+    },
+  });
+}
+
+/** Map a specs outcome that has ALREADY cleared the 401-recovery path (never
+ * `unauthorized` — the refresh trigger handled by {@link refreshAndRetryOnce}) to
+ * the agent-facing envelope. Mirrors `mapSearchOutcome`, minus the source-attributed
+ * `retryable` (specs has no external source): a 5xx/network blip is the GENERIC
+ * transient. The `unauthorized` arm is structurally unreachable but kept exhaustive
+ * (falls to the same terminal re-register) so a future refactor can't drop a variant. */
+function mapSpecsOutcome(api: PluginAPI, outcome: SpecsOutcome) {
+  switch (outcome.kind) {
+    case "ok":
+      return specsResult(outcome);
+    case "forbidden":
+      // Symmetric with sil_search/sil_product_get (one vocabulary): a 403 is the
+      // shared forbidden envelope, and `user_not_provisioned` — and ONLY that exact
+      // reason — clears the structurally-dead token at this call site.
+      api.logger.warn("sil_specs_forbidden", { reason: outcome.reason });
+      if (outcome.reason === "user_not_provisioned") clearTokens();
+      return forbidden(outcome.reason);
+    case "invalid_request":
+      api.logger.info("sil_specs_invalid_request", { error: outcome.error });
+      return invalidRequest(outcome.error, outcome.message);
+    case "retryable":
+      // BARE transient — the registry is sil's own Postgres, so there is no external
+      // source to name (unlike sil_search's outcome-b). Generic "try again" copy.
+      api.logger.info("sil_specs_retryable", {});
+      return transient("sil_specs");
+    case "unauthorized":
+      return mustReregister("sil_specs");
+  }
+}
+
 /** Narrow the untrusted `params` to a string[] of ids. A non-string entry is
  * DROPPED (treated as absent), not coerced — the host has already validated
  * against the schema, but a drifted on-disk call must not slip a non-string into
@@ -884,6 +1112,95 @@ function readSpec(raw: unknown, index: number): SpecRead {
   return { kind: "ok", value: spec };
 }
 
+/** The `sil_specs` read-site closed value-types (the defensive backstop for the
+ * host-validated `data_type`; `namespace`/`key` stay open — the coined vocabulary). */
+const SPEC_DATA_TYPES: readonly SpecDataType[] = ["number", "text", "boolean", "enum"];
+
+function isSpecDataType(value: unknown): value is SpecDataType {
+  return typeof value === "string" && (SPEC_DATA_TYPES as readonly string[]).includes(value);
+}
+
+/** The outcome of narrowing the whole `sil_specs` param object: the typed
+ * {@link SpecsParams} to forward, or the reject class. `empty_specs_input` = a blank
+ * `query` OR an empty/all-dropped `specs` (no usable input); `invalid_spec` = a
+ * present-but-malformed definition (fail-whole — `field` names the offender). */
+type SpecsParamsRead =
+  | { kind: "ok"; params: SpecsParams }
+  | { kind: "invalid"; code: "empty_specs_input" }
+  | { kind: "invalid"; code: "invalid_spec"; field: string };
+
+/** The outcome of narrowing ONE untrusted definition: the typed
+ * {@link SpecDefinition} to forward, or the offending index/field. */
+type SpecDefinitionRead =
+  | { kind: "ok"; value: SpecDefinition }
+  | { kind: "invalid"; field: string };
+
+/** Narrow the untrusted `sil_specs` params to the typed {@link SpecsParams}, or
+ * report the reject. A blank `query` or an empty/non-array/all-dropped `specs` is
+ * `empty_specs_input` (no network); the FIRST malformed definition rejects the WHOLE
+ * request `invalid_spec` (a silently-dropped coined spec never canonicalizes → never
+ * converges — the same honesty rule as search's `readSpecs`). No `any`, no unchecked
+ * `as`. The host has already validated the schema; this is a drifted-call backstop. */
+function readSpecsParams(params: Record<string, unknown>): SpecsParamsRead {
+  const query = params["query"];
+  if (typeof query !== "string" || query.trim().length === 0) {
+    return { kind: "invalid", code: "empty_specs_input" };
+  }
+
+  const rawSpecs = params["specs"];
+  if (!Array.isArray(rawSpecs) || rawSpecs.length === 0) {
+    return { kind: "invalid", code: "empty_specs_input" };
+  }
+
+  const specs: SpecDefinition[] = [];
+  for (let index = 0; index < rawSpecs.length; index++) {
+    const read = readSpecDefinition(rawSpecs[index], index);
+    if (read.kind === "invalid") {
+      return { kind: "invalid", code: "invalid_spec", field: read.field };
+    }
+    specs.push(read.value);
+  }
+  return { kind: "ok", params: { query, specs } };
+}
+
+/** Narrow ONE untrusted definition to {@link SpecDefinition}, or report the
+ * offending field (`specs[i]`, `specs[i].namespace`, `specs[i].data_type`, …).
+ * Requires a non-blank `namespace`/`key`/`display_name` and a `data_type` in the
+ * closed set; optional `description`/`unit`/`allowed_values` are carried when the
+ * right type, dropped otherwise. */
+function readSpecDefinition(raw: unknown, index: number): SpecDefinitionRead {
+  const at = (suffix: string): string => `specs[${index}]${suffix}`;
+  const obj = asRecord(raw);
+  if (obj === null) return { kind: "invalid", field: at("") };
+
+  const namespace = obj["namespace"];
+  if (typeof namespace !== "string" || namespace.trim().length === 0) {
+    return { kind: "invalid", field: at(".namespace") };
+  }
+  const key = obj["key"];
+  if (typeof key !== "string" || key.trim().length === 0) {
+    return { kind: "invalid", field: at(".key") };
+  }
+  const displayName = obj["display_name"];
+  if (typeof displayName !== "string" || displayName.trim().length === 0) {
+    return { kind: "invalid", field: at(".display_name") };
+  }
+  const dataType = obj["data_type"];
+  if (!isSpecDataType(dataType)) return { kind: "invalid", field: at(".data_type") };
+
+  const value: SpecDefinition = { namespace, key, display_name: displayName, data_type: dataType };
+  const description = obj["description"];
+  if (typeof description === "string") value.description = description;
+  const unit = obj["unit"];
+  if (typeof unit === "string") value.unit = unit;
+  const allowedValues = obj["allowed_values"];
+  if (Array.isArray(allowedValues)) {
+    const values = allowedValues.filter((v): v is string => typeof v === "string");
+    if (values.length > 0) value.allowed_values = values;
+  }
+  return { kind: "ok", value };
+}
+
 /** The one client-side invariant the tool owns: at least one recognized input.
  * A non-whitespace `query`, any filter (`category` / `price_min` / `price_max`),
  * OR a non-empty well-formed `specs` list suffices — a spec is a real constraint
@@ -968,6 +1285,43 @@ function invalidSpec(field: string) {
       + " non-empty `ns` and `key`, an `op` of eq/neq/gte/lte/in/nin/exists, and a"
       + " `value` matching the op: a number for gte/lte, a non-empty array for"
       + " in/nin, a scalar for eq/neq, and NO value for exists.",
+  });
+}
+
+/** Success: the resolved canonicalizations — no token, no Bearer header. The `ok`
+ * outcome carries `resolved` directly; spread its payload (minus the `kind`
+ * discriminant) onto the agent-facing `{ status: "ok", resolved }` envelope. */
+function specsResult(outcome: Extract<SpecsOutcome, { kind: "ok" }>) {
+  const { kind: _kind, ...payload } = outcome;
+  return jsonResult({ status: "ok", ...payload });
+}
+
+/** Client-side validation: no usable canonicalization input (a blank `query` or an
+ * empty/all-dropped `specs`). Distinct from a sil-api 400 — this never hit the
+ * network. No `recovery: sil_register` (auth is fine; the input is the problem). */
+function invalidSpecsInput() {
+  return jsonResult({
+    status: "invalid_request",
+    error: "empty_specs_input",
+    message:
+      "Provide a non-empty `query` and at least one coined spec definition to"
+      + " canonicalize.",
+  });
+}
+
+/** Client-side validation: a `specs` definition is malformed (blank
+ * `namespace`/`key`/`display_name`, or a `data_type` outside
+ * number/text/boolean/enum) — the WHOLE request is rejected BEFORE any network call,
+ * so no coined spec is silently dropped from canonicalization. Machine code
+ * `invalid_spec`; `field` names the offending definition. No `recovery: sil_register`. */
+function invalidSpecDefinition(field: string) {
+  return jsonResult({
+    status: "invalid_request",
+    error: "invalid_spec",
+    message:
+      `The \`${field}\` spec definition is malformed. Each definition needs a`
+      + " non-empty `namespace`, `key`, and `display_name`, and a `data_type` of"
+      + " number, text, boolean, or enum.",
   });
 }
 

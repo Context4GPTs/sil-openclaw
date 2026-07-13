@@ -31,9 +31,10 @@
  *     the manifest names exactly the tools they register) — the set on
  *     both sides equals { sil_learn, sil_product_get, sil_profile_get,
  *     sil_profile_materialize, sil_profile_remove, sil_profile_search,
- *     sil_register, sil_search, sil_whoami } (the 9-tool floor after the
- *     spec-driven-shopping-redesign card renamed sil_remember → sil_learn
- *     and ADDED sil_profile_search — the frontmatter-as-truth query tool).
+ *     sil_register, sil_search, sil_specs, sil_whoami } (the 10-tool floor
+ *     after the sds-specs-client-tool card ADDED the sil_specs catalog tool —
+ *     the coin/dedupe/register canonicalization primitive — to the 9-tool set
+ *     the spec-driven-shopping-redesign card left behind).
  */
 
 import { describe, it, expect } from "vitest";
@@ -127,10 +128,9 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // The card's spine: after removing the skeleton examples, the manifest
     // AND the code both name exactly the real tools. Pinned by literal
     // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
-    // not just the symmetric drift check above. Now 9 tools — the
-    // spec-driven-shopping-redesign card renames sil_remember → sil_learn
-    // (the target+change feedback verb) and ADDS sil_profile_search (the
-    // frontmatter-as-truth discovery/query tool): 8 → 9, add-only.
+    // not just the symmetric drift check above. Now 10 tools — the
+    // sds-specs-client-tool card ADDS sil_specs (the coin/dedupe/register
+    // canonicalization primitive) to the existing 9: 9 → 10, add-only.
     const expected = [
       "sil_learn",
       "sil_product_get",
@@ -140,6 +140,7 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
       "sil_profile_search",
       "sil_register",
       "sil_search",
+      "sil_specs",
       "sil_whoami",
     ];
     expect(sorted(codeRegisteredNames())).toEqual(expected);
@@ -240,6 +241,18 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // the equal set: registered by the group AND listed in contracts.tools.
     expect(codeRegisteredNames().has("sil_profile_search")).toBe(true);
     expect(manifestToolNames().has("sil_profile_search")).toBe(true);
+  });
+
+  it("sil_specs is BOTH registered by register() and declared in contracts.tools", () => {
+    // The sds-specs-client-tool card's NEW catalog tool — the coin/dedupe/register
+    // canonicalization primitive (Beat-2 born-canonical-before-persist). Added to the
+    // existing registerCatalogTools group beside sil_search / sil_product_get (no new
+    // group, no src/index.ts change), so it is auto-picked-up by codeRegisteredNames.
+    // The load-bearing 3rd "add a tool" step: it MUST also be listed in
+    // openclaw.plugin.json#contracts.tools — a forgotten manifest entry flips the
+    // set-equality RED here, before merge.
+    expect(codeRegisteredNames().has("sil_specs")).toBe(true);
+    expect(manifestToolNames().has("sil_specs")).toBe(true);
   });
 });
 

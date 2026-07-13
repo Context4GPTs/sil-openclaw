@@ -17,6 +17,7 @@
       "sil_profile_search",
       "sil_register",
       "sil_search",
+      "sil_specs",
       "sil_whoami"
     ]
   },
