@@ -984,3 +984,316 @@ describe("sil_search — token never logged (leak-canary)", () => {
     expect(blob).not.toMatch(/authorization/i);
   });
 });
+
+/**
+ * CARD `sds-forward-specs-contract` (epic `spec-driven-shopping-redesign`, Phase 2)
+ * — the RED unit floor for the `specs` param at the TOOL boundary: the SCHEMA shape
+ * (AC-A1), the description steer (AC-A1), the `invalid_spec` client-side rejection
+ * (AC-P4), the empty-vs-malformed split + `exists` validity (AC-A2), and specs-as-
+ * usable-input (AC-A3).
+ *
+ * `sil_search` gains an OPTIONAL `specs: SpecPredicate[]` — a CLOSED shape over an
+ * OPEN vocabulary: `{ ns, key, op, value?, unit?, hard? }`. `ns`/`key` carry NO enum
+ * and NO pattern (enumerating a `ns.key` is the central schema the design FORBIDS —
+ * [[sds-specs-vocabulary-is-bottom-up]]); `op` is exactly the seven literals; `value`
+ * is optional in the SCHEMA (an `exists` carries none) — the op↔value validity is a
+ * READ-SITE rule (`readSpecs`), the established flat-schema + read-site-enforcement
+ * idiom (`readSearchParams`/`ship_to`, NOT a new pattern). A malformed predicate
+ * rejects the WHOLE request client-side with code `invalid_spec`, ZERO network — the
+ * `invalid_filter`/`ship_to` twin.
+ *
+ * EXPECT RED today: the schema has no `specs` property, the description names no
+ * `specs` steer, and the tool neither validates nor forwards `specs` — so a malformed
+ * predicate is silently ignored (no `invalid_spec`) and a specs-only request is
+ * rejected as `empty_search_input` (not counted as usable input).
+ */
+describe("sil_search — schema exposes `specs` as an optional closed-shape / open-vocabulary array (AC-A1)", () => {
+  function searchProps(): Record<string, Record<string, unknown>> {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const params = getTool(api, TOOL).parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+    };
+    return params.properties ?? {};
+  }
+  /** The `specs` array's per-item object schema node. */
+  function specItemProps(): Record<string, Record<string, unknown>> {
+    const specs = searchProps()["specs"];
+    expect(specs, "specs must be a registered param").toBeDefined();
+    const items = (specs!["items"] ?? {}) as Record<string, unknown>;
+    return (items["properties"] ?? {}) as Record<string, Record<string, unknown>>;
+  }
+  /** Collect the literal values `op` allows, from whichever JSON-schema encoding
+   * TypeBox emits for a union-of-literals (`enum`, or `anyOf`/`oneOf` of `const`). */
+  function opLiterals(): string[] {
+    const op = specItemProps()["op"];
+    expect(op, "spec item must have an `op`").toBeDefined();
+    if (Array.isArray(op!["enum"])) return (op!["enum"] as unknown[]).map(String);
+    const union = (op!["anyOf"] ?? op!["oneOf"]) as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(union)) {
+      return union
+        .map((m) => (m["const"] !== undefined ? m["const"] : Array.isArray(m["enum"]) ? (m["enum"] as unknown[])[0] : undefined))
+        .filter((v): v is unknown => v !== undefined)
+        .map(String);
+    }
+    return [];
+  }
+
+  it("declares `specs` as an optional array of objects (NOT in the required set)", () => {
+    const specs = searchProps()["specs"];
+    expect(specs).toBeDefined();
+    expect(specs!["type"]).toBe("array");
+    const items = (specs!["items"] ?? {}) as Record<string, unknown>;
+    expect(items["type"]).toBe("object");
+
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const params = getTool(api, TOOL).parameters as { required?: unknown };
+    const required = Array.isArray(params.required) ? (params.required as string[]) : [];
+    expect(required).not.toContain("specs");
+  });
+
+  it("each predicate has props ns / key / op / value / unit / hard", () => {
+    const keys = Object.keys(specItemProps());
+    for (const k of ["ns", "key", "op", "value", "unit", "hard"]) {
+      expect(keys).toContain(k);
+    }
+  });
+
+  it("ns and key are OPEN strings — NO enum, NO pattern (enumerating a ns.key is the schema the design forbids)", () => {
+    // The load-bearing open-vocabulary guard: a `ns`/`key` enum or pattern would be
+    // the central spec registry the bottom-up design deliberately refuses. They are
+    // two SEPARATE plain-string wire fields, never a dotted string, never constrained.
+    for (const field of ["ns", "key"]) {
+      const node = specItemProps()[field];
+      expect(node, `${field} must exist`).toBeDefined();
+      expect(node!["type"]).toBe("string");
+      expect(node!["enum"]).toBeUndefined();
+      expect(node!["pattern"]).toBeUndefined();
+    }
+  });
+
+  it("op is a union of EXACTLY the seven operators {eq,neq,gte,lte,in,nin,exists}", () => {
+    expect(new Set(opLiterals())).toEqual(
+      new Set(["eq", "neq", "gte", "lte", "in", "nin", "exists"]),
+    );
+  });
+
+  it("unit is an optional string and hard is an optional boolean", () => {
+    expect(specItemProps()["unit"]!["type"]).toBe("string");
+    expect(specItemProps()["hard"]!["type"]).toBe("boolean");
+  });
+
+  it("value is present but NOT required within a predicate (an `exists` carries none — op↔value is a read-site rule)", () => {
+    const specs = searchProps()["specs"];
+    const items = (specs!["items"] ?? {}) as Record<string, unknown>;
+    const req = Array.isArray(items["required"]) ? (items["required"] as string[]) : [];
+    // `value` is schema-optional (validity is enforced at readSpecs, not the schema).
+    expect(req).not.toContain("value");
+    expect(req).not.toContain("unit");
+    expect(req).not.toContain("hard");
+  });
+});
+
+describe("sil_search — description steers `specs` as the open long-tail channel + prefer-a-dedicated-param (AC-A1)", () => {
+  function description(): string {
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    return getTool(api, TOOL).description;
+  }
+
+  it("names `specs` as the structured channel for the OPEN long-tail (attributes with no dedicated param)", () => {
+    const d = description();
+    expect(d).toMatch(/specs/);
+    const dl = d.toLowerCase();
+    // It is the channel for structured requirements that have no dedicated param —
+    // the additive long-tail (capacity, rating, delivery days, …).
+    expect(dl).toMatch(/structured|requirement|attribute|long.tail|no dedicated/);
+  });
+
+  it("states PREFER A DEDICATED PARAM over a `specs` predicate for the same attribute, listing the reserved attributes", () => {
+    // Business rule 1 as a description steer (NOT a tool guard — the open-vocabulary
+    // design forbids a hardcoded ns.key→param map). The prose must tell the agent to
+    // route price/category/condition/availability/destination to their dedicated
+    // params and NOT double-constrain via a specs predicate.
+    const d = description();
+    const dl = d.toLowerCase();
+    expect(dl).toMatch(/prefer|instead of|rather than|do not use.*specs|not.*specs.*dedicated/);
+    // The reserved attributes with dedicated params are named so the agent knows the gap.
+    expect(dl).toMatch(/price/);
+    expect(dl).toMatch(/categor/);
+    expect(dl).toMatch(/condition/);
+    expect(dl).toMatch(/availab/);
+    expect(dl).toMatch(/ship_to|destination|deliver/);
+  });
+});
+
+describe("sil_search — a MALFORMED predicate rejects the whole request client-side with `invalid_spec`, ZERO network (AC-P4)", () => {
+  let api: MockPluginAPI;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    // A token IS present, so the read-site validation (not the not-registered path)
+    // is what rejects; fetch fails loudly if a malformed spec slips to the wire.
+    seedTokens();
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("a malformed spec must not hit the network"));
+    api = createMockPluginApi();
+    registerCatalogTools(api);
+  });
+
+  /** Each entry: a label + the malformed predicate. A real `query` rides alongside so
+   * the request would ITSELF be valid — proving the malformed predicate rejects the
+   * WHOLE request (mirrors invalid_filter / ship_to), not merely an empty one. */
+  const MALFORMED: Array<[string, Record<string, unknown>]> = [
+    ["op outside the seven", { ns: "product", key: "x", op: "contains", value: "y" }],
+    ["blank ns", { ns: "", key: "x", op: "eq", value: 1 }],
+    ["blank key", { ns: "product", key: "", op: "eq", value: 1 }],
+    ["missing ns", { key: "x", op: "eq", value: 1 }],
+    ["value-op with NO value (eq)", { ns: "product", key: "x", op: "eq" }],
+    ["in with a NON-array value", { ns: "product", key: "x", op: "in", value: "medium" }],
+    ["nin with a NON-array value", { ns: "product", key: "x", op: "nin", value: "medium" }],
+    ["gte with a NON-number value", { ns: "product", key: "x", op: "gte", value: "big" }],
+    ["lte with a NON-number value", { ns: "product", key: "x", op: "lte", value: "small" }],
+    ["exists CARRYING a value", { ns: "product", key: "x", op: "exists", value: 5 }],
+  ];
+
+  for (const [label, predicate] of MALFORMED) {
+    it(`rejects (${label}) → invalid_request/invalid_spec, ZERO network`, async () => {
+      const payload = payloadOf(
+        await getTool(api, TOOL).execute("c1", { query: "gloves", specs: [predicate] }),
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(payload["status"]).toBe("invalid_request");
+      expect(payload["error"]).toBe("invalid_spec");
+    });
+  }
+
+  it("rejects even when the malformed predicate is the SECOND entry (validates the whole list, names the offender)", async () => {
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "gloves",
+        specs: [
+          { ns: "product", key: "waterproof_rating", op: "gte", value: 10000 },
+          { ns: "product", key: "color", op: "in", value: "red" }, // in ⇒ array; malformed
+        ],
+      }),
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("invalid_spec");
+    // The message must name the offending predicate so the agent can fix it (mirrors
+    // invalid_filter naming `ship_to.country`). The offender is index 1 / its key.
+    expect(JSON.stringify(payload)).toMatch(/color|1|spec/i);
+  });
+
+  it("is DISTINCT from invalid_filter — a malformed spec is `invalid_spec`, not the ship_to `invalid_filter` code", async () => {
+    // The read arm carries a `code` so the right envelope fires. A malformed spec must
+    // never be mislabelled as a location-filter problem.
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "gloves", specs: [{ ns: "product", key: "x", op: "eq" }] }),
+    );
+    expect(payload["error"]).toBe("invalid_spec");
+    expect(payload["error"]).not.toBe("invalid_filter");
+  });
+});
+
+describe("sil_search — empty vs malformed specs split; `exists`-without-value is VALID; non-array dropped (AC-A2)", () => {
+  it("a benign `specs: []` alongside a real query is NOT invalid_spec — it PROCEEDS and forwards NO filters.specs", async () => {
+    seedTokens();
+    const bodies: unknown[] = [];
+    const fetchSpy = captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "gloves", specs: [] }));
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // proceeded, not rejected
+    expect(payload["status"]).toBe("ok");
+    const filters = ((bodies[0] as Record<string, unknown>)["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("specs"); // empty ⇒ no-op omit
+  });
+
+  it("`specs: []` as the request's ONLY content falls to `empty_search_input` (empty specs are no usable input), ZERO network", async () => {
+    seedTokens();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("empty specs is no usable input — must not hit the network"));
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { specs: [] }));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // NOT invalid_spec (nothing is malformed) — it is the existing empty-input guard.
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["error"]).toBe("empty_search_input");
+  });
+
+  it("an `exists` predicate with NO value is VALID (not invalid_spec) — it proceeds and rides filters.specs", async () => {
+    seedTokens();
+    const bodies: unknown[] = [];
+    const fetchSpy = captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "tent",
+        specs: [{ ns: "product", key: "waterproof_rating", op: "exists" }],
+      }),
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(payload["status"]).toBe("ok");
+    const filters = ((bodies[0] as Record<string, unknown>)["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters["specs"]).toEqual([{ ns: "product", key: "waterproof_rating", op: "exists" }]);
+  });
+
+  it("a `specs` that is NOT an array is DROPPED (treated absent), not coerced — with a query it proceeds and forwards no filters.specs", async () => {
+    seedTokens();
+    const bodies: unknown[] = [];
+    const fetchSpy = captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    // A drifted on-disk call passes a non-array `specs`; the read site drops it (the
+    // `readIds` discipline), never rejecting as invalid_spec and never coercing.
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "gloves", specs: "not-an-array" }),
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(payload["status"]).toBe("ok");
+    expect(payload["error"]).not.toBe("invalid_spec");
+    const filters = ((bodies[0] as Record<string, unknown>)["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters).not.toHaveProperty("specs");
+  });
+});
+
+describe("sil_search — a non-empty well-formed `specs` COUNTS as usable input (AC-A3)", () => {
+  it("a specs-only request (no query, no dedicated filter) PROCEEDS to the network — a spec is a real constraint, not a refinement", async () => {
+    // The counterpart to the `local_merchants`/`cursor`/`limit` refinements (which do
+    // NOT constitute a search): a well-formed spec renders + filters, so it is a real
+    // input. `hasUsableInput` must count it — RED today (specs is ignored, so a
+    // specs-only request is rejected as empty_search_input and never reaches fetch).
+    seedTokens();
+    const bodies: unknown[] = [];
+    const fetchSpy = captureBodyFetch(bodies);
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        specs: [{ ns: "product", key: "capacity_gb", op: "gte", value: 512 }],
+      }),
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(payload["status"]).toBe("ok");
+    // And the predicate rode the wire under the one namespaced key.
+    const filters = ((bodies[0] as Record<string, unknown>)["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters["specs"]).toEqual([{ ns: "product", key: "capacity_gb", op: "gte", value: 512 }]);
+  });
+});
