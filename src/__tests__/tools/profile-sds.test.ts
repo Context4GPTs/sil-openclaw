@@ -397,6 +397,98 @@ describe("sil_learn append / amend / retract — refine in place, fail-closed", 
 });
 
 /* ===========================================================================
+ * GAP 1 — `hard:true` is REJECTED loudly on EVERY non-append kind (create /
+ * amend / retract / attach-asset), never silently dropped. One top-level guard
+ * in `learnArtefact` (subsuming the deleted method-only `rejectHardMisuse`) fires
+ * BEFORE the kind switch, so `hard` wins error-precedence over per-kind field
+ * checks and a hard-constraint promotion is never a silent no-op.
+ * ========================================================================= */
+describe("sil_learn — hard:true is rejected on EVERY non-append kind (the silent drop is closed)", () => {
+  // A 1x1 transparent PNG (for the attach-asset kind).
+  const PNG_B64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+  it("amend + hard:true → invalid_request (field `hard`) and the PRD bullet stays SOFT — not a silent promotion", async () => {
+    await getTool(api, MATERIALIZE).execute("g1m", { name: "sil shopper", userSpec: USER_SPEC });
+    await getTool(api, LEARN).execute("g1a", {
+      target: "method", domain: "ski", kind: "create", name: "Ski", body: "#g",
+    });
+    await getTool(api, LEARN).execute("g1b", {
+      target: "prd", domain: "ski", prd: "gloves-slope", product: "gloves", intent: "slope", title: "G", kind: "create",
+      body: "## Requirements\n- gore-tex preferred\n",
+    });
+    const payload = payloadOf(
+      await getTool(api, LEARN).execute("g1c", {
+        target: "prd", domain: "ski", prd: "gloves-slope", kind: "amend",
+        from: "gore-tex preferred", to: "gore-tex required", hard: true,
+      }),
+    );
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("hard");
+    // Nothing written: the amend did NOT land and the soft pref was NOT promoted to hard.
+    const raw = readFileSync(join(domainDir("ski"), "prds", "gloves-slope.md"), "utf8");
+    expect(raw).toContain("gore-tex preferred");
+    expect(raw).not.toContain("gore-tex required");
+    expect(raw).not.toContain("[hard]");
+  });
+
+  it("create + hard:true → invalid_request (field `hard`) and NOTHING is minted", async () => {
+    await getTool(api, MATERIALIZE).execute("g1d", { name: "sil shopper", userSpec: USER_SPEC });
+    const payload = payloadOf(
+      await getTool(api, LEARN).execute("g1e", {
+        target: "method", domain: "ski", kind: "create", name: "Ski", body: "# guide", hard: true,
+      }),
+    );
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("hard");
+    expect(existsSync(join(domainDir("ski"), "method.md"))).toBe(false);
+  });
+
+  it("retract + hard:true → invalid_request (field `hard`) and the bullet is NOT removed", async () => {
+    const methodPath = await seedSkiMethod();
+    const payload = payloadOf(
+      await getTool(api, LEARN).execute("g1f", {
+        target: "method", domain: "ski", kind: "retract", from: "Prefer last-year models.", hard: true,
+      }),
+    );
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("hard");
+    expect(readFileSync(methodPath, "utf8")).toContain("Prefer last-year models.");
+  });
+
+  it("attach-asset + hard:true → invalid_request (field `hard`) BEFORE any bytes/link write (hard wins error-precedence)", async () => {
+    await seedSkiMethod();
+    const payload = payloadOf(
+      await getTool(api, LEARN).execute("g1g", {
+        target: "method", domain: "ski", kind: "attach-asset", bytes: PNG_B64, mime: "image/png", hard: true,
+      }),
+    );
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["field"]).toBe("hard");
+    expect(existsSync(join(domainDir("ski"), "assets"))).toBe(false);
+    expect(readFileSync(join(domainDir("ski"), "method.md"), "utf8")).not.toContain("assets/");
+  });
+
+  it("append + hard:true is STILL honored on prd (the guard keys on kind+target, never over-narrow to user_spec only)", async () => {
+    await getTool(api, MATERIALIZE).execute("g1h", { name: "sil shopper", userSpec: USER_SPEC });
+    await getTool(api, LEARN).execute("g1i", {
+      target: "method", domain: "ski", kind: "create", name: "Ski", body: "#g",
+    });
+    await getTool(api, LEARN).execute("g1j", {
+      target: "prd", domain: "ski", prd: "gloves-slope", product: "gloves", intent: "slope", title: "G", kind: "create",
+      body: "## Requirements\n- baseline\n",
+    });
+    const payload = payloadOf(
+      await getTool(api, LEARN).execute("g1k", {
+        target: "prd", domain: "ski", prd: "gloves-slope", kind: "append", text: "waterproof to IPX7", hard: true,
+      }),
+    );
+    expect(payload["status"]).toBe("ok");
+    expect(readFileSync(join(domainDir("ski"), "prds", "gloves-slope.md"), "utf8")).toContain("[hard]");
+  });
+});
+
+/* ===========================================================================
  * sil_learn attach-asset — bytes in, path-reference out; per-domain only.
  * ========================================================================= */
 describe("sil_learn attach-asset — persists image bytes into domains/<slug>/assets and links by path", () => {
@@ -443,6 +535,52 @@ describe("sil_learn attach-asset — persists image bytes into domains/<slug>/as
       }),
     );
     expect(payload["status"]).toBe("invalid_request");
+  });
+
+  // GAP 4 — the markdown link append is idempotent: bytes dedup by content hash,
+  // and re-attaching the SAME asset path to the SAME target never accretes a second
+  // `![…](assets/…)` line. Idempotence keys on the asset PATH, not the caption.
+  it("re-attaching the SAME bytes to the SAME target adds NO second link line (second call ok + same assetPath)", async () => {
+    await seedSkiMethod();
+    const first = payloadOf(
+      await getTool(api, LEARN).execute("idem1", {
+        target: "method", domain: "ski", kind: "attach-asset", bytes: PNG_B64, mime: "image/png", caption: "boot last",
+      }),
+    );
+    expect(first["status"]).toBe("ok");
+    const second = payloadOf(
+      await getTool(api, LEARN).execute("idem2", {
+        target: "method", domain: "ski", kind: "attach-asset", bytes: PNG_B64, mime: "image/png", caption: "boot last",
+      }),
+    );
+    expect(second["status"]).toBe("ok");
+    expect(second["assetPath"]).toBe(first["assetPath"]);
+
+    const methodRaw = readFileSync(join(domainDir("ski"), "method.md"), "utf8");
+    const linkCount = (methodRaw.match(/\]\(assets\//g) ?? []).length;
+    expect(linkCount).toBe(1);
+    // The bytes were content-hash dedup'd to a single asset file all along.
+    expect(readdirSync(join(domainDir("ski"), "assets")).length).toBe(1);
+  });
+
+  it("re-attaching the same bytes with a DIFFERENT caption is still a body no-op — idempotence keys on the asset PATH, not the caption", async () => {
+    await seedSkiMethod();
+    await getTool(api, LEARN).execute("cap1", {
+      target: "method", domain: "ski", kind: "attach-asset", bytes: PNG_B64, mime: "image/png", caption: "first caption alpha",
+    });
+    const second = payloadOf(
+      await getTool(api, LEARN).execute("cap2", {
+        target: "method", domain: "ski", kind: "attach-asset", bytes: PNG_B64, mime: "image/png", caption: "second caption bravo",
+      }),
+    );
+    expect(second["status"]).toBe("ok");
+
+    const methodRaw = readFileSync(join(domainDir("ski"), "method.md"), "utf8");
+    const linkCount = (methodRaw.match(/\]\(assets\//g) ?? []).length;
+    expect(linkCount).toBe(1);
+    // The first link stays; the second caption is NOT accreted onto the body.
+    expect(methodRaw).toContain("first caption alpha");
+    expect(methodRaw).not.toContain("second caption bravo");
   });
 });
 
@@ -561,6 +699,42 @@ describe("sil_profile_get — reads ONE full body (method or PRD)", () => {
         "invalid_request",
       );
     }
+  });
+
+  // GAP 3 — the rich read distinguishes a PRESENT-but-corrupt artefact (`unreadable`,
+  // fail-closed) from an ABSENT one (`not_found`), matching the scan paths. Conflating
+  // them lets the agent re-mint over a recoverable body — silent data loss.
+  it("a method.md present but with malformed/absent frontmatter → `unreadable` (NOT not_found) so the agent never re-mints over a recoverable artefact", async () => {
+    await getTool(api, MATERIALIZE).execute("u0", { name: "sil shopper", userSpec: USER_SPEC });
+    // A hand-corrupted domain: method.md exists but carries no valid frontmatter fence.
+    const brokenDir = domainDir("broken");
+    mkdirSync(brokenDir, { recursive: true, mode: 0o700 });
+    writeFileSync(join(brokenDir, "method.md"), "no frontmatter here at all\njust prose\n", { mode: 0o600 });
+
+    const payload = payloadOf(await getTool(api, GET).execute("u1", { domainSlug: "broken" }));
+    expect(payload["status"]).toBe("unreadable");
+    expect(payload["status"]).not.toBe("not_found");
+    // Fail-closed recovery that steers AWAY from re-mint (do not overwrite a corrupt-but-recoverable body).
+    expect(payload["recovery"]).toBe("inspect_artefact");
+    expect(String(payload["message"])).toMatch(/corrupt|overwrite|inspect|repair/i);
+  });
+
+  it("a malformed PRD → `unreadable`; a genuinely ABSENT method / PRD still → not_found", async () => {
+    await getTool(api, MATERIALIZE).execute("u2", { name: "sil shopper", userSpec: USER_SPEC });
+    await getTool(api, LEARN).execute("u3", { target: "method", domain: "ski", kind: "create", name: "Ski", body: "#g" });
+    // A corrupt PRD leaf: present but unparseable.
+    const prdsDir = join(domainDir("ski"), "prds");
+    mkdirSync(prdsDir, { recursive: true, mode: 0o700 });
+    writeFileSync(join(prdsDir, "gloves-slope.md"), "not a frontmatter doc\n", { mode: 0o600 });
+
+    expect(payloadOf(await getTool(api, GET).execute("u4", { domainSlug: "ski", prd: "gloves-slope" }))["status"]).toBe(
+      "unreadable",
+    );
+    // Absence is distinct from corruption — a truly missing method/PRD is still not_found.
+    expect(payloadOf(await getTool(api, GET).execute("u5", { domainSlug: "never-minted" }))["status"]).toBe("not_found");
+    expect(payloadOf(await getTool(api, GET).execute("u6", { domainSlug: "ski", prd: "no-such-prd" }))["status"]).toBe(
+      "not_found",
+    );
   });
 });
 

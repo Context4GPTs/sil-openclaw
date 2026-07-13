@@ -513,6 +513,19 @@ function shopLoopLower(): string {
   return readBody(SHOP_LOOP_PATH).toLowerCase();
 }
 
+/** The Beat-4 section ONLY (lowercased) — `## beat 4` up to `## beat 5`. Scoping is
+ * MANDATORY for the specs-projection assertion: `specs_status`, `predicate` and `hard`
+ * all pre-exist in Beat 5 / Beat 1, so a whole-body `includes` would false-green off a
+ * token this beat never actually documents today. */
+function beat4Lower(): string {
+  const body = shopLoopLower();
+  const start = body.indexOf("## beat 4");
+  const end = body.indexOf("## beat 5");
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return body.slice(start, end);
+}
+
 describe("references/shop_loop.md — the six-beat loop state machine (names all six beats, in order)", () => {
   it("exists on disk", () => {
     expect(existsSync(SHOP_LOOP_PATH)).toBe(true);
@@ -625,6 +638,37 @@ describe("references/shop_loop.md — Beat 4: a BOUNDED ≤4 priority-ordered fa
     const neverInvents =
       body.includes("never invent") || body.includes("not invent") || (body.includes("invent") && body.includes("filter"));
     expect(neverInvents).toBe(true);
+  });
+
+  // GAP 2 — the half-wired specs channel: Beat 2 coins the vocabulary (`sil_specs`) and
+  // Beat 5 consumes `specs_status`, but Beat 4 (the only beat positioned to PRODUCE it)
+  // never told the agent to build `filters.specs`. Scoped to the Beat-4 section so a
+  // pre-existing Beat-5 `specs_status` / `predicate` can't false-green it.
+  it("documents the SPECS PROJECTION end-to-end — build filters.specs predicates from the coined vocabulary, prefer a dedicated param over a predicate, author the query itself (pure transport, no fold), mark hard, and read per-predicate specs_status", () => {
+    const beat4 = beat4Lower();
+    // PRODUCE — build filters.specs predicates from the method's coined / canonical vocabulary.
+    expect(beat4).toContain("filters.specs");
+    expect(beat4).toContain("predicate");
+    const fromCoinedVocab =
+      beat4.includes("canonical") || beat4.includes("coined") || beat4.includes("vocabulary");
+    expect(fromCoinedVocab).toBe(true);
+    // PREFER a dedicated param over a predicate for the same attribute (never both).
+    const prefersDedicatedParam =
+      beat4.includes("dedicated") &&
+      (beat4.includes("prefer") || beat4.includes("over a predicate") || beat4.includes("rather than") ||
+        beat4.includes("not both") || beat4.includes("never both"));
+    expect(prefersDedicatedParam).toBe(true);
+    // PURE TRANSPORT — the agent authors the free-text query itself; no predicate is folded in.
+    const authorsQuery = beat4.includes("author") && beat4.includes("query");
+    expect(authorsQuery).toBe(true);
+    const noFold =
+      beat4.includes("pure transport") || beat4.includes("no fold") || beat4.includes("not fold") ||
+      beat4.includes("never fold") || beat4.includes("folded");
+    expect(noFold).toBe(true);
+    // Inviolable predicates are marked hard (backend-enforced, or Beat 5 rejects-at-pick).
+    expect(beat4).toContain("hard");
+    // CONSUME — read the per-predicate specs_status for Beat 5's honesty pass.
+    expect(beat4).toContain("specs_status");
   });
 });
 

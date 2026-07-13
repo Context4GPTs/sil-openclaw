@@ -254,8 +254,11 @@ function registerGet(api: PluginAPI): void {
       + " taste + search vocabulary); with `domainSlug` + `prd`, returns that PRD's"
       + " body (its requirements + filled preferences). Use sil_profile_search first"
       + " to discover which domains/PRDs exist (coordinates), then this to read one in"
-      + " full. A missing method/PRD returns not_found; a malformed/traversal/\"main\""
-      + " slug returns invalid_request. Makes no network call and reads no token.",
+      + " full. A missing method/PRD returns not_found; a present-but-corrupt body"
+      + " (malformed/absent frontmatter) returns unreadable (inspect / repair — do NOT"
+      + " overwrite it, it may be recoverable), distinct from not_found; a malformed/"
+      + "traversal/\"main\" slug returns invalid_request. Makes no network call and reads"
+      + " no token.",
     parameters: Type.Object({
       domainSlug: Type.String({
         description: "The domain slug to read (lower-kebab, not \"main\"). REQUIRED.",
@@ -327,6 +330,7 @@ function mapFailure(
   result:
     | { ok: false; kind: "invalid_request"; field: string; message: string }
     | { ok: false; kind: "not_found"; message: string }
+    | { ok: false; kind: "unreadable"; message: string }
     | { ok: false; kind: "persistence_failed"; error: string; message: string; recovery: "fix_data_dir" },
 ) {
   if (result.kind === "invalid_request") {
@@ -336,6 +340,12 @@ function mapFailure(
   if (result.kind === "not_found") {
     api.logger.info(tool + "_not_found", {});
     return jsonResult({ status: "not_found", message: result.message });
+  }
+  if (result.kind === "unreadable") {
+    // A present-but-corrupt artefact — steer the agent to inspect/repair, NEVER re-mint
+    // over it (silent data loss on a recoverable artefact). Distinct from not_found.
+    api.logger.warn(tool + "_unreadable", {});
+    return jsonResult({ status: "unreadable", message: result.message, recovery: "inspect_artefact" });
   }
   api.logger.error(tool + "_persistence_failed", { error: result.error });
   return jsonResult({
