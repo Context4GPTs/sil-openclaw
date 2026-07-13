@@ -3015,3 +3015,134 @@ describe("sil_search — the enriched projection is read-side only: request body
     expect(sourceFailStatus).toBe("retryable");
   });
 });
+
+/**
+ * CARD `sds-forward-specs-contract` (epic `spec-driven-shopping-redesign`, Phase 2)
+ * — the HEADLINE integration proof (AC-P3): all-`applied:false` is a NORMAL
+ * `status:"ok"` success, and the per-predicate `specs_status` is OBSERVABLE to the
+ * agent, end-to-end through the REAL tool + real sil-client.
+ *
+ * The registry that would filter on a `ns.key` and set `applied:true` has NOT landed
+ * (the sil-services `spec-registry-backend` epic), so the mocked sil-api returns EVERY
+ * predicate `applied:false` — the honest not-indexed-yet shape. This suite proves the
+ * PLUGIN contract against that boundary:
+ *   - the request forwards the predicates under ONE namespaced `filters.specs` key
+ *     (the predicates ride the already-open SearchFilters, exactly as `ships_to` did);
+ *   - the tool is PURE TRANSPORT — it forwards the agent's free-text `query` unchanged
+ *     and does NOT fold predicates into it; results move via the agent's authored
+ *     free-text (here, the mocked sil-api simply returns a matching product);
+ *   - `specs_status` surfaces on the `ok` payload FAITHFULLY, per-predicate, all
+ *     `applied:false` — never collapsed to a boolean, never dropped — INCLUDING on an
+ *     empty match.
+ *
+ * STUB-FREE (complete-work-is-stub-free): the only mock is `fetch`; the response is
+ * the REAL flat sil-api envelope (products with a required `source`, variants with a
+ * non-empty `checkout_url`) PLUS a top-level `specs_status`. Nothing here asserts the
+ * backend FILTERS on any `ns.key`, and nothing asserts a stubbed tool — it asserts the
+ * client BUILDS the contract and READS the honest status.
+ */
+describe("sil_search — all-applied:false is a NORMAL success with an OBSERVABLE per-predicate specs_status (AC-P3)", () => {
+  const SPECS = [
+    { ns: "product", key: "waterproof_rating", op: "gte", value: 10000, unit: "mm", hard: true },
+    { ns: "seller", key: "rating_average", op: "gte", value: 4.5 },
+  ];
+  /** Every predicate `applied:false` — the honest not-indexed-yet shape. */
+  const SPECS_STATUS_ALL_FALSE = [
+    { ns: "product", key: "waterproof_rating", applied: false },
+    { ns: "seller", key: "rating_average", applied: false },
+  ];
+  /** The REAL flat sil-api envelope + a top-level `specs_status` sibling of `products`. */
+  function envelopeWithSpecsStatus(products: unknown[], specs_status: unknown): unknown {
+    return {
+      ucp: { version: "0.1", status: "success" },
+      products,
+      pagination: { has_next_page: false },
+      specs_status,
+    };
+  }
+
+  it("forwards the predicates under ONE `filters.specs` key AND surfaces the all-false specs_status verbatim on the ok payload", async () => {
+    seedTokens("the-access-token", "the-refresh-token");
+    const rec = installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: envelopeWithSpecsStatus([PRODUCT_A], SPECS_STATUS_ALL_FALSE) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "waterproof gloves", specs: SPECS }),
+    );
+
+    // (1) The request forwarded the predicates under the ONE namespaced key — not
+    //     spread per-predicate, not top-level (the ships_to fail-green defense).
+    expect(rec.search.length).toBe(1);
+    const body = rec.search[0]!.body as Record<string, unknown>;
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters["specs"]).toEqual(SPECS);
+    expect(body).not.toHaveProperty("specs");
+    expect(filters).not.toHaveProperty("waterproof_rating");
+
+    // (2) A NORMAL success — products present even at applied:false (the mocked
+    //     sil-api returns a match; the tool does not fold specs into the query).
+    expect(payload["status"]).toBe("ok");
+    expect((payload["products"] as unknown[]).length).toBeGreaterThan(0);
+
+    // (3) specs_status is OBSERVABLE, per-predicate, all applied:false — never
+    //     collapsed to a boolean, never dropped.
+    expect(payload["specs_status"]).toEqual(SPECS_STATUS_ALL_FALSE);
+    expect(typeof payload["specs_status"]).not.toBe("boolean");
+    for (const s of payload["specs_status"] as Array<{ applied: unknown }>) {
+      expect(s.applied).toBe(false);
+    }
+  });
+
+  it("an EMPTY match still surfaces the all-false specs_status (sibling of products) — the honesty pass runs even at zero results", async () => {
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: envelopeWithSpecsStatus([], SPECS_STATUS_ALL_FALSE) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", { query: "waterproof gloves", specs: SPECS }),
+    );
+
+    expect(payload["status"]).toBe("ok");
+    expect(payload["products"]).toEqual([]);
+    // specs_status still present on the empty match — it is a sibling of products.
+    expect(payload["specs_status"]).toEqual(SPECS_STATUS_ALL_FALSE);
+  });
+
+  it("NEVER asserts the backend filtered — a hard:true predicate STILL comes back applied:false (the observable fail-green reflection polices)", async () => {
+    // The exact product requirement: a `hard:true` predicate returning `applied:false`
+    // means the backend did NOT enforce it. The tool must surface that truthfully — it
+    // is what lets Beat 5 reject-at-pick instead of silently presenting an unenforced
+    // hard constraint as met. Nothing here claims the backend filtered on the ns.key.
+    seedTokens("at", "rt");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: envelopeWithSpecsStatus([PRODUCT_A], SPECS_STATUS_ALL_FALSE) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const payload = payloadOf(
+      await getTool(api, TOOL).execute("c1", {
+        query: "waterproof gloves",
+        specs: [{ ns: "product", key: "waterproof_rating", op: "gte", value: 10000, unit: "mm", hard: true }],
+      }),
+    );
+
+    expect(payload["status"]).toBe("ok");
+    const status = payload["specs_status"] as Array<{ ns: string; key: string; applied: boolean }>;
+    const hardEntry = status.find((s) => s.ns === "product" && s.key === "waterproof_rating");
+    expect(hardEntry).toBeDefined();
+    expect(hardEntry!.applied).toBe(false);
+  });
+});

@@ -44,6 +44,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { searchCatalog } from "../../lib/sil-client.js";
+import type { SpecPredicate } from "../../lib/sil-client.js";
 
 const SIL_API = "https://sil-api.test.example.com";
 
@@ -576,5 +577,253 @@ describe("searchCatalog — transport failure maps to retryable without leaking 
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("boom"));
     const thrown = await searchCatalog(SIL_API, SECRET, { query: "chair" });
     expect(JSON.stringify(thrown)).not.toContain(SECRET);
+  });
+});
+
+/**
+ * CARD `sds-forward-specs-contract` (epic `spec-driven-shopping-redesign`, Phase 2
+ * — founder scope revision 2026-07-13: THE PLUGIN IS PURE TRANSPORT). The unit floor
+ * for the `specs` contract in `buildSearchBody` (AC-P1, AC-P5, AC-A2 wire-half,
+ * AC-A3 wire-half).
+ *
+ * `SearchParams` gains `specs?: SpecPredicate[]` — a closed-shape / OPEN-vocabulary
+ * structured requirement `{ ns, key, op, value?, unit?, hard? }`. `buildSearchBody`
+ * has exactly ONE effect on it:
+ *
+ *   filters.specs — the predicate array rides under ONE namespaced well-known key
+ *   `filters.specs`, forwarded VERBATIM (the whole array, all seven ops, `hard`
+ *   unchanged), NEVER spread per-predicate as `filters.<key>`/`filters.<ns>` and
+ *   NEVER at the top level. This is the exact fail-green hazard the `ships_to` rename
+ *   defends against (the OPEN `SearchFilters`, `additionalProperties:true`, silently
+ *   accepts a wrong key → a no-op that a presence-only test would miss). So the
+ *   defense is WHOLE-BODY equality asserting the precise `filters.specs` array, never
+ *   "a specs key exists". `hard` is forwarded VERBATIM (true kept, false
+ *   kept-not-dropped, absent stays absent) so the backend can enforce once it lands
+ *   and reflection can correlate the `applied:false` hard set.
+ *
+ * THE PLUGIN DOES NOT FOLD PREDICATES INTO `query`. Authoring free-text from the
+ * requirements is the AGENT's job (the sil-shopping loop, Beat 4) and reframing on
+ * `applied:false` is Beat 5 — a mechanical plugin fold was lossy (a range renders as
+ * a bare numeric token — noise) and unsafe (a negation folded as a bare positive
+ * token inverts intent). So `body.query` is left EXACTLY the agent's `params.query`,
+ * byte-for-byte, regardless of `specs` — a predicate never adds, removes, or reorders
+ * a query token, and `specs` alone never SYNTHESIZES a `query` (absent stays absent).
+ *
+ * The backend does not filter on any `ns.key` yet (the sil-services
+ * `spec-registry-backend` epic) — NOTHING here asserts filtering. Results move today
+ * via the agent's free-text authoring, not a plugin-side fold.
+ *
+ * Contract this file pins for the implementation (expert-developer),
+ * `src/lib/sil-client.ts`:
+ *   type SpecOp = "eq"|"neq"|"gte"|"lte"|"in"|"nin"|"exists";
+ *   interface SpecPredicate { ns: string; key: string; op: SpecOp;
+ *     value?: number|string|boolean|(string|number)[]; unit?: string; hard?: boolean }
+ *   SearchParams.specs?: SpecPredicate[]
+ *   buildSearchBody sets ONE `filters.specs` = the predicate array (verbatim, `hard`
+ *   kept) and forwards `body.query` = `params.query` UNCHANGED. The exact mappings
+ *   below ARE the immutable spec.
+ */
+describe("searchCatalog — specs ride ONE namespaced filters.specs key (whole-body equality, never spread)", () => {
+  let cap: Captured[];
+  beforeEach(() => {
+    cap = [];
+    spyFetch(cap);
+  });
+
+  it("whole body EXACT: filters.specs carries ALL SEVEN ops verbatim beside typed filters, and the query is left UNTOUCHED", async () => {
+    // The strongest single assertion — a byte-exact whole-body equality carrying every
+    // op (eq/neq/gte/lte/in/nin/exists) plus a `hard:true` entry. `filters.specs` is
+    // the ONE namespaced key beside `categories`/`price` under the ONE `filters`
+    // object, holding the predicate array VERBATIM. The agent's `query` ("gloves")
+    // survives byte-for-byte: a plugin that folded the positive ops (eq/gte/lte/in)
+    // would append "black"/"10000mm"/"500"/"leather"/"suede" and this equality would
+    // FAIL — the guard against any future re-introduction of a fold.
+    const specs: SpecPredicate[] = [
+      { ns: "product", key: "color", op: "eq", value: "black", hard: true },
+      { ns: "product", key: "size", op: "neq", value: "xs" },
+      { ns: "product", key: "waterproof_rating", op: "gte", value: 10000, unit: "mm" },
+      { ns: "product", key: "weight_g", op: "lte", value: 500 },
+      { ns: "product", key: "material", op: "in", value: ["leather", "suede"] },
+      { ns: "seller", key: "name", op: "nin", value: ["acme"] },
+      { ns: "product", key: "insulation", op: "exists" },
+    ];
+    await searchCatalog(SIL_API, "tok", {
+      query: "gloves",
+      category: "Apparel",
+      price_max: 5000,
+      specs,
+    });
+    expect(cap[0]!.body).toEqual({
+      query: "gloves",
+      filters: {
+        categories: ["Apparel"],
+        price: { max: 5000 },
+        specs,
+      },
+    });
+  });
+
+  it("filters.specs carries the predicate array VERBATIM and NEVER spreads a predicate as filters.<name> or top-level `specs`", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "gloves",
+      specs: [
+        { ns: "product", key: "waterproof_rating", op: "gte", value: 10000, unit: "mm" },
+        { ns: "seller", key: "rating_average", op: "gte", value: 4.5 },
+        { ns: "product", key: "size", op: "in", value: ["medium", "large"] },
+      ],
+    });
+    const body = cap[0]!.body as Record<string, unknown>;
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    // The ONE namespaced key holds every predicate, unchanged (no reshaping).
+    expect(filters["specs"]).toEqual([
+      { ns: "product", key: "waterproof_rating", op: "gte", value: 10000, unit: "mm" },
+      { ns: "seller", key: "rating_average", op: "gte", value: 4.5 },
+      { ns: "product", key: "size", op: "in", value: ["medium", "large"] },
+    ]);
+    // NEVER spread per-predicate onto the open SearchFilters (the silent-no-op / typed-
+    // filter-collision hazard) — not by key, not by ns.
+    for (const wrong of ["waterproof_rating", "rating_average", "size", "product", "seller"]) {
+      expect(filters).not.toHaveProperty(wrong);
+    }
+    // NEVER at the top level — `specs` is a backend-bound filter, unlike sil-private
+    // `local_merchants`.
+    expect(body).not.toHaveProperty("specs");
+  });
+
+  it("forwards `hard` VERBATIM on each entry — true kept, false kept (not dropped as falsy), absent stays absent", async () => {
+    // The backend can only enforce a hard constraint, and reflection can only
+    // correlate the `applied:false` hard set, if `hard` survives the wire unchanged.
+    // A truthiness drop of `hard:false`, or a fabricated default on an absent `hard`,
+    // would break the honesty rail. `toEqual` pins all three: true, false, and the
+    // ABSENCE of a `hard` key on the third entry.
+    await searchCatalog(SIL_API, "tok", {
+      query: "gloves",
+      specs: [
+        { ns: "a", key: "b", op: "eq", value: 1, hard: true },
+        { ns: "a", key: "c", op: "eq", value: 2, hard: false },
+        { ns: "a", key: "d", op: "eq", value: 3 },
+      ],
+    });
+    const filters = ((cap[0]!.body as Record<string, unknown>)["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters["specs"]).toEqual([
+      { ns: "a", key: "b", op: "eq", value: 1, hard: true },
+      { ns: "a", key: "c", op: "eq", value: 2, hard: false },
+      { ns: "a", key: "d", op: "eq", value: 3 },
+    ]);
+  });
+
+  it("an EMPTY specs:[] is a no-op — no filters.specs, query unchanged (whole body exact)", async () => {
+    await searchCatalog(SIL_API, "tok", { query: "gloves", specs: [] });
+    // An empty predicate list adds nothing: no `filters` skeleton conjured to hold a
+    // `specs`, and the query is byte-exactly the agent's. (Symmetry with the
+    // omit-when-absent discipline every other filter follows.)
+    expect(cap[0]!.body).toEqual({ query: "gloves" });
+  });
+});
+
+/**
+ * PURE TRANSPORT (founder scope revision 2026-07-13): `specs` NEVER touch `body.query`.
+ * The plugin forwards the agent's free-text VERBATIM; authoring search text from the
+ * requirements is the agent's job (sil-shopping loop, Beat 4). Every assertion below
+ * pins that invariant: `body.query` is byte-exactly `params.query`, and a specs-only
+ * request synthesizes no `query` key.
+ */
+describe("searchCatalog — specs are PURE TRANSPORT: body.query is the agent's query VERBATIM, untouched by any predicate", () => {
+  let cap: Captured[];
+  beforeEach(() => {
+    cap = [];
+    spyFetch(cap);
+  });
+
+  /** The outbound `body.query` (or undefined when the key is omitted). */
+  function outboundQuery(): string | undefined {
+    const q = (cap[0]!.body as Record<string, unknown>)["query"];
+    return typeof q === "string" ? q : undefined;
+  }
+
+  it("a POSITIVE eq predicate leaves body.query EXACTLY the agent's query — the value appears NOWHERE in it (RED against the fold)", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "external drive",
+      specs: [{ ns: "product", key: "capacity_gb", op: "eq", value: 512 }],
+    });
+    // Byte-exact: no token added, removed, or reordered by the predicate.
+    expect(outboundQuery()).toBe("external drive");
+    expect(outboundQuery()).not.toContain("512");
+  });
+
+  it("a gte predicate's value AND unit are NOT folded into the query (query stays byte-exact)", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "hiking gloves",
+      specs: [{ ns: "product", key: "waterproof_rating", op: "gte", value: 10000, unit: "mm" }],
+    });
+    expect(outboundQuery()).toBe("hiking gloves");
+    const q = outboundQuery()!.toLowerCase();
+    expect(q).not.toContain("10000");
+    expect(q).not.toContain("mm");
+  });
+
+  it("an `in` array value is NOT folded — no element enters the query", async () => {
+    await searchCatalog(SIL_API, "tok", {
+      query: "jacket",
+      specs: [{ ns: "product", key: "size", op: "in", value: ["medium", "large"] }],
+    });
+    expect(outboundQuery()).toBe("jacket");
+    const q = outboundQuery()!.toLowerCase();
+    expect(q).not.toContain("medium");
+    expect(q).not.toContain("large");
+  });
+
+  it("a MIX of positive and negation predicates leaves the query byte-exactly the agent's — no token added, removed, or reordered", async () => {
+    // The general invariant in one shot: positive ops and negations alike leave
+    // `body.query` identical to `params.query`. Byte-exact equality catches an add,
+    // a drop, and a reorder alike.
+    await searchCatalog(SIL_API, "tok", {
+      query: "waterproof running shoes",
+      specs: [
+        { ns: "product", key: "capacity_gb", op: "eq", value: 512 },
+        { ns: "product", key: "color", op: "neq", value: "pink" },
+        { ns: "product", key: "brand", op: "nin", value: ["accaltd"] },
+        { ns: "product", key: "waterproof_rating", op: "gte", value: 10000, unit: "mm" },
+      ],
+    });
+    expect(outboundQuery()).toBe("waterproof running shoes");
+    const q = outboundQuery()!.toLowerCase();
+    // Negation values never enter the query …
+    expect(q).not.toContain("pink");
+    expect(q).not.toContain("accaltd");
+    // … and no positive value either — pure transport.
+    expect(q).not.toContain("512");
+    expect(q).not.toContain("10000");
+  });
+
+  it("query ABSENT + only a POSITIVE spec → the `query` key is OMITTED — specs NEVER synthesize a query", async () => {
+    // With no agent free-text there is no query to forward, so the `query` key is
+    // absent — a specs-only request never synthesizes one. The predicate still rides
+    // filters.specs, so the constraint is not lost.
+    await searchCatalog(SIL_API, "tok", {
+      specs: [{ ns: "product", key: "capacity_gb", op: "eq", value: 512 }],
+    });
+    const body = cap[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("query");
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters["specs"]).toEqual([{ ns: "product", key: "capacity_gb", op: "eq", value: 512 }]);
+  });
+
+  it("query ABSENT + only negation/exists predicates → the `query` key is OMITTED, predicates still ride filters.specs", async () => {
+    // No agent free-text → no `query` key conjured; the predicates still ride
+    // filters.specs, preserved.
+    await searchCatalog(SIL_API, "tok", {
+      specs: [
+        { ns: "product", key: "color", op: "neq", value: "red" },
+        { ns: "product", key: "waterproof_rating", op: "exists" },
+      ],
+    });
+    const body = cap[0]!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("query");
+    const filters = (body["filters"] ?? {}) as Record<string, unknown>;
+    expect(filters["specs"]).toEqual([
+      { ns: "product", key: "color", op: "neq", value: "red" },
+      { ns: "product", key: "waterproof_rating", op: "exists" },
+    ]);
   });
 });
