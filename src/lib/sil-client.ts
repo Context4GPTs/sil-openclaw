@@ -220,6 +220,48 @@ export interface ShipTo {
   postal_code?: string;
 }
 
+/** The comparison operator on a spec predicate. The seven split by their effect
+ * on the query FOLD (see {@link buildSearchBody}): the POSITIVE ops (`eq`/`gte`/
+ * `lte`/`in`) render their value into `query` text as a backstop; the negation +
+ * existence ops (`neq`/`nin`/`exists`) render NOTHING (a negation as a bare
+ * positive token would surface exactly what it excludes — fail-worse). All seven
+ * forward unchanged on the wire `filters.specs`; only the fold is op-aware. */
+export type SpecOp = "eq" | "neq" | "gte" | "lte" | "in" | "nin" | "exists";
+
+/** The value a spec predicate carries. A scalar for `eq`/`neq`, a number for
+ * `gte`/`lte`, an array for `in`/`nin`; `exists` carries NONE. Value is OPTIONAL
+ * in the shape (so `exists` fits) — the op→value validity is a READ-SITE rule
+ * (`readSpecs` in catalog.ts), not a schema one. */
+export type SpecValue = number | string | boolean | (string | number)[];
+
+/** One structured requirement projected from a filled PRD — the THIRD search
+ * channel beside free-text `query` and the dedicated params. Closed SHAPE, open
+ * `ns.key` VOCABULARY: `ns`/`key` are two free wire strings (the method coins them
+ * bottom-up; the TypeBox schema enumerates zero keys — [[sds-specs-vocabulary-is-
+ * bottom-up]]), never a dotted string. `hard` mirrors the PRD inviolability flag
+ * and is forwarded UNCHANGED so the backend can enforce once it lands and
+ * reflection can correlate the `applied:false` hard set. */
+export interface SpecPredicate {
+  ns: string;
+  key: string;
+  op: SpecOp;
+  value?: SpecValue;
+  unit?: string;
+  hard?: boolean;
+}
+
+/** The per-predicate applied-status the backend reports on the `ok` response —
+ * the OBSERVABLE fail-green signal. `applied:true` = the backend indexed it and
+ * truly filtered; `applied:false` = not indexed yet (it moved results only via the
+ * query fold), and that `applied:false` set is EXACTLY what reflection's
+ * hard-constraint honesty check polices. Surfaced verbatim, per-predicate — never
+ * collapsed to one boolean, never dropped. */
+export interface SpecStatus {
+  ns: string;
+  key: string;
+  applied: boolean;
+}
+
 /** The simplified search query an agent sends — a free-text `query` plus
  * optional filters and pagination. Maps 1:1 into the sil-api `CatalogSearchRequest`
  * body (`searchCatalog` builds the nested shape). All fields optional at this
@@ -250,6 +292,13 @@ export interface SearchParams {
   condition?: string[];
   available?: boolean;
   local_merchants?: boolean;
+  /** The structured requirement predicates ({@link SpecPredicate}) projected from a
+   * filled PRD — the open long-tail channel with no dedicated param. Each is
+   * DUAL-projected in `buildSearchBody`: it rides a single namespaced `filters.specs`
+   * key AND folds its value into `query` (positive ops only). Present-but-empty `[]`
+   * is a benign no-op (omits `filters.specs`, does not count as usable input); the
+   * per-predicate validity is enforced at the read site (`readSpecs`). */
+  specs?: SpecPredicate[];
 }
 
 /** A currency-tagged price, passed through OPAQUE from sil-api's UCP `Price`
@@ -338,6 +387,11 @@ export interface ProductDescription {
 export interface SearchResult {
   products: SearchProduct[];
   cursor?: string;
+  /** The per-predicate applied-status ({@link SpecStatus}[]) read off the flat
+   * envelope's top-level `specs_status` — a SIBLING of `products`, so it surfaces on
+   * an empty match too. OMITTED entirely when the wire carries none (no fabricated
+   * default — interpreting absence as unconfirmed is reflection's job). */
+  specs_status?: SpecStatus[];
 }
 
 /**
@@ -370,7 +424,7 @@ export interface SearchResult {
  * whether to clear the dead token (only on `user_not_provisioned`).
  */
 export type SearchOutcome =
-  | { kind: "ok"; products: SearchProduct[]; cursor?: string }
+  | { kind: "ok"; products: SearchProduct[]; cursor?: string; specs_status?: SpecStatus[] }
   | { kind: "unauthorized" }
   | { kind: "forbidden"; reason: string }
   | { kind: "invalid_request"; error: string; message: string }
@@ -1060,7 +1114,12 @@ function extractForbiddenReason(body: unknown): string {
  */
 function buildSearchBody(params: SearchParams): Record<string, unknown> {
   const body: Record<string, unknown> = {};
-  if (typeof params.query === "string") body["query"] = params.query;
+  // The agent's free-text `query` is PRIMARY; each POSITIVE spec predicate folds
+  // its value(+unit) in as a backstop (deduped case-insensitively) so a structured
+  // requirement still moves results at `applied:false`. `renderSpecQuery` returns
+  // the base query verbatim when there are no specs (behaviour-preserving).
+  const query = renderSpecQuery(params.query, params.specs ?? []);
+  if (query !== undefined) body["query"] = query;
 
   const filters: Record<string, unknown> = {};
   if (typeof params.category === "string") {
@@ -1078,6 +1137,14 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   if (params.condition !== undefined) filters["condition"] = params.condition;
   if (typeof params.available === "boolean") filters["available"] = params.available;
 
+  // The structured requirement predicates ride ONE namespaced well-known key —
+  // `filters.specs` holds the WHOLE array (never spread as `filters.<key>`, which
+  // would collide with a typed filter and fail-green on the open `SearchFilters`;
+  // never top-level — unlike the sil-private `local_merchants`, `specs` is a
+  // backend-bound filter). `hard` rides each entry UNCHANGED. A present-but-empty
+  // `[]` emits nothing (the query is unchanged, `filters.specs` omitted).
+  if (Array.isArray(params.specs) && params.specs.length > 0) filters["specs"] = params.specs;
+
   if (Object.keys(filters).length > 0) body["filters"] = filters;
 
   // `local_merchants` is a sil-PRIVATE ranking bias — it rides at the TOP LEVEL of
@@ -1094,6 +1161,69 @@ function buildSearchBody(params: SearchParams): Record<string, unknown> {
   if (Object.keys(pagination).length > 0) body["pagination"] = pagination;
 
   return body;
+}
+
+/** The POSITIVE spec ops whose value folds into the free-text query. The rest
+ * (`neq`/`nin`/`exists`) render NOTHING — a negation as a bare positive token
+ * would surface exactly what it EXCLUDES, failing worse than a silent no-op. */
+const POSITIVE_SPEC_OPS: ReadonlySet<SpecOp> = new Set(["eq", "gte", "lte", "in"]);
+
+/**
+ * Fold the POSITIVE spec predicates into the agent's free-text `query` as a
+ * backstop so a structured requirement still moves results while the backend
+ * reports it `applied:false`. The agent's phrasing stays PRIMARY and un-mangled:
+ * its tokens are kept, and each spec token is appended ONLY when not already
+ * present (case-insensitive, whitespace-tokenized) so the fold never duplicates
+ * what the agent already wrote nor what an earlier predicate rendered.
+ *
+ * A predicate renders `value` immediately followed by `unit` (`16` + `GB` →
+ * `16GB`, matching the design's rendered-form example — NO separating space); an
+ * `in` array renders one token per element. Negation/existence ops and BOOLEAN
+ * values render nothing (see {@link POSITIVE_SPEC_OPS}).
+ *
+ * Behaviour-preserving when `specs` is empty: returns the base `query` verbatim
+ * (including an empty string, kept present), or `undefined` when there is no base
+ * query and nothing to fold (so `buildSearchBody` omits the key).
+ */
+function renderSpecQuery(query: string | undefined, specs: SpecPredicate[]): string | undefined {
+  const hasBase = typeof query === "string";
+  const base = hasBase ? query : "";
+  const seen = new Set(tokenizeQuery(base));
+  const additions: string[] = [];
+  for (const spec of specs) {
+    for (const token of renderSpecTokens(spec)) {
+      const lower = token.toLowerCase();
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+      additions.push(token);
+    }
+  }
+  if (additions.length === 0) return hasBase ? base : undefined;
+  return [base, ...additions].filter((token) => token.length > 0).join(" ");
+}
+
+/** The free-text query as lower-cased, whitespace-split tokens — the dedup set the
+ * spec fold checks each rendered token against. */
+function tokenizeQuery(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
+}
+
+/** Render one predicate to its query token(s), or none. Only POSITIVE ops render;
+ * `value` is stringified with `unit` appended (no space), an array value yields one
+ * token per element, and a boolean/absent value renders nothing. */
+function renderSpecTokens(spec: SpecPredicate): string[] {
+  if (!POSITIVE_SPEC_OPS.has(spec.op)) return [];
+  const unit = typeof spec.unit === "string" ? spec.unit : "";
+  const values = Array.isArray(spec.value) ? spec.value : [spec.value];
+  const tokens: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string" && typeof value !== "number") continue;
+    tokens.push(`${value}${unit}`);
+  }
+  return tokens;
 }
 
 /** Emit a ship-to object with its alpha-2 `country` UPPERCASED on the wire
@@ -1127,6 +1257,11 @@ function withUppercaseCountry<T extends { country: string }>(value: T): T {
  * The opaque cursor is hoisted from `pagination.cursor` and surfaced ONLY when
  * `pagination.has_next_page` is true (end-of-results is the absent cursor — never
  * derived from `products.length`).
+ *
+ * `specs_status` is read off the SAME flat envelope as a sibling of `products`
+ * (via {@link extractSpecsStatus}), so the observable per-predicate applied-status
+ * surfaces even on an empty match. It is informational — NEVER a purchasability
+ * gate; the `Array.isArray(products)` anti-false-green guard is unchanged.
  */
 function extractSearchResult(body: unknown): SearchResult | null {
   const envelope = asRecord(body);
@@ -1139,8 +1274,37 @@ function extractSearchResult(body: unknown): SearchResult | null {
     .map(projectProduct)
     .filter((p): p is SearchProduct => p !== null);
 
+  const result: SearchResult = { products };
   const cursor = extractCursor(envelope["pagination"]);
-  return cursor === null ? { products } : { products, cursor };
+  if (cursor !== null) result.cursor = cursor;
+  const specsStatus = extractSpecsStatus(envelope["specs_status"]);
+  if (specsStatus !== null) result.specs_status = specsStatus;
+  return result;
+}
+
+/** Narrow the wire `specs_status` to {@link SpecStatus}[], or null to OMIT the
+ * key. Each usable entry needs a non-empty string `ns`, a non-empty string `key`,
+ * and a BOOLEAN `applied`; a malformed entry is DROPPED (never fabricated
+ * `applied:true`, never a crash). Returns null when the field is absent/non-array
+ * OR when no entry survives — the no-fabrication discipline: interpreting the
+ * ABSENCE of a status is reflection's job, not the tool's. A fully-`applied:false`
+ * array is the honest "not indexed yet" shape and passes through whole. */
+function extractSpecsStatus(raw: unknown): SpecStatus[] | null {
+  if (!Array.isArray(raw)) return null;
+  const statuses = raw
+    .map((entry): SpecStatus | null => {
+      const obj = asRecord(entry);
+      if (obj === null) return null;
+      const ns = obj["ns"];
+      const key = obj["key"];
+      const applied = obj["applied"];
+      if (typeof ns !== "string" || ns.length === 0) return null;
+      if (typeof key !== "string" || key.length === 0) return null;
+      if (typeof applied !== "boolean") return null;
+      return { ns, key, applied };
+    })
+    .filter((s): s is SpecStatus => s !== null);
+  return statuses.length === 0 ? null : statuses;
 }
 
 /**
