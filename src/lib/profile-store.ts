@@ -93,6 +93,16 @@ interface NotFound {
   message: string;
 }
 
+/** A file that is PRESENT but parses to null (malformed/absent frontmatter) — the
+ * rich read must NOT conflate this with an absent file (`not_found`), or a corrupt
+ * but recoverable artefact gets silently re-minted over. Fail-closed, matching the
+ * scan paths (`searchProfileFrontmatter`, `readShopperIdentity`). */
+interface Unreadable {
+  ok: false;
+  kind: "unreadable";
+  message: string;
+}
+
 interface PersistenceFailed {
   ok: false;
   kind: "persistence_failed";
@@ -108,6 +118,16 @@ function invalid(field: string, message: string): InvalidRequest {
 
 function notFound(message: string): NotFound {
   return { ok: false, kind: "not_found", message };
+}
+
+function unreadable(path: string): Unreadable {
+  return {
+    ok: false,
+    kind: "unreadable",
+    message:
+      path + ": the artefact is present but corrupt (malformed or absent frontmatter)"
+        + " — inspect / repair, do NOT overwrite (it may still be recoverable).",
+  };
 }
 
 function persistenceFailed(path: string, err: unknown): PersistenceFailed {
@@ -394,6 +414,19 @@ function resolveTarget(spec: LearnSpec): ResolvedTarget | InvalidRequest {
 }
 
 export function learnArtefact(spec: LearnSpec): LearnResult {
+  // `hard` is valid ONLY on append to user_spec / prd. Every other combination —
+  // all four non-append kinds on any target, and append to method — is rejected
+  // LOUDLY, never silently dropped: a buyer who passes `hard:true` expecting to
+  // promote a constraint must learn at once when the promotion does not land.
+  // Hoisted ABOVE the kind switch so a hard misuse wins error-precedence over the
+  // per-kind field checks (this subsumes the old method-only append guard).
+  if (spec.hard === true && !(spec.kind === "append" && spec.target !== "method")) {
+    return invalid(
+      "hard",
+      "hard is valid only on append to user_spec or prd — a method carries no hard"
+        + " constraints, and create/amend/retract/attach-asset take no hard flag.",
+    );
+  }
   switch (spec.kind) {
     case "create":
       return learnCreate(spec);
@@ -466,25 +499,11 @@ function learnCreate(spec: LearnSpec): LearnResult {
   return { ok: true, kind: "create", target: "prd", domain: slug, prd, path };
 }
 
-/** `hard` is valid only on append to user_spec / prd — a method carries no hard
- * constraints (they are the person's, or the job's). */
-function rejectHardMisuse(spec: LearnSpec): InvalidRequest | null {
-  if (spec.hard === true && spec.target === "method") {
-    return invalid(
-      "hard",
-      "hard is valid only on append to user_spec or prd — a method carries no hard"
-        + " constraints (they belong to the person or the job).",
-    );
-  }
-  return null;
-}
-
 /** append — add `- <text>` (or `- [hard] <text>`) under `## <section>` when given
  * (fail-closed if that heading is absent), else at EOF. The target must already
- * exist → not_found (never resurrects a seed-less doc). */
+ * exist → not_found (never resurrects a seed-less doc). `hard` is guarded up-front
+ * in `learnArtefact` (append to method / any non-append kind is rejected there). */
 function learnAppend(spec: LearnSpec): LearnResult {
-  const badHard = rejectHardMisuse(spec);
-  if (badHard) return badHard;
   if (!nonBlank(spec.text)) return invalid("text", "text is required and must be non-empty.");
 
   const target = resolveTarget(spec);
@@ -606,12 +625,36 @@ function learnAttachAsset(spec: LearnSpec): LearnResult {
   } catch (err) {
     return persistenceFailed(assetAbs, err);
   }
-  const caption = nonBlank(spec.caption) ? (spec.caption as string).trim() : "";
-  const link = "![" + caption + "](" + assetRel + ")";
-  const body = existing.body.replace(/\n*$/, "\n") + link + "\n";
-  const res = writeArtefactBody(target, existing.fields, body, "attach-asset");
+
+  // Idempotent link on the asset PATH (not the caption): if `assets/<hash>.<ext>` is
+  // already referenced in the target, skip the body write — no second link line, no
+  // updated_at churn. The bytes were re-written above (identical-hash overwrite, a
+  // benign no-op), so a re-attach under any caption is a body no-op that still
+  // reports ok + assetPath.
+  const res = existing.body.includes("](" + assetRel + ")")
+    ? okAttach(target)
+    : writeArtefactBody(
+        target,
+        existing.fields,
+        existing.body.replace(/\n*$/, "\n")
+          + "![" + (nonBlank(spec.caption) ? (spec.caption as string).trim() : "") + "](" + assetRel + ")\n",
+        "attach-asset",
+      );
   if (!res.ok) return res;
   return { ...res, assetPath: assetRel };
+}
+
+/** The success envelope for an attach-asset that wrote no body (idempotent re-link)
+ * — mirrors `writeArtefactBody`'s ok shape without the re-serialize / timestamp bump. */
+function okAttach(target: ResolvedTarget): LearnResult {
+  return {
+    ok: true,
+    kind: "attach-asset",
+    target: target.label,
+    ...(target.domain !== undefined ? { domain: target.domain } : {}),
+    ...(target.prd !== undefined ? { prd: target.prd } : {}),
+    path: target.path,
+  };
 }
 
 /** Re-serialize a method/PRD with a bumped `updated_at`; user_spec carries no
@@ -815,6 +858,7 @@ export type ReadResult =
       path: string;
     }
   | NotFound
+  | Unreadable
   | InvalidRequest;
 
 export function readArtefactBody(domainSlug: string, prd?: string): ReadResult {
@@ -825,18 +869,20 @@ export function readArtefactBody(domainSlug: string, prd?: string): ReadResult {
     const badPrd = rejectBadSegment(prd, "prd");
     if (badPrd) return badPrd;
     const path = join(getDomainArtefactDir(domainSlug), PRDS_SUBDIR, prd + ".md");
+    // Split absent from corrupt: an absent file is not_found, a present-but-unparseable
+    // one is unreadable (never conflated — the agent must not re-mint over a corrupt PRD).
+    if (!existsSync(path)) return notFound('No PRD "' + prd + '" in domain "' + domainSlug + '".');
     const parsed = readArtefactFile(path);
-    if (parsed === null) {
-      return notFound('No PRD "' + prd + '" in domain "' + domainSlug + '".');
-    }
+    if (parsed === null) return unreadable(path);
     return { ok: true, target: "prd", domain: domainSlug, prd, fields: parsed.fields, body: parsed.body, path };
   }
 
   const path = join(getDomainArtefactDir(domainSlug), METHOD_FILE);
-  const parsed = readArtefactFile(path);
-  if (parsed === null) {
+  if (!existsSync(path)) {
     return notFound('No method for domain "' + domainSlug + '" — mint it with sil_learn create.');
   }
+  const parsed = readArtefactFile(path);
+  if (parsed === null) return unreadable(path);
   return { ok: true, target: "method", domain: domainSlug, fields: parsed.fields, body: parsed.body, path };
 }
 
