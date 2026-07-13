@@ -70,12 +70,11 @@ function identityEnvelope(): unknown {
   };
 }
 
-/** A real search envelope with one product (sil_search's ok shape). FLAT shape
- * (`{ ucp, products, pagination }` — top level, no `result` wrapper;
- * `withUcpMeta(body)`), the only shape sil-api emits. */
+/** A real search body with one product (sil_search's ok shape). FLAT shape
+ * (`{ products, pagination }` — top level, no `result` wrapper), the only shape
+ * sil-api emits. */
 function searchEnvelope(): unknown {
   return {
-    ucp: { version: "0.1", status: "success" },
     products: [
       {
         id: "gid://product/a",
@@ -96,12 +95,10 @@ function searchEnvelope(): unknown {
   };
 }
 
-/** A real lookup envelope with one product (sil_product_get's ok shape). FLAT shape
- * (`{ ucp, products }` — top level, no `result` wrapper; `withUcpMeta(body)`), the
- * only shape sil-api emits. */
+/** A real lookup body with one product (sil_product_get's ok shape). FLAT shape
+ * (`{ products }` — top level, no `result` wrapper), the only shape sil-api emits. */
 function lookupEnvelope(): unknown {
   return {
-    ucp: { version: "0.1", status: "success" },
     products: [
       {
         id: "gid://product/a",

@@ -30,11 +30,11 @@
  *      (the headline lookup risk; UCP §Identifiers Not Found: "return success with
  *      the found products … MAY include informational messages indicating which
  *      identifiers were not found"):
- *        200 { ucp, products:[…found…], messages:[{type:"info",code:"not_found",content:"<id>"}] }
+ *        200 { products:[…found…], messages:[{type:"info",code:"not_found",content:"<id>"}] }
  *                          → ok + found products + not_found:[<the unfound ids>]
- *        200 { ucp, products:[], messages:[…not_found for every id…] }
+ *        200 { products:[], messages:[…not_found for every id…] }
  *                          → ok + products:[] + not_found:[<all ids>]   (all-missed IS a success)
- *        200 { ucp, products:[…all resolved…] } (NO messages key)
+ *        200 { products:[…all resolved…] } (NO messages key)
  *                          → ok + NO not_found key                       (every id resolved)
  *      The `not_found` ids come from the top-level `messages` entries whose
  *      `code === "not_found"`; `content` is the id (sil-api emits exactly this,
@@ -43,7 +43,7 @@
  *
  *   3. The anti-false-green body gate on 200 (mirroring `extractIdentity`'s
  *      `name`-gate / `extractSearchResult`'s array-gate — complete-work-is-stub-free):
- *        200 { ucp, products: [] }             → ok + empty list   (a VALID all-missed,
+ *        200 { products: [] }                  → ok + empty list   (a VALID all-missed,
  *                                                 distinct from the no-array fault)
  *        200 with NO usable top-level `products` array (partial / garbage / `{stub:true}`)
  *                                              → retryable, NEVER ok (the false-green guard:
@@ -170,16 +170,13 @@ const PRODUCT_B = {
   source: "uplift",
 };
 
-/** Wrap a `CatalogLookupResult` in the FLAT UCP envelope sil-api actually emits —
- * `withUcpMeta(body) → { ucp, ...body }` (sil-services `.../sil-api/src/envelope.ts`):
- * the result body's fields (`products`, `messages`) sit at the TOP LEVEL beside `ucp`,
- * NOT under a `result` wrapper. The `result` arg here IS a CatalogLookupResult object
- * whose keys are spread onto the envelope. A non-object `result` is spread as nothing
- * (the flat body then carries only `ucp`) — exactly the malformed/garbage case the
- * anti-false-green gate must still reject. */
+/** Wrap a `CatalogLookupResult` in the FLAT body sil-api actually emits — the result
+ * body's fields (`products`, `messages`) sit at the TOP LEVEL, NOT under a `result`
+ * wrapper. The `result` arg here IS a CatalogLookupResult object whose keys are spread
+ * onto the body. A non-object `result` is spread as nothing (the body is then empty) —
+ * exactly the malformed/garbage case the anti-false-green gate must still reject. */
 function envelope(result: unknown): unknown {
   return {
-    ucp: { version: "0.1", status: "success" },
     ...(result !== null && typeof result === "object" ? (result as Record<string, unknown>) : {}),
   };
 }

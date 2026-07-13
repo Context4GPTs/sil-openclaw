@@ -79,15 +79,14 @@ function seedTokens(access = "stored-at", refresh = "stored-rt"): void {
   );
 }
 
-/** A 200 real lookup envelope (one product whose featured variant carries the
+/** A 200 real lookup body (one product whose featured variant carries the
  * required `inputs`), so a forwarded request resolves cleanly to `ok`. The FLAT
- * sil-api shape (`{ ucp, products }` — top level, no `result` wrapper;
- * `withUcpMeta(body)`), the only shape sil-api emits. */
+ * sil-api shape (`{ products }` — top level, no `result` wrapper), the only shape
+ * sil-api emits. */
 function okEnvelopeFetch(): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(
       JSON.stringify({
-        ucp: { version: "0.1", status: "success" },
         products: [
           {
             id: "gid://product/a",
