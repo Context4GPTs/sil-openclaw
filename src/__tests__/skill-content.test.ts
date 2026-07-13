@@ -696,6 +696,62 @@ describe("references/method_and_prds.md — Beat 2: method load (hot path) vs re
     expect(coinedRawNow).toBe(true);
   });
 
+  it("MINT coins CONVERGENCE-FRIENDLY — reuse-your-own-name (one concept, one spelling), the CONVENTIONAL name for a common concept, framed by the all-fields WHY + the corroborating `description`", () => {
+    // CARD advise-spec-convergence-in-shopper-skill — the PROACTIVE convergence-aid
+    // coining discipline #57 did NOT ship. #57 taught the agent to REACT to `sil_specs`
+    // (adopt the canonical `ns.key` it returns); this pins how to COIN so the
+    // dedupe-or-create returns `matched` (converged) instead of forking a fresh
+    // `created` row. ADD-ONLY on the MISS assertion above — leaves #57's
+    // canonicalize-before-persist + the ten-tool pins byte-for-byte intact.
+    //
+    // Every anchor below is NET-NEW (grep-0 across the whole sil-shopping bundle
+    // today: conventional / "one concept" / display_name / data_type / namespace /
+    // precision-first / "all fields" / corroborat), so this is genuinely RED until the
+    // convergence-aid prose lands — it CANNOT false-green off #57's pre-existing
+    // `matched` / `converge` / `synonym` / `description`(word) mentions.
+    const body = methodPrdsLower();
+
+    // AC#1 — reuse your OWN coined name for a concept across domains (one concept, one
+    // spelling): keep the same coined SpecDefinition fields (display_name + data_type,
+    // the real frozen-wire tokens) rather than re-spelling the concept per domain.
+    const oneConceptOneSpelling =
+      body.includes("one concept") ||
+      body.includes("reuse the same") || body.includes("reuse your") ||
+      (body.includes("consistent") && (body.includes("across") || body.includes("every")));
+    expect(oneConceptOneSpelling).toBe(true);
+    const reusesTheCoinedFields = body.includes("display_name") && body.includes("data_type");
+    expect(reusesTheCoinedFields).toBe(true);
+
+    // AC#2 — a common/widely-shared concept it has NOT coined before takes the
+    // CONVENTIONAL name, not an idiosyncratic personal synonym.
+    const conventionalForCommon =
+      body.includes("conventional") &&
+      (body.includes("common") || body.includes("widely") || body.includes("shared"));
+    expect(conventionalForCommon).toBe(true);
+
+    // AC#2 (the WHY) — convergence keys on EVERY spec field agreeing within a `namespace`
+    // + `data_type` (precision-first), so consistent + conventional naming is the lever
+    // that tips a coin to `matched` instead of a fresh fragment. Determiner-tolerant
+    // (every/each field · all its/their/the fields) so a benign reword survives; the
+    // "all…fields / every field" phrase is net-new (grep-0 in HEAD) → still RED there.
+    const allFieldsWhy =
+      (/(?:every|each) (?:coined |spec )?field/.test(body) ||
+        /all (?:its |their |the |of its |of their )?(?:coined |spec )?fields/.test(body)) &&
+      (body.includes("namespace") || body.includes("precision-first") || body.includes("precision first"));
+    expect(allFieldsWhy).toBe(true);
+
+    // AC#3 — carry a concept-naming `description` as the load-bearing CORROBORATOR (the
+    // signal that merges true synonyms, and the veto that keeps distinct concepts apart).
+    // `corroborat*` is net-new (grep-0 in HEAD); the fallback still requires the
+    // `description` FIELD framed by a merge/veto role, never bare "description".
+    const corroboratingDescription =
+      body.includes("corroborat") ||
+      (body.includes("description") &&
+        (body.includes("veto") || body.includes("merge true synonym") ||
+          body.includes("distinguish") || body.includes("disambiguat")));
+    expect(corroboratingDescription).toBe(true);
+  });
+
   it("mints via `sil_learn create` (target method), NOT the setup-only sil_profile_materialize (no domain-mint on materialize)", () => {
     const body = methodPrdsLower();
     // The mint verb is sil_learn create — the old materialize-with-a-domain-object mint is DELETED.
