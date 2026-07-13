@@ -623,12 +623,6 @@ describe("searchCatalog — transport failure maps to retryable without leaking 
  *   buildSearchBody sets ONE `filters.specs` = the predicate array (verbatim, `hard`
  *   kept) and forwards `body.query` = `params.query` UNCHANGED. The exact mappings
  *   below ARE the immutable spec.
- *
- * EXPECT RED today: the current impl still FOLDS positive predicate values into
- * `body.query` (`renderSpecQuery`/`renderSpecTokens`/`POSITIVE_SPEC_OPS`). Every
- * "query untouched by specs" assertion below fails until that fold is deleted; the
- * `filters.specs` placement/verbatim/hard assertions already pass and stay as forward
- * guards.
  */
 describe("searchCatalog — specs ride ONE namespaced filters.specs key (whole-body equality, never spread)", () => {
   let cap: Captured[];
@@ -644,7 +638,7 @@ describe("searchCatalog — specs ride ONE namespaced filters.specs key (whole-b
     // object, holding the predicate array VERBATIM. The agent's `query` ("gloves")
     // survives byte-for-byte: a plugin that folded the positive ops (eq/gte/lte/in)
     // would append "black"/"10000mm"/"500"/"leather"/"suede" and this equality would
-    // FAIL — which is exactly the RED that the pure-transport rewrite must green.
+    // FAIL — the guard against any future re-introduction of a fold.
     const specs: SpecPredicate[] = [
       { ns: "product", key: "color", op: "eq", value: "black", hard: true },
       { ns: "product", key: "size", op: "neq", value: "xs" },
@@ -730,11 +724,10 @@ describe("searchCatalog — specs ride ONE namespaced filters.specs key (whole-b
 
 /**
  * PURE TRANSPORT (founder scope revision 2026-07-13): `specs` NEVER touch `body.query`.
- * The plugin forwards the agent's free-text VERBATIM; folding requirements into search
- * text is the agent's job (sil-shopping loop, Beat 4). These assertions are the RED
- * floor against the current fold implementation — each one fails while
- * `renderSpecQuery` still appends positive predicate values, and greens once the fold
- * is deleted and `body.query` reverts to forwarding `params.query` unchanged.
+ * The plugin forwards the agent's free-text VERBATIM; authoring search text from the
+ * requirements is the agent's job (sil-shopping loop, Beat 4). Every assertion below
+ * pins that invariant: `body.query` is byte-exactly `params.query`, and a specs-only
+ * request synthesizes no `query` key.
  */
 describe("searchCatalog — specs are PURE TRANSPORT: body.query is the agent's query VERBATIM, untouched by any predicate", () => {
   let cap: Captured[];
@@ -782,9 +775,9 @@ describe("searchCatalog — specs are PURE TRANSPORT: body.query is the agent's 
   });
 
   it("a MIX of positive and negation predicates leaves the query byte-exactly the agent's — no token added, removed, or reordered", async () => {
-    // The general invariant in one shot: positive ops (which the old fold appended)
-    // and negations (which it excluded) both leave `body.query` identical to
-    // `params.query`. Byte-exact equality catches an add, a drop, and a reorder alike.
+    // The general invariant in one shot: positive ops and negations alike leave
+    // `body.query` identical to `params.query`. Byte-exact equality catches an add,
+    // a drop, and a reorder alike.
     await searchCatalog(SIL_API, "tok", {
       query: "waterproof running shoes",
       specs: [
@@ -796,19 +789,18 @@ describe("searchCatalog — specs are PURE TRANSPORT: body.query is the agent's 
     });
     expect(outboundQuery()).toBe("waterproof running shoes");
     const q = outboundQuery()!.toLowerCase();
-    // The excluded values were never surfaced (the old fail-worse hazard) …
+    // Negation values never enter the query …
     expect(q).not.toContain("pink");
     expect(q).not.toContain("accaltd");
-    // … and no positive value was appended either — pure transport.
+    // … and no positive value either — pure transport.
     expect(q).not.toContain("512");
     expect(q).not.toContain("10000");
   });
 
   it("query ABSENT + only a POSITIVE spec → the `query` key is OMITTED — specs NEVER synthesize a query", async () => {
-    // The critical case the pure-transport rewrite must green: the old fold synthesized
-    // a `query` string ("512") from a specs-only request. The plugin must NOT — with no
-    // agent free-text there is no query to forward, so the key is absent. The predicate
-    // still rides filters.specs, so the constraint is not lost.
+    // With no agent free-text there is no query to forward, so the `query` key is
+    // absent — a specs-only request never synthesizes one. The predicate still rides
+    // filters.specs, so the constraint is not lost.
     await searchCatalog(SIL_API, "tok", {
       specs: [{ ns: "product", key: "capacity_gb", op: "eq", value: 512 }],
     });
@@ -819,8 +811,8 @@ describe("searchCatalog — specs are PURE TRANSPORT: body.query is the agent's 
   });
 
   it("query ABSENT + only negation/exists predicates → the `query` key is OMITTED, predicates still ride filters.specs", async () => {
-    // Forward guard (green today, must stay green): no agent free-text and nothing a
-    // fold would ever have rendered → no `query` key conjured, predicates preserved.
+    // No agent free-text → no `query` key conjured; the predicates still ride
+    // filters.specs, preserved.
     await searchCatalog(SIL_API, "tok", {
       specs: [
         { ns: "product", key: "color", op: "neq", value: "red" },
