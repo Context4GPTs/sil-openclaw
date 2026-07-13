@@ -10,6 +10,46 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Changed
+
+- **Spec-Driven Shopping rebuilt around a frontmatter-as-truth store and a
+  six-beat loop (Phase 1).** The shopper's behaviour store is recast: the
+  `profile.json` manifest and the `domain_spec`/`intent_spec`/`playbook` triple
+  are **deleted** (no backwards compatibility — old flat packs read `unreadable`),
+  replaced by a filesystem-scanned layout `shopper/{user_spec.md,
+  domains/<slug>/{method.md, prds/<product>-<intent>.md, assets/}}` where each
+  file's own frontmatter IS the source of truth. Discovery is a scan, not an index
+  read; a file with malformed frontmatter is skipped and surfaced as `unreadable`,
+  never half-read. `sil_profile_materialize` is now **setup-only** (it writes the
+  shared `user_spec.md`, its frontmatter carrying the shopper name, and mints no
+  domain); `sil_profile_get` / `sil_profile_remove` take `domainSlug` + optional
+  `prd` selectors (read one body / remove a whole domain or one PRD). The bundled
+  `sil-shopping` skill is rewritten as the **six-beat** loop — classify → method →
+  fill → search-space → reflect → feedback — across new `references/shop_loop.md`,
+  `method_and_prds.md`, and `fill_and_feedback.md` (the `manage_domains.md` /
+  `refine_shopper.md` references are retired).
+
+### Added
+
+- **`sil_learn` — one `target + change` write verb (5 kinds).** Replaces
+  `sil_remember`: `create` mints a whole method/PRD; `append` / `amend` / `retract`
+  refine a section-aware markdown body in place (single-occurrence match,
+  fail-closed); `attach-asset` persists image bytes into the domain's `assets/`
+  (owner-only, content-hashed) and links them by relative path. Targets
+  `user_spec` / `method` / `prd`; `hard` marks an inviolable constraint on
+  `user_spec`/`prd` appends.
+- **`sil_profile_search` — the frontmatter-as-truth discovery tool.** Queries
+  artefact frontmatter and returns coordinates only (domains + PRDs, no bodies) —
+  the reuse-before-mint primitive that replaces the deleted manifest's index role;
+  malformed artefacts surface in an observable `unreadable[]`, never silently
+  dropped. Tool floor 8 → 9.
+
+### Removed
+
+- **`sil_remember`** (renamed to `sil_learn` — no alias) and the `profile.json`
+  manifest machinery. The two operator bins now read the singleton from the
+  `user_spec.md` frontmatter, not the manifest.
+
 ## [0.3.9] - 2026-07-10
 
 ### Added

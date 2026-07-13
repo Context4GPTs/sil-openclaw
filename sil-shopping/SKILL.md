@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use for any sil shopping, identity, or shopper-setup intent: register or sign in, check the account, search the sil catalog for purchasable products, or look up products by id — plus the single-shopper lifecycle: create the shopper (a short two-touchpoint onboarding), search what it knows or which domains (niches) it has learned, view or forget a domain, refine it — or, as the shopper, run a Spec-Driven Shopping query on any niche and learn a fact or buying taste it surfaces. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, and sil_learn.'
+description: 'Use for any sil shopping, identity, or shopper-setup intent: register or sign in, check the account, search the sil catalog for purchasable products, or look up products by id — plus the single-shopper lifecycle: create the shopper (a short two-touchpoint onboarding), search what it knows or which domains (niches) it has learned, view or forget a domain or one of its PRDs, refine it — or, as the shopper, run the six-beat Spec-Driven Shopping loop on any niche and learn a fact or buying taste it surfaces. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, and sil_learn.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -10,9 +10,9 @@ metadata:
 
 Drive the sil plugin's tools on the user's behalf: register them, read their
 identity, help them find purchasable products — and, when asked, set up their
-**shopper** (one sil-wired agent that shops every niche), then see what it knows,
-view or forget a domain, or refine it. Read intent, route to the matching tool
-(loading its reference on demand), call it, and report what came back.
+**shopper** (one sil-wired agent that shops every niche), then search what it
+knows, view or forget a domain, or refine it. Read intent, route to the matching
+tool or reference (loading it on demand), call it, and report what came back.
 
 ## Always-on contract
 
@@ -36,34 +36,33 @@ route to `sil_register`, or run `sil_register` up front when intent requires it.
 ## Routing — read the stage, then match intent to a tool
 
 **Read the stage from state — never guess it.** Two cheap reads settle it:
-`sil_whoami` (is a sil identity **registered** yet?) and the no-arg
-`sil_profile_get` overview (its **`name` field** is the whole discriminator —
-present only once a shopper exists).
+`sil_whoami` (is a sil identity **registered** yet?) and `sil_profile_search` (is
+a shopper set up — does it return any `domains`?).
 
 - **No identity** ⇒ guide the user to register.
-- **`name` absent ⇒ profile-less stage** — bare shopping is a first-class quick
-  lookup; the setup path is offered alongside it.
-- **`name` present ⇒ shopper stage** — shop through what you know about the person.
+- **No shopper / no domains** ⇒ bare shopping is a first-class quick lookup; the
+  setup path is offered alongside it.
+- **Shopper present** ⇒ shop through what you know about the person via the loop.
 
 [`references/setup_onboarding.md`](references/setup_onboarding.md) owns the setup
 script — the staged ladder, the after-register offer, the per-search pitch. Load
 it while setup is incomplete; it sheds once a shopper exists.
 
-### Intent → tool (load the reference on demand)
+### Intent → tool / reference (load on demand)
 
-| Intent | Tool | Reference |
+| Intent | Tool / path | Reference |
 |---|---|---|
 | "sign me up" / "log me in" / "register" | `sil_register` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
 | "who am I?" / show my saved name + addresses | `sil_whoami` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
 | "find X" / "search for X" / browse a category or price range | `sil_search` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
 | "look up these items" / re-check ids from a prior result | `sil_product_get` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
 | "set up an agent that shops for me" / "create my shopper" | (onboarding, then the engine) | the two-step below |
-| "what does my shopper know?" / "which domains / PRDs has it learned?" | `sil_profile_search` | [`manage_domains.md`](references/manage_domains.md) |
-| "show me the &lt;niche&gt; domain" (method or one PRD) | `sil_profile_get` (`domainSlug`, `prd?`) | [`manage_domains.md`](references/manage_domains.md) |
-| "forget the &lt;niche&gt; domain" (or one PRD) | `sil_profile_remove` | [`manage_domains.md`](references/manage_domains.md) |
-| (as the shopper) a shopping intent on any niche | `sil_search` → `sil_product_get` | [`shop_loop.md`](references/shop_loop.md) |
-| "learn this" — a fact or taste the shopper surfaced | `sil_learn` | [`shop_loop.md`](references/shop_loop.md) |
-| "refine / sharpen my shopper" / fix a niche | (load → propose → confirm → persist) | [`refine_shopper.md`](references/refine_shopper.md) |
+| "what does my shopper know?" / "which domains / PRDs?" | `sil_profile_search` | [`method_and_prds.md`](references/method_and_prds.md) |
+| "show me the &lt;niche&gt; domain" (method or one PRD) | `sil_profile_get` | [`method_and_prds.md`](references/method_and_prds.md) |
+| "forget the &lt;niche&gt; domain" (or one PRD) | `sil_profile_remove` | [`method_and_prds.md`](references/method_and_prds.md) |
+| (as the shopper) a shopping intent on any niche | the six-beat loop | [`shop_loop.md`](references/shop_loop.md) |
+| "learn / remember this" — a fact or taste the shopper surfaced | `sil_learn` | [`fill_and_feedback.md`](references/fill_and_feedback.md) |
+| "refine / sharpen my shopper" / fix a niche | `sil_learn` (target + change) | [`fill_and_feedback.md`](references/fill_and_feedback.md) |
 
 [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md)
 holds the per-tool behaviour + status taxonomy — basic shopping needs only that.
@@ -81,38 +80,27 @@ assembled draft, run
 engine that persists the one sil-wired shopper. No engine step runs before that
 endorsement.
 
-### Profile-less stage — the bare lane stays bare
+## As the shopper — the six-beat Spec-Driven-Shopping loop
 
-**`name` absent.** A shopping intent takes the "find X" → `sil_search` row above
-**unchanged** — no domain check, no mint, no pre-search question. Bare search is a
-legitimate quick lookup; the only nudge is the profile-less per-search pitch
-([`references/setup_onboarding.md`](references/setup_onboarding.md)).
+Once a shopper exists, shop through what you know about the person. The loop is a
+**six-beat** state machine — **classify → method → fill → search-space → reflect →
+feedback** — and its detail lives in the references that own each beat, loaded on
+demand:
 
-### Shopper stage — shop through what you know
+1. **Classify** the request's `{domain, product, intent}` and reuse a learned
+   domain/PRD before minting — [`references/shop_loop.md`](references/shop_loop.md).
+2. **Method** load (hot path) or research-and-mint, then intent-keyed PRDs and the
+   frontmatter-as-truth store — [`references/method_and_prds.md`](references/method_and_prds.md).
+3. **Fill** the PRD by precedence, eliciting only the residue —
+   [`references/fill_and_feedback.md`](references/fill_and_feedback.md).
+4. **Search-space** — the bounded fan-out —
+   [`references/shop_loop.md`](references/shop_loop.md).
+5. **Reflect** on best-available vs the PRD —
+   [`references/shop_loop.md`](references/shop_loop.md).
+6. **Feedback** — capture what surfaced via `sil_learn` —
+   [`references/fill_and_feedback.md`](references/fill_and_feedback.md).
 
-**`name` present.** As the shopper, shop through what you know about the person:
-classify the query's niche and **reuse a learned domain or mint one before
-searching** — the shop loop's first beat — then follow
-[`references/shop_loop.md`](references/shop_loop.md), the profile-driven
-**Spec-Driven Shopping** loop that web-refreshes the domain, decomposes the
-request, and persists each surfaced fact or taste with a single `sil_learn`.
-
-- **An empty `domains` map means no niche yet:** the first shopping intent **mints
-  the domain before searching**, **announced** with the inferred niche stated so
-  the user can correct it — never a silent mint.
-
-This shapes the shopper's **reasoning, not the user's inbox**: a reused domain plus
-a fully-resolved query **passes straight through, asking nothing**. It scopes to
-`sil_search`-driven product discovery only — identity (`sil_register` /
-`sil_whoami`), a direct `sil_product_get` id re-check, and shopper-management
-intents (view / forget a domain) route normally, **ungated**.
-
-**Per-query self-check (prose, not a tool).** As you shop, keep track of which
-beat you're on and that you resolved the domain before searching — an in-context
-guardrail, not a new tool, table, or telemetry surface.
-
-Management + refinement load on demand:
-[`references/manage_domains.md`](references/manage_domains.md) (view/forget,
-confirm-before-remove) and
-[`references/refine_shopper.md`](references/refine_shopper.md) (sharpen from observed
-sessions, confirm-before-persist).
+The loop shapes the shopper's **reasoning, not the user's inbox**: a reused domain
+plus a fully-resolved request **passes straight through, asking nothing**. It
+scopes to `sil_search`-driven discovery — identity, a direct `sil_product_get`
+re-check, and shopper-management route normally, ungated.

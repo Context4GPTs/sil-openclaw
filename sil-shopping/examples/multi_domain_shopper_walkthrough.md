@@ -1,118 +1,56 @@
 ---
 name: multi-domain-shopper-walkthrough
-description: Worked end-to-end example — create one shopper, then shop two unrelated niches in one session with a shared fact reused across both and per-domain taste kept isolated.
+description: A worked six-beat, multi-domain run — create one shopper (after an explicit endorsement), then shop two unrelated niches in one session, the second minted on the fly and announced, with a shared user_spec fact reused across both. Illustrative, not a spec.
 ---
 
-# Worked example — one shopper, two unrelated niches, one session
+# Worked run — one shopper, two niches, six beats
 
-The headline: create **one shopper**
-([`../references/brainstorm_interview.md`](../references/brainstorm_interview.md) →
-[`../references/agent_creation_engine.md`](../references/agent_creation_engine.md)), then
-shop **two unrelated niches in the same session** — the second **minted on the fly** —
-with a **shared fact reused across both** and **per-domain taste that does not leak**. It
-shows the shape and the gates, not exact wording; the machinery lives in the references.
+A concrete end-to-end walkthrough of the six-beat loop across two unrelated
+niches. It is illustrative — the authoritative rules live in the beat references.
 
-## Onboarding — two touchpoints, no niche research
+## Create the shopper (once, after endorsement)
 
-> **User:** "Set up something that shops for me."
+The two-touchpoint interview assembles a draft persona + a shared user-spec seed.
+Only after the user **endorses** the assembled draft does the engine run
+`openclaw agents add` and materialize the shared `user_spec.md`. Nothing is created
+before that endorsement. The result is **one** shopper — a **singleton**.
 
-A **generalist** — onboarding touches only the persona and the shared user spec, no niche.
+The seeded shared spec already holds one durable fact: `- [hard] ships to Berlin;
+allergic to wool` — a cross-niche fact, kept in `user_spec` because it stays true in
+**every niche**.
 
-> **Shopper:** "How do you want it to behave?"
-> **User:** "Concise and a bit opinionated — never recommend anything with leather, it's
-> an ethics thing."
-> **Shopper:** "Anything I should always know — sizes, where to ship, hard rules?"
-> **User:** "Ship to 12 Rue Centrale, Lyon, France. The no-leather rule is absolute."
+## Niche A — ski gloves (all six beats)
 
-→ persona (→ host `SOUL.md`): *concise, lightly opinionated generalist.* Shared
-`userSpec`: *ship-to Lyon (soft fact); **HARD-NO: leather** (inviolable, carries across
-every niche).*
+1. **Classify** — the request "warm gloves for the slope" resolves to
+   `{ domain: ski, product: gloves, intent: slope }`. `sil_profile_search` finds no
+   ski domain yet → a MISS.
+2. **Method** — research ski gear and **mint** the method via `sil_learn create`,
+   **announced** ("I read this as *ski gloves for the slope* — correct me if not").
+3. **Fill** — precedence resolves waterproofing and cuff length from the method;
+   the wool allergy is **reused** from the **shared** `user_spec` **without
+   re-asking**. Only the budget is elicited — one question, tied to why.
+4. **Search-space** — a bounded fan-out of ≤ 4 `sil_search` calls, core first.
+5. **Reflect** — honesty pass, then a **hero + one alternative**, each with a why.
+6. **Feedback** — the buyer reacts "I always run Hestra" → confirm, then persist a
+   durable per-domain taste to the method via **`sil_learn`**.
 
-## Assemble + endorse
+## Niche B — an espresso grinder (same session, minted on the fly)
 
-```jsonc
-{
-  "agentId": "my-shopper", "name": "My Shopper",
-  "persona": "A concise, lightly opinionated generalist shopper.",
-  "userSpec": "### Soft facts\n- Ship-to: 12 Rue Centrale, Lyon, France.\n### Hard constraints (INVIOLABLE — every niche)\n- HARD-NO: leather (ethics)."
-}
-```
+In the **same session** the user pivots: "now I need a burr grinder." This is a
+**second niche**, **unrelated** to ski gear. No agent switch — the one shopper
+handles it:
 
-> **Shopper:** "Here's your shopper — shall I create it?"  **User:** "Yes, create it."
+1. **Classify** → `{ domain: espresso, product: grinder, intent: general }` (a
+   context-free request keys `general`).
+2. **Method** — a MISS again → research + **mint on the fly**, **announced**.
+3. **Fill** — the "ships to Berlin" fact is again **reused across** niches from the
+   **shared** `user_spec`, **kept from** the ski session — never re-asked. The
+   Hestra taste, being per-domain on the ski method, does **not** leak here.
 
-**This affirmative act is the gate** — up to here, zero engine steps ran. Only now does
-the engine run — `openclaw agents add my-shopper …` → persona into `SOUL.md` →
-`sil_profile_materialize { name, userSpec }` (no `domain`; writes the shared
-`user_spec.md` + an empty `domains: {}`) → wire + admit sil → validate → **`created`**,
-with an **empty `domains` map** (healthy; each niche mints on first shop).
+The two niches coexist: shared facts flow to both; per-domain taste stays isolated.
 
-## Niche A — road cycling (minted on the fly, announced)
+## The singleton edge
 
-> **User:** "Find me a first road bike, around €1500."
-
-The shop loop classifies the niche (**road cycling**), finds no match, and **mints it on
-the spot — announced** ("I haven't shopped cycling for you yet — setting that up"). It
-researches a deep `domainSpec` (fit is everything; geometry; gearing; material/wheel
-trade-offs), derives the `intentSpec`, seeds a partial `playbook`, and persists with the
-whole-doc `sil_profile_materialize` carrying `domain.slug: "road-cycling"`. It recommends
-with a **"why" that cites the layers** — "for a first bike **fit/comfort outrank outright
-speed** (a domain mechanic), a 54 cm endurance frame fits, kept within your value budget;
-**no leather anywhere** (your standing hard rule)."
-
-A taste surfaces, captured the cheap way — one append, scoped to this domain:
-
-> **User:** "I don't chase brands — value over name."
-
-```
-sil_remember { kind: "taste", text: "Value over brand; ~€1500 band.", domain: "road-cycling" }
-```
-
-→ lands in `domains/road-cycling/playbook.md` only.
-
-## Niche B — espresso (a second niche, same session, no switch)
-
-> **User:** "Different thing — a home espresso machine, decent but not crazy."
-
-Same session, **no agent switch, no re-onboarding**. The loop classifies **espresso**,
-finds no match, and **mints espresso on the fly — announced**, with its own deep
-`domainSpec` (boiler type, PID, pressure profiling, grinder pairing) via a second
-whole-doc `sil_profile_materialize` (`domain.slug: "espresso"`).
-
-**The shared fact carries — without being re-asked:** the ship-to from the shared
-`user_spec.md` is reused in espresso with **no re-ask** ("I'll ship to your Lyon address
-as usual"), and the no-leather hard rule still rejects a leather-wrapped tamper handle.
-
-**The niche taste does not leak:** the *value-over-brand* taste lives in
-`domains/road-cycling/playbook.md` and does not shape the espresso picks — espresso learns
-its own:
-
-> **User:** "For coffee I'll happily pay for a known reliable brand."
-
-```
-sil_remember { kind: "taste", text: "Pays up for a reliable known brand.", domain: "espresso" }
-```
-
-→ `domains/espresso/playbook.md` only. The two tastes coexist without contradiction —
-per-domain taste isolation. A **fact** would instead go to the shared `user_spec.md`
-(`kind: "fact"`) and carry to *both* niches.
-
-## The singleton edge — refuse a second shopper
-
-> **User:** "Can you make me a second shopper just for coffee?"
-> **Shopper:** "You already have a shopper — it handles every niche. I've added espresso
-> as a domain; I won't create a second. Want me to refine the espresso domain instead?"
-
-The engine's **singleton refusal** (`collision`, "a shopper already exists") — one
-shopper, many domains.
-
-## Edge cases this example would have handled
-
-- **Reuse before mint** — "another road bike, for winter" reuses the existing
-  `road-cycling` domain (semantic dedup), never a near-duplicate pack.
-- **Forget one domain ≠ decommission the shopper** — "forget espresso" runs
-  `sil_profile_remove { domainSlug: "espresso" }`; the shopper, shared user spec, and
-  road-cycling domain survive.
-- **No web tool** — the shopper says so honestly at mint time and composes from public
-  knowledge, never pretending the research happened.
-- **Creation is local + offline** — no sil registration to create; the user registers
-  later, on first shop.
+If the user later says "set me up a second shopper," the engine refuses: **a
+shopper already exists**. Steer them to shop a new niche (it mints a domain on the
+spot) or refine the existing one with `sil_learn` — never a second shopper.

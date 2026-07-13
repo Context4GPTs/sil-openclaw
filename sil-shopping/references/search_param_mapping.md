@@ -12,24 +12,25 @@ Load this at shop time, when the shop loop maps a decomposed request into a
 **The param catalog lives in the `sil_search` tool description** — the full list and
 their forms (`query`/`category`; `price_min`/`price_max` in the currency's ISO 4217
 minor unit; `condition` = `["new"]`/`["secondhand"]`; `available`; `local_merchants`;
-`ship_to` as ISO codes). Read it there; do not restate it here. Under SDS there is no
-stored "answer→param" seller artefact — *what* to search on for a niche lives in the
-active domain's `domain_spec.md`; this reference covers only the SDS layers that feed
-the mapping and the two rules the mapping must hold.
+`ship_to` as ISO codes). Read it there; do not restate it here. There is no stored
+"answer→param" seller artefact — *what* to search on for a niche lives in the active
+domain's **method**; this reference covers only the SDS layers that feed the mapping and
+the two rules the mapping must hold.
 
 ## What feeds the mapping — the SDS layers
 
-The mapping reads several layers, not just the user's words for this request:
+The mapping reads several layers, not just the user's words for this request (the fill
+precedence — see [`fill_and_feedback.md`](fill_and_feedback.md) — is
+**request-intent > PRD filled-pref > method taste > user_spec fact > method default**):
 
-- The **decomposed per-query intent** (the active `intent_spec.md` filled for this
-  request — ephemeral) is most specific and wins for *preferences* (precedence
-  **intent > playbook(domain) > user_spec(SHARED) > domain_spec(domain)**).
-- The **shopping taste** (the active `playbook.md`) supplies standing preferences for
-  *this niche* — a budget band → `price_min`/`price_max` exactly like a freshly-stated
-  answer, but **never re-asked**. Taste is per-domain.
+- The **filled PRD** for this job is most specific and wins for *preferences* — its
+  filled answers map onto params exactly like a freshly-stated answer, but **never
+  re-asked**.
+- The buyer's durable per-domain **taste** (in the **method**) supplies standing
+  preferences for *this niche* — a budget band → `price_min`/`price_max`.
 - The **shared user spec** (`user_spec.md`) supplies standing **facts** and the **hard
   constraints**, reused across **every** niche — a fact maps to a param like any answer.
-- The **domain spec** supplies the niche's decision-mechanics — which attributes are
+- The **method** supplies the niche's decision-mechanics — which attributes are
   load-bearing here — so the mapping knows what to map and what matters.
 
 These layers are inputs to the same params, not new params. A stated taste with **no
