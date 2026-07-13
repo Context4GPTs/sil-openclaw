@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-13
+
 ### Changed
 
 - **Spec-Driven Shopping rebuilt around a frontmatter-as-truth store and a

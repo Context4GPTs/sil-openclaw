@@ -2,7 +2,7 @@
   "id": "sil",
   "name": "sil",
   "description": "Turn your OpenClaw into an expert shopping agent.",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "skills": ["./sil-shopping"],
   "activation": {
     "onCapabilities": ["tool"]
