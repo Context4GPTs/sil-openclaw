@@ -3054,7 +3054,6 @@ describe("sil_search — all-applied:false is a NORMAL success with an OBSERVABL
   /** The REAL flat sil-api envelope + a top-level `specs_status` sibling of `products`. */
   function envelopeWithSpecsStatus(products: unknown[], specs_status: unknown): unknown {
     return {
-      ucp: { version: "0.1", status: "success" },
       products,
       pagination: { has_next_page: false },
       specs_status,

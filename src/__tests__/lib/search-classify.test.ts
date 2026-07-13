@@ -1077,7 +1077,7 @@ describe("classifySearchResponse — specs_status narrowing: no fabrication, dro
     // signal can never manufacture a false empty-match success.
     const out = classifySearchResponse(
       200,
-      { ucp: { version: "0.1", status: "success" }, specs_status: [{ ns: "p", key: "k", applied: false }] },
+      { specs_status: [{ ns: "p", key: "k", applied: false }] },
     );
     expect(out.kind).not.toBe("ok");
     expect(out.kind).toBe("retryable");
