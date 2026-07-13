@@ -30,8 +30,8 @@ and its single next step**.
    correct it. Next: state a shopping intent.
 4. **Shopper active** — `name` present, `domains` non-empty. Check off the completion
    **milestones**: the **first domain created** (`domains` now non-empty) and, softer, that
-   the memory tool has been used (`sil_remember` stored a fact or taste — a soft self-check
-   judged from whether this shopper has ever remembered anything).
+   the learn tool has been used (`sil_learn` stored a fact or taste — a soft self-check
+   judged from whether this shopper has ever learned anything).
 5. **Setup complete** — a shopper with at least one domain. **Shed** every onboarding beat:
    none of the stages above apply. **Show only how to use** the plugin well — the
    **domain-gated shop loop** and **Spec-Driven Shopping** ([`shop_loop.md`](shop_loop.md)).

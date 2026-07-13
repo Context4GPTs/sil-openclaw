@@ -16,8 +16,9 @@
  *
  *   created            — a valid spec + no shopper + a validating host config ⇒
  *                        host agent added, SOUL.md carries the persona, the sil
- *                        artefacts materialized (shared user_spec.md + profile.json
- *                        with an EMPTY `domains: {}` map), the sil skill attached,
+ *                        artefacts materialized (shared user_spec.md whose frontmatter
+ *                        carries the name — frontmatter-as-truth, no manifest, no
+ *                        domain minted at create), the sil skill attached,
  *                        `sil` admitted at ALL THREE allow surfaces, exit 0, the
  *                        result carries name + agentId.
  *   invalid_request    — a bad/blank/malformed spec ⇒ NOTHING attempted (validate-
@@ -473,26 +474,16 @@ function shimLog(): string {
 }
 
 const shopperDir = () => join(dataDir, "shopper");
-const profileJsonPath = () => join(shopperDir(), "profile.json");
 const userSpecPath = () => join(shopperDir(), "user_spec.md");
 
-/** Seed a pre-existing SINGLETON shopper (valid manifest + shared user spec) so the
- * bin's `readAgentProfile()` pre-flight returns a named overview ⇒ collision. */
+/** Seed a pre-existing SINGLETON shopper — user_spec.md whose FRONTMATTER carries the
+ * shopper name — so the bin's `readShopperIdentity()` pre-flight sees a named shopper
+ * ⇒ collision. Frontmatter-as-truth: there is NO profile.json manifest. */
 function seedExistingShopper(): void {
   mkdirSync(shopperDir(), { recursive: true });
-  writeFileSync(userSpecPath(), "# Existing shopper user spec\nships to Berlin\n");
   writeFileSync(
-    profileJsonPath(),
-    JSON.stringify(
-      {
-        name: "Existing Shopper",
-        userSpecPath: userSpecPath(),
-        createdAt: "2026-01-01T00:00:00.000Z",
-        domains: {},
-      },
-      null,
-      2,
-    ) + "\n",
+    userSpecPath(),
+    "---\nname: Existing Shopper\n---\n# Existing shopper user spec\nships to Berlin\n",
   );
 }
 
@@ -515,20 +506,20 @@ describe("created — one valid run wires every surface and returns the identity
     expect(r.stderr.includes("sil_shopper_create_failed")).toBe(false);
   });
 
-  it("materializes the sil artefacts — shared user_spec.md + profile.json with an EMPTY domains map (healthy)", () => {
+  it("materializes the sil artefacts — shared user_spec.md (frontmatter name), NO manifest, NO domains at create", () => {
     writeConfig(freshConfig());
     const spec = validSpec();
     const r = runBin({ spec });
     expect(r.status).toBe(0);
 
-    expect(existsSync(profileJsonPath())).toBe(true);
-    const manifest = JSON.parse(readFileSync(profileJsonPath(), "utf8"));
-    expect(manifest.name).toBe(spec.name);
-    // A fresh shopper has NO domains — an empty map is healthy, not a deficiency.
-    expect(manifest.domains).toEqual({});
+    // Frontmatter-as-truth: the shopper name lives in user_spec.md's own frontmatter.
     expect(existsSync(userSpecPath())).toBe(true);
-    expect(readFileSync(userSpecPath(), "utf8")).toContain(USERSPEC_SECRET);
-    // No per-domain packs authored at create.
+    const userSpec = readFileSync(userSpecPath(), "utf8");
+    expect(userSpec.startsWith("---")).toBe(true);
+    expect(userSpec).toMatch(new RegExp("name:\\s*" + spec.name));
+    expect(userSpec).toContain(USERSPEC_SECRET);
+    // No profile.json manifest anywhere; no per-domain packs authored at create.
+    expect(existsSync(join(shopperDir(), "profile.json"))).toBe(false);
     expect(existsSync(join(shopperDir(), "domains"))).toBe(false);
   });
 
@@ -765,7 +756,7 @@ describe("collision — a shopper already exists (singleton): refuse, write noth
     writeConfig(freshConfig());
     seedExistingShopper();
     const preConfig = readFileSync(configPath, "utf8");
-    const preProfile = readFileSync(profileJsonPath(), "utf8");
+    const preUserSpec = readFileSync(userSpecPath(), "utf8");
 
     const r = runBin({ spec: validSpec() });
 
@@ -780,7 +771,7 @@ describe("collision — a shopper already exists (singleton): refuse, write noth
     expect(shimLog()).not.toContain("agents add");
     // Nothing written: config byte-identical AND the existing shopper untouched.
     expect(readFileSync(configPath, "utf8")).toBe(preConfig);
-    expect(readFileSync(profileJsonPath(), "utf8")).toBe(preProfile);
+    expect(readFileSync(userSpecPath(), "utf8")).toBe(preUserSpec);
   });
 
   it("a second run AFTER a successful created hits the same singleton gate (never a duplicate shopper)", () => {
@@ -1109,7 +1100,7 @@ describe("input channels — the spec arrives via stdin (primary) OR a --spec fi
     const m = parseMarker(r.stdout);
     expect(m["status"]).toBe("created");
     expect(m["agentId"]).toBe("spec-file-shopper");
-    expect(existsSync(profileJsonPath())).toBe(true);
+    expect(existsSync(userSpecPath())).toBe(true);
   });
 });
 

@@ -45,13 +45,13 @@ guarantee holds; the bin legitimately drives `openclaw …` on your behalf.
 |---|---|---|---|
 | **agentId** | Lower-kebab id → `agents.list[].id`. Unique, never `main`. | host | Required |
 | **name** | Human-readable name ("My Shopper"). | sil manifest | Required |
-| **persona** | Who the shopper is / how it shops — a generalist, voice, standing rules. | host **`SOUL.md`** (no `persona.md`) | Required |
+| **persona** | Who the shopper is / how it shops — a generalist, voice, standing rules. | host **`SOUL.md`** (no separate persona file) | Required |
 | **workspace** | The shopper's workspace directory. | host | Required |
 | **userSpec** | The user's **shared, cross-niche** facts + hard constraints. Seeded partial by the interview. | sil `user_spec.md` | **Required** |
 | **channel** | The channel the setup conversation is on — bound to the new shopper. | host `openclaw.json` bindings | **Optional (fail-open)** |
 
-There is **no per-niche input at create** — no `domainSpec` / `intentSpec` / `playbook`;
-those are minted lazily on first shop. The shopper reaches the web to mint and refresh
+There is **no per-niche input at create** — no method and no PRD; those are minted lazily
+on first shop via `sil_learn create`. The shopper reaches the web to mint and refresh
 domains, so the agent needs web/fetch tools (inherited from `agents.defaults`); if
 defaults grant none, the bin reports `created` with a `warnings` entry naming the gap
 (bare `sil_search` still works) — surface it.
@@ -60,11 +60,11 @@ defaults grant none, the bin reports `created` with a `warnings` entry naming th
 
 1. **Validate the spec FIRST** — `agentId` (present, lower-kebab, ≠ `main`), `name`,
    `persona`, `workspace`, and the shared **`userSpec`** (present, non-blank — the only
-   sil artefact at create). No `domainSpec` / `intentSpec` / `playbook` to validate. Any
-   failure stops with **`invalid_request`** naming the field and **writes nothing**, ahead
-   of every host command.
-2. **Singleton check.** Run `openclaw agents list --json` and read the sil store (the
-   no-args `sil_profile_get` overview) **before** the add. If a sil shopper already
+   sil artefact at create). No per-domain method or PRD to validate. Any failure stops with
+   **`invalid_request`** naming the field and **writes nothing**, ahead of every host
+   command.
+2. **Singleton check.** Run `openclaw agents list --json` and read the sil store (whether a
+   shopper `user_spec.md` already exists) **before** the add. If a sil shopper already
    exists, stop with **`collision`** — **"a shopper already exists"** — and do **not** run
    `openclaw agents add`; steer to shop-a-new-niche (lazy mint) or refine — **never mint a
    second shopper**. An `agentId` clashing with any existing agent is likewise
@@ -73,13 +73,14 @@ defaults grant none, the bin reports `created` with a `warnings` entry naming th
    --non-interactive --json` — the real `agents.list[]` entry + workspace bootstrap
    (`SOUL.md`, `AGENTS.md`, …), inheriting model and tool profile from `agents.defaults`.
 4. **Write the persona straight into the workspace `SOUL.md`** (host CLI). The persona is
-   the shopper's soul — the host's `SOUL.md`, not a sil artefact. There is **no**
-   `persona.md` and **no copy** step.
-5. **Materialize the shared user spec — NO `domain`.** Call `sil_profile_materialize {
-   name, userSpec }` (the singleton takes no `agentId`). With no `domain`, it writes the
-   shared **`user_spec.md`** + **`profile.json`** with an **empty `domains: {}` map** into
-   `$SIL_DATA_DIR/shopper/`, atomically. No `domain_spec.md` / `intent_spec.md` /
-   `playbook.md` yet.
+   the shopper's soul — the host's `SOUL.md`, not a sil artefact. There is **no separate
+   persona file** and **no copy** step.
+5. **Materialize the shared user spec — SETUP-ONLY, NO `domain`.** Call
+   `sil_profile_materialize { name, userSpec }` (the singleton takes no `agentId`). It is
+   **setup-only**: it writes the shared **`user_spec.md`** into `$SIL_DATA_DIR/shopper/`,
+   atomically, with the shopper **name in its frontmatter** — there is **no manifest**, and
+   it mints **no method or PRD**. Those are minted lazily on first shop via
+   `sil_learn create`.
 6. **Wire the sil skill + plugin** (host CLI). Asserted against the pinned host
    **`alpine/openclaw:2026.6.9`**, both value-mode sets with `--strict-json` (the only set
    mode this image accepts):
@@ -129,11 +130,11 @@ The bin emits **one** `{ status, … }` result and exits 0 **only** on `created`
 ## Runtime — how the shopper loads its behaviour
 
 When you (the sil skill) start a session as the shopper, the host has already injected the
-persona via **`SOUL.md`**. Then read `$SIL_DATA_DIR/shopper/profile.json` and load the
-shared **`user_spec.md`** (cross-niche facts + hard constraints, reused across every
-niche) and the slug-keyed **`domains`** map — an empty map is healthy; the per-domain
-packs load **lazily at shop time**. Because the `sil_*` tools were admitted at create, the
-shopper calls **`sil_search`** / **`sil_product_get`** (and `sil_register` / `sil_whoami`
-as needed) with **no further setup**, minting each niche on the fly the first time the
-user shops it, per [`shop_loop.md`](shop_loop.md). To sharpen the shopper or a domain, see
-[`refine_shopper.md`](refine_shopper.md).
+persona via **`SOUL.md`**. Load the shared **`user_spec.md`** (cross-niche facts + hard
+constraints, reused across every niche); its frontmatter carries the shopper **name**, and
+`sil_profile_search` scans the domains it has learned — an empty set is healthy, and each
+per-domain method loads **lazily at shop time**. Because the `sil_*` tools were admitted at
+create, the shopper calls **`sil_search`** / **`sil_product_get`** (and `sil_register` /
+`sil_whoami` as needed) with **no further setup**, minting each niche on the fly the first
+time the user shops it, per [`shop_loop.md`](shop_loop.md). To sharpen the shopper or a
+domain, see [`fill_and_feedback.md`](fill_and_feedback.md).

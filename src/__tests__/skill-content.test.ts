@@ -1,45 +1,64 @@
 /**
- * INTEGRATION — single multi-domain SHOPPER skill ↔ registered-tool drift guard
- * (tier: integration — reads the real `sil-shopping/` skill files from disk and
- * compares their bodies against the set of registered tool names and the pinned
- * single-shopper procedure invariants; multiple artifacts interacting across the
- * skill-doc ↔ registration seam and the SKILL.md-router ↔ reference-files seam).
+ * INTEGRATION — the SIX-BEAT Spec-Driven-Shopping skill ↔ registered-tool drift
+ * guard (tier: integration — reads the real `sil-shopping/` bundle from disk and
+ * compares it against the registered tool set + the resolved-fork invariants of the
+ * spec-driven-shopping-redesign design doc).
  *
- * THE MODEL THIS FILE PINS (card: single-shopper-skill-rewrite — Slice 2 of #38):
- * there is ONE persistent **shopper** (a generalist created ONCE) that learns
- * **domains** (niches) LAZILY on first shop. This RETIRES the per-niche **expert**
- * model wholesale (no backwards compat). The skill bundle was renamed +
- * rewritten to drive the shipped single-shopper tool surface:
- *   - `expert_shopping.md`                 → `shop_loop.md`
- *   - `manage_experts.md`                  → `manage_domains.md`
- *   - `refine_expert.md`                   → `refine_shopper.md`
- *   - `road_cycling_expert_walkthrough.md` → `multi_domain_shopper_walkthrough.md`
- *   - `agent_creation_engine.md` / `brainstorm_interview.md` keep their names,
- *     rewritten in place (create ONE shopper, two-touchpoint interview).
+ * Card: spec-driven-shopping-redesign — Phase 1, Step B (the skill half).
+ * THESE ASSERTIONS ARE THE SPEC (RED-first). Step A recast the store to
+ * frontmatter-as-truth and shipped the 9-tool surface (`sil_remember` → `sil_learn`,
+ * NEW `sil_profile_search`). This file pins the skill REWRITE: the sil-shopping
+ * bundle becomes the **six-beat Spec-Driven-Shopping loop**, replacing the
+ * superseded five-beat single-shopper model. It supersedes the old-store prose
+ * wholesale — `profile.json`, `sil_remember`, the `domain_spec/intent_spec/playbook`
+ * triple, and the `intent > playbook > user_spec > domain_spec` precedence are all
+ * DELETED, asserted here by their absence.
  *
- * The tool surface is EIGHT tools (the consolidate-profile-tools-to-the-singleton-
- * surface card folded `sil_profile_list` into `sil_profile_get` and dropped the
- * caller-supplied `agentId`): `sil_register`, `sil_whoami`, `sil_search`,
- * `sil_product_get`, `sil_profile_materialize`, `sil_profile_get`,
- * `sil_profile_remove`, `sil_remember`. Shapes that drive the prose pins:
- *   - `sil_profile_materialize { name, userSpec, domain? }` — NO `domain`
- *     ⇒ create the shopper (writes the SHARED `user_spec.md` + an empty `domains`
- *     map); WITH `domain` ⇒ lazily mint/refresh a niche pack;
- *   - `sil_profile_get { domainSlug? }` — no-args overview (absorbs the deleted
- *     `sil_profile_list`) vs one domain;
- *   - `sil_profile_remove { domainSlug }` — forget ONE domain;
- *   - `sil_remember { kind:"fact"|"taste", text, domain?, hard? }` —
- *     the cheap per-query append (fact → SHARED user spec, taste → active domain).
+ * THE SIX BEATS (design-doc names, § "The loop (state machine)"):
+ *   1. Classify / intent-resolve — three-level `{domain, product, intent}`;
+ *      reuse-before-mint; never over-ask just to key; announce a mint.
+ *   2. Method load / mint / refresh — HIT=load (hot path, no research);
+ *      MISS=research+mint (coin niche vocab, born-canonical via sil_specs where the
+ *      endpoint exists — coined-and-used raw until Phase 3); refresh is
+ *      SIGNAL-DRIVEN (buyer contradiction · overdue volatility marker · explicit
+ *      ask — not TTL, not every revisit); create-with-merge preserves every buyer
+ *      `sil_learn` edit.
+ *   3. Fill — method-driven elicitation to a filled PRD; precedence
+ *      request-intent > PRD filled-pref > method taste > user_spec fact > method
+ *      default; multi-turn until resolved-or-declined (never a battery);
+ *      one-off-vs-standing on a durable conflict; hard constraints inviolable
+ *      (route-to-filter + reject-at-pick); elicited durable answers persist NOW
+ *      (the split — Beat 6 owns the reaction half).
+ *   4. Search-space — project the filled PRD into a BOUNDED ≤4 priority-ordered
+ *      searches, dedup + concatenate in issue order (NOT a re-rank).
+ *   5. Reflect — honesty pass first (reject-at-pick `applied:false` hard
+ *      predicates), then judge best-available vs PRD+method (judgment, not a
+ *      threshold): satisfies → hero + 1–2 justified alternatives (never re-rank);
+ *      shortfall/empty → propose a specific relaxation and WAIT (no silent
+ *      re-search); non-`ok` → follow the tool `recovery`.
+ *   6. Feedback — the reaction half; persist only what newly surfaced (durable AND
+ *      new), per-reaction and confirmed before each write; route by scope
+ *      (fact/hard→user_spec, durable taste→method, this-job→PRD, image→attach-asset);
+ *      append/amend/retract; re-scope = write-broader-then-retract-narrower.
  *
- * THESE ASSERTIONS ARE THE SPEC. Do NOT weaken them to match the markdown — the
- * markdown is rewritten to satisfy them. Anchors are NET-NEW tokens + OR-grouped
- * intent substrings + indexOf ordering on step VERBS — never `§N` numbers, never
- * brittle full sentences. The per-niche-expert negatives match whole-word
- * `\bexperts?\b` (so legitimate "niche expertise" never false-fails).
+ * CANONICAL BUNDLE LAYOUT (this file OWNS it — the expert builds to conform):
+ *   SKILL.md                              lean router (six beats named, session-start
+ *                                         admission, core tools, routes on demand)
+ *   references/catalog_tools_reference.md the 4 core tools + shared status taxonomy
+ *   references/shop_loop.md               the six-beat loop; owns Beat 1, 4, 5
+ *   references/method_and_prds.md         Beat 2 + intent-PRD model + frontmatter-as-truth
+ *                                         store + discovery/manage (search/get/remove)   [NEW]
+ *   references/fill_and_feedback.md       Beat 3 + Beat 6 + the sil_learn write verb      [NEW]
+ *   references/search_param_mapping.md    Beat-4 answer→param mapping (ship_to empty)
+ *   references/agent_creation_engine.md   one-time shopper creation (setup-only materialize)
+ *   references/brainstorm_interview.md    the two-touchpoint creation interview
+ *   references/setup_onboarding.md        one-time onboarding (after-register + per-search pitch)
+ *   examples/multi_domain_shopper_walkthrough.md   a worked six-beat run
+ *   RETIRED (gone from disk + all cross-links): manage_domains.md, refine_shopper.md
  *
- * Frontmatter is parsed with a small self-contained extractor that REJECTS a
- * malformed block (missing fence, empty body, absent keys) — "parses" means
- * structurally valid, not merely present.
+ * Anchors are structural (beats named in order), decisional (fork phrases,
+ * OR-grouped so a reword survives), and tool-name — never brittle full sentences.
+ * Do NOT weaken to match the markdown; the markdown is rewritten to satisfy this.
  */
 
 import { describe, it, expect } from "vitest";
@@ -64,55 +83,38 @@ const SKILL_DIR = join(REPO_ROOT, "sil-shopping");
 const SKILL_PATH = join(SKILL_DIR, "SKILL.md");
 const MANIFEST_PATH = join(REPO_ROOT, "openclaw.plugin.json");
 
-// The progressive-disclosure reference + example files that own the detailed
-// procedures the router points at. The four RENAMED files carry the single-
-// shopper vocabulary in their paths (the router links name them; the test
-// constants encode them) — a `manage_experts.md`-whose-body-says-domains was the
-// exact expert/shopper confusion this card kills, so the rename is load-bearing.
+// The canonical reference/example files (this file OWNS the layout).
 const CATALOG_TOOLS_PATH = join(SKILL_DIR, "references", "catalog_tools_reference.md");
-const BRAINSTORM_PATH = join(SKILL_DIR, "references", "brainstorm_interview.md");
-const ENGINE_PATH = join(SKILL_DIR, "references", "agent_creation_engine.md");
-const MAPPING_PATH = join(SKILL_DIR, "references", "search_param_mapping.md");
-const MANAGE_PATH = join(SKILL_DIR, "references", "manage_domains.md");
 const SHOP_LOOP_PATH = join(SKILL_DIR, "references", "shop_loop.md");
-const REFINE_PATH = join(SKILL_DIR, "references", "refine_shopper.md");
-// The one-time SETUP script the thin router evicts to a reference (progressive-
-// disclosure rewrite). The lean SKILL.md keeps the STEADY-STATE decision logic (the
-// stage read, the shopper-stage domain gate, the five-beat self-check); the one-time
-// setup SCRIPT — the five-stage staged-progression detail, the after-register
-// `offer_shopper` beat, and the `post-result` per-search pitch — moves HERE. The
-// `stagedBodyLower` / `afterRegisterBeat` / `perSearchBeat` extractors read THIS
-// file; `routingRaw` / `sessionStartLower` stay pointed at SKILL.md.
+const METHOD_PRDS_PATH = join(SKILL_DIR, "references", "method_and_prds.md");
+const FILL_FEEDBACK_PATH = join(SKILL_DIR, "references", "fill_and_feedback.md");
+const MAPPING_PATH = join(SKILL_DIR, "references", "search_param_mapping.md");
+const ENGINE_PATH = join(SKILL_DIR, "references", "agent_creation_engine.md");
+const BRAINSTORM_PATH = join(SKILL_DIR, "references", "brainstorm_interview.md");
 const SETUP_ONBOARDING_PATH = join(SKILL_DIR, "references", "setup_onboarding.md");
 const EXAMPLE_PATH = join(SKILL_DIR, "examples", "multi_domain_shopper_walkthrough.md");
 
-/** The pre-rewrite filenames the rename retired. Must be gone from disk AND from
- * every cross-link in the bundle (the router-glob catches router links, NOT the
- * cross-links buried inside reference bodies — this set drives the body scan). */
-const RETIRED_FILENAMES = [
-  "expert_shopping.md",
-  "manage_experts.md",
-  "refine_expert.md",
-  "road_cycling_expert_walkthrough.md",
-] as const;
+/** The five-beat filenames this card RETIRES — absorbed into method_and_prds.md
+ * (manage) + fill_and_feedback.md (refine). Gone from disk AND every cross-link. */
+const RETIRED_FILENAMES = ["manage_domains.md", "refine_shopper.md"] as const;
 
-/* `PER_NICHE_EXPERT_WORD` + `perNicheExpertOffenders` (the disavowal-token
- * discipline + 28-char retro-allowance) live in ./helpers/per-niche-expert.ts —
- * a single source of truth shared with the unit tool-description vocabulary guard
- * in tools/tool-schema-contract.unit.test.ts, so the retro-allowance can never
- * drift between the two guards. */
+/** Deleted-store tokens: the manifest + the domain_spec/intent_spec/playbook triple
+ * the recast removed. A shopping-loop prose that still names them points the skill
+ * at a store shape that no longer exists. (`intent_spec`/`domain_spec` carry the
+ * underscore, so the live vocabulary "intent"/"domain" is never tripped.) */
+const DELETED_STORE_TOKENS = ["profile.json", "domain_spec", "intent_spec", "playbook.md"] as const;
+
+/** Deleted / never-existed tool names — must be absent from the whole bundle. */
+const DELETED_TOOLS = ["sil_remember", "sil_profile_list", "sil_ping", "sil_echo"] as const;
 
 interface Frontmatter {
   raw: string;
   fields: Record<string, string>;
 }
 
-/**
- * Extract + validate the leading `--- ... ---` frontmatter block. Throws on a
- * structurally-invalid block (no opening fence at byte 0, no closing fence, or
- * empty body) — so "parses" is a real assertion. Reads top-level `key: value`
- * scalar lines (enough for name + description; nested metadata is ignored).
- */
+/** Extract + validate the leading `--- ... ---` frontmatter block. Throws on a
+ * structurally-invalid block (no opening fence at byte 0, no closing fence, empty
+ * body) — so "parses" is a real assertion. */
 function parseFrontmatter(content: string): Frontmatter {
   if (!content.startsWith("---")) {
     throw new Error("SKILL.md does not open with a `---` frontmatter fence");
@@ -141,17 +143,17 @@ function skillBody(content: string): string {
   return content.slice(3 + closeMatch.index + closeMatch[0].length);
 }
 
-/** Read a skill file and return its body below the frontmatter (reference/example
- * files may have none — then the whole content is the body). */
+/** Read a skill file's body below its frontmatter. A file that does not exist yet
+ * (a NEW reference during RED) reads as "" so the bundle-wide scans never throw —
+ * existence is asserted separately. */
 function readBody(path: string): string {
+  if (!existsSync(path)) return "";
   const content = readFileSync(path, "utf8");
   return content.startsWith("---") ? skillBody(content) : content;
 }
 
-/** The set of names the real register code emits against a mock api. Mirrors
- * src/index.ts#register(): identity + catalog + profile groups, so the bundle is
- * checked against the REAL eight-tool surface (`registerProfileTools` wires the
- * three `sil_profile_*` tools AND `sil_remember`). */
+/** The names the real register code emits (identity + catalog + profile groups) —
+ * the REAL nine-tool surface (Step A: sil_learn + sil_profile_search). */
 function registeredNames(): Set<string> {
   const api = createMockPluginApi();
   registerIdentityTools(api);
@@ -160,41 +162,29 @@ function registeredNames(): Set<string> {
   return registeredToolNames(api);
 }
 
-/** The whole progressive-disclosure bundle as one corpus: the router PLUS every
- * reference + example. Under progressive disclosure the BUNDLE is the source of
- * truth for the tool surface — a tool may be named in the file that OWNS its
- * procedure, not forced into the lean router. */
-function bundleCorpus(): string {
-  return [
-    readBody(SKILL_PATH),
-    readBody(CATALOG_TOOLS_PATH),
-    readBody(BRAINSTORM_PATH),
-    readBody(ENGINE_PATH),
-    readBody(MAPPING_PATH),
-    readBody(MANAGE_PATH),
-    readBody(SHOP_LOOP_PATH),
-    readBody(REFINE_PATH),
-    readBody(SETUP_ONBOARDING_PATH),
-    readBody(EXAMPLE_PATH),
-  ].join("\n");
-}
-
-/** Every bundle file's absolute path (for the bundle-wide scans). */
+/** Every bundle file's [label, path] (drives the bundle-wide scans). */
 const BUNDLE_FILES: ReadonlyArray<readonly [string, string]> = [
   ["SKILL.md", SKILL_PATH],
   ["catalog_tools_reference.md", CATALOG_TOOLS_PATH],
-  ["brainstorm_interview.md", BRAINSTORM_PATH],
-  ["agent_creation_engine.md", ENGINE_PATH],
-  ["search_param_mapping.md", MAPPING_PATH],
-  ["manage_domains.md", MANAGE_PATH],
   ["shop_loop.md", SHOP_LOOP_PATH],
-  ["refine_shopper.md", REFINE_PATH],
+  ["method_and_prds.md", METHOD_PRDS_PATH],
+  ["fill_and_feedback.md", FILL_FEEDBACK_PATH],
+  ["search_param_mapping.md", MAPPING_PATH],
+  ["agent_creation_engine.md", ENGINE_PATH],
+  ["brainstorm_interview.md", BRAINSTORM_PATH],
   ["setup_onboarding.md", SETUP_ONBOARDING_PATH],
   ["multi_domain_shopper_walkthrough.md", EXAMPLE_PATH],
 ];
 
+/** The whole bundle as one corpus (router + every reference + example). Under
+ * progressive disclosure the BUNDLE owns the surface — a decision may live in the
+ * file that owns its beat, not forced into the lean router. */
+function bundleCorpus(): string {
+  return BUNDLE_FILES.map(([, p]) => readBody(p)).join("\n");
+}
+
 /* ===========================================================================
- * DISCOVERABILITY + FRONTMATTER — the single-shopper SKILL.md
+ * DISCOVERABILITY + FRONTMATTER — the six-beat SKILL.md router
  * ========================================================================= */
 
 describe("sil-shopping/SKILL.md — discoverability", () => {
@@ -203,29 +193,26 @@ describe("sil-shopping/SKILL.md — discoverability", () => {
   });
 
   it("has frontmatter that parses (valid open + close fences, non-empty body)", () => {
-    const content = readFileSync(SKILL_PATH, "utf8");
-    expect(() => parseFrontmatter(content)).not.toThrow();
+    expect(() => parseFrontmatter(readFileSync(SKILL_PATH, "utf8"))).not.toThrow();
   });
 
-  it("exposes a non-empty `name` in frontmatter", () => {
+  it("exposes a non-empty `name` and `description` in frontmatter", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     expect((fm.fields["name"] ?? "").length).toBeGreaterThan(0);
-  });
-
-  it("exposes a non-empty `description` in frontmatter", () => {
-    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     expect((fm.fields["description"] ?? "").length).toBeGreaterThan(0);
   });
 });
 
-describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename; description drives eight tools, shopper/domain model, NO expert vocab)", () => {
-  it("frontmatter `name` equals the published basename `sil-shopping` (not the stale `sil`)", () => {
+describe("sil-shopping/SKILL.md — frontmatter drives the NINE tools + shopper/domain model, no expert / deleted-tool vocab", () => {
+  it("frontmatter `name` equals the published basename `sil-shopping` (not the plugin id `sil`)", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     expect(fm.fields["name"]).toBe("sil-shopping");
     expect(fm.fields["name"]).not.toBe("sil");
   });
 
-  it("frontmatter `description` enumerates the EIGHT sil_* tools it drives, and NOT the deleted sil_profile_list", () => {
+  it("frontmatter `description` enumerates the NINE sil_* tools it drives, and NOT the deleted sil_profile_list / sil_remember", () => {
+    // TOOL-SET MIRROR #6 — add-only, kept exact. Step A renamed sil_remember →
+    // sil_learn and added sil_profile_search (frontmatter-as-truth query).
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     const description = fm.fields["description"] ?? "";
     const missing = [
@@ -236,117 +223,71 @@ describe("sil-shopping/SKILL.md — single-shopper frontmatter (name == basename
       "sil_profile_materialize",
       "sil_profile_get",
       "sil_profile_remove",
-      "sil_remember",
+      "sil_learn",
+      "sil_profile_search",
     ].filter((t) => !description.includes(t));
     expect(missing).toEqual([]);
-    // The fold deletes sil_profile_list — the trigger description must no longer
-    // name it (a recovery/route hint to a nonexistent tool is the regression we kill).
     expect(description).not.toContain("sil_profile_list");
+    expect(description).not.toContain("sil_remember");
   });
 
-  it("frontmatter `description` presents the SHOPPER + DOMAIN model (not the retired per-niche expert)", () => {
-    // The card: the description is rewritten from the per-niche-expert lifecycle to
-    // create-your-shopper / shop-any-niche / manage-domains. NET-NEW: the model
-    // noun is "shopper" and niches are "domains" — the pre-rewrite description said
-    // "shopping expert" and named no "shopper"/"domain", so both are RED today.
-    const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
-    const description = (fm.fields["description"] ?? "").toLowerCase();
-    expect(description).toContain("shopper");
-    expect(description).toContain("domain");
-  });
-
-  it("frontmatter `description` carries NO per-niche-expert vocabulary (whole-word `expert`)", () => {
-    // "zero surviving per-niche-expert prose" applied to the trigger description —
-    // no "shopping expert", no "shopping-expert intent". Whole-word so a hypothetical
-    // "expertise" would not false-fail.
+  it("frontmatter `description` presents the SHOPPER + DOMAIN model, no per-niche-expert vocabulary", () => {
     const fm = parseFrontmatter(readFileSync(SKILL_PATH, "utf8"));
     const description = fm.fields["description"] ?? "";
+    expect(description.toLowerCase()).toContain("shopper");
+    expect(description.toLowerCase()).toContain("domain");
     expect(PER_NICHE_EXPERT_WORD.test(description)).toBe(false);
   });
 });
 
 /* ===========================================================================
- * NAME-AGREEMENT DRIFT GUARD [unit] — the skill's PUBLISHED name is ONE value
- * across the shipped manifest + SKILL.md, and it is NEVER the plugin id.
- *
- * A skill attaches to an agent by its PUBLISHED name = directory basename =
- * `openclaw.plugin.json#skills[0]` basename = SKILL.md frontmatter `name`. The
- * create-shopper bin must write THAT name into `agents.list[i].skills` — NEVER the
- * plugin id `openclaw.plugin.json#id` (`sil`). That plugin-id ⇄ skill-name
- * conflation is the TOTAL skill-load failure this card kills: create-shopper.mjs
- * attached `["sil"]`, the host found no skill named `sil`, and `sil-shopping`
- * never entered the runtime skill list. This is a PURE STATIC check — no
- * create-shopper flow — that fails the build if that conflation ever reappears,
- * pinning the invariant the integration attach-value assertion in
- * create-shopper.integration.test.ts depends on: attach-name == registered name.
+ * NAME-AGREEMENT DRIFT GUARD — the skill's PUBLISHED name is ONE value across the
+ * manifest + SKILL.md, and never the plugin id. (Unchanged invariant.)
  * ========================================================================= */
 
 interface SkillManifest {
   id: string;
   skills: string[];
 }
-
 function readSkillManifest(): SkillManifest {
   return JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) as SkillManifest;
 }
 
-describe("skill name-agreement drift guard — published name is one value across manifest + SKILL.md, and never the plugin id", () => {
+describe("skill name-agreement drift guard — one published name across manifest + SKILL.md, never the plugin id", () => {
   it("basename(openclaw.plugin.json#skills[0]) EQUALS the SKILL.md frontmatter `name`", () => {
     const manifest = readSkillManifest();
     expect(Array.isArray(manifest.skills)).toBe(true);
     expect(manifest.skills.length).toBeGreaterThan(0);
-
     const manifestSkillName = basename(manifest.skills[0]!);
-    const frontmatterName = parseFrontmatter(readFileSync(SKILL_PATH, "utf8")).fields[
-      "name"
-    ];
-
+    const frontmatterName = parseFrontmatter(readFileSync(SKILL_PATH, "utf8")).fields["name"];
     expect(manifestSkillName).toBe(frontmatterName);
   });
 
-  it("the published skill name is NOT the plugin id — the plugin-id/skill-name conflation this card kills", () => {
+  it("the published skill name is NOT the plugin id (the conflation this guards)", () => {
     const manifest = readSkillManifest();
-    const manifestSkillName = basename(manifest.skills[0]!);
-
-    // The anti-conflation invariant: the skill-attach key (published name) and the
-    // trust key (plugin id) are two DISTINCT host surfaces and must never collapse
-    // onto one value. `id` is anchored to `sil` (the named plugin id) so the guard
-    // compares against the real id, not an undefined field.
     expect(manifest.id).toBe("sil");
-    expect(manifestSkillName).not.toBe(manifest.id);
+    expect(basename(manifest.skills[0]!)).not.toBe(manifest.id);
   });
 });
 
 /* ===========================================================================
- * BUNDLE — the tool surface + the rename retirement
+ * BUNDLE — the nine-tool surface, deleted-token retirement, canonical file set
  * ========================================================================= */
 
-describe("skill bundle — source of truth for the eight-tool surface", () => {
-  it("registeredNames() equals EIGHT (the four core tools + the four sil_profile_* / sil_remember verbs)", () => {
+describe("skill bundle — source of truth for the nine-tool surface", () => {
+  it("registeredNames() equals NINE (the four core tools + the five sil_profile_* / sil_learn verbs)", () => {
+    // TOOL-SET MIRROR #6 (count). Add-only, kept exact.
     const names = registeredNames();
-    expect(names.size, `registered tools: ${[...names].sort().join(", ")}`).toBe(8);
-    expect(names.has("sil_remember")).toBe(true);
-    // sil_profile_list was folded into sil_profile_get — it no longer registers.
+    expect(names.size, `registered tools: ${[...names].sort().join(", ")}`).toBe(9);
+    expect(names.has("sil_learn")).toBe(true);
+    expect(names.has("sil_profile_search")).toBe(true);
+    expect(names.has("sil_remember")).toBe(false);
     expect(names.has("sil_profile_list")).toBe(false);
-  });
-
-  it("NO bundle file names the deleted sil_profile_list anywhere (grepped to zero across the bundle)", () => {
-    // The fold deletes sil_profile_list; a lingering mention in any reference body —
-    // a route row, a recovery hint, a taxonomy row — would point the skill at a
-    // nonexistent tool. The card's "grep sil_profile_list to zero" requirement,
-    // enforced bundle-wide (the router-glob + per-tool-present scans do NOT catch a
-    // stale tool NAME buried in a reference body).
-    const offenders: string[] = [];
-    for (const [label, path] of BUNDLE_FILES) {
-      if (readBody(path).includes("sil_profile_list")) offenders.push(label);
-    }
-    expect(offenders).toEqual([]);
   });
 
   it("names EVERY registered real tool somewhere in the bundle (router or the reference that owns it)", () => {
     const corpus = bundleCorpus();
-    const names = registeredNames();
-    const missing = [...names].filter((name) => !corpus.includes(name));
+    const missing = [...registeredNames()].filter((name) => !corpus.includes(name));
     expect(missing).toEqual([]);
   });
 
@@ -357,35 +298,61 @@ describe("skill bundle — source of truth for the eight-tool surface", () => {
     }
   });
 
-  it("names no removed example tool (sil_ping / sil_echo) anywhere in the bundle", () => {
-    const corpus = bundleCorpus();
-    expect(corpus).not.toContain("sil_ping");
-    expect(corpus).not.toContain("sil_echo");
+  it("NO bundle file names a DELETED tool (sil_remember / sil_profile_list / sil_ping / sil_echo)", () => {
+    // sil_remember was renamed to sil_learn (Step A) — a lingering mention routes
+    // the skill at a nonexistent tool. Grepped to zero bundle-wide.
+    const offenders: string[] = [];
+    for (const [label, path] of BUNDLE_FILES) {
+      const body = readBody(path);
+      for (const dead of DELETED_TOOLS) {
+        if (body.includes(dead)) offenders.push(`${label} → ${dead}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("NO bundle file names a DELETED-store token (profile.json / domain_spec / intent_spec / playbook.md)", () => {
+    // The store recast deletes the manifest + the domain_spec/intent_spec/playbook
+    // triple. A shopping-loop prose that still references them points at a store
+    // shape that no longer exists.
+    const offenders: string[] = [];
+    for (const [label, path] of BUNDLE_FILES) {
+      const body = readBody(path);
+      for (const dead of DELETED_STORE_TOKENS) {
+        if (body.includes(dead)) offenders.push(`${label} → ${dead}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("carries NO per-niche-expert user-facing vocabulary (whole-word `expert`, scan derived from BUNDLE_FILES)", () => {
+    const offenders: string[] = [];
+    for (const [label, path] of BUNDLE_FILES) {
+      for (const ctx of perNicheExpertOffenders(readBody(path))) offenders.push(`${label}: …${ctx}…`);
+    }
+    expect(offenders).toEqual([]);
   });
 });
 
-describe("skill bundle — the rename retired the per-niche-expert filenames (renamed files exist; old names gone from disk AND every cross-link)", () => {
-  it("the four renamed files EXIST on disk and their pre-rewrite names do NOT", () => {
-    const renames: ReadonlyArray<readonly [string, string]> = [
-      [SHOP_LOOP_PATH, join(SKILL_DIR, "references", "expert_shopping.md")],
-      [MANAGE_PATH, join(SKILL_DIR, "references", "manage_experts.md")],
-      [REFINE_PATH, join(SKILL_DIR, "references", "refine_expert.md")],
-      [EXAMPLE_PATH, join(SKILL_DIR, "examples", "road_cycling_expert_walkthrough.md")],
-    ];
+describe("skill bundle — the six-beat restructure: new reference files exist; the five-beat files are retired", () => {
+  it("the canonical six-beat reference files EXIST on disk (shop_loop + method_and_prds + fill_and_feedback)", () => {
     const problems: string[] = [];
-    for (const [renamed, old] of renames) {
-      if (!existsSync(renamed)) problems.push(`missing renamed file: ${renamed}`);
-      if (existsSync(old)) problems.push(`stale old file still on disk: ${old}`);
+    for (const p of [SHOP_LOOP_PATH, METHOD_PRDS_PATH, FILL_FEEDBACK_PATH]) {
+      if (!existsSync(p)) problems.push(`missing canonical reference: ${p}`);
     }
     expect(problems).toEqual([]);
   });
 
-  it("NO bundle file cross-links any retired filename (the link blast radius is grepped to zero)", () => {
-    // Renaming 4 files breaks every [...](expert_shopping.md|manage_experts.md|
-    // refine_expert.md|road_cycling_expert_walkthrough.md) link across SKILL.md,
-    // search_param_mapping.md, the renamed files cross-linking each other, and the
-    // example. The router's "every path exists" glob catches router links but NOT
-    // cross-links buried inside reference bodies — this scan catches all of them.
+  it("the retired five-beat files (manage_domains.md / refine_shopper.md) are GONE from disk", () => {
+    const stale: string[] = [];
+    for (const name of RETIRED_FILENAMES) {
+      const p = join(SKILL_DIR, "references", name);
+      if (existsSync(p)) stale.push(p);
+    }
+    expect(stale).toEqual([]);
+  });
+
+  it("NO bundle file cross-links a retired filename (the rename blast radius grepped to zero)", () => {
     const offenders: string[] = [];
     for (const [label, path] of BUNDLE_FILES) {
       const body = readBody(path);
@@ -395,55 +362,30 @@ describe("skill bundle — the rename retired the per-niche-expert filenames (re
     }
     expect(offenders).toEqual([]);
   });
-
-  it("NO bundle file carries per-niche-expert user-facing vocabulary (whole-word `expert`, scan derived from BUNDLE_FILES)", () => {
-    // The card's headline success signal: zero surviving per-niche-expert prose. The
-    // model noun is "shopper", a niche is a "domain". Whole-word `\bexperts?\b` so
-    // legitimate "niche expertise" passes; "shopping expert" / "your experts" fail.
-    // The scan set is DERIVED from BUNDLE_FILES (audit forward-gap 1) — not a hand-
-    // maintained subset — so NO bundle file can ever escape it again. This folds in
-    // search_param_mapping.md AND catalog_tools_reference.md, the two files that
-    // previously sat OUTSIDE the scan (covered only by the retired-filename link
-    // scan, which greps filenames, not the word "expert"). Both are clean today, so
-    // this stays GREEN; a future affirmative `expert` reintroduction in ANY bundle
-    // file — including the two newly-folded-in references — is now caught here.
-    const offenders: string[] = [];
-    for (const [label, path] of BUNDLE_FILES) {
-      for (const ctx of perNicheExpertOffenders(readBody(path))) {
-        offenders.push(`${label}: …${ctx}…`);
-      }
-    }
-    expect(offenders).toEqual([]);
-  });
 });
 
 /* ===========================================================================
- * CATALOG + IDENTITY TOOLS REFERENCE — per-tool behaviour + shared status
- * taxonomy (delegated from the lean router; niche-agnostic, model-neutral).
+ * CATALOG + IDENTITY TOOLS REFERENCE — per-tool behaviour + shared status taxonomy
+ * (delegated from the lean router; niche-agnostic, model-neutral). Unchanged.
  * ========================================================================= */
-
-function catalogToolsBodyLower(): string {
-  return readBody(CATALOG_TOOLS_PATH).toLowerCase();
-}
 
 describe("references/catalog_tools_reference.md — per-tool behaviour + shared status taxonomy", () => {
   it("exists on disk", () => {
     expect(existsSync(CATALOG_TOOLS_PATH)).toBe(true);
   });
 
-  it("documents the per-tool behaviour of all four core tools", () => {
-    const body = catalogToolsBodyLower();
+  it("documents the per-tool behaviour of all four core tools + the key catalog fields", () => {
+    const body = readBody(CATALOG_TOOLS_PATH).toLowerCase();
     for (const tool of ["sil_register", "sil_whoami", "sil_search", "sil_product_get"]) {
       expect(body).toContain(tool);
     }
-    expect(body).toContain("awaiting_browser");
-    expect(body).toContain("cursor");
-    expect(body).toContain("not_found");
-    expect(body).toContain("checkout_url");
+    for (const field of ["awaiting_browser", "cursor", "not_found", "checkout_url"]) {
+      expect(body).toContain(field);
+    }
   });
 
-  it("holds the shared status taxonomy (all six statuses, with the recovery rule)", () => {
-    const body = catalogToolsBodyLower();
+  it("holds the shared status taxonomy (all six statuses + the recovery rule)", () => {
+    const body = readBody(CATALOG_TOOLS_PATH).toLowerCase();
     const missing = [
       "ok",
       "not_registered",
@@ -456,1366 +398,732 @@ describe("references/catalog_tools_reference.md — per-tool behaviour + shared 
     expect(body).toContain("recovery");
   });
 
-  it("does NOT carry the agent-creation procedure (it is a SHOPPING-tools reference, not the engine)", () => {
-    const body = catalogToolsBodyLower();
+  it("is the SHOPPING-tools reference — does NOT carry the agent-creation procedure", () => {
+    const body = readBody(CATALOG_TOOLS_PATH).toLowerCase();
     expect(body).not.toContain("openclaw agents add");
     expect(body).not.toContain("sil_profile_materialize");
   });
 });
 
 /* ===========================================================================
- * LEAN ROUTER — SKILL.md routes to the RENAMED references; no detail leaks back.
+ * LEAN ROUTER — progressive disclosure: names the six beats, routes to the
+ * references (they exist), inlines NO detail, carries NO contributor content.
  * ========================================================================= */
 
-describe("sil-shopping/SKILL.md — lean router routes to the renamed references", () => {
-  it("routes to the brainstorm interview, the engine, the param mapping, the shop loop, manage-domains, refine-shopper, and the renamed example by relative path", () => {
+describe("sil-shopping/SKILL.md — lean router routes to the canonical references", () => {
+  it("routes to the six-beat loop + the beat references + creation path by relative path", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
     const expected = [
-      "references/brainstorm_interview.md",
-      "references/agent_creation_engine.md",
-      "references/search_param_mapping.md",
+      "references/catalog_tools_reference.md",
       "references/shop_loop.md",
-      "references/manage_domains.md",
-      "references/refine_shopper.md",
-      "references/setup_onboarding.md",
+      "references/method_and_prds.md",
+      "references/fill_and_feedback.md",
+      "references/agent_creation_engine.md",
+      "references/brainstorm_interview.md",
       "examples/multi_domain_shopper_walkthrough.md",
     ];
-    const missing = expected.filter((rel) => !body.includes(rel));
-    expect(missing).toEqual([]);
+    expect(expected.filter((rel) => !body.includes(rel))).toEqual([]);
   });
 
   it("every references/… and examples/… path SKILL.md mentions EXISTS on disk", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    const referenced = [
-      ...body.matchAll(/(references|examples)\/[A-Za-z0-9_./-]+\.md/g),
-    ].map((m) => m[0]);
+    const referenced = [...body.matchAll(/(references|examples)\/[A-Za-z0-9_./-]+\.md/g)].map((m) => m[0]);
     expect(referenced.length).toBeGreaterThan(0);
-    const missing = referenced.filter((rel) => !existsSync(join(SKILL_DIR, rel)));
-    expect(missing).toEqual([]);
+    expect(referenced.filter((rel) => !existsSync(join(SKILL_DIR, rel)))).toEqual([]);
   });
 
-  it("makes the endorsement-before-engine gate unmistakable in the routing block", () => {
-    // Creating the shopper still runs the engine ONLY after the user's explicit
-    // endorsement of the assembled draft. Reading the router alone, an agent already
-    // knows the gate exists, and that the interview is loaded before the engine.
+  it("advertises the SIX-BEAT Spec-Driven-Shopping loop and routes its detail to shop_loop.md (lean — the beats live in the reference)", () => {
+    // Progressive disclosure: the LEAN router makes the six-beat loop legible + routes
+    // to the reference that OWNS the beat detail. The authoritative "six beats named
+    // in order" pin lives in shop_loop.md (below), not inlined here. `six-beat` is
+    // net-new (absent from the whole bundle today → RED).
     const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
-    const endorseIdx = body.indexOf("endorse");
-    const engineRefIdx = body.indexOf("agent_creation_engine.md");
-    const interviewRefIdx = body.indexOf("brainstorm_interview.md");
-    expect(endorseIdx).toBeGreaterThanOrEqual(0);
-    expect(engineRefIdx).toBeGreaterThanOrEqual(0);
-    expect(interviewRefIdx).toBeGreaterThanOrEqual(0);
-    expect(endorseIdx).toBeLessThan(engineRefIdx);
-    expect(interviewRefIdx).toBeLessThan(engineRefIdx);
+    // `six-beat` is net-new (absent from the whole bundle today). The pre-existing
+    // "Spec-Driven Shopping loop" phrase must NOT satisfy this — the router has to
+    // advertise the SIX-beat structure specifically.
+    const advertisesSixBeatLoop = body.includes("six-beat") || body.includes("six beat");
+    expect(advertisesSixBeatLoop).toBe(true);
+    expect(body).toContain("references/shop_loop.md");
   });
 
-  it("keeps the router LEAN — the engine's ordered host-CLI steps do NOT live in SKILL.md", () => {
+  it("keeps the router LEAN — no inlined status taxonomy, host-CLI steps, or contributor content", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
+    // taxonomy lives in catalog_tools_reference.md, not the router
+    for (const t of ["awaiting_browser", "not_registered", "must_reregister", "retryable"]) {
+      expect(body).not.toContain(t);
+    }
+    // host-CLI creation steps live in the engine reference
     expect(body).not.toContain("openclaw agents add");
     expect(body).not.toContain("openclaw config validate");
-    expect(body).not.toContain("sil_profile_materialize");
-  });
-
-  it("does NOT inline the per-tool behaviour or the status taxonomy (they live in catalog_tools_reference.md, no duplication)", () => {
-    const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
-    expect(body).not.toContain("awaiting_browser");
-    expect(body).not.toContain("not_registered");
-    expect(body).not.toContain("must_reregister");
-    expect(body).not.toContain("retryable");
-    expect(body).toContain("references/catalog_tools_reference.md");
-  });
-});
-
-describe("sil-shopping/SKILL.md — routes every shop / manage / refine / create intent to the renamed reference that owns it", () => {
-  it("routes the shopping intent to references/shop_loop.md", () => {
-    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    expect(body).toContain("references/shop_loop.md");
-    expect(body.toLowerCase()).toContain("sil_search");
-  });
-
-  it("routes the manage intents (view/remove) to references/manage_domains.md, naming the two surviving sil_profile_* tools (no sil_profile_list)", () => {
-    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    // After the fold, the "what does my shopper know / which domains" intent routes
-    // to the no-args sil_profile_get (Zoom A) — sil_profile_list is gone.
-    for (const tool of ["sil_profile_get", "sil_profile_remove"]) {
-      expect(body).toContain(tool);
+    // contributor "how to add a tool" content never ships in the runtime skill
+    for (const c of ["registerxtools", "contracts.tools", "adding a real tool", "adding a tool"]) {
+      expect(body).not.toContain(c);
     }
-    expect(body).not.toContain("sil_profile_list");
-    expect(body).toContain("references/manage_domains.md");
   });
 
-  it("routes the refine intent to references/refine_shopper.md", () => {
-    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    expect(body).toContain("references/refine_shopper.md");
-  });
-});
-
-describe("sil-shopping/SKILL.md — session start retains the admission self-heal branch (#37, preserved)", () => {
-  /** The `## Session start` section body of SKILL.md, lower-cased — from that
-   * heading to the next `## ` heading. The missing-`sil_*`-tools branch must offer
-   * the one-command helper, not dead-end. */
-  function sessionStartLower(): string {
+  it("Session start retains the admission self-heal branch (missing sil_* → the shipped helper, not a dead-end)", () => {
     const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
     const heading = "## Session start";
     const start = body.indexOf(heading);
     expect(start).toBeGreaterThanOrEqual(0);
     const rest = body.slice(start + heading.length);
     const nextHeading = rest.indexOf("\n## ");
-    const section = nextHeading >= 0 ? rest.slice(0, nextHeading) : rest;
-    return section.toLowerCase();
-  }
-
-  it("points the missing-`sil_*`-tools branch at the shipped admission helper (self-healing, not a dead-end)", () => {
-    const section = sessionStartLower();
+    const section = (nextHeading >= 0 ? rest.slice(0, nextHeading) : rest).toLowerCase();
     const present = ALLOWLIST_HELPER_TOKENS.filter((t) => section.includes(t));
     expect(present).not.toEqual([]);
-  });
-
-  it("no longer dead-ends at 'consult … docs and stop' without offering the fix", () => {
-    const section = sessionStartLower();
-    const deadEnds =
-      section.includes("consult the host's tool-allowlist docs and stop") ||
-      (section.includes("consult") && section.includes("and stop"));
-    expect(deadEnds).toBe(false);
-  });
-});
-
-describe("skill — the contributor-facing 'adding a tool' prose is GONE from the runtime skill", () => {
-  it("no bundle file carries the repo-CLAUDE.md 'how to add a tool' contributor content", () => {
-    const corpus = bundleCorpus().toLowerCase();
-    expect(corpus).not.toContain("registerxtools");
-    expect(corpus).not.toContain("contracts.tools");
-    expect(corpus).not.toContain("adding a real tool");
-    expect(corpus).not.toContain("adding a tool");
+    expect(section.includes("consult") && section.includes("and stop")).toBe(false);
   });
 });
 
 /* ===========================================================================
- * AGENT-CREATION ENGINE — create ONE shopper (userSpec only, no domain),
- * singleton refusal, admission preserved. The procedure-as-source-of-truth seam.
+ * BEAT 1 + 4 + 5 — the shop_loop.md six-beat loop.
  * ========================================================================= */
 
-function engineBodyLower(): string {
+function shopLoopLower(): string {
+  return readBody(SHOP_LOOP_PATH).toLowerCase();
+}
+
+describe("references/shop_loop.md — the six-beat loop state machine (names all six beats, in order)", () => {
+  it("exists on disk", () => {
+    expect(existsSync(SHOP_LOOP_PATH)).toBe(true);
+  });
+
+  it("names all SIX beats in loop order (classify → method → fill → search-space → reflect → feedback)", () => {
+    const body = shopLoopLower();
+    const beatIdx = [
+      /classif|intent-resolve|intent resolve/,
+      /method (?:load|mint|refresh|load\/mint)|load \/ mint|load\/mint\/refresh|beat 2/,
+      /\bfill\b|elicit/,
+      /search-space|search space|bounded|fan-out|fan out|≤ ?4|four searches/,
+      /reflect/,
+      /feedback|reaction/,
+    ].map((re) => {
+      const m = re.exec(body);
+      return m ? m.index : -1;
+    });
+    expect(beatIdx.every((i) => i >= 0), `shop_loop must name all six beats: ${JSON.stringify(beatIdx)}`).toBe(true);
+    for (let i = 1; i < beatIdx.length; i++) {
+      expect(beatIdx[i]!, `beat ${i + 1} must follow beat ${i}`).toBeGreaterThan(beatIdx[i - 1]!);
+    }
+  });
+});
+
+describe("references/shop_loop.md — Beat 1: classify {domain, product, intent} → reuse-before-mint (never over-ask to key, announce a mint)", () => {
+  it("resolves the three coordinates domain → product → intent (intent ALWAYS present — a context-free request keys `general`)", () => {
+    const body = shopLoopLower();
+    for (const coord of ["domain", "product", "intent"]) {
+      expect(body).toContain(coord);
+    }
+    // The NEW three-level classification: intent is always present; a context-free
+    // request keys `general`. `context-free`/`always present` are net-new (absent
+    // today), so a stray "general"/"default" mention can no longer false-green this.
+    const namesGeneralAsContextFree =
+      body.includes("general") &&
+      (body.includes("context-free") || body.includes("context free") ||
+        body.includes("always present") || body.includes("always-present") ||
+        body.includes("intent is always"));
+    expect(namesGeneralAsContextFree).toBe(true);
+  });
+
+  it("REUSES an existing domain / PRD before minting — semantic match via sil_profile_search (not the deleted manifest)", () => {
+    const body = shopLoopLower();
+    const reuseBeforeMint =
+      body.includes("reuse-before-mint") ||
+      (body.includes("reuse") && (body.includes("before mint") || body.includes("before minting")));
+    expect(reuseBeforeMint).toBe(true);
+    // Discovery is the frontmatter-as-truth query tool, NOT a filesystem/manifest guess.
+    expect(body).toContain("sil_profile_search");
+    const semantic = body.includes("semantic") || body.includes("prefer existing") || body.includes("prefer-existing");
+    expect(semantic).toBe(true);
+  });
+
+  it("ANNOUNCES a new-domain / new-PRD mint (inferred coordinates stated so the buyer can correct) — never silent", () => {
+    const body = shopLoopLower();
+    const announces = body.includes("announce") || body.includes("announced");
+    const correctable = body.includes("correct") || body.includes("so the buyer") || body.includes("so the user");
+    const neverSilent = body.includes("never silent") || body.includes("not silent") || (body.includes("announce") && body.includes("never"));
+    expect(announces).toBe(true);
+    expect(correctable).toBe(true);
+    expect(neverSilent).toBe(true);
+  });
+
+  it("does NOT over-ask just to key — keying never forces an extra question (a silent request keys `general`)", () => {
+    const body = shopLoopLower();
+    // `over-ask`/`over ask` is net-new (absent today), so this can no longer
+    // false-green on an unrelated "general"/"silent" mint mention.
+    const namesOverAsk = body.includes("over-ask") || body.includes("over ask");
+    const negated = body.includes("never") || body.includes("not ") || body.includes("no ");
+    expect(namesOverAsk && negated).toBe(true);
+  });
+});
+
+describe("references/shop_loop.md — Beat 4: a BOUNDED ≤4 priority-ordered fan-out, concatenated in issue order (NOT a re-rank)", () => {
+  it("decomposes into ≤ 4 priority-ordered sil_search calls (core first, widenings after) — a production budget", () => {
+    const body = shopLoopLower();
+    expect(body).toContain("sil_search");
+    const boundedFour =
+      body.includes("≤ 4") || body.includes("≤4") || body.includes("<= 4") ||
+      body.includes("at most 4") || body.includes("up to 4") || body.includes("four searches") ||
+      (body.includes("bounded") && body.includes("4"));
+    expect(boundedFour).toBe(true);
+    const priorityOrdered =
+      body.includes("priority order") || body.includes("priority-order") ||
+      (body.includes("core first") && (body.includes("widen") || body.includes("widening")));
+    expect(priorityOrdered).toBe(true);
+  });
+
+  it("merges by dedup + CONCATENATE in issue order — explicitly NOT a re-rank (the engine owns order within each call)", () => {
+    const body = shopLoopLower();
+    const concatIssueOrder =
+      (body.includes("concat") || body.includes("concatenate")) &&
+      (body.includes("issue order") || body.includes("issue-order"));
+    expect(concatIssueOrder).toBe(true);
+    const notRerank =
+      body.includes("never re-rank") || body.includes("not re-rank") || body.includes("not a re-rank") ||
+      (body.includes("re-rank") && body.includes("never"));
+    expect(notRerank).toBe(true);
+    const dedup = body.includes("dedup") || body.includes("already seen") || body.includes("drop") ;
+    expect(dedup).toBe(true);
+  });
+
+  it("projects onto EXISTING params + query enrichment now (leaves ship_to empty; never invents a filter)", () => {
+    const body = shopLoopLower();
+    const projectsExisting =
+      body.includes("existing") && (body.includes("param") || body.includes("category") || body.includes("price"));
+    expect(projectsExisting || body.includes("query enrichment") || body.includes("query-enrichment")).toBe(true);
+    expect(body).toContain("ship_to");
+    const neverInvents =
+      body.includes("never invent") || body.includes("not invent") || (body.includes("invent") && body.includes("filter"));
+    expect(neverInvents).toBe(true);
+  });
+});
+
+describe("references/shop_loop.md — Beat 5: reflect (honesty pass first, judgment not threshold, hero + alternatives, propose-and-wait)", () => {
+  it("runs the HONESTY PASS first — reject-at-pick any hard predicate the backend left `applied:false` (+ user_spec hard)", () => {
+    const body = shopLoopLower();
+    // `honesty pass` + `applied:false` are net-new (absent today), so the preserved
+    // `reject-at-pick` / `hard constraint` vocabulary can no longer false-green this:
+    // the NEW Beat-5 structure is a distinct honesty pass over the applied:false set.
+    const honestyPass = body.includes("honesty pass") || body.includes("honesty-pass");
+    expect(honestyPass).toBe(true);
+    const rejectAtPick = body.includes("reject-at-pick") || body.includes("reject at pick");
+    expect(rejectAtPick).toBe(true);
+    const namesAppliedFalse =
+      body.includes("applied:false") || body.includes("applied: false") || body.includes("applied false");
+    expect(namesAppliedFalse).toBe(true);
+  });
+
+  it("judges best-available vs PRD+method as a JUDGMENT CALL, not a threshold / mechanical any-unmet rule", () => {
+    const body = shopLoopLower();
+    const judgmentNotThreshold =
+      body.includes("judgment") &&
+      (body.includes("not a threshold") || body.includes("never a threshold") ||
+        body.includes("not a mechanical") || body.includes("not mechanical"));
+    expect(judgmentNotThreshold).toBe(true);
+  });
+
+  it("satisfies → a HERO + 1–2 justified alternatives (best-first as returned, never a bare list, never re-rank)", () => {
+    const body = shopLoopLower();
+    const heroPlusAlternatives =
+      (body.includes("hero") || body.includes("one recommendation") || body.includes("lead with one")) &&
+      (body.includes("alternative") || body.includes("1–2") || body.includes("1-2") || body.includes("one or two"));
+    expect(heroPlusAlternatives).toBe(true);
+    const notRerank =
+      body.includes("never re-rank") || body.includes("not re-rank") || (body.includes("re-rank") && body.includes("never"));
+    expect(notRerank).toBe(true);
+  });
+
+  it("shortfall OR empty → propose a SPECIFIC relaxation and WAIT — no silent re-search; non-ok → follow the tool recovery", () => {
+    const body = shopLoopLower();
+    const proposeAndWait =
+      (body.includes("propose") && body.includes("wait")) ||
+      body.includes("propose-and-wait") || body.includes("propose and wait");
+    expect(proposeAndWait).toBe(true);
+    const noSilentReSearch =
+      body.includes("no silent re-search") || body.includes("never silently re-search") ||
+      body.includes("no silent auto-widen") || body.includes("never auto-widen") ||
+      (body.includes("silent") && (body.includes("re-search") || body.includes("widen")));
+    expect(noSilentReSearch).toBe(true);
+    expect(body).toContain("recovery");
+  });
+});
+
+/* ===========================================================================
+ * BEAT 2 — method_and_prds.md: method load/mint/refresh + intent-PRD +
+ * frontmatter-as-truth store + discovery/manage.
+ * ========================================================================= */
+
+function methodPrdsLower(): string {
+  return readBody(METHOD_PRDS_PATH).toLowerCase();
+}
+
+describe("references/method_and_prds.md — Beat 2: method load (hot path) vs research+mint vs SIGNAL-DRIVEN refresh", () => {
+  it("exists on disk", () => {
+    expect(existsSync(METHOD_PRDS_PATH)).toBe(true);
+  });
+
+  it("HIT = LOAD the durable method (hot path — no research, no round-trip); a plain revisit LOADS, never rebuilds", () => {
+    const body = methodPrdsLower();
+    const loadHotPath =
+      (body.includes("load") && (body.includes("hot path") || body.includes("hot-path"))) ||
+      (body.includes("load") && body.includes("no research"));
+    expect(loadHotPath).toBe(true);
+    expect(body).toContain("sil_profile_get");
+    const recoveredNotRebuilt =
+      body.includes("recovered, never rebuilt") || body.includes("never rebuilt") ||
+      body.includes("not rebuilt") || (body.includes("revisit") && body.includes("load"));
+    expect(recoveredNotRebuilt).toBe(true);
+  });
+
+  it("MISS = research + mint — coin the niche's whole-domain spec vocabulary (coined-and-used raw until Phase 3)", () => {
+    const body = methodPrdsLower();
+    const researchAndMint = body.includes("research") && body.includes("mint");
+    expect(researchAndMint).toBe(true);
+    const coinsVocab =
+      body.includes("coin") && (body.includes("vocabulary") || body.includes("spec") || body.includes("ns.key"));
+    expect(coinsVocab).toBe(true);
+    // sil_specs is a barred stub until Phase 3 — coined-and-used raw now (never a stub call).
+    const coinedRawNow =
+      body.includes("coined-and-used raw") || body.includes("coined and used raw") ||
+      body.includes("phase 3") || body.includes("applied:false") ||
+      (body.includes("sil_specs") && (body.includes("not") || body.includes("until") || body.includes("skip")));
+    expect(coinedRawNow).toBe(true);
+  });
+
+  it("mints via `sil_learn create` (target method), NOT the setup-only sil_profile_materialize (no domain-mint on materialize)", () => {
+    const body = methodPrdsLower();
+    // The mint verb is sil_learn create — the old materialize-with-a-domain-object mint is DELETED.
+    expect(body).toContain("sil_learn");
+    const mintsViaLearn =
+      (body.includes("sil_learn") && body.includes("create")) &&
+      (body.includes("method") || body.includes("mint"));
+    expect(mintsViaLearn).toBe(true);
+    const materializeIsSetupOnly =
+      body.includes("setup-only") || body.includes("setup only") ||
+      (body.includes("sil_profile_materialize") && (body.includes("not") || body.includes("never") || body.includes("only the")));
+    expect(materializeIsSetupOnly).toBe(true);
+  });
+
+  it("REFRESH is SIGNAL-DRIVEN — buyer contradiction · overdue volatility marker · explicit ask — NOT TTL, NOT every revisit", () => {
+    const body = methodPrdsLower();
+    const signalDriven =
+      body.includes("signal-driven") || body.includes("signal driven") ||
+      (body.includes("contradict") && (body.includes("volatility") || body.includes("marker") || body.includes("explicit")));
+    expect(signalDriven).toBe(true);
+    const namesTheThreeSignals =
+      (body.includes("contradict")) &&
+      (body.includes("volatility") || body.includes("marker")) &&
+      (body.includes("explicit ask") || body.includes("asks") || body.includes("explicit"));
+    expect(namesTheThreeSignals).toBe(true);
+    const notTtlNotEveryRevisit =
+      (body.includes("not ttl") || body.includes("no ttl") || body.includes("never a ttl")) ||
+      (body.includes("not every revisit") || body.includes("never every revisit") || body.includes("not on every revisit"));
+    expect(notTtlNotEveryRevisit).toBe(true);
+  });
+
+  it("CREATE-WITH-MERGE preserves every buyer `sil_learn` edit verbatim on a refresh (never clobbers a buyer edit)", () => {
+    const body = methodPrdsLower();
+    const createWithMerge =
+      body.includes("create-with-merge") || body.includes("create with merge") ||
+      (body.includes("merge") && (body.includes("verbatim") || body.includes("preserve")));
+    expect(createWithMerge).toBe(true);
+    const preservesBuyerEdits =
+      (body.includes("preserve") || body.includes("carry") || body.includes("honor") || body.includes("honour")) &&
+      (body.includes("buyer") || body.includes("sil_learn edit") || body.includes("edit"));
+    expect(preservesBuyerEdits).toBe(true);
+    const neverClobbers =
+      body.includes("never clobber") || body.includes("not clobber") || body.includes("never overwrite a buyer");
+    expect(neverClobbers).toBe(true);
+  });
+});
+
+describe("references/method_and_prds.md — intent-keyed PRDs + frontmatter-as-truth store + discovery/manage", () => {
+  it("keys PRDs by {domain, product, intent} — one durable, revisitable requirements doc per job", () => {
+    const body = methodPrdsLower();
+    expect(body).toContain("prd");
+    const keyedByThree =
+      (body.includes("domain") && body.includes("product") && body.includes("intent"));
+    expect(keyedByThree).toBe(true);
+    const durableRevisitable =
+      body.includes("durable") && (body.includes("revisit") || body.includes("recover"));
+    expect(durableRevisitable).toBe(true);
+  });
+
+  it("discovery is FRONTMATTER-AS-TRUTH via sil_profile_search (coordinates, no bodies) — no manifest, no filesystem guess", () => {
+    const body = methodPrdsLower();
+    expect(body).toContain("sil_profile_search");
+    const frontmatterAsTruth =
+      body.includes("frontmatter") && (body.includes("scan") || body.includes("truth") || body.includes("coordinates"));
+    expect(frontmatterAsTruth).toBe(true);
+    const noManifest =
+      body.includes("no manifest") || body.includes("not a manifest") || body.includes("no `profile.json`") || body.includes("without a manifest");
+    expect(noManifest).toBe(true);
+  });
+
+  it("manages with sil_profile_get (read one body) and sil_profile_remove (whole domain OR one PRD), confirm-before-remove", () => {
+    const body = methodPrdsLower();
+    for (const tool of ["sil_profile_get", "sil_profile_remove"]) {
+      expect(body).toContain(tool);
+    }
+    const removesDomainOrPrd =
+      (body.includes("whole domain") || body.includes("entire domain")) &&
+      (body.includes("one prd") || body.includes("single prd") || body.includes("just that prd") || body.includes("a prd"));
+    expect(removesDomainOrPrd).toBe(true);
+    const confirms = body.includes("confirm") || body.includes("explicit go-ahead") || body.includes("ask before");
+    expect(confirms).toBe(true);
+  });
+});
+
+/* ===========================================================================
+ * BEAT 3 + 6 — fill_and_feedback.md: fill (precedence, multi-turn, hard, the split)
+ * + feedback (capture-gate, confirm-before-write, route-by-scope) + sil_learn.
+ * ========================================================================= */
+
+function fillFeedbackLower(): string {
+  return readBody(FILL_FEEDBACK_PATH).toLowerCase();
+}
+
+describe("references/fill_and_feedback.md — Beat 3: fill by PRECEDENCE, multi-turn, hard-constraint dual-enforce, the split", () => {
+  it("exists on disk", () => {
+    expect(existsSync(FILL_FEEDBACK_PATH)).toBe(true);
+  });
+
+  it("resolves each dimension by the PRECEDENCE chain: request-intent > PRD filled-pref > method taste > user_spec fact > method default", () => {
+    // The NEW precedence — supersedes the deleted intent > playbook > user_spec >
+    // domain_spec chain. Pin the ordered spine (a read-compose, most resolve with no question).
+    const body = fillFeedbackLower();
+    const idx = [
+      body.indexOf("request-intent") >= 0 ? body.indexOf("request-intent") : body.indexOf("request intent"),
+      body.indexOf("filled-pref") >= 0 ? body.indexOf("filled-pref") : body.indexOf("filled pref"),
+      body.indexOf("method taste") >= 0 ? body.indexOf("method taste") : body.indexOf("taste"),
+      body.indexOf("user_spec"),
+      body.indexOf("method default") >= 0 ? body.indexOf("method default") : body.indexOf("default"),
+    ];
+    expect(idx.every((i) => i >= 0), `precedence chain must be named in order: ${JSON.stringify(idx)}`).toBe(true);
+    for (let i = 1; i < idx.length; i++) {
+      expect(idx[i]!, `precedence rung ${i} must follow rung ${i - 1}`).toBeGreaterThan(idx[i - 1]!);
+    }
+    const readCompose =
+      body.includes("read-compose") || body.includes("read compose") ||
+      body.includes("most resolve") || body.includes("no question") || body.includes("without a question");
+    expect(readCompose).toBe(true);
+  });
+
+  it("elicits the residue MULTI-TURN until resolved-or-declined — a few at a time, tied to WHY, never a battery", () => {
+    const body = fillFeedbackLower();
+    const multiTurn =
+      body.includes("multi-turn") || body.includes("multi turn") ||
+      (body.includes("resolved") && body.includes("declined"));
+    expect(multiTurn).toBe(true);
+    const neverABattery =
+      body.includes("never a battery") || body.includes("not a battery") ||
+      body.includes("a few at a time") || body.includes("few at a time");
+    expect(neverABattery).toBe(true);
+    const tiedToWhy = body.includes("why") || body.includes("tied to");
+    expect(tiedToWhy).toBe(true);
+  });
+
+  it("a live request contradicting a stored DURABLE pref → ASK one-off vs standing (standing → amend), never silently overwrite", () => {
+    const body = fillFeedbackLower();
+    const oneOffVsStanding =
+      body.includes("one-off") || body.includes("one off") ||
+      (body.includes("standing") && (body.includes("just this once") || body.includes("from now on") || body.includes("ask")));
+    expect(oneOffVsStanding).toBe(true);
+    const standingAmends =
+      (body.includes("standing") && body.includes("amend")) || body.includes("amend the stored");
+    expect(standingAmends).toBe(true);
+    const neverSilentOverwrite =
+      body.includes("never silently overwrite") || body.includes("not silently overwrite") ||
+      body.includes("never silently") ;
+    expect(neverSilentOverwrite).toBe(true);
+  });
+
+  it("hard constraints are INVIOLABLE + dual-enforced — routed to a real filter AND handed to the reject-at-pick check", () => {
+    const body = fillFeedbackLower();
+    const inviolable =
+      body.includes("inviolable") || body.includes("never overrid") || body.includes("never break");
+    expect(inviolable).toBe(true);
+    const dualEnforced =
+      (body.includes("filter") && (body.includes("reject-at-pick") || body.includes("reject at pick"))) ||
+      body.includes("dual-enforce") || body.includes("belt and suspenders");
+    expect(dualEnforced).toBe(true);
+  });
+
+  it("THE SPLIT — elicited durable answers persist to the PRD NOW; Beat 6 owns the reaction half; one-off direction stays ephemeral", () => {
+    const body = fillFeedbackLower();
+    const persistsNow =
+      (body.includes("persist") || body.includes("write")) &&
+      (body.includes("now") || body.includes("during elicitation") || body.includes("stated"));
+    expect(persistsNow).toBe(true);
+    const theSplit =
+      body.includes("the split") || body.includes("reaction half") ||
+      (body.includes("beat 6") && body.includes("reaction"));
+    expect(theSplit).toBe(true);
+    const ephemeralOneOff =
+      body.includes("ephemeral") || body.includes("one-off direction is never written") ||
+      body.includes("never written") || body.includes("not written");
+    expect(ephemeralOneOff).toBe(true);
+  });
+
+  it("a declined question narrows QUALITY, never ACCESS — proceed on best-defensible params + STATE the assumption", () => {
+    const body = fillFeedbackLower();
+    const narrowsQualityNotAccess =
+      (body.includes("quality") && body.includes("access")) ||
+      body.includes("decline never blocks") || body.includes("never blocks");
+    expect(narrowsQualityNotAccess).toBe(true);
+    const statesAssumption =
+      body.includes("state the assumption") || body.includes("states the assumption") ||
+      body.includes("assuming") || body.includes("what you assumed");
+    expect(statesAssumption).toBe(true);
+  });
+});
+
+describe("references/fill_and_feedback.md — Beat 6: reaction half, capture-gate, confirm-before-write, route-by-scope", () => {
+  it("captures only what is DURABLE AND NEW (no duplicate / noise / empty) — the capture gate", () => {
+    const body = fillFeedbackLower();
+    const durableAndNew =
+      (body.includes("durable") && body.includes("new")) ;
+    expect(durableAndNew).toBe(true);
+    const gate =
+      body.includes("no duplicate") || body.includes("not already stored") ||
+      body.includes("noise") || body.includes("no empty") || body.includes("capture gate") || body.includes("capture-gate");
+    expect(gate).toBe(true);
+  });
+
+  it("CONFIRMS before every durable write — asks, then persists (never a silent harvest); gated behind the candidate", () => {
+    const body = fillFeedbackLower();
+    const confirmsBeforeWrite =
+      body.includes("confirm before") || body.includes("ask before") ||
+      body.includes("asks before") || (body.includes("confirm") && body.includes("write"));
+    expect(confirmsBeforeWrite).toBe(true);
+    const neverSilentHarvest =
+      body.includes("never silently harvested") || body.includes("not silently harvested") ||
+      body.includes("never a silent harvest") || body.includes("silent harvest");
+    expect(neverSilentHarvest).toBe(true);
+  });
+
+  it("routes by SCOPE — fact/hard → user_spec, durable taste → method, this-job → PRD, image → attach-asset (broadest scope where it stays true)", () => {
+    const body = fillFeedbackLower();
+    const routesFactToUserSpec = body.includes("user_spec") && (body.includes("fact") || body.includes("hard"));
+    const routesTasteToMethod = body.includes("method") && body.includes("taste");
+    const routesJobToPrd = body.includes("prd") && (body.includes("this-job") || body.includes("this job") || body.includes("job"));
+    const routesImageToAsset = body.includes("attach-asset") && body.includes("image");
+    expect(routesFactToUserSpec).toBe(true);
+    expect(routesTasteToMethod).toBe(true);
+    expect(routesJobToPrd).toBe(true);
+    expect(routesImageToAsset).toBe(true);
+    const broadestScope =
+      body.includes("broadest scope") || body.includes("placement rule") || body.includes("where it stays true");
+    expect(broadestScope).toBe(true);
+  });
+
+  it("picks the kind — new → append; contradicts a stored SOFT pref → amend (supersedes, never a stacked bullet); withdrawal → retract", () => {
+    const body = fillFeedbackLower();
+    for (const kind of ["append", "amend", "retract"]) {
+      expect(body).toContain(kind);
+    }
+    const amendSupersedes =
+      (body.includes("amend") && (body.includes("supersede") || body.includes("contradict"))) &&
+      (body.includes("never a stacked bullet") || body.includes("not a second") || body.includes("never a second") || body.includes("stacked bullet"));
+    expect(amendSupersedes).toBe(true);
+  });
+
+  it("RE-SCOPE = write-broader-then-retract-narrower (two sil_learn calls) — there is NO promote verb", () => {
+    const body = fillFeedbackLower();
+    const writeBroaderRetractNarrower =
+      (body.includes("broader") && body.includes("retract")) ||
+      body.includes("write-broader") || body.includes("re-scope");
+    expect(writeBroaderRetractNarrower).toBe(true);
+    const noPromoteVerb =
+      body.includes("no promote verb") || body.includes("no separate promote") || body.includes("never a promote");
+    expect(noPromoteVerb).toBe(true);
+  });
+});
+
+describe("references/fill_and_feedback.md — sil_learn is the ONE target+change feedback verb (5 kinds); sil_remember is GONE", () => {
+  it("names sil_learn as the single target+change write verb owning the whole method/PRD lifecycle", () => {
+    const body = fillFeedbackLower();
+    expect(body).toContain("sil_learn");
+    const targetPlusChange =
+      body.includes("target") && (body.includes("change") || body.includes("kind"));
+    expect(targetPlusChange).toBe(true);
+    const namesTheFiveKinds = ["create", "append", "amend", "retract", "attach-asset"].filter((k) => !body.includes(k));
+    expect(namesTheFiveKinds).toEqual([]);
+  });
+
+  it("does NOT name the deleted sil_remember (renamed to sil_learn — no alias survives in prose)", () => {
+    expect(readBody(FILL_FEEDBACK_PATH)).not.toContain("sil_remember");
+  });
+});
+
+/* ===========================================================================
+ * BEAT-4 PARAM MAPPING — search_param_mapping.md (ship_to empty; hard → real
+ * filter + reject; never round-trip whoami). Kept, model-neutral.
+ * ========================================================================= */
+
+describe("references/search_param_mapping.md — answer→param mapping; ship_to empty; hard → real filter + reject", () => {
+  it("exists and leaves ship_to empty by default, never round-tripping sil_whoami to populate it", () => {
+    expect(existsSync(MAPPING_PATH)).toBe(true);
+    const body = readBody(MAPPING_PATH).toLowerCase();
+    expect(body).toContain("ship_to");
+    const leavesEmpty = body.includes("ship_to empty") || (body.includes("ship_to") && body.includes("empty"));
+    expect(leavesEmpty).toBe(true);
+    const disavowsWhoami =
+      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) || /sil_whoami[^.]*(never|not)/.test(body);
+    expect(disavowsWhoami).toBe(true);
+  });
+
+  it("routes a hard constraint to a real FILTER + a reject rule, never only soft query text", () => {
+    const body = readBody(MAPPING_PATH).toLowerCase();
+    const namesHard = body.includes("hard constraint") || body.includes("hard-constraint") || body.includes("hard-no") || body.includes("inviolable");
+    const filterAndReject =
+      (body.includes("filter") || body.includes("condition")) && (body.includes("reject") || body.includes("never recommend"));
+    const notQueryOnly = body.includes("not only") || body.includes("never only") || body.includes("not just query");
+    expect(namesHard).toBe(true);
+    expect(filterAndReject).toBe(true);
+    expect(notQueryOnly).toBe(true);
+  });
+});
+
+/* ===========================================================================
+ * CREATION PATH (condensed, frontmatter-as-truth) — the one-time shopper setup:
+ * setup-only materialize, singleton, admission, persona→SOUL.md, two-touchpoint
+ * endorsement-gated interview.
+ * ========================================================================= */
+
+function engineLower(): string {
   return readBody(ENGINE_PATH).toLowerCase();
 }
 
-/** The four engine outcome statuses (mirrors identity.ts/catalog.ts vocabulary). */
-const ENGINE_STATUSES = ["created", "invalid_request", "collision", "persistence_failed"] as const;
-
-describe("references/agent_creation_engine.md — host-CLI procedure is a pinned source of truth", () => {
-  it("names the host-native creation CLI `openclaw agents add` and the host `agents` config surface", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("openclaw agents add");
-    expect(body).toContain("agents");
-  });
-
-  it("names ALL FOUR engine outcome statuses (created/invalid_request/collision/persistence_failed)", () => {
-    const body = engineBodyLower();
-    const missing = ENGINE_STATUSES.filter((s) => !body.includes(s));
-    expect(missing).toEqual([]);
-  });
-
-  it("frames the procedure as creating ONE shopper (NOT a per-niche expert)", () => {
-    const body = engineBodyLower();
-    const namesCreation = body.includes("create") || body.includes("creation");
-    const namesShopper = body.includes("shopper");
-    expect(namesCreation).toBe(true);
-    expect(namesShopper).toBe(true);
+describe("references/agent_creation_engine.md — creates ONE shopper via SETUP-ONLY materialize (frontmatter-as-truth, no manifest)", () => {
+  it("exists; frames the procedure as creating ONE shopper (never a per-niche expert)", () => {
+    expect(existsSync(ENGINE_PATH)).toBe(true);
+    const body = engineLower();
+    expect(body.includes("create") || body.includes("creation")).toBe(true);
+    expect(body).toContain("shopper");
     expect(perNicheExpertOffenders(readBody(ENGINE_PATH))).toEqual([]);
   });
-});
 
-describe("references/agent_creation_engine.md — validate-first; collision is a SINGLETON refusal", () => {
-  it("names `invalid_request` and validates the spec BEFORE `openclaw agents add` (validate-first ordering)", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("invalid_request");
-    const firstValidateIdx = body.indexOf("validate");
-    const addIdx = body.indexOf("openclaw agents add");
-    expect(firstValidateIdx).toBeGreaterThanOrEqual(0);
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(firstValidateIdx).toBeLessThan(addIdx);
-  });
-
-  it("requires the mandatory create fields — name AND persona AND the shared userSpec", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("persona");
-    expect(body).toContain("userspec");
-    expect(body).toMatch(/name/);
-  });
-
-  it("names the SINGLETON refusal — a second create is refused with 'a shopper already exists', never a second shopper", () => {
-    // NET-NEW: the pre-rewrite engine framed collision as an agentId clash only.
-    // The single-shopper model adds the singleton invariant: the user has exactly
-    // ONE shopper; a second create attempt is refused and steered to add-a-domain or
-    // refine — never a second shopper minted.
-    const body = engineBodyLower();
-    const namesSingletonRefusal =
-      body.includes("a shopper already exists") ||
-      body.includes("already have a shopper") ||
-      body.includes("shopper already exists");
-    expect(namesSingletonRefusal).toBe(true);
-    const namesSingleton = body.includes("singleton");
-    const refusesSecond =
-      body.includes("never mint a second shopper") ||
-      body.includes("never a second shopper") ||
-      body.includes("not a second shopper") ||
-      (body.includes("second shopper") && body.includes("never"));
-    expect(namesSingleton || refusesSecond).toBe(true);
-  });
-
-  it("reads existing agents BEFORE the add (collision check precedes `openclaw agents add`)", () => {
-    const body = engineBodyLower();
-    const listIdx = body.indexOf("openclaw agents list");
-    const addIdx = body.indexOf("openclaw agents add");
-    expect(listIdx).toBeGreaterThanOrEqual(0);
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(listIdx).toBeLessThan(addIdx);
-  });
-
-  it("states nothing is written on an invalid spec (atomic outcome)", () => {
-    const body = engineBodyLower();
-    const saysNothingWritten =
-      body.includes("write nothing") ||
-      body.includes("writes nothing") ||
-      body.includes("nothing is written") ||
-      body.includes("does not write") ||
-      body.includes("nothing partial") ||
-      body.includes("no partial");
-    expect(saysNothingWritten).toBe(true);
-  });
-});
-
-describe("references/agent_creation_engine.md — the create call is `sil_profile_materialize { agentId, name, userSpec }` with NO domain (no per-niche specs at create)", () => {
-  it("names the create-materialize call with userSpec and NO `domain` (the shopper, not a domain pack)", () => {
-    const body = engineBodyLower();
+  it("the create call is SETUP-ONLY `sil_profile_materialize { name, userSpec }` — NO domain pack, NO manifest", () => {
+    const body = engineLower();
     expect(body).toContain("sil_profile_materialize");
-    // The exact create-call arg list — `name, userSpec` only. The consolidate-
-    // profile-tools-to-the-singleton-surface card DROPS the sil-tool-call `agentId`
-    // (the store re-scopes to the singleton), so the materialize call no longer
-    // carries it. The HOST agent id survives in `openclaw agents add <id>` + the
-    // brainstorm draft (host-CLI wiring) — that distinction is per-pin, see
-    // brainstorm_interview's `{ agentId, name, persona, userSpec }` draft pin.
-    expect(body).toContain("name, userspec");
-    const passesNoDomain =
-      body.includes("pass no `domain`") ||
-      body.includes("pass no domain") ||
-      body.includes("no `domain` at create") ||
-      body.includes("no domain at create") ||
-      body.includes("with no `domain`") ||
-      body.includes("with no domain") ||
-      body.includes("without a `domain`") ||
-      body.includes("without a domain");
-    expect(passesNoDomain).toBe(true);
+    expect(body).toContain("userspec");
+    const setupOnly =
+      body.includes("setup-only") || body.includes("setup only") ||
+      body.includes("no domain") || body.includes("without a domain") || body.includes("no `domain`");
+    expect(setupOnly).toBe(true);
+    // Frontmatter-as-truth: user_spec.md carries the name; NO profile.json manifest.
+    const frontmatterName =
+      body.includes("user_spec.md") && (body.includes("frontmatter") || body.includes("name"));
+    expect(frontmatterName).toBe(true);
   });
 
-  it("states create writes the shared user_spec + an EMPTY domains map (a fresh shopper has no domains, healthily)", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("user_spec.md");
-    const namesEmptyDomains =
-      body.includes("domains: {}") ||
-      body.includes("empty `domains`") ||
-      body.includes("empty domains") ||
-      (body.includes("domains") && body.includes("map") && body.includes("empty"));
-    expect(namesEmptyDomains).toBe(true);
-  });
-
-  it("NEGATIVE: no 'all four specs from creation' — the retired four-spec create-call arg-list is GONE", () => {
-    // The lazy-mint move (create-time → first-shop) means NO per-domain pack is
-    // authored at create. We forbid the RETIRED four-spec create-call arg-list and
-    // the four-SDS-specs-at-creation framing — NOT the bare tokens `domainSpec` /
-    // `intentSpec` (the corrected engine legitimately NAMES them to DISAVOW them at
-    // create: "there is no domainSpec / intentSpec / playbook here").
-    const body = engineBodyLower();
-    expect(body).not.toContain("domainspec, intentspec, userspec, playbook");
-    expect(body).not.toContain("name, domainspec, intentspec, userspec, playbook");
-    expect(body).not.toContain("all four sds specs");
-    expect(body).not.toContain("four sds specs");
-    expect(body).not.toContain("all four are present from creation");
-  });
-});
-
-describe("references/agent_creation_engine.md — wires a host-loadable, sil-wired shopper; validate gates created", () => {
-  it("invokes `openclaw agents add` non-interactively with JSON output", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("--non-interactive");
-    expect(body).toContain("--json");
-  });
-
-  it("gates 'created' on the host's OWN validation, ordered AFTER the add, reading `.valid` (not a non-existent `ok` field)", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("openclaw config validate");
+  it("gates `created` on the host's own validation, ordered after `openclaw agents add`, and admits sil via the shipped helper", () => {
+    const body = engineLower();
+    expect(body).toContain("openclaw agents add");
     const addIdx = body.indexOf("openclaw agents add");
     const validateIdx = body.indexOf("openclaw config validate");
-    expect(addIdx).toBeGreaterThanOrEqual(0);
     expect(validateIdx).toBeGreaterThan(addIdx);
-    expect(body).toContain("valid");
-    expect(body).not.toContain("ok: false");
-  });
-
-  it("enables the sil plugin with the host's real value-mode set (`--strict-json`), NOT `--merge`", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("plugins.entries.sil.enabled true --strict-json");
-    expect(body).not.toContain("--merge");
-  });
-
-  it("pins the asserted OpenClaw image tag with NO stale 2026.4.15 lingering", () => {
-    const raw = readBody(ENGINE_PATH);
-    expect(raw).toContain("alpine/openclaw:2026.6.9");
-    expect(raw).not.toContain("2026.4.15");
-  });
-
-  it("wires the sil PLUGIN enabled AND the sil SKILL attached into the created shopper", () => {
-    const body = engineBodyLower();
-    const wiresPlugin = body.includes("plugin") && (body.includes("enable") || body.includes("enabled"));
-    const wiresSkill = body.includes("skill") && (body.includes("attach") || body.includes("attached"));
-    expect(wiresPlugin).toBe(true);
-    expect(wiresSkill).toBe(true);
-  });
-
-  it("names `persistence_failed` (with path + cause) for a write/validate failure", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("persistence_failed");
-    expect(body.includes("path") && body.includes("cause")).toBe(true);
-  });
-
-  it("states the created shopper shops with NO further setup (calls sil_search / sil_product_get immediately)", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("sil_search");
-    expect(body).toContain("sil_product_get");
-    const noFurtherSetup =
-      body.includes("no further setup") ||
-      body.includes("without further setup") ||
-      body.includes("zero further setup") ||
-      body.includes("no additional setup");
-    expect(noFurtherSetup).toBe(true);
-  });
-
-  it("does NOT couple creation to identity (no register/token as a precondition to CREATE)", () => {
-    const body = engineBodyLower();
-    const couplesIdentity =
-      /register[^.]*before[^.]*creat/.test(body) ||
-      /creat[^.]*requires[^.]*register/.test(body) ||
-      /must.*register.*to.*creat/.test(body);
-    expect(couplesIdentity).toBe(false);
-  });
-});
-
-describe("references/agent_creation_engine.md — persona → host SOUL.md directly; $SIL_DATA_DIR holds the shared user spec", () => {
-  it("writes the persona DIRECTLY into the host SOUL.md — NO sil persona.md, no copy step", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("soul.md");
-    const namesDirectWrite =
-      body.includes("straight into") ||
-      body.includes("write the persona directly") ||
-      body.includes("persona directly") ||
-      body.includes("directly into the workspace soul.md") ||
-      body.includes("directly into the host soul.md") ||
-      (body.includes("persona") && body.includes("soul.md") && body.includes("no copy"));
-    expect(namesDirectWrite).toBe(true);
-    const namesCopyStep =
-      body.includes("copy the materialized persona") ||
-      body.includes("copy the persona") ||
-      body.includes("copies the persona") ||
-      body.includes("copy persona.md");
-    expect(namesCopyStep).toBe(false);
-  });
-
-  it("names $SIL_DATA_DIR as where the shared user spec is materialized, with the store boundary kept clean (host config = wiring)", () => {
-    const body = engineBodyLower();
-    const namesDataDir =
-      body.includes("$sil_data_dir") ||
-      body.includes("sil_data_dir") ||
-      body.includes("sil data directory") ||
-      body.includes("sil data dir");
-    const namesHostConfig =
-      body.includes("openclaw agents add") || body.includes("openclaw config validate");
-    expect(namesDataDir).toBe(true);
-    expect(namesHostConfig).toBe(true);
-  });
-
-  it("the Runtime hook loads the shared user_spec + the (possibly empty) domains map; per-domain packs load LAZILY at shop time", () => {
-    // NET-NEW: the retired engine loaded four sil artefacts at runtime. The single-
-    // shopper engine loads the SHARED user spec + the domains map, and per-domain
-    // packs load lazily on first shop.
-    const body = engineBodyLower();
-    const loadsSharedUserSpec =
-      body.includes("shared `user_spec.md`") ||
-      body.includes("shared user_spec.md") ||
-      body.includes("shared user spec") ||
-      (body.includes("user_spec") && body.includes("shared"));
-    const namesDomainsMap =
-      body.includes("`domains`") || body.includes("domains map") || body.includes("domains` map");
-    const lazy =
-      body.includes("lazil") || body.includes("lazy") ||
-      body.includes("on first shop") || body.includes("at shop time");
-    expect(loadsSharedUserSpec).toBe(true);
-    expect(namesDomainsMap).toBe(true);
-    expect(lazy).toBe(true);
-  });
-});
-
-/* ===========================================================================
- * ADMISSION (#37, preserved) — the create flow admits sil at tools.alsoAllow via
- * the shipped helper, AFTER the agent shell, gating `created` on real admission.
- * ========================================================================= */
-
-/** Stable identifiers of the shipped #35 helper: the package bin, the script
- * basename, and the pnpm script. Naming one is enough; all three are distinctive
- * to the real artefact, so requiring one pins the REAL shipped helper — never a
- * hand-rolled `openclaw config set` that would clobber existing `tools.alsoAllow`. */
-const ALLOWLIST_HELPER_TOKENS = [
-  "sil-openclaw-allowlist",
-  "allowlist-openclaw.mjs",
-  "openclaw:allowlist",
-] as const;
-
-function firstHelperIdx(body: string): number {
-  const idxs = ALLOWLIST_HELPER_TOKENS.map((t) => body.indexOf(t)).filter((i) => i >= 0);
-  return idxs.length ? Math.min(...idxs) : -1;
-}
-
-describe("references/agent_creation_engine.md — admits sil at tools.alsoAllow via the shipped helper (#37, retained through the rewrite)", () => {
-  it("invokes the shipped allow-list helper (sil-openclaw-allowlist / allowlist-openclaw.mjs / openclaw:allowlist), NOT just enabling the plugin", () => {
-    const present = ALLOWLIST_HELPER_TOKENS.filter((t) => engineBodyLower().includes(t));
+    const present = ALLOWLIST_HELPER_TOKENS.filter((t) => body.includes(t));
     expect(present).not.toEqual([]);
+    expect(body).toContain("tools.alsoallow");
   });
 
-  it("names the tool-admission surface `tools.alsoAllow` (the surface that un-filters sil's tools)", () => {
-    expect(engineBodyLower()).toContain("tools.alsoallow");
+  it("refuses a SECOND shopper (singleton) and writes the persona into the host SOUL.md, never a sil persona.md", () => {
+    const body = engineLower();
+    const singletonRefusal =
+      body.includes("a shopper already exists") || body.includes("already have a shopper") ||
+      body.includes("singleton") || (body.includes("second shopper") && body.includes("never"));
+    expect(singletonRefusal).toBe(true);
+    expect(body).toContain("soul.md");
+    expect(body).not.toContain("persona.md");
   });
 
-  it("orders the admission step AFTER the agent shell is created (`openclaw agents add` precedes the helper)", () => {
-    const body = engineBodyLower();
-    const addIdx = body.indexOf("openclaw agents add");
-    const helperIdx = firstHelperIdx(body);
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(helperIdx).toBeGreaterThanOrEqual(0);
-    expect(addIdx).toBeLessThan(helperIdx);
-  });
-
-  it("gates the `created` verdict on real admission — a failed allow-list step yields `persistence_failed`, not a green `created` over filtered tools", () => {
-    const body = engineBodyLower();
-    const FAIL_TOKENS = [
-      "non-zero",
-      "exits non-zero",
-      "helper exit",
-      "helper fail",
-      "admission fail",
-      "failed admission",
-      "allow-list fail",
-      "allowlist fail",
-    ];
-    const failIdxs = FAIL_TOKENS.map((t) => body.indexOf(t)).filter((i) => i >= 0);
-    expect(failIdxs.length).toBeGreaterThan(0);
-    const failIdx = Math.min(...failIdxs);
-    const window = body.slice(Math.max(0, failIdx - 240), failIdx + 320);
-    expect(window).toContain("persistence_failed");
+  it("names the engine outcome statuses (created / invalid_request / collision / persistence_failed)", () => {
+    const body = engineLower();
+    expect(["created", "invalid_request", "collision", "persistence_failed"].filter((s) => !body.includes(s))).toEqual([]);
   });
 });
 
-/* ===========================================================================
- * BRAINSTORM / INTERVIEW — exactly TWO touchpoints (persona + shared user-spec
- * seed); NO create-time domain research / compare-options taste / intent sign-off.
- * ========================================================================= */
-
-function brainstormBodyLower(): string {
-  return readBody(BRAINSTORM_PATH).toLowerCase();
-}
-
-/**
- * The affirmative create-time-niche-work STEP instructions a regression to the
- * retired five-touchpoint interview would re-introduce: the deep niche research
- * (old §2), the compare-a-set-of-options taste (old §4), and the intent-dimension
- * sign-off (old §5) that the single-shopper interview RELOCATED to first-shop lazy
- * mint. Same phrases the old bare `not.toContain(...)` forbids targeted — but now
- * negation-aware (audit forward-gap 3): the corrected interview legitimately NAMES
- * these to DISAVOW them ("does NOT research any niche", "never interrogated here",
- * "deferred to first shop", "minted lazily"), so a bare forbid false-REDs the
- * disavowal. This is the disavowal-token discipline applied to a STEP, not a noun.
- */
-const CREATE_TIME_NICHE_STEP_RE =
-  /research (?:it|the niche) yourself|compare a set of options|ask (?:the user|you) to sign off/gi;
-
-/** Negation / deferral markers that turn an affirmative-step match into a
- * legitimate disavowal when one sits within ~28 chars before the match (mirrors
- * `perNicheExpertOffenders`' retro-allowance lookback). */
-const NICHE_STEP_DEFERRAL = [
-  "not ",
-  "never",
-  "no ",
-  "don't",
-  "deferred",
-  "instead",
-  "lazily",
-  "at first shop",
-] as const;
-
-/**
- * Affirmative create-time-niche-work step instructions that are NOT preceded
- * (within ~28 chars) by a negation/deferral token — i.e. a real regression that
- * re-introduces the retired step, never a disavowal of it. Returns the offending
- * contexts (empty ⇒ clean). Body is expected already-lowercased.
- */
-function createTimeNicheStepOffenders(body: string): string[] {
-  const offenders: string[] = [];
-  CREATE_TIME_NICHE_STEP_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = CREATE_TIME_NICHE_STEP_RE.exec(body)) !== null) {
-    const before = body.slice(Math.max(0, m.index - 28), m.index);
-    const deferred = NICHE_STEP_DEFERRAL.some((t) => before.includes(t));
-    if (!deferred) {
-      offenders.push(
-        body
-          .slice(Math.max(0, m.index - 24), m.index + m[0].length + 12)
-          .replace(/\s+/g, " ")
-          .trim(),
-      );
-    }
-  }
-  return offenders;
-}
-
-describe("references/brainstorm_interview.md — open, two-sided interview that converges a shopper draft", () => {
-  it("names the brainstorm/interview as an open, multi-turn conversation that is NOT a form-fill", () => {
-    const body = brainstormBodyLower();
-    const namesInterview = body.includes("brainstorm") || body.includes("interview");
-    const namesMultiTurn =
-      body.includes("multi-turn") ||
-      body.includes("back-and-forth") ||
-      body.includes("back and forth") ||
-      body.includes("conversation") ||
-      body.includes("conversational");
-    const disavowsForm =
-      body.includes("not a fixed questionnaire") ||
-      body.includes("not a questionnaire") ||
-      body.includes("not a form-fill") ||
-      body.includes("not a form fill") ||
-      body.includes("not a form") ||
-      body.includes("not a wizard") ||
-      (body.includes("questionnaire") && body.includes("not"));
-    expect(namesInterview).toBe(true);
-    expect(namesMultiTurn).toBe(true);
-    expect(disavowsForm).toBe(true);
-  });
-
-  it("converges with the user — reflect-back + confirm per touchpoint; collaborative / re-entrant", () => {
-    const body = brainstormBodyLower();
-    const reflectsBack =
-      body.includes("reflect back") || body.includes("reflect-back") ||
-      body.includes("reflects back") || body.includes("reflect a") ||
-      body.includes("summary of what") || body.includes("reflect");
-    const confirms =
-      body.includes("confirm") || body.includes("yes/adjust") ||
-      body.includes("before moving on") || body.includes("before advancing");
-    const collaborative =
-      body.includes("collaborative") || body.includes("re-entrant") ||
-      body.includes("reentrant") || body.includes("revise an earlier") ||
-      body.includes("revisit") || body.includes("not a locked wizard");
-    expect(reflectsBack).toBe(true);
-    expect(confirms).toBe(true);
-    expect(collaborative).toBe(true);
-  });
-});
-
-describe("references/brainstorm_interview.md — exactly TWO create touchpoints (persona + shared user-spec seed); no per-niche work at create", () => {
-  it("names exactly TWO touchpoints — the PERSONA and the SHARED USER-SPEC seed", () => {
-    // NET-NEW: the retired interview walked FIVE artefacts (one touchpoint each). The
-    // single-shopper interview collapses to TWO: persona (voice/standing rules — the
-    // shopper is a generalist, the niche no longer falls out) + a shared user-spec
-    // seed (cross-niche facts + hard constraints).
-    const body = brainstormBodyLower();
-    const namesTwoTouchpoints =
-      body.includes("two touchpoints") ||
-      body.includes("two touch-points") ||
-      body.includes("exactly two") ||
-      (body.includes("two") && body.includes("touchpoint"));
-    expect(namesTwoTouchpoints).toBe(true);
-    const namesPersona = body.includes("persona");
-    const namesSharedUserSpec =
-      body.includes("shared user spec") ||
-      body.includes("shared `user_spec") ||
-      body.includes("shared user_spec") ||
-      (body.includes("user spec") && body.includes("shared")) ||
-      (body.includes("user_spec") && body.includes("shared"));
-    expect(namesPersona).toBe(true);
-    expect(namesSharedUserSpec).toBe(true);
-  });
-
-  it("seeds the SHARED user spec with cross-niche facts + hard constraints (not a per-niche fact)", () => {
-    const body = brainstormBodyLower();
-    const namesCrossNiche =
-      body.includes("cross-niche") || body.includes("across every niche") ||
-      body.includes("every niche") || body.includes("across niches");
-    const namesFactsAndConstraints =
-      (body.includes("fact") || body.includes("address") || body.includes("size")) &&
-      (body.includes("hard constraint") || body.includes("hard-constraint") || body.includes("constraint"));
-    expect(namesCrossNiche).toBe(true);
-    expect(namesFactsAndConstraints).toBe(true);
-  });
-
-  it("RELOCATES niche work to first-shop lazy mint — no domain-research / compare-options / sign-off STEP runs at onboarding", () => {
-    // The deep domain research (old §2), the compare-a-set-of-options taste (old §4),
-    // and the intent-dimension sign-off (old §5) MOVE to first-shop lazy mint
-    // (shop_loop.md). The corrected interview legitimately NAMES them only to
-    // DISAVOW them ("not authored here", "deferred to first shop") — so we pin the
-    // relocation POSITIVELY and forbid the AFFIRMATIVE old-model STEP instructions,
-    // NEVER the bare tokens (the disavowal-token trap that false-greens/false-reds a
-    // corrected doc).
-    const body = brainstormBodyLower();
-    // POSITIVE: the niche work is deferred to first shop / lazy mint.
-    const relocates =
-      (body.includes("first shop") || body.includes("lazily") || body.includes("lazy mint")) &&
-      (body.includes("not authored here") ||
-        body.includes("deferred") ||
-        body.includes("no domain interview") ||
-        body.includes("does not research any niche") ||
-        body.includes("no niche is researched") ||
-        body.includes("minted lazily") ||
-        body.includes("minted later"));
-    expect(relocates).toBe(true);
-    // NEGATIVE (negation-aware — audit forward-gap 3): the active old five-touchpoint
-    // create-STEP instructions are gone. A regression re-introduces one of these
-    // affirmative steps ("research the niche yourself", "compare a set of options",
-    // "ask the user to sign off"); the corrected interview only NAMES them to disavow
-    // them. So flag a match ONLY when no negation/deferral token sits within ~28 chars
-    // before it — NEVER a bare `not.toContain(...)`, which would false-RED a future
-    // negated disavowal ("never asks you to research the niche yourself"). Matcher
-    // stays `.toEqual([])` (add-only).
-    expect(createTimeNicheStepOffenders(body)).toEqual([]);
-  });
-});
-
-describe("references/brainstorm_interview.md — the assembled draft is { agentId, name, persona, userSpec }; endorsement-gated", () => {
-  it("frames the converged output as a { agentId, name, persona, userSpec } draft (no domain, no per-niche specs)", () => {
-    const body = brainstormBodyLower();
-    expect(body).toContain("agentid");
+describe("references/brainstorm_interview.md — the TWO-touchpoint, endorsement-gated creation interview", () => {
+  it("exists; an open multi-turn interview (not a form-fill) with exactly two touchpoints: persona + shared user-spec seed", () => {
+    expect(existsSync(BRAINSTORM_PATH)).toBe(true);
+    const body = readBody(BRAINSTORM_PATH).toLowerCase();
+    expect(body.includes("brainstorm") || body.includes("interview")).toBe(true);
+    const twoTouchpoints =
+      body.includes("two touchpoints") || body.includes("two touch-points") || (body.includes("two") && body.includes("touchpoint"));
+    expect(twoTouchpoints).toBe(true);
     expect(body).toContain("persona");
-    expect(body).toContain("userspec");
-    const namesKebab =
-      body.includes("lower-kebab") || body.includes("lower kebab") || body.includes("kebab");
-    expect(namesKebab).toBe(true);
-    expect(body).toContain("main");
-    // NET-NEW draft shape: the contiguous { agentId, name, persona, userSpec } arg
-    // list. The retired draft carried { …, domainSpec, intentSpec, userSpec, playbook }.
-    // Pin the new shape POSITIVELY — the corrected doc legitimately NAMES
-    // domainSpec/intentSpec only to DISAVOW them ("no domainSpec/intentSpec — there
-    // is none at create"), so a bare `not.toContain("domainspec")` would false-fail.
-    expect(body).toContain("agentid, name, persona, userspec");
+    const sharedUserSpec = body.includes("shared user spec") || (body.includes("user_spec") && body.includes("shared")) || (body.includes("user spec") && body.includes("shared"));
+    expect(sharedUserSpec).toBe(true);
   });
 
-  it("names an explicit endorsement/go-ahead on the assembled draft, BEFORE the engine handoff", () => {
-    const body = brainstormBodyLower();
-    const namesEndorsement =
-      body.includes("endorse") || body.includes("endorsement") ||
-      body.includes("go-ahead") || body.includes("go ahead");
-    const namesDraft =
-      body.includes("draft") || body.includes("assembled spec") || body.includes("assembled draft");
-    expect(namesEndorsement).toBe(true);
-    expect(namesDraft).toBe(true);
+  it("assembles a draft and reaches the engine ONLY after an explicit endorsement — nothing created before that", () => {
+    const body = readBody(BRAINSTORM_PATH).toLowerCase();
     const endorseIdx = body.indexOf("endorse");
     const lastEngineHandoffIdx = body.lastIndexOf("agent_creation_engine.md");
     expect(endorseIdx).toBeGreaterThanOrEqual(0);
     expect(lastEngineHandoffIdx).toBeGreaterThanOrEqual(0);
     expect(endorseIdx).toBeLessThan(lastEngineHandoffIdx);
-  });
-
-  it("states ZERO engine steps run before endorsement; abandon mid-flow creates nothing", () => {
-    const body = brainstormBodyLower();
-    const nothingBeforeEndorse =
-      body.includes("nothing is created until") ||
-      body.includes("nothing created until") ||
-      body.includes("creates nothing until") ||
-      body.includes("zero engine steps") ||
-      body.includes("no engine step") ||
-      (body.includes("only") && body.includes("endorse"));
-    const abandonClean =
-      body.includes("nothing is created") || body.includes("nothing created") ||
-      body.includes("created nothing") || body.includes("no partial") ||
-      body.includes("nothing partial") || body.includes("clean state");
-    expect(nothingBeforeEndorse).toBe(true);
-    expect(abandonClean).toBe(true);
-  });
-
-  it("does NOT present sil registration / a token as a prerequisite to CREATE the shopper", () => {
-    const body = brainstormBodyLower();
-    const couplesIdentity =
-      /register[^.]*before[^.]*creat/.test(body) ||
-      /creat[^.]*requires[^.]*register/.test(body) ||
-      /must.*register.*to.*creat/.test(body);
-    expect(couplesIdentity).toBe(false);
+    const nothingBefore =
+      body.includes("nothing is created") || body.includes("nothing created") || body.includes("creates nothing") || body.includes("no partial");
+    expect(nothingBefore).toBe(true);
   });
 });
 
 /* ===========================================================================
- * SHOP LOOP — the heart of the model change. classify → reuse-before-mint →
- * on-miss research + materialize WITH domain (announced, correctable) → the loop
- * over the active domain; per-query sil_remember; precedence with SHARED user_spec.
+ * WORKED EXAMPLE — the six-beat multi-domain headline.
  * ========================================================================= */
 
-function shopLoopBodyLower(): string {
-  return readBody(SHOP_LOOP_PATH).toLowerCase();
-}
-
-describe("references/shop_loop.md — exists; one shopper, many lazily-minted domains", () => {
-  it("exists on disk", () => {
-    expect(existsSync(SHOP_LOOP_PATH)).toBe(true);
-  });
-
-  it("frames ONE shopper holding many domains, each minted lazily on first shop, reading the shared user spec + the domains map", () => {
-    const body = shopLoopBodyLower();
-    const oneShopperManyDomains =
-      (body.includes("one shopper") && body.includes("domain")) ||
-      (body.includes("single shopper") && body.includes("domain"));
-    expect(oneShopperManyDomains).toBe(true);
-    const lazyMint =
-      body.includes("minted lazily") || body.includes("lazily") ||
-      (body.includes("mint") && body.includes("first shop"));
-    expect(lazyMint).toBe(true);
-    const readsSharedUserSpec =
-      body.includes("shared user spec") || body.includes("shared `user_spec") ||
-      (body.includes("user_spec") && body.includes("shared"));
-    expect(readsSharedUserSpec).toBe(true);
-  });
-});
-
-describe("references/shop_loop.md — entry: classify → reuse-before-mint (semantic dedup) → on-miss mint announced + correctable", () => {
-  it("classifies the query's niche by skill reasoning (no routing tool), then reads profile.json.domains", () => {
-    const body = shopLoopBodyLower();
-    const namesClassify = body.includes("classify") || body.includes("classif");
-    expect(namesClassify).toBe(true);
-    const readsDomainsMap =
-      body.includes("profile.json.domains") ||
-      body.includes("profile.json`.domains") ||
-      (body.includes("profile.json") && body.includes("domains"));
-    expect(readsDomainsMap).toBe(true);
-  });
-
-  it("REUSES an existing matching domain before minting — semantic slug dedup is the shop loop's job (load-bearing)", () => {
-    // Architect risk: the store enforces only shape; without reuse-before-mint the
-    // one shopper fragments into thin duplicate packs. This is the headline dedup
-    // rule the test must pin hard.
-    const body = shopLoopBodyLower();
-    const namesReuseBeforeMint =
-      body.includes("reuse-before-mint") ||
-      body.includes("reuse an existing domain before minting") ||
-      (body.includes("reuse") && (body.includes("before mint") || body.includes("before minting")));
-    expect(namesReuseBeforeMint).toBe(true);
-    const namesSemanticDedup = body.includes("semantic") && (body.includes("dedup") || body.includes("slug"));
-    const namesFragmentRisk =
-      body.includes("fragment") || body.includes("duplicate") || body.includes("thin pack") || body.includes("thin packs");
-    expect(namesSemanticDedup || namesFragmentRisk).toBe(true);
-  });
-
-  it("on a MISS mints the domain on the fly, ANNOUNCED, with the inferred domain STATED so the user can correct it", () => {
-    const body = shopLoopBodyLower();
-    const announces =
-      body.includes("announce") || body.includes("announced") ||
-      (body.includes("tell the user") && body.includes("new niche"));
-    const disavowsSilentMint =
-      body.includes("never silently") || body.includes("not silently") ||
-      (body.includes("announce") && body.includes("never"));
-    const correctable =
-      body.includes("correct it") || body.includes("can correct") ||
-      body.includes("stated so the user can correct") || body.includes("the inferred");
-    expect(announces).toBe(true);
-    expect(disavowsSilentMint).toBe(true);
-    expect(correctable).toBe(true);
-  });
-
-  it("on a MISS runs the research pass + persists with `sil_profile_materialize` WITH a `domain` object (the whole-doc mint path)", () => {
-    const body = shopLoopBodyLower();
-    expect(body.includes("research")).toBe(true);
-    expect(body).toContain("sil_profile_materialize");
-    const withDomainObject =
-      body.includes("with the `domain` object") ||
-      body.includes("with the domain object") ||
-      body.includes("with a `domain` object") ||
-      body.includes("with a domain object") ||
-      body.includes("domain: { slug") ||
-      (body.includes("sil_profile_materialize") && body.includes("domain") && body.includes("slug"));
-    expect(withDomainObject).toBe(true);
-  });
-});
-
-describe("references/shop_loop.md — layering precedence with the SHARED user spec; per-query learning via sil_remember", () => {
-  it("layers intent > playbook(domain) > user_spec(SHARED) > domain_spec(domain), with hard-constraint inviolability", () => {
-    const body = shopLoopBodyLower();
-    const namesPrecedence =
-      body.includes("intent > playbook") ||
-      (body.includes("precedence") && body.includes("intent") && body.includes("playbook") &&
-        body.includes("user_spec") && body.includes("domain_spec"));
-    expect(namesPrecedence).toBe(true);
-    const userSpecIsShared =
-      body.includes("user_spec(shared)") ||
-      body.includes("shared user spec") ||
-      (body.includes("user_spec") && body.includes("shared"));
-    expect(userSpecIsShared).toBe(true);
-    const hardInviolable =
-      (body.includes("hard constraint") || body.includes("hard-constraint")) &&
-      (body.includes("inviolable") || body.includes("never overrid") || body.includes("never break") || body.includes("never violate"));
-    expect(hardInviolable).toBe(true);
-  });
-
-  it("persists a per-query learning with a SINGLE sil_remember call — fact → SHARED user spec, taste → ACTIVE domain", () => {
-    const body = shopLoopBodyLower();
-    expect(body).toContain("sil_remember");
-    const factToShared =
-      (body.includes('kind: "fact"') || body.includes("kind:fact") || body.includes("kind: fact")) &&
-      (body.includes("shared") || body.includes("every niche") || body.includes("across"));
-    expect(factToShared).toBe(true);
-    const tasteToActiveDomain =
-      (body.includes('kind: "taste"') || body.includes("kind:taste") || body.includes("kind: taste")) &&
-      body.includes("active domain");
-    expect(tasteToActiveDomain).toBe(true);
-  });
-
-  it("reserves the whole-doc `sil_profile_materialize` for the heavy paths (mint, web refresh, refine) — NOT per-query learning", () => {
-    const body = shopLoopBodyLower();
-    expect(body).toContain("sil_profile_materialize");
-    expect(body).toContain("sil_remember");
-    const reservesWholeDoc =
-      body.includes("whole-doc") || body.includes("whole doc") ||
-      body.includes("web refresh") || body.includes("web-refresh") ||
-      body.includes("refine") || body.includes("contradict") ||
-      body.includes("re-materialize");
-    expect(reservesWholeDoc).toBe(true);
-  });
-
-  it("carries an after-recommendation capture that routes each surfaced fact/taste through sil_remember, firing ONLY when something surfaced", () => {
-    const body = shopLoopBodyLower();
-    const triggers = [
-      "after every recommendation",
-      "after a recommendation",
-      "after the recommendation",
-      "after recommending",
-      "before the turn ends",
-      "post-recommendation",
-      "after-recommendation",
-    ];
-    const hits = triggers.map((t) => body.indexOf(t)).filter((i) => i >= 0).sort((a, b) => a - b);
-    expect(hits.length, "no after-recommendation trigger phrase found").toBeGreaterThan(0);
-    const at = hits[0] ?? 0;
-    expect(body.slice(at, at + 600)).toContain("sil_remember");
-    const onlyWhenSurfaced =
-      body.includes("only when") || body.includes("only if") ||
-      body.includes("nothing surfaced") || body.includes("no new fact") ||
-      body.includes("no empty") || body.includes("noise");
-    expect(onlyWhenSurfaced).toBe(true);
-  });
-
-  it("keeps capture in-the-open + reviewable via sil_profile_get + erasable via sil_profile_remove", () => {
-    const body = shopLoopBodyLower();
-    const inTheOpen =
-      body.includes("in the open") || body.includes("in-the-open") ||
-      body.includes("never silently harvested") || body.includes("not silently harvested");
-    expect(inTheOpen).toBe(true);
-    expect(body).toContain("sil_profile_get");
-    expect(body).toContain("sil_profile_remove");
-  });
-});
-
-describe("references/shop_loop.md — the map/search/compare/recommend loop (preserved invariants)", () => {
-  it("maps to real sil_search params, never invents a filter, leaves ship_to empty without a sil_whoami round-trip", () => {
-    const body = shopLoopBodyLower();
-    expect(body).toContain("sil_search");
-    const neverInvents =
-      body.includes("never invent a filter") || body.includes("never invent a param") ||
-      body.includes("not invent a filter") || body.includes("do not invent") ||
-      (body.includes("invent") && body.includes("filter"));
-    expect(neverInvents).toBe(true);
-    expect(body).toContain("ship_to");
-    const leavesShipToEmpty =
-      body.includes("ship_to empty") || body.includes("leave ship_to empty") ||
-      (body.includes("ship_to") && body.includes("empty"));
-    expect(leavesShipToEmpty).toBe(true);
-    const disavowsWhoami =
-      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) ||
-      /sil_whoami[^.]*(never|not)/.test(body);
-    expect(disavowsWhoami).toBe(true);
-  });
-
-  it("recommends with the 'why' that cites the layers, presents best-first, and never re-ranks", () => {
-    const body = shopLoopBodyLower();
-    const requiresWhy =
-      body.includes("rationale") || body.includes('"why"') || body.includes("the why") ||
-      body.includes("why this") || (body.includes("recommend") && body.includes("cite"));
-    expect(requiresWhy).toBe(true);
-    const namesBestFirst = body.includes("best-first") || body.includes("best first") || body.includes("in order");
-    const disavowsRerank =
-      body.includes("never re-rank") || body.includes("not re-rank") ||
-      body.includes("do not re-rank") || (body.includes("re-rank") && body.includes("not"));
-    expect(namesBestFirst).toBe(true);
-    expect(disavowsRerank).toBe(true);
-  });
-
-  it("re-fetches the chosen item with sil_product_get BEFORE any buy (never commits off the stale sil_search snapshot)", () => {
-    // A bare indexOf("buy") mis-anchors on "buying niche" / "how to buy well" early
-    // in the doc, so pin the re-fetch-before-buy invariant by PHRASE, not a global
-    // ordering scan: the pre-buy re-fetch step + the never-off-stale rule.
-    const body = shopLoopBodyLower();
-    expect(body).toContain("sil_product_get");
-    const refetchBeforeBuy =
-      body.includes("before any buy") ||
-      body.includes("before the buy") ||
-      body.includes("before any purchase") ||
-      body.includes("before any checkout") ||
-      (body.includes("re-fetch") && body.includes("before"));
-    expect(refetchBeforeBuy).toBe(true);
-    const neverOffStale =
-      body.includes("never commit a buy off the stale") ||
-      body.includes("off the stale") ||
-      (body.includes("stale") && body.includes("snapshot")) ||
-      body.includes("point-in-time");
-    expect(neverOffStale).toBe(true);
-
-    // Two-sided contract (audit forward-gap 2): the PROSE deliberately keeps every
-    // buy-substring OUT of Steps 0–7 — it shops with "shop well" / "shopping taste",
-    // never "buy well" / "buying taste" — so the FIRST "buy" substring in the body
-    // is the real Step-8 re-fetch step. Anchor on the FIRST occurrence and assert
-    // its surrounding window co-locates with the `sil_product_get` re-fetch, so a
-    // future "buy well" in an early step moves the first buy UPSTREAM into a window
-    // that names neither `sil_product_get` nor the re-fetch → RED. This is a POSITIVE
-    // window pin, NOT a naive global indexOf("buy") vs indexOf("sil_product_get")
-    // ordering scan (which downstream "unbuyable" / "buying taste" would confound).
-    const firstBuy = body.indexOf("buy");
-    expect(firstBuy).toBeGreaterThanOrEqual(0);
-    const firstBuyWindow = body.slice(Math.max(0, firstBuy - 140), firstBuy + 20);
-    expect(firstBuyWindow).toContain("sil_product_get");
-    expect(firstBuyWindow).toMatch(/re-fetch|before any buy/);
-  });
-
-  it("handles ok+empty (relax + explain), the unservable 'no' (never junk), and non-ok (follow recovery, never improvise)", () => {
-    const body = shopLoopBodyLower();
-    const relaxesEmpty =
-      (body.includes("relax") || body.includes("re-frame") || body.includes("broaden")) &&
-      body.includes("explain");
-    expect(relaxesEmpty).toBe(true);
-    const honestNo =
-      (body.includes("cannot serve") || body.includes("unservable") || body.includes("not shippable") || body.includes("out of scope")) &&
-      (body.includes("honest") || body.includes("never fabricate") || body.includes("never pad") || body.includes("junk"));
-    expect(honestNo).toBe(true);
-    expect(body).toContain("recovery");
-    const neverImprovise =
-      body.includes("never improvise") || body.includes("not improvise") || body.includes("follow the tool");
-    expect(neverImprovise).toBe(true);
-  });
-
-  it("DELEGATES the param table to search_param_mapping.md and the status taxonomy to catalog_tools_reference.md (references, does not restate)", () => {
-    const body = shopLoopBodyLower();
-    expect(body).toContain("search_param_mapping.md");
-    expect(body).toContain("catalog_tools_reference.md");
-    expect(body).not.toContain("awaiting_browser");
-    expect(body).not.toContain("not_registered");
-    expect(body).not.toContain("must_reregister");
-  });
-});
-
-/* ===========================================================================
- * MANAGE DOMAINS — list/view/remove operate on DOMAINS; remove ONE domain; two
- * granularities (forget a domain vs decommission the whole shopper).
- * ========================================================================= */
-
-function manageBodyLower(): string {
-  return readBody(MANAGE_PATH).toLowerCase();
-}
-
-describe("references/manage_domains.md — exists; names the three management tools", () => {
-  it("exists on disk", () => {
-    expect(existsSync(MANAGE_PATH)).toBe(true);
-  });
-
-  it("names the two surviving management tools sil_profile_get and sil_profile_remove (sil_profile_list folded away)", () => {
-    const body = readBody(MANAGE_PATH);
-    const missing = ["sil_profile_get", "sil_profile_remove"].filter(
-      (name) => !body.includes(name),
-    );
-    expect(missing).toEqual([]);
-    // The no-args sil_profile_get (Zoom A) absorbs the listing — sil_profile_list is gone.
-    expect(body).not.toContain("sil_profile_list");
-  });
-});
-
-describe("references/manage_domains.md — list/view/remove operate on DOMAINS; remove forgets ONE domain", () => {
-  it("frames the managed unit as the shopper's DOMAINS (list/view/remove a domain), not per-niche experts", () => {
-    const body = manageBodyLower();
-    const namesList = body.includes("list");
-    const namesView = body.includes("view") || body.includes("show");
-    const namesRemove = body.includes("remove") || body.includes("forget") || body.includes("delete");
-    expect(namesList && namesView && namesRemove).toBe(true);
-    expect(body).toContain("domain");
-  });
-
-  it("`sil_profile_remove { domainSlug }` forgets ONE domain — the shopper, the shared user spec, and the SIBLING domains survive", () => {
-    // NET-NEW: the retired manage flow removed a whole expert via `sil_profile_remove
-    // { agentId }`. The single-shopper flow forgets ONE domain (domainSlug REQUIRED,
-    // no caller agentId), leaving the shopper + shared user_spec + sibling domains intact.
-    const body = manageBodyLower();
-    const namesDomainSlug =
-      body.includes("domainslug") || body.includes("domain_slug") || body.includes("domain slug");
-    expect(namesDomainSlug).toBe(true);
-    const forgetsOneDomain =
-      body.includes("forget one domain") || body.includes("forget a domain") ||
-      body.includes("one domain") || body.includes("single domain") ||
-      (body.includes("one") && body.includes("domain") && body.includes("pack"));
-    expect(forgetsOneDomain).toBe(true);
-    const siblingsSurvive =
-      body.includes("sibling") || body.includes("other domains") ||
-      body.includes("shared user spec") || (body.includes("the shopper") && body.includes("survive"));
-    expect(siblingsSurvive).toBe(true);
-  });
-
-  it("makes the TWO remove granularities distinct — forget a DOMAIN vs decommission the WHOLE SHOPPER (host CLI)", () => {
-    // NET-NEW: "delete the grocery agent" now means forget the grocery DOMAIN.
-    // Decommissioning the whole shopper (host wiring + SOUL.md + tree) is a separate,
-    // host-CLI-first action.
-    const body = manageBodyLower();
-    const namesForgetDomain = body.includes("forget") && body.includes("domain");
-    const namesDecommissionShopper =
-      body.includes("decommission") || body.includes("whole shopper") ||
-      body.includes("the entire shopper") || (body.includes("openclaw agents remove") && body.includes("shopper"));
-    expect(namesForgetDomain).toBe(true);
-    expect(namesDecommissionShopper).toBe(true);
-    expect(body).toContain("openclaw agents remove");
-  });
-
-  it("confirms before a destructive remove; frames not_found / invalid_request gracefully (never a stack trace / raw path)", () => {
-    const body = manageBodyLower();
-    const confirms =
-      body.includes("confirm") || body.includes("explicit go-ahead") || body.includes("ask before");
-    expect(confirms).toBe(true);
-    expect(body).toContain("not_found");
-    expect(body).toContain("invalid_request");
-    const graceful =
-      body.includes("never a stack trace") || body.includes("not a stack trace") ||
-      body.includes("raw path") || body.includes("raw filesystem path") ||
-      (body.includes("stack trace") && body.includes("never"));
-    expect(graceful).toBe(true);
-  });
-
-  it("keeps the artefact-store source-of-truth framing (profile.json, never the host agent list)", () => {
-    const body = manageBodyLower();
-    const namesArtefactSource =
-      body.includes("profile.json") || body.includes("artefact store") ||
-      body.includes("sil_data_dir") || body.includes("sil data dir");
-    expect(namesArtefactSource).toBe(true);
-    const namesSourceOfTruth =
-      body.includes("source of truth") || body.includes("source-of-truth") ||
-      body.includes("never the host agent list") || body.includes("not the host agent list");
-    expect(namesSourceOfTruth).toBe(true);
-  });
-
-  it("names the manage status taxonomy (ok / not_found / invalid_request / removed / persistence_failed)", () => {
-    const body = manageBodyLower();
-    const missing = ["ok", "not_found", "invalid_request", "removed", "persistence_failed"].filter(
-      (s) => !body.includes(s),
-    );
-    expect(missing).toEqual([]);
-  });
-});
-
-/* ===========================================================================
- * REFINE SHOPPER — refine the shared user_spec OR one domain pack (by slug);
- * persisted whole-doc; persona → SOUL.md; confirm-subset gate.
- * ========================================================================= */
-
-function refineBodyLower(): string {
-  return readBody(REFINE_PATH).toLowerCase();
-}
-
-function refineCorpusLower(): string {
-  return (readBody(REFINE_PATH) + "\n" + readBody(MAPPING_PATH)).toLowerCase();
-}
-
-describe("references/refine_shopper.md — exists; composes the load + persist tools", () => {
-  it("exists on disk", () => {
-    expect(existsSync(REFINE_PATH)).toBe(true);
-  });
-
-  it("names the load step `sil_profile_get` and the persist step `sil_profile_materialize`", () => {
-    const body = refineBodyLower();
-    expect(body).toContain("sil_profile_get");
-    expect(body).toContain("sil_profile_materialize");
-  });
-});
-
-describe("references/refine_shopper.md — targets the SHARED user_spec OR one DOMAIN pack (by slug)", () => {
-  it("names the two refine targets — the shared user_spec (shopper-level) OR one domain pack selected by slug", () => {
-    // NET-NEW: the retired refine targeted the four specs of one expert. The single-
-    // shopper refine targets either the SHARED user_spec (no domain) OR one domain
-    // pack (by slug — its domain_spec / intent_spec / playbook).
-    const body = refineBodyLower();
-    const namesSharedUserSpec =
-      body.includes("shared user spec") || body.includes("shared `user_spec") ||
-      (body.includes("user_spec") && body.includes("shared"));
-    expect(namesSharedUserSpec).toBe(true);
-    const namesDomainPackBySlug =
-      (body.includes("domain pack") || body.includes("one domain") || body.includes("a domain")) &&
-      (body.includes("slug") || body.includes("domainslug"));
-    expect(namesDomainPackBySlug).toBe(true);
-  });
-
-  it("frames a distinct REFINE capability (load → propose → confirm → persist), session-grounded, never a generic template", () => {
-    const body = refineBodyLower();
-    const namesRefine = body.includes("refine") || body.includes("sharpen") || body.includes("amend");
-    expect(namesRefine).toBe(true);
-    const namesObserved =
-      body.includes("observed session") || body.includes("observed shopping") ||
-      (body.includes("observed") && body.includes("session"));
-    expect(namesObserved).toBe(true);
-    const disavowsGeneric =
-      body.includes("not a generic template") || body.includes("not a generic") ||
-      body.includes("never a generic") || body.includes("ungrounded") ||
-      (body.includes("generic") && body.includes("not"));
-    expect(disavowsGeneric).toBe(true);
-  });
-
-  it("persists ONLY the confirmed subset, gated on explicit confirmation that is NEVER inferred from silence / off-topic", () => {
-    const body = refineBodyLower();
-    const namesSubset =
-      body.includes("subset") || body.includes("all, some, or none") ||
-      body.includes("per-proposal") || body.includes("which to keep");
-    expect(namesSubset).toBe(true);
-    const confirmIdx = body.indexOf("confirm");
-    const materializeIdx = body.indexOf("sil_profile_materialize");
-    expect(confirmIdx).toBeGreaterThanOrEqual(0);
-    expect(materializeIdx).toBeGreaterThanOrEqual(0);
-    expect(confirmIdx).toBeLessThan(materializeIdx);
-    const disavowsSilence =
-      body.includes("never inferred from silence") || body.includes("not inferred from silence") ||
-      (body.includes("silence") && body.includes("never"));
-    const disavowsOffTopic =
-      body.includes("off-topic") || body.includes("off topic") ||
-      body.includes("unrelated question") || body.includes("unrelated reply") || body.includes("an unrelated");
-    expect(disavowsSilence).toBe(true);
-    expect(disavowsOffTopic).toBe(true);
-  });
-});
-
-describe("references/refine_shopper.md — persist is whole-doc + atomic; failure leaves prior intact; persona → SOUL.md", () => {
-  it("persists via the whole-doc `sil_profile_materialize` re-write (no hand-rolled write, no new tool)", () => {
-    const body = refineBodyLower();
-    expect(body).toContain("sil_profile_materialize");
-    const namesAtomicRewrite =
-      body.includes("atomic") || body.includes("in-place re-write") || body.includes("in-place rewrite") ||
-      body.includes("re-materialize") || body.includes("overwrit") || body.includes("whole-doc");
-    expect(namesAtomicRewrite).toBe(true);
-  });
-
-  it("states a persist FAILURE leaves the PRIOR artefacts intact (never a half-refined shopper)", () => {
-    const body = refineBodyLower();
-    const priorSurvives =
-      body.includes("prior artefacts") || body.includes("prior state") ||
-      body.includes("left intact") || body.includes("leaves intact") ||
-      (body.includes("intact") && body.includes("prior"));
-    const neverHalf =
-      body.includes("half-refined") || body.includes("never half") ||
-      body.includes("did not stick") || body.includes("nothing partial") || body.includes("no partial");
-    expect(priorSurvives).toBe(true);
-    expect(neverHalf).toBe(true);
-  });
-
-  it("a PERSONA refinement refreshes the host SOUL.md via the host CLI — NOT a sil persona.md", () => {
-    const body = refineBodyLower();
-    const namesSoulRefresh =
-      body.includes("soul.md") &&
-      (body.includes("refresh") || body.includes("rewrite") || body.includes("re-write") ||
-        body.includes("update") || body.includes("host cli") || body.includes("host-cli"));
-    expect(namesSoulRefresh).toBe(true);
-    expect(body).not.toContain("persona.md");
-  });
-});
-
-describe("references/refine_shopper.md — per-user/local; isolation; no-signal fallback; points at the mapping", () => {
-  it("frames refinement as per-user + local under $SIL_DATA_DIR with NO server endpoint / identity round-trip", () => {
-    const body = refineBodyLower();
-    const namesPerUserLocal =
-      body.includes("per-user") || body.includes("per user") || body.includes("local") || body.includes("your own");
-    const namesDataDir =
-      body.includes("$sil_data_dir") || body.includes("sil_data_dir") ||
-      body.includes("sil data directory") || body.includes("sil data dir");
-    expect(namesPerUserLocal).toBe(true);
-    expect(namesDataDir).toBe(true);
-    expect(body).not.toContain("sil_register");
-    expect(body).not.toContain("sil_whoami");
-    expect(body).not.toContain("sil-api");
-    expect(body).not.toContain("https://");
-  });
-
-  it("isolates the refine to the targeted scope — siblings + the shared spec untouched unless they ARE the target", () => {
-    const body = refineBodyLower();
-    const namesIsolation =
-      body.includes("sibling") || body.includes("other domains") ||
-      body.includes("untouched") || body.includes("isolation") || body.includes("isolated");
-    expect(namesIsolation).toBe(true);
-  });
-
-  it("on no observed-session signal, falls back to a guided amend / invite-to-shop-first — never fabricates observations", () => {
-    const body = refineBodyLower();
-    const namesNoSignal =
-      body.includes("no observed") || body.includes("no session") ||
-      body.includes("fresh session") || body.includes("out of context") || body.includes("no signal");
-    const namesFallback =
-      body.includes("guided amend") || body.includes("ask the user what to change") ||
-      body.includes("ask what to change") || body.includes("invite") || body.includes("shop first");
-    expect(namesNoSignal).toBe(true);
-    expect(namesFallback).toBe(true);
-    const disavowsFabrication =
-      body.includes("not fabricate") || body.includes("never fabricate") ||
-      body.includes("do not fabricate") || body.includes("never invent") ||
-      (body.includes("fabricat") && body.includes("not"));
-    expect(disavowsFabrication).toBe(true);
-  });
-
-  it("points at search_param_mapping.md for the param table rather than re-carrying it (ship_to-empty rule preserved)", () => {
-    const refineOnly = readBody(REFINE_PATH).toLowerCase();
-    expect(refineOnly).toContain("search_param_mapping.md");
-    expect(refineOnly).not.toContain("price_min");
-    expect(refineOnly).not.toContain("price_max");
-    expect(refineCorpusLower()).toContain("ship_to");
-  });
-});
-
-/* ===========================================================================
- * WORKED EXAMPLE — multi_domain_shopper_walkthrough.md demonstrates the headline:
- * create once → shop ≥2 unrelated niches in one session, 2nd minted on the fly +
- * announced, a shared fact reused across niches, taste isolation, a sil_remember.
- * ========================================================================= */
-
-function exampleBodyLower(): string {
+function exampleLower(): string {
   return readBody(EXAMPLE_PATH).toLowerCase();
 }
 
-describe("examples/multi_domain_shopper_walkthrough.md — exists; create-once, endorsement-gated", () => {
-  it("the renamed walkthrough exists on disk", () => {
+describe("examples/multi_domain_shopper_walkthrough.md — a worked six-beat, multi-domain run", () => {
+  it("exists; create-ONCE reaching the engine only after the explicit endorsement", () => {
     expect(existsSync(EXAMPLE_PATH)).toBe(true);
-  });
-
-  it("walks create-ONCE of the shopper, reaching the engine only after the explicit endorsement", () => {
-    const body = exampleBodyLower();
+    const body = exampleLower();
     expect(body).toContain("shopper");
-    expect(body).toContain("openclaw agents add");
     const endorseIdx = body.indexOf("endorse");
     const addIdx = body.indexOf("openclaw agents add");
     expect(endorseIdx).toBeGreaterThanOrEqual(0);
     expect(addIdx).toBeGreaterThanOrEqual(0);
     expect(endorseIdx).toBeLessThan(addIdx);
   });
-});
 
-describe("examples/multi_domain_shopper_walkthrough.md — the multi-domain headline", () => {
-  it("shops ≥2 UNRELATED niches in ONE session with no agent switch, the 2nd minted on the fly + ANNOUNCED", () => {
-    // NET-NEW: the retired example shopped one niche (road cycling) across queries.
-    // The new walkthrough demonstrates two UNRELATED niches in the same session, the
-    // second minted lazily on the fly and announced.
-    const body = exampleBodyLower();
-    const namesSecondNiche =
-      body.includes("second niche") || body.includes("another niche") ||
-      body.includes("a second, unrelated niche") || body.includes("unrelated niche") ||
-      (body.includes("two") && body.includes("niche"));
-    expect(namesSecondNiche).toBe(true);
-    const sameSession =
-      body.includes("same session") || body.includes("one session") ||
-      body.includes("no agent switch") || body.includes("without switching");
+  it("shops ≥2 UNRELATED niches in ONE session, the 2nd minted on the fly + ANNOUNCED, a shared user_spec fact reused across niches", () => {
+    const body = exampleLower();
+    const secondNiche =
+      body.includes("second niche") || body.includes("another niche") || body.includes("unrelated niche") || (body.includes("two") && body.includes("niche"));
+    expect(secondNiche).toBe(true);
+    const sameSession = body.includes("same session") || body.includes("one session") || body.includes("no agent switch");
     expect(sameSession).toBe(true);
-    const mintedAnnounced =
-      body.includes("mint") && (body.includes("announce") || body.includes("on the fly") || body.includes("on the spot"));
+    const mintedAnnounced = body.includes("mint") && (body.includes("announce") || body.includes("on the fly"));
     expect(mintedAnnounced).toBe(true);
-  });
-
-  it("reuses a SHARED fact captured in niche A while shopping niche B (never re-asked)", () => {
-    const body = exampleBodyLower();
     const sharedReuse =
       (body.includes("shared") || body.includes("across") || body.includes("every niche")) &&
-      (body.includes("reuse") || body.includes("reused") || body.includes("never re-ask") ||
-        body.includes("without re-asking") || body.includes("kept from"));
+      (body.includes("reuse") || body.includes("never re-ask") || body.includes("without re-asking") || body.includes("kept from"));
     expect(sharedReuse).toBe(true);
   });
 
-  it("demonstrates TASTE isolation — a taste learned in A does not leak into B", () => {
-    const body = exampleBodyLower();
-    const tasteIsolation =
-      body.includes("taste") &&
-      (body.includes("isolat") || body.includes("does not leak") || body.includes("never leak") ||
-        body.includes("never b's") || body.includes("not leak"));
-    expect(tasteIsolation).toBe(true);
-  });
-
-  it("shows a per-query sil_remember and the singleton-refusal edge (a second 'create' → 'a shopper already exists')", () => {
-    const body = exampleBodyLower();
-    expect(body).toContain("sil_remember");
+  it("persists a surfaced signal via sil_learn (NOT the deleted sil_remember) and shows the singleton-refusal edge", () => {
+    const body = exampleLower();
+    expect(body).toContain("sil_learn");
+    expect(body).not.toContain("sil_remember");
     const singletonEdge =
-      body.includes("a shopper already exists") || body.includes("already have a shopper") ||
-      body.includes("shopper already exists") || (body.includes("singleton") && body.includes("refus"));
+      body.includes("a shopper already exists") || body.includes("already have a shopper") || (body.includes("singleton") && body.includes("refus"));
     expect(singletonEdge).toBe(true);
   });
 });
 
 /* ===========================================================================
- * HARD-CONSTRAINT ROUTING — the shared user-spec hard constraint is routed to a
- * real filter + a reject-at-recommend rule, never only `query` text (mapping doc).
+ * ONBOARDING PITCH BEATS — setup_onboarding.md: after-register offer + per-search
+ * pitch. Valid, orthogonal to the six-beat restructure; kept with disavowal
+ * discipline. (See docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md.)
  * ========================================================================= */
 
-describe("references/search_param_mapping.md — hard constraint → real filter + reject-at-recommend, never only query text; ship_to empty", () => {
-  it("routes a hard constraint to a real FILTER + an explicit reject-at-recommend rule, never only soft query text", () => {
-    const body = readBody(MAPPING_PATH).toLowerCase();
-    const namesHardConstraint =
-      body.includes("hard constraint") || body.includes("hard-constraint") ||
-      body.includes("hard-no") || body.includes("inviolable");
-    const routesToFilterAndReject =
-      (body.includes("filter") || body.includes("condition") || body.includes("available")) &&
-      (body.includes("reject") || body.includes("never recommend") || body.includes("rubric"));
-    const disavowsQueryOnly =
-      body.includes("not only") || body.includes("never only") ||
-      body.includes("not just query") || body.includes("not merely query");
-    expect(namesHardConstraint).toBe(true);
-    expect(routesToFilterAndReject).toBe(true);
-    expect(disavowsQueryOnly).toBe(true);
-  });
-
-  it("leaves ship_to empty by default and never round-trips sil_whoami to populate it", () => {
-    const body = readBody(MAPPING_PATH).toLowerCase();
-    expect(body).toContain("ship_to");
-    const leavesEmpty =
-      body.includes("ship_to empty") || body.includes("leave ship_to empty") ||
-      (body.includes("ship_to") && body.includes("empty"));
-    expect(leavesEmpty).toBe(true);
-    const disavowsWhoami =
-      /(never|not|no|without|don't|do not)[^.]*sil_whoami/.test(body) ||
-      /sil_whoami[^.]*(never|not)/.test(body);
-    expect(disavowsWhoami).toBe(true);
-  });
-});
-
-/* ===========================================================================
- * POST-REGISTER SHOPPER NUDGE + PER-SEARCH PITCH — two add-only always-on
- * SKILL.md beats (card: post-register-shopper-nudge-and-per-search-pitch):
- *   (1) after a confirmed registration, offer the shopper ONCE — gated on a
- *       no-arg sil_profile_get empty-store check, routed to brainstorm_interview
- *       on a yes, skipped for an existing shopper (singleton);
- *   (2) after every completed profile-less bare sil_search, append one short
- *       POST-RESULT pitch line naming what a shopper would add — recurring by
- *       design, Lane 1 untouched (best-first, no re-rank, no pre-search question).
- *
- * DISAVOWAL DISCIPLINE ([[skill-prose-drift-guard-disavowal-discipline]]): pin the
- * NEW model POSITIVELY on NET-NEW anchor tokens (`offer_shopper`, `next_step`,
- * `post-result`, `re-rank`, `fire-once`, … — all ABSENT from SKILL.md before this
- * card, so RED-capable), and make EVERY negative NEGATION-AWARE — NEVER a bare
- * not.toContain(<anti-pattern token>), because the corrected prose legitimately
- * NAMES the anti-patterns ("never a re-rank", "no fire-once … gate") to DISAVOW
- * them. Offender matchers stay `.toEqual([])`; no existing assertion is loosened.
- *
- * SECTION SCOPING is load-bearing, not decoration: the gate/route tokens the
- * after-register beat needs (`sil_profile_get`, `references/brainstorm_interview.md`,
- * `singleton`) ALREADY appear elsewhere in SKILL.md (the routing table + the create
- * two-step gate), so a whole-body `body.includes(...)` would FALSE-GREEN. Each beat
- * is isolated to its own H2 section — located by a net-new anchor unique to that
- * beat, bounded to the enclosing `## ` heading and the next `## ` — so every pin is
- * meaningful (and RED before the beat exists).
- * ========================================================================= */
-
-/** The SKILL.md body H2 section that OWNS `anchor` — from its `## ` heading up to
- * the next `## `. `anchor` is a net-new token unique to one beat, so the section is
- * that beat and nothing else (no bleed into the adjacent beat or the routing table). */
+/** The SKILL.md/reference body H2 section that OWNS `anchor` — from its `## `
+ * heading up to the next `## `. `anchor` is a net-new token unique to one beat. */
 function sectionOwning(body: string, anchor: number): string {
   const headingStart = body.lastIndexOf("\n## ", anchor);
   const from = headingStart >= 0 ? headingStart + 1 : Math.max(0, anchor - 300);
@@ -1824,8 +1132,6 @@ function sectionOwning(body: string, anchor: number): string {
   return nextH2 >= 0 ? rest.slice(0, nextH2) : rest;
 }
 
-/** The after-register beat section, anchored on `offer_shopper` (net-new; appears
- * ONLY in this beat — RED before the beat exists). */
 function afterRegisterBeat(): string {
   const body = readBody(SETUP_ONBOARDING_PATH);
   const at = body.indexOf("offer_shopper");
@@ -1833,8 +1139,6 @@ function afterRegisterBeat(): string {
   return sectionOwning(body, at);
 }
 
-/** The per-search pitch beat section, anchored on `post-result`/`post result`
- * (net-new; unique to this beat — RED before the beat exists). */
 function perSearchBeat(): string {
   const body = readBody(SETUP_ONBOARDING_PATH);
   const m = /post-?result/i.exec(body);
@@ -1842,18 +1146,8 @@ function perSearchBeat(): string {
   return sectionOwning(body, m!.index);
 }
 
-/** Negation/deferral markers that turn an affirmative anti-pattern match into a
- * legitimate DISAVOWAL when one sits within ~28 chars before the match (mirrors
- * `perNicheExpertOffenders` / `createTimeNicheStepOffenders`' retro-allowance).
- * The corrected pitch beat says "never a re-rank", "no fire-once … gate" — the
- * anti-pattern token is present ONLY to be buried, so a bare forbid false-REDs it. */
-const PITCH_DISAVOWAL = [
-  "no ", "not ", "never", "without", "don't", "do not", "n't ", "isn't", "aren't",
-] as const;
+const PITCH_DISAVOWAL = ["no ", "not ", "never", "without", "don't", "do not", "n't ", "isn't", "aren't"] as const;
 
-/** Affirmative (non-disavowed) matches of `re` in `body` — a match is flagged ONLY
- * when NO disavowal token sits within ~28 chars before it. Empty ⇒ clean. `body` is
- * expected already-lowercased; `re` MUST carry the global flag. */
 function affirmativeOffenders(body: string, re: RegExp): string[] {
   const offenders: string[] = [];
   re.lastIndex = 0;
@@ -1862,1157 +1156,55 @@ function affirmativeOffenders(body: string, re: RegExp): string[] {
     const before = body.slice(Math.max(0, m.index - 28), m.index);
     const disavowed = PITCH_DISAVOWAL.some((t) => before.includes(t));
     if (!disavowed) {
-      offenders.push(
-        body
-          .slice(Math.max(0, m.index - 24), m.index + m[0].length + 12)
-          .replace(/\s+/g, " ")
-          .trim(),
-      );
+      offenders.push(body.slice(Math.max(0, m.index - 24), m.index + m[0].length + 12).replace(/\s+/g, " ").trim());
     }
   }
   return offenders;
 }
 
-/** Lane-1-violation instructions — an AFFIRMATIVE re-rank of the results, or an
- * AFFIRMATIVE pre-search question. The corrected beat disavows both ("never a
- * pre-search question and never a re-rank"). `re-?rank` does NOT match a bare
- * "ranked list" (no `re` prefix), so the legitimate "flat ranked list" copy is safe. */
-const LANE1_VIOLATION_RE =
-  /re-?rank|pre-?search question|ask (?:the user )?(?:a question )?before (?:the )?search/gi;
+const LANE1_VIOLATION_RE = /re-?rank|pre-?search question|ask (?:the user )?(?:a question )?before (?:the )?search/gi;
 
-/** Frequency-gate (anti-recurrence) instructions — the product-owner REGRESSION: a
- * fire-once / seen-it / cooldown / one-shot suppression bolted onto the recurring
- * pitch. The corrected beat disavows them ("no fire-once or seen-it gate, and no
- * cooldown"). Generic "suppress" is DELIBERATELY excluded — the beat legitimately
- * says a shopper-owner suppresses the pitch (the one valid STATE gate); only
- * FREQUENCY gates are the regression this guards. */
-const FREQUENCY_GATE_RE =
-  /fire-?once|seen-?it|one-?shot|cooldown|snooze|dismiss(?:ed|es)?|show (?:it |the (?:tip|pitch|line) )?(?:only )?once|only once/gi;
+const ALLOWLIST_HELPER_TOKENS = [
+  "sil-openclaw-allowlist",
+  "allowlist-openclaw.mjs",
+  "openclaw:allowlist",
+] as const;
 
-describe("sil-shopping/SKILL.md — after-register introduce-and-offer beat (add-only, disavowal discipline)", () => {
-  it("names the next_step: 'offer_shopper' hint (byte-identical to identity.ts's already_registered field)", () => {
-    // The SKILL keys the beat off the EXACT machine breadcrumb identity.ts emits —
-    // the two are a contract (product-marketer's naming↔code flag), pinned
-    // byte-identical on both sides. `offer_shopper`/`next_step` are net-new ⇒ RED
-    // before the beat exists.
+describe("sil-shopping — setup_onboarding.md after-register introduce-and-offer beat", () => {
+  it("keys off the identity.ts breadcrumb next_step: offer_shopper on already_registered", () => {
     const beat = afterRegisterBeat();
     expect(beat).toContain("next_step");
     expect(beat).toContain("offer_shopper");
-    // The breadcrumb rides the confirmed-registration outcome (allowed token —
-    // "already_registered" does not contain the forbidden "not_registered").
     expect(beat).toContain("already_registered");
   });
 
-  it("gates the offer on a NO-ARG sil_profile_get empty-store check (offer ONLY when no shopper)", () => {
-    // The skill owns the actual gate (identity.ts stays decoupled from the store):
-    // read shopper state with the no-arg overview, offer ONLY on an empty store.
-    // Section-scoped because `sil_profile_get` also appears in the routing table —
-    // a whole-body check would false-green.
-    const beat = afterRegisterBeat().toLowerCase();
-    expect(beat).toContain("sil_profile_get");
-    const namesNoArg =
-      beat.includes("no-arg") || beat.includes("no arg") ||
-      beat.includes("no `domainslug`") || beat.includes("no domainslug") ||
-      beat.includes("overview");
-    expect(namesNoArg).toBe(true);
-    const gatesOnEmpty =
-      beat.includes("empty store") || beat.includes("empty") ||
-      beat.includes("no shopper") || beat.includes("none yet") ||
-      beat.includes("no shopper yet");
-    expect(gatesOnEmpty).toBe(true);
-  });
-
-  it("routes to references/brainstorm_interview.md ONLY on acceptance (a yes)", () => {
-    // Section-scoped: brainstorm_interview.md also appears in the create two-step
-    // gate, so a whole-body includes would false-green the routing pin.
+  it("gates the offer on a no-arg sil_profile_get empty-store check, routes to brainstorm_interview.md only on a yes, skips for a singleton", () => {
     const beat = afterRegisterBeat();
+    const lower = beat.toLowerCase();
+    expect(lower).toContain("sil_profile_get");
     expect(beat).toContain("brainstorm_interview.md");
-    const onlyOnYes =
-      /only on a yes/i.test(beat) || /on a yes/i.test(beat) ||
-      /on acceptance/i.test(beat) || /if .{0,20}\byes\b/i.test(beat) ||
-      /\baccepts?\b/i.test(beat);
-    expect(onlyOnYes).toBe(true);
-  });
-
-  it("states the SINGLETON skip — an existing shopper is never offered a second one", () => {
-    // Section-scoped: "singleton" also appears in the create two-step gate below.
-    const beat = afterRegisterBeat().toLowerCase();
-    expect(beat).toContain("singleton");
-    const skipsWhenExists =
-      beat.includes("skip this beat") || beat.includes("skip the beat") ||
-      beat.includes("never offer a second") || beat.includes("second one") ||
-      beat.includes("second shopper") ||
-      (beat.includes("already") && beat.includes("shopper") && beat.includes("skip"));
-    expect(skipsWhenExists).toBe(true);
+    expect(lower).toContain("singleton");
+    const gatesOnEmpty = lower.includes("empty") || lower.includes("no shopper") || lower.includes("none yet");
+    expect(gatesOnEmpty).toBe(true);
   });
 });
 
-describe("sil-shopping/SKILL.md — per-search pitch beat (add-only, disavowal discipline)", () => {
+describe("sil-shopping — setup_onboarding.md per-search pitch beat (recurring; Lane 1 untouched)", () => {
   it("describes a POST-RESULT trailing line on a completed bare sil_search, recurring by design", () => {
     const beat = perSearchBeat();
     const lower = beat.toLowerCase();
-    // Post-result (the anchor) + a single trailing line — not a pre-search prompt.
     expect(/post-?result/i.test(beat)).toBe(true);
     expect(lower).toContain("sil_search");
-    const trailingLine =
-      lower.includes("trailing line") || lower.includes("trailing tip") ||
-      lower.includes("one short") || lower.includes("a short trailing") ||
-      lower.includes("short trailing line");
+    const trailingLine = lower.includes("trailing line") || lower.includes("one short") || lower.includes("short trailing");
     expect(trailingLine).toBe(true);
-    // Recurring by design — the recurrence IS the feature (product-owner non-goal).
-    const recurs =
-      /recur/i.test(beat) || /every\b[\s\S]{0,30}\bsearch/i.test(beat) ||
-      /each\b[\s\S]{0,30}\bsearch/i.test(beat);
+    const recurs = /recur/i.test(beat) || /every\b[\s\S]{0,30}\bsearch/i.test(beat) || /each\b[\s\S]{0,30}\bsearch/i.test(beat);
     expect(recurs).toBe(true);
-  });
-
-  it("names ≥1 of the three levers a bare search leaves on the table (depth / memory / the why)", () => {
-    const lower = perSearchBeat().toLowerCase();
-    const levers = [
-      /niche depth|in depth|how (?:the|this) niche/i, // niche depth
-      /re-?ask|sizes and hard limits|on file|\bmemory\b/i, // memory / facts-reuse
-      /the why|explains?\b[\s\S]{0,40}\bwhy\b|\bwhy\b/i, // the why
-    ].filter((re) => re.test(lower));
-    // AC bar is ≥1 (the instruction enumerates all three for rotation).
-    expect(levers.length).toBeGreaterThanOrEqual(1);
   });
 
   it("keeps Lane 1 UNTOUCHED — best-first, never a re-rank, never a pre-search question (negation-aware)", () => {
     const lower = perSearchBeat().toLowerCase();
-    // Positive: results presented best-first / unchanged (no re-order).
-    const bestFirst =
-      /best-?first/i.test(lower) || lower.includes("unchanged") ||
-      lower.includes("exactly as they came back") || lower.includes("as they came back");
+    const bestFirst = /best-?first/i.test(lower) || lower.includes("unchanged") || lower.includes("as they came back");
     expect(bestFirst).toBe(true);
-    // Negation-aware: an AFFIRMATIVE re-rank or pre-search question is the Lane-1
-    // violation; the corrected beat NAMES both only to disavow them ("never a
-    // re-rank", "never a pre-search question"), so flag a match ONLY when it is NOT
-    // negated within ~28 chars. NEVER a bare not.toContain("re-rank") (that would
-    // false-RED the disavowal). Matcher stays `.toEqual([])`.
     expect(affirmativeOffenders(lower, LANE1_VIOLATION_RE)).toEqual([]);
-  });
-
-  it("the recurrence IS the feature — no fire-once / seen-it / cooldown FREQUENCY gate (positive + negation-aware regression guard)", () => {
-    const lower = perSearchBeat().toLowerCase();
-    // Positive: recurrence is explicit; the ONLY gate is the STATE gate.
-    const recurrenceIsThePoint =
-      lower.includes("recurrence is the point") || lower.includes("the recurrence is") ||
-      /recurs on\b[\s\S]{0,24}every/i.test(lower) || lower.includes("no fire-once");
-    expect(recurrenceIsThePoint).toBe(true);
-    // Negation-aware regression guard (product-owner): a future dev reading the
-    // repetition as noise and adding a fire-once / seen-it / cooldown suppression is
-    // a REGRESSION, not a cleanup. The corrected beat DISAVOWS these by name, so a
-    // bare forbid would false-RED it — flag only the AFFIRMATIVE (non-disavowed)
-    // frequency gate. Matcher stays `.toEqual([])`.
-    expect(affirmativeOffenders(lower, FREQUENCY_GATE_RE)).toEqual([]);
-  });
-
-  it("STATE-gated symmetry — the pitch drops for a shopper-owner (profile-less only), the one legitimate suppression", () => {
-    const lower = perSearchBeat().toLowerCase();
-    // Profile-less session only …
-    const profileLess =
-      lower.includes("profile-less") || lower.includes("profileless") ||
-      (lower.includes("no shopper") && lower.includes("session"));
-    expect(profileLess).toBe(true);
-    // … and drops entirely once a shopper exists (Lane 2's session — offering a
-    // shopper they own is wrong). This is the STATE gate — never a frequency gate.
-    const dropsForOwner =
-      lower.includes("a shopper already exists") || lower.includes("once a shopper exists") ||
-      lower.includes("drop the line") || lower.includes("drop this line") ||
-      (lower.includes("shopper") && lower.includes("drop"));
-    expect(dropsForOwner).toBe(true);
-  });
-
-  it("fires ONLY on a completed ok search — a non-ok status is skipped and follows its own recovery", () => {
-    const lower = perSearchBeat().toLowerCase();
-    // Gated on status ok …
-    const okGate =
-      /status\b[\s\S]{0,6}\bok\b/i.test(lower) ||
-      /completes?\b[\s\S]{0,12}\bok\b/i.test(lower) ||
-      /complete\b[\s\S]{0,8}ok\b/i.test(lower);
-    expect(okGate).toBe(true);
-    // … a non-ok status skips the tip + follows its own recovery (never improvises).
-    const nonOkSkips =
-      (/non-?ok/i.test(lower) || lower.includes("did not complete")) &&
-      (lower.includes("recovery") || lower.includes("no tip") ||
-        lower.includes("add no tip") || lower.includes("skip"));
-    expect(nonOkSkips).toBe(true);
-  });
-});
-
-describe("sil-shopping/SKILL.md — the two new beats introduce no lean-router-forbidden token (add-only localization)", () => {
-  it("neither new beat names a forbidden status/engine token, and both stay clean under the whole-word expert guard", () => {
-    // Belt-and-braces localization of the highest-likelihood build-breaker (SA
-    // risk): the existing whole-body guards (L448-462) already forbid these tokens
-    // across the SKILL body, but scoping the check to each NEW beat points a
-    // debugging dev at the exact offending beat rather than "somewhere in SKILL.md".
-    const after = afterRegisterBeat();
-    const perSearch = perSearchBeat();
-    const FORBIDDEN = [
-      "awaiting_browser", "not_registered", "must_reregister", "retryable",
-      "sil_profile_materialize", "openclaw agents add", "openclaw config validate",
-    ];
-    const offenders: string[] = [];
-    for (const [label, region] of [
-      ["after-register", after],
-      ["per-search", perSearch],
-    ] as const) {
-      for (const tok of FORBIDDEN) {
-        if (region.includes(tok)) offenders.push(`${label}: ${tok}`);
-      }
-      for (const ctx of perNicheExpertOffenders(region)) offenders.push(`${label}: …${ctx}…`);
-    }
-    expect(offenders).toEqual([]);
-  });
-});
-
-/* ===========================================================================
- * ON-QUERY SDS SPINE — card: enforce-the-on-query-sds-spine-in-the-shop-loop.
- *
- * The founder is promoting the on-EVERY-query SDS sequence in shop_loop.md into a
- * hard, non-skippable FIVE-BEAT spine, splitting today's Step 3 so ELICITATION
- * becomes a first-class ORDERED gate AHEAD of search (the headline). SKILL.md gains
- * ONE reinforcement line making the on-every-query domain-exists check non-skippable,
- * scoped "as the shopper" (Lane 2). Lane 1 (profile-less bare sil_search) stays bare.
- * Skill-prose only — no tool change; the six exact-set/count mirrors are NOT triggered.
- *
- * These are ADD-ONLY drift guards. Every describe ABOVE stays UNEDITED and green.
- * Disavowal discipline (docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md):
- * positive OR-grouped semantic tokens, negation-aware negatives, offender matchers
- * `.toEqual([])`. No `§N` anchors.
- *
- * RED-capability, proven against today's (pre-re-order) files by pre-flight grep:
- *   - shop_loop.md: the beat-3 gate anchors ("gather what's missing"/"before searching"/
- *     "elicitation gate"/"elicit the unresolved") and the beat-4 anchors ("persist what
- *     surfaced"/"persist the surfaced") are ALL absent today (elicitation is still folded
- *     into Step 3), so the five-beat ordering pin and the elicit-before-search gate pin RED.
- *   - SKILL.md: the skip-family reinforcement tokens ("non-skippable"/"before any search"/…)
- *     are absent today (grepped to zero), so the SKILL reinforcement pin REDs. The card's
- *     fuller OR-group ("every query"/"on every"/"first") is DELIBERATELY NOT the anchor —
- *     those already live at L43 ("learns every query", "shops every niche") and would
- *     false-GREEN the reinforcement (content-seam-false-green trap).
- * The regression rails (buy-window ordering, after-recommendation ordering, Lane-1 bare)
- * are GREEN today and stay green — they guard what the re-order must NOT break.
- * ========================================================================= */
-
-/** First index of ANY of `tokens` in the already-lowercased `body`, or -1 if none
- * are present. Used for OR-grouped step anchors + index-ordering pins. Because it
- * returns -1 when a NET-NEW anchor is absent, every ordering assertion below is
- * guarded by a `toBeGreaterThanOrEqual(0)` on the anchor FIRST — so a -1 can never
- * false-satisfy a `toBeLessThan` (−1 < any positive index). */
-function firstIndexOfAny(body: string, tokens: readonly string[]): number {
-  const idxs = tokens.map((t) => body.indexOf(t)).filter((i) => i >= 0);
-  return idxs.length ? Math.min(...idxs) : -1;
-}
-
-// OR-group anchors for the five beats (solutions-architect handoff). b3 + b4 are the
-// NET-NEW gate/persist anchors — absent in today's Step-3-folded doc.
-const SPINE_BEAT1_ANCHORS = ["domain-exists check", "classify the query's niche"] as const;
-const SPINE_BEAT2_ANCHORS = ["on a miss", "learn the domain and how", "mint the domain on the fly"] as const;
-const SPINE_BEAT3_ANCHORS = ["gather what's missing", "before searching", "elicitation gate", "elicit the unresolved"] as const;
-const SPINE_BEAT4_ANCHORS = ["persist what surfaced", "persist the surfaced"] as const;
-// The search-EXECUTION phrase, unique to the call step. NOT a bare indexOf("sil_search")
-// — that mis-anchors on the earlier layering/map prose (architect risk). Lowercased.
-const SEARCH_EXEC_ANCHOR = "call `sil_search` with the mapped";
-const SPINE_BEAT5_ANCHORS = [SEARCH_EXEC_ANCHOR, "then search"] as const;
-
-describe("references/shop_loop.md — the on-query SDS spine reads as five ordered beats (add-only; card: enforce-the-on-query-sds-spine)", () => {
-  it("presents the five beats in strict order: domain-exists → learn-on-miss → ELICIT-gate → persist → search-execution", () => {
-    const body = shopLoopBodyLower();
-    const b1 = firstIndexOfAny(body, SPINE_BEAT1_ANCHORS);
-    const b2 = firstIndexOfAny(body, SPINE_BEAT2_ANCHORS);
-    const b3 = firstIndexOfAny(body, SPINE_BEAT3_ANCHORS);
-    const b4 = firstIndexOfAny(body, SPINE_BEAT4_ANCHORS);
-    const b5 = firstIndexOfAny(body, SPINE_BEAT5_ANCHORS);
-    // Each beat present. b3 (the promoted elicit gate) and b4 (persist-what-surfaced)
-    // are NET-NEW anchors — both absent today, so these two `>= 0` checks are the RED
-    // driver: the promotion has not been done until they appear.
-    expect(b1, "beat 1 (domain-exists / classify) anchor missing").toBeGreaterThanOrEqual(0);
-    expect(b2, "beat 2 (learn-on-miss / mint) anchor missing").toBeGreaterThanOrEqual(0);
-    expect(b3, "beat 3 (elicit gate) anchor missing — elicitation is not yet a first-class ordered step").toBeGreaterThanOrEqual(0);
-    expect(b4, "beat 4 (persist-what-surfaced) anchor missing").toBeGreaterThanOrEqual(0);
-    expect(b5, "beat 5 (search-execution) anchor missing").toBeGreaterThanOrEqual(0);
-    // Strict index ordering (each guarded by the `>= 0` checks above).
-    expect(b2, "beat 2 must follow beat 1").toBeGreaterThan(b1);
-    expect(b3, "beat 3 (elicit) must follow beat 2").toBeGreaterThan(b2);
-    expect(b4, "beat 4 (persist) must follow beat 3 (elicit)").toBeGreaterThan(b3);
-    expect(b5, "beat 5 (search) must follow beat 4 (persist)").toBeGreaterThan(b4);
-  });
-});
-
-describe("references/shop_loop.md — the elicit-missing gate is a first-class step ORDERED BEFORE search (the headline promotion; add-only)", () => {
-  it("positions the elicitation gate before the search-execution call, resolving three sources + asking only genuinely-unresolved dimensions", () => {
-    const body = shopLoopBodyLower();
-    const gate = firstIndexOfAny(body, SPINE_BEAT3_ANCHORS);
-    const searchExec = body.indexOf(SEARCH_EXEC_ANCHOR);
-    // (a) the gate is a present, named step (NET-NEW → RED today).
-    expect(gate, "the standalone elicit-before-search gate is absent (still folded into Step 3)").toBeGreaterThanOrEqual(0);
-    // the search-execution anchor is present (regression: the call step keeps its unique phrasing).
-    expect(searchExec, "search-execution anchor 'call `sil_search` with the mapped' missing").toBeGreaterThanOrEqual(0);
-    // (d) ORDERED BEFORE search — guarded by gate >= 0 above so an absent gate (-1) can't
-    // false-pass (-1 < searchExec). This is the on-query-SDS headline: elicit precedes search.
-    expect(gate, "the elicit gate must be ordered before the search-execution call").toBeLessThan(searchExec);
-
-    // Scope (b)/(c)/(e) to the gate window [gate, searchExec] so they pin the GATE, not an
-    // incidental mention (the recommend "why" also cites intent/playbook/user_spec downstream).
-    const gateWindow = body.slice(Math.max(0, gate), searchExec > gate ? searchExec : body.length);
-    // (b) resolves each dimension against the THREE sources — request/intent AND the shared
-    // user_spec AND the active playbook (the "resolve first, ask only what's left" rule).
-    const namesRequest = gateWindow.includes("request") || gateWindow.includes("intent");
-    const namesUserSpec =
-      gateWindow.includes("user_spec") || gateWindow.includes("user spec") || gateWindow.includes("shared spec");
-    const namesPlaybook =
-      gateWindow.includes("playbook") || (gateWindow.includes("active domain") && gateWindow.includes("taste"));
-    expect(
-      namesRequest && namesUserSpec && namesPlaybook,
-      "the gate must resolve each dimension against the request/intent + the shared user_spec + the active playbook",
-    ).toBe(true);
-    // (c) asks ONLY genuinely-unresolved, load-bearing dimensions (need-driven, never a battery).
-    const asksOnlyUnresolved = [
-      "ask only for what",
-      "genuinely unresolved",
-      "need-driven",
-      "only a dimension missing",
-      "only when a dimension",
-      "load-bearing",
-    ].some((t) => gateWindow.includes(t));
-    expect(asksOnlyUnresolved, "the gate must state the ask-only-genuinely-unresolved / load-bearing discipline").toBe(true);
-    // (e) the per-query decompose stays EPHEMERAL (never persisted). Pinned POSITIVELY — NOT a
-    // bare forbid of the accretive-capture prose (beat 4 legitimately still handles facts/tastes);
-    // the promotion is enforced by the ORDERING above, never by a `not.toContain`.
-    const ephemeral = ["ephemeral", "never persisted"].some((t) => gateWindow.includes(t));
-    expect(ephemeral, "the per-query intent fill must be named ephemeral / never persisted").toBe(true);
-  });
-
-  it("does NOT force an always-ask — the zero-question happy path (enough resolved ⇒ straight to search) stays legal", () => {
-    // The council's product distinction: "non-skippable" governs the shopper's REASONING,
-    // not the user's inbox. The gate RUNS every query but ASKS only when a load-bearing
-    // dimension is genuinely unresolved. This guard deliberately asserts NOTHING about a
-    // question being asked (that would wrongly force an always-ask); it only pins that the
-    // straight-to-search escape hatch is documented, so a future "always ask before search"
-    // regression is not silently blessed here.
-    const body = shopLoopBodyLower();
-    const straightToSearch =
-      body.includes("straight to") ||
-      body.includes("proceed directly") ||
-      body.includes("ask nothing") ||
-      body.includes("zero question") ||
-      body.includes("no question") ||
-      body.includes("pass straight through") ||
-      (body.includes("proceed") && body.includes("search"));
-    expect(straightToSearch, "the zero-question happy path (enough resolved ⇒ straight to search) must stay documented").toBe(true);
-  });
-});
-
-// Skip-family reinforcement anchor for SKILL.md — NET-NEW (absent today, grepped to zero),
-// so it is the RED driver. The card's fuller OR-group is not used as the anchor because
-// "every query"/"on every"/"first" already live at L43 and would false-GREEN.
-const SKILL_SKIP_REINFORCE_ANCHORS = [
-  "before any search",
-  "before searching",
-  "before any sil_search",
-  "before recommending",
-  "reuse a learned domain or mint",
-] as const;
-const SKILL_DOMAIN_CHECK_TOKENS = [
-  "domain-exists",
-  "domain exists",
-  "domain-check",
-  "domain check",
-  "classify",
-  "reuse a learned domain",
-  "reuses a learned domain",
-  "reuse or mint",
-  "which domain",
-] as const;
-// The lean-router-forbidden tokens the reinforcement line must NOT introduce (mirrors the
-// pre-existing lean-router guards at :448-462 / :247-254; asserted here scoped to the new line).
-const LEAN_ROUTER_FORBIDDEN = [
-  "openclaw agents add",
-  "openclaw config validate",
-  "sil_profile_materialize",
-  "awaiting_browser",
-  "not_registered",
-  "must_reregister",
-  "retryable",
-  "sil_profile_list",
-] as const;
-
-describe("sil-shopping/SKILL.md — one reinforcement line makes the on-every-query domain-exists check non-skippable, scoped 'as the shopper' (add-only)", () => {
-  it("adds a NON-SKIPPABLE domain-exists reinforcement in the shopper (Lane 2) routing, clean of lean-router-forbidden tokens", () => {
-    const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
-    const idx = firstIndexOfAny(body, SKILL_SKIP_REINFORCE_ANCHORS);
-    // NET-NEW anchor → RED today; GREEN once the reinforcement line lands.
-    expect(idx, "SKILL.md must add a domain-exists reinforcement (resolve the domain before searching), scoped as the shopper").toBeGreaterThanOrEqual(0);
-    // The reinforcement is ABOUT the domain-exists / classify / reuse-or-mint check.
-    const win = body.slice(Math.max(0, idx - 450), idx + 450);
-    const namesDomainCheck = SKILL_DOMAIN_CHECK_TOKENS.some((t) => win.includes(t));
-    expect(namesDomainCheck, "the reinforcement must be about the domain-exists / classify / reuse-or-mint check").toBe(true);
-    // Scoped to Lane 2 — 'as the shopper' near the reinforcement (never the general router).
-    const scopedShopper = body.slice(Math.max(0, idx - 700), idx + 700).includes("as the shopper");
-    expect(scopedShopper, "the reinforcement must be scoped 'as the shopper' (Lane 2), not the general router").toBe(true);
-    // Belt: the reinforcement window introduces NONE of the lean-router-forbidden tokens.
-    const bledForbidden = LEAN_ROUTER_FORBIDDEN.filter((t) => win.includes(t));
-    expect(bledForbidden, "the reinforcement window must stay clean of lean-router-forbidden tokens").toEqual([]);
-    // Whole-word `expert`-free around the new line (disavowal discipline).
-    expect(perNicheExpertOffenders(win)).toEqual([]);
-  });
-});
-
-// Negation-aware Lane-boundary scan (mirrors perNicheExpertOffenders' retro-allowance): a
-// pre-search-gate instruction is an OFFENDER only when NOT scoped to the shopper (Lane 2)
-// within ~200 chars before it. The card's own reinforcement IS scoped ('as the shopper'/
-// 'shopper' dense in the L43 paragraph), so it is allowed; an unscoped clarifying-question /
-// domain-check step added to the general router (breaking Lane 1) is flagged.
-const LANE1_GATE_RE =
-  /clarifying question|ask[^.]{0,40}(?:clarifying|a question|questions)|domain[- ]exists check|before any search/gi;
-const LANE2_SCOPE_TOKENS = ["as the shopper", "shopper", "loaded profile", "shop_loop"] as const;
-function laneBleedOffenders(body: string): string[] {
-  const offenders: string[] = [];
-  LANE1_GATE_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = LANE1_GATE_RE.exec(body)) !== null) {
-    const before = body.slice(Math.max(0, m.index - 200), m.index);
-    const scoped = LANE2_SCOPE_TOKENS.some((t) => before.includes(t));
-    if (!scoped) {
-      offenders.push(
-        body
-          .slice(Math.max(0, m.index - 24), m.index + m[0].length + 12)
-          .replace(/\s+/g, " ")
-          .trim(),
-      );
-    }
-  }
-  return offenders;
-}
-
-describe("sil-shopping/SKILL.md — Lane 1 (profile-less bare sil_search) stays bare (add-only, negation-aware)", () => {
-  it("preserves the profile-less → 'find X' → sil_search bare boundary (unchanged)", () => {
-    const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
-    expect(body).toContain("profile-less");
-    expect(body).toContain('"find x"');
-    const staysBare = body.includes("unchanged") || body.includes("bare") || body.includes("untouched");
-    expect(staysBare, "the profile-less Lane-1 boundary ('find X' → sil_search, unchanged) must be preserved").toBe(true);
-  });
-
-  it("keeps the Lane-1 'find X' routing ROW bare — sil_search only, no domain/elicit/gate token", () => {
-    const raw = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    const rowLine = raw
-      .split(/\r?\n/)
-      .find((l) => l.trimStart().startsWith("|") && l.toLowerCase().includes('"find x"'));
-    expect(rowLine, "the 'find X' routing table row must exist").toBeTruthy();
-    const row = (rowLine ?? "").toLowerCase();
-    expect(row).toContain("sil_search");
-    // A domain check / elicitation gate / pre-search question must never enter the Lane-1 row.
-    const LANE1_ROW_FORBIDDEN = ["domain", "elicit", "clarif", "non-skippable", "before any search", " gate"];
-    const bled = LANE1_ROW_FORBIDDEN.filter((t) => row.includes(t));
-    expect(bled, "the Lane-1 'find X' row must not gain a domain-check / elicitation / pre-search-question step").toEqual([]);
-  });
-
-  it("no UNSCOPED pre-search-gate instruction bleeds into the general router (negation-aware; scoped 'as the shopper' allowed)", () => {
-    const body = skillBody(readFileSync(SKILL_PATH, "utf8")).toLowerCase();
-    expect(laneBleedOffenders(body)).toEqual([]);
-  });
-});
-
-describe("references/shop_loop.md — spine re-order preserves the buy-window + after-recommendation ordering rails (add-only regression rails; MUST stay green)", () => {
-  it("keeps every 'buy' substring downstream of the sil_product_get re-fetch (first re-fetch precedes first buy — the #1 build-breaker)", () => {
-    const body = shopLoopBodyLower();
-    const firstRefetch = body.indexOf("sil_product_get");
-    const firstBuy = body.indexOf("buy");
-    expect(firstRefetch, "sil_product_get (the re-fetch step) must be present").toBeGreaterThanOrEqual(0);
-    expect(firstBuy, "'buy' substring (the re-fetch step) must be present").toBeGreaterThanOrEqual(0);
-    // The prose keeps 'buy' out of beats 1–4 and the early part of beat 5 ("shop well" /
-    // "shopping taste" / "before searching" / "before purchase"), so the FIRST sil_product_get
-    // and the FIRST 'buy' co-locate at the re-fetch step. A 'buy' planted upstream (e.g.
-    // "before buying") moves firstBuy above firstRefetch → RED — which would also flip the
-    // pre-existing first-buy-window pin (:1316). This is the reciprocal ordering assertion.
-    expect(firstRefetch, "the first sil_product_get (re-fetch) must precede the first 'buy'").toBeLessThan(firstBuy);
-  });
-
-  it("keeps the after-recommendation capture DOWNSTREAM of the search-execution call (beat-5 tail, not stolen into beat 4)", () => {
-    const body = shopLoopBodyLower();
-    const searchExec = body.indexOf(SEARCH_EXEC_ANCHOR);
-    const AFTER_REC_TRIGGERS = [
-      "after every recommendation",
-      "after a recommendation",
-      "after the recommendation",
-      "after recommending",
-      "before the turn ends",
-      "post-recommendation",
-      "after-recommendation",
-    ];
-    const afterRec = firstIndexOfAny(body, AFTER_REC_TRIGGERS);
-    expect(searchExec, "search-execution anchor missing").toBeGreaterThanOrEqual(0);
-    expect(afterRec, "after-recommendation trigger phrase missing").toBeGreaterThanOrEqual(0);
-    // The after-recommendation capture (today's Step 9) is the beat-5 tail — it must stay
-    // AFTER the search call, never pulled up into the beat-4 persist step (which would also
-    // move the trigger phrase and break the pre-existing after-recommendation window pin :1220).
-    expect(searchExec, "the search-execution call must precede the after-recommendation capture").toBeLessThan(afterRec);
-  });
-});
-
-/* ===========================================================================
- * ONE-TAP CREATE (card: one-tap-shopper-create-via-a-single-wrapper-bin) —
- * ADD-ONLY guards. The engine rewrite centres on the ONE shipped bin
- * `sil-openclaw-create-shopper`; the interview session-seeds the persona +
- * shared user_spec, still gated. Every EXISTING engine/brainstorm describe above
- * stays UNEDITED + green (the rewrite preserves their tokens/ordering); these
- * describes are purely additive. Prose pins honour the disavowal discipline
- * (`docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md`): positive
- * OR-grouped tokens for the NEW model; any negative is negation-aware, never a
- * bare `not.toContain`; matchers stay `.toEqual([])` (never loosened).
- * ========================================================================= */
-
-/** Negation / disavowal markers that turn a `sil_whoami` mention into a legitimate
- * "the seed does NOT pull it" disavowal when one sits within ~28 chars before —
- * mirrors `createTimeNicheStepOffenders`' retro-allowance lookback. `\b…\b` so a
- * markdown-bold `**not**` (asterisks are word boundaries) still counts. */
-const WHOAMI_SEED_NEGATION =
-  /\b(?:not|never|no|without|don't|reads no|offline|local|session[- ]only)\b/;
-
-/**
- * `sil_whoami` mentions in the (already-lowercased) interview body that are NOT
- * preceded (within ~28 chars) by a negation/disavowal token — i.e. a real
- * regression that pulls identity to seed, never a disavowal of it. Returns the
- * offending contexts (empty ⇒ clean: no mention, or every mention is disavowed).
- * Never a bare `not.toContain("sil_whoami")` — the corrected interview legitimately
- * NAMES `sil_whoami` only to disavow it.
- */
-function whoamiSeedPullOffenders(bodyLower: string): string[] {
-  const offenders: string[] = [];
-  const re = /sil_whoami/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(bodyLower)) !== null) {
-    const before = bodyLower.slice(Math.max(0, m.index - 28), m.index);
-    if (!WHOAMI_SEED_NEGATION.test(before)) {
-      offenders.push(
-        bodyLower
-          .slice(Math.max(0, m.index - 24), m.index + 22)
-          .replace(/\s+/g, " ")
-          .trim(),
-      );
-    }
-  }
-  return offenders;
-}
-
-describe("references/agent_creation_engine.md — the ONE-command bin engine (card: one-tap create-shopper)", () => {
-  it("names the ONE shipped command `sil-openclaw-create-shopper` and frames it as the single command run after endorsement", () => {
-    // NET-NEW: the rewrite collapses the hand-run nine-step choreography into ONE
-    // shipped bin. `sil-openclaw-create-shopper` is 0 hits pre-rewrite (RED at HEAD).
-    const body = engineBodyLower();
-    expect(body).toContain("sil-openclaw-create-shopper");
-    const framesOneCommand =
-      body.includes("one command") ||
-      body.includes("one shipped command") ||
-      body.includes("single command") ||
-      body.includes("exactly one") ||
-      body.includes("exactly **one**");
-    expect(framesOneCommand).toBe(true);
-  });
-
-  it("instructs the agent to RUN the bin fed the endorsed spec as stdin / `--spec` JSON — not hand-run the nine steps", () => {
-    const body = engineBodyLower();
-    // The bin reads the endorsed spec as one JSON object on stdin (or --spec <path>).
-    const namesInputChannel = body.includes("stdin") || body.includes("--spec");
-    expect(namesInputChannel).toBe(true);
-    // Positive: the bin is the executor — it runs the choreography FOR the agent.
-    const binRunsIt =
-      body.includes("runs the whole choreography") ||
-      body.includes("runs them for you") ||
-      body.includes("the bin runs") ||
-      (body.includes("bin") && body.includes("choreography"));
-    expect(binRunsIt).toBe(true);
-  });
-
-  it("states the bin runs the whole choreography ATOMICALLY and fail-closed", () => {
-    const body = engineBodyLower();
-    const atomic =
-      body.includes("atomically") ||
-      body.includes("atomic") ||
-      body.includes("one transaction");
-    const failClosed =
-      body.includes("fail-closed") || body.includes("fail closed") || body.includes("fails closed");
-    expect(atomic).toBe(true);
-    expect(failClosed).toBe(true);
-  });
-
-  it("states a non-zero/invalid outcome reports persistence_failed and tears down, leaving NOTHING partial", () => {
-    const body = engineBodyLower();
-    expect(body).toContain("persistence_failed");
-    const tearsDown =
-      body.includes("teardown") ||
-      body.includes("tears down") ||
-      body.includes("torn down") ||
-      body.includes("restore") ||
-      body.includes("snapshot");
-    expect(tearsDown).toBe(true);
-    const nothingPartial =
-      body.includes("nothing partial") ||
-      body.includes("no partial") ||
-      body.includes("nothing is left half") ||
-      body.includes("nothing left half") ||
-      (body.includes("nothing") && body.includes("partial"));
-    expect(nothingPartial).toBe(true);
-  });
-
-  it("frames the bin as NON-INTERACTIVE + post-endorsement — it never re-runs the interview or prompts", () => {
-    const body = engineBodyLower();
-    expect(body.includes("non-interactive") || body.includes("noninteractive")).toBe(true);
-    const postEndorsement =
-      body.includes("already-assembled") ||
-      body.includes("already-endorsed") ||
-      body.includes("already endorsed") ||
-      body.includes("after the explicit endorsement") ||
-      (body.includes("endors") && body.includes("after"));
-    expect(postEndorsement).toBe(true);
-    const noReprompt =
-      body.includes("never re-runs the interview") ||
-      body.includes("never re-run the interview") ||
-      body.includes("never prompts") ||
-      body.includes("does not prompt") ||
-      (body.includes("interview") && body.includes("never"));
-    expect(noReprompt).toBe(true);
-  });
-
-  it("the rewritten engine prose stays clean under the per-niche-expert whole-word guard", () => {
-    expect(perNicheExpertOffenders(readBody(ENGINE_PATH))).toEqual([]);
-  });
-});
-
-describe("references/brainstorm_interview.md — session-seeded pre-fill, still endorsement-gated (card: one-tap create-shopper)", () => {
-  it("PRE-SEEDS / PRE-FILLS the persona + shared user_spec from what the user already said THIS SESSION", () => {
-    // NET-NEW: the rewrite opens with a session-assembled draft rather than a cold
-    // question. Positive OR-grouped tokens — the pre-seed/this-session half is 0 hits
-    // pre-rewrite (RED at HEAD).
-    const body = brainstormBodyLower();
-    const preSeeds =
-      body.includes("pre-seed") ||
-      body.includes("pre-fill") ||
-      body.includes("preseed") ||
-      body.includes("prefill");
-    expect(preSeeds).toBe(true);
-    const fromThisSession =
-      body.includes("this session") ||
-      body.includes("already said") ||
-      body.includes("already told") ||
-      body.includes("what they already said");
-    expect(fromThisSession).toBe(true);
-    // Seeds BOTH the persona and the shared user spec.
-    expect(body).toContain("persona");
-    const namesSharedUserSpec =
-      body.includes("shared user spec") ||
-      body.includes("shared `user_spec") ||
-      (body.includes("user_spec") && body.includes("shared")) ||
-      (body.includes("user spec") && body.includes("shared"));
-    expect(namesSharedUserSpec).toBe(true);
-  });
-
-  it("opens by presenting the assembled draft (reflect-back), not a cold questionnaire", () => {
-    const body = brainstormBodyLower();
-    const reflectsDraftOpen =
-      body.includes("reflect") &&
-      (body.includes("draft") ||
-        body.includes("what you've told me") ||
-        body.includes("what they already said"));
-    expect(reflectsDraftOpen).toBe(true);
-  });
-
-  it("STILL requires an explicit endorsement before any create — the pre-fill is a proposal, never consent", () => {
-    const body = brainstormBodyLower();
-    const namesEndorse =
-      body.includes("endorse") ||
-      body.includes("explicit yes") ||
-      body.includes("go-ahead") ||
-      body.includes("go ahead");
-    expect(namesEndorse).toBe(true);
-    const proposalNotConsent =
-      body.includes("proposal, never consent") ||
-      body.includes("never consent") ||
-      body.includes("not consent") ||
-      body.includes("never an auto-commit") ||
-      body.includes("not inferred from silence") ||
-      body.includes("not from silence") ||
-      (body.includes("proposal") && body.includes("endors"));
-    expect(proposalNotConsent).toBe(true);
-    // Endorsement precedes the engine handoff (ordering) — the seed never auto-runs it.
-    const endorseIdx = body.indexOf("endorse");
-    const lastEngineHandoffIdx = body.lastIndexOf("agent_creation_engine.md");
-    expect(endorseIdx).toBeGreaterThanOrEqual(0);
-    expect(lastEngineHandoffIdx).toBeGreaterThanOrEqual(0);
-    expect(endorseIdx).toBeLessThan(lastEngineHandoffIdx);
-  });
-
-  it("the session seed is LOCAL + OFFLINE — reads no token, makes no network call", () => {
-    const body = brainstormBodyLower();
-    const localOffline =
-      (body.includes("local") && body.includes("offline")) ||
-      body.includes("session-only") ||
-      body.includes("session only");
-    expect(localOffline).toBe(true);
-    const readsNoToken =
-      body.includes("no token") ||
-      body.includes("reads no token") ||
-      body.includes("no network");
-    expect(readsNoToken).toBe(true);
-  });
-
-  it("does NOT pull identity via sil_whoami to seed (negation-aware — never a bare not.toContain)", () => {
-    // The corrected interview legitimately NAMES sil_whoami only to DISAVOW it
-    // ("does NOT pull sil_whoami", "never pull sil_whoami to seed"). A bare
-    // not.toContain("sil_whoami") would false-RED that disavowal, so flag a mention
-    // ONLY when no negation sits within ~28 chars before it. [] ⇒ clean (no
-    // affirmative pull). Mirrors createTimeNicheStepOffenders' negation-awareness.
-    expect(whoamiSeedPullOffenders(brainstormBodyLower())).toEqual([]);
-  });
-});
-
-/* ===========================================================================
- * STAGE-AWARE ROUTING — the shopper shops through a domain (de-rigidified)
- * cards: stage-aware-skill-md-that-gates-search-on-a-domain, then
- *        derigidify-sil-shopping-skill (scolding → guidance).
- *
- * The `## Routing` slice OPENS with a stage read keyed on the no-arg
- * `sil_profile_get` `name`-presence, then branches:
- *   - name ABSENT  ⇒ profile-less: the bare "find X" → sil_search lane, unchanged.
- *   - name PRESENT ⇒ shopper: shop through what you know — classify the niche and
- *     reuse-or-mint its domain BEFORE recommending; an empty `domains` map mints
- *     the first domain, announced with the inferred niche stated so the user can
- *     correct it. Identity / a direct id re-check / management route normally.
- * A lightweight per-query self-check rides the shopper branch as PROSE — an
- * in-context orientation aid, no new tool/table/telemetry.
- *
- * These pins assert PRESERVED BEHAVIOUR, not the retired scolding vocabulary. The
- * de-rigidify removed "the bare lane is not reachable", "process failure", "warn
- * visibly", the "non-skippable" framing, and the rote five-verb self-check recital
- * (`profile_loaded → domain_classified → …`) — so this block pins the
- * domain-before-recommend behaviour, the announced/correctable mint, the no-friction
- * pass-through, the ungated non-shopping intents, and a labelled (but un-recited)
- * self-check — never the deleted tokens. Behaviour anchors are OR-grouped intent
- * substrings, section/heading-scoped, negation-aware where negative, `.toEqual([])`.
- *
- * ADD-ONLY over the blocks ABOVE (all stay green). The `[e2e]` behavioural ACs (the
- * agent OBEYS the gate at runtime) stay DEFERRED — no host-load gate in this repo —
- * and are NOT faked: these pins assert only that the ROUTER PROSE ships the
- * instruction, never a runtime claim.
- * ========================================================================= */
-
-/** The `## Routing` H2 region — from the `## Routing` heading to the next `## ` (or
- * EOF; Routing is the last major area). The delete-first rewrite keeps the `## Routing`
- * heading, so this never errors post-rewrite; a rename would (correctly) RED here. */
-function routingRaw(): string {
-  const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-  const at = body.toLowerCase().indexOf("## routing");
-  expect(at, "SKILL.md must keep a `## Routing` section (delete-first rewrite of the routing slice)").toBeGreaterThanOrEqual(0);
-  const rest = body.slice(at + 3);
-  const next = rest.indexOf("\n## ");
-  return next >= 0 ? body.slice(at, at + 3 + next) : body.slice(at);
-}
-function routingLower(): string {
-  return routingRaw().toLowerCase();
-}
-
-/** The tightest heading-bounded section (H2 OR H3) containing `anchor` — from the
- * nearest preceding `## `/`### ` heading to the next `## `/`### `. Isolates a single
- * stage ARM (e.g. `### Profile-less stage`) so an offender scan cannot leak into the
- * sibling `### Shopper stage` arm (which legitimately carries affirmative gate steps). */
-function headingScopedSection(body: string, anchor: number): string {
-  const before = Math.max(body.lastIndexOf("\n## ", anchor), body.lastIndexOf("\n### ", anchor));
-  const start = before >= 0 ? before + 1 : 0;
-  const nextH2 = body.indexOf("\n## ", anchor + 1);
-  const nextH3 = body.indexOf("\n### ", anchor + 1);
-  const ends = [nextH2, nextH3].filter((i) => i >= 0);
-  const end = ends.length ? Math.min(...ends) : body.length;
-  return body.slice(start, end);
-}
-
-// ---- Behaviour anchors for the shopper stage (preserved behaviour, de-rigidified) ----
-const NAME_DISCRIMINATOR_RE =
-  /`?name`?\s*(?:field\b|absent|present|is present|is absent|-?presence)|carries a `?name`?|(?:the )?(?:whole|single) discriminator|presence of (?:a |the )?`?name`?/i;
-const STAGE_READ_RE =
-  /read the stage|settles which stage|reads? the stage|derive[sd]? the stage|keyed (?:on|off)|(?:the )?(?:whole|single) discriminator/i;
-const EMPTY_DOMAINS_RE =
-  /domains?\s*:?\s*\[\s*\]|domains?\s*==\s*\[\s*\]|no niche yet|empty domains/i;
-// No-friction: a reused domain + fully-resolved query asks nothing / passes straight
-// through. The retired defensive framing ("quality, not access" / "governs … reasoning")
-// is NOT required — only the behaviour that a resolved query adds no friction.
-const NO_FRICTION_RE =
-  /ask(?:s|ing)? nothing|passes? straight through|zero questions?|no (?:further )?questions?/i;
-// The non-shopping intents route normally (not subject to the domain-resolve step).
-// Anchored on the scope STATEMENT's own phrasing ("route normally" / "ungated"); a bare
-// "no domain check" is deliberately NOT an alternative — it also names the profile-less
-// arm's bare lane, which precedes this statement and would mis-anchor the window scan.
-const UNGATED_RE =
-  /ungated|route[s]? normally|not (?:subject to|gated)|without (?:a |the |any )?domain (?:check|gate)/i;
-
-/** AFFIRMATIVE domain-gate STEP instructions (a real gate, not a disavowal of one).
- * Bare "domain gate" / "domain" are DELIBERATELY excluded — a legit profile-less
- * disavowal reads "the domain gate below does not bleed" (negation AFTER the token,
- * out of the 28-char pre-lookback), which would false-flag. Only the affirmative
- * STEP verbs are scanned, and `affirmativeOffenders`' pre-negation lookback clears
- * the profile-less arm's "no domain check, no mint, no pre-search question". */
-const AFFIRMATIVE_DOMAIN_GATE_RE =
-  /classify the (?:query'?s )?niche|reuse[- ](?:a |the |one )?(?:learned )?domain|reuse-or-mint|reuse or mint|\bmint\b|domain-exists check|domain check|pre-?search question|before any (?:sil_search|search)|non-?skippable|\belicit/gi;
-
-/** AFFIRMATIVE "guess the stage" (BR2 forbids it). The corrected prose NAMES it only
- * to disavow it ("never guess it", "never an assumption") — negation-aware clears
- * those; a real "guess/assume the stage" regression is flagged. */
-const STAGE_GUESS_RE =
-  /guess(?:ed|es|ing)?|assum(?:e|es|ed|ption)|infer(?:red|s|ring)?[^.]{0,20}(?:conversation|history)/gi;
-
-describe("sil-shopping/SKILL.md — Routing opens with a stage gate read from sil_profile_get `name`-presence, never guessed (BR2/AC5; add-only)", () => {
-  it("derives the stage from the no-arg sil_profile_get overview's `name` field — names both the profile-less and shopper stages", () => {
-    const raw = routingRaw();
-    const lower = raw.toLowerCase();
-    // NET-NEW RED driver: a "stage" gate now heads Routing (0 in HEAD).
-    expect(lower.includes("stage"), "Routing must open with a stage gate (NET-NEW 'stage' — 0 in HEAD)").toBe(true);
-    // The stage is DERIVED (read), not guessed.
-    expect(STAGE_READ_RE.test(raw), "the stage must be READ from state (read the stage / settles which stage / the discriminator)").toBe(true);
-    // The discriminator IS the no-arg sil_profile_get `name` field.
-    expect(lower).toContain("sil_profile_get");
-    expect(NAME_DISCRIMINATOR_RE.test(raw), "the discriminator must be the sil_profile_get `name` field (present/absent)").toBe(true);
-    // Both stages named as outcomes of the gate.
-    expect(lower).toContain("profile-less");
-    expect(lower).toContain("shopper");
-  });
-
-  it("BR2 negation-aware: the stage is never guessed / assumed from conversation history (offender scan, disavowals allowed)", () => {
-    // The corrected prose says "never guess it" / "never an assumption" (guess/assume
-    // NAMED only to bury them). A bare not.toContain would false-RED that; flag only an
-    // AFFIRMATIVE (non-negated within ~28 chars) guess-the-stage instruction. `.toEqual([])`.
-    expect(affirmativeOffenders(routingLower(), STAGE_GUESS_RE)).toEqual([]);
-  });
-});
-
-describe("sil-shopping/SKILL.md — shopper stage: the domain is resolved BEFORE recommending; scoped 'as the shopper' (BR4/AC1; add-only)", () => {
-  it("routes every shopper-stage sil_search intent through sil_profile_get → reuse-or-mint a domain before searching, scoped 'as the shopper'", () => {
-    const lower = routingLower();
-    expect(lower).toContain("sil_profile_get");
-    expect(lower).toContain("sil_search");
-    const reuseOrMint =
-      /reuse[^.]{0,20}(?:or )?mint|reuse a learned domain or mint|reuse-or-mint|reuse or mint/i.test(lower);
-    expect(reuseOrMint, "the shopper branch must reuse-or-mint a domain").toBe(true);
-    const beforeSearch = /before (?:any )?(?:sil_search|search|searching|recommend)/i.test(lower);
-    expect(beforeSearch, "the domain must resolve BEFORE searching / recommending").toBe(true);
-    // The precondition is scoped to the shopper (Lane 2), never the general router.
-    expect(lower).toContain("as the shopper");
-  });
-});
-
-describe("sil-shopping/SKILL.md — an empty domains map mints the first domain before search, announced + correctable (BR5/AC2; add-only)", () => {
-  it("a shopper with no niche yet mints the domain before searching, announced with the inferred niche stated so the user can correct it", () => {
-    const lower = routingLower();
-    expect(EMPTY_DOMAINS_RE.test(lower), "the empty-domains condition (`domains: []` / no niche yet) must be named").toBe(true);
-    const mints = /\bmint/i.test(lower);
-    expect(mints, "an empty domains map must mint the first domain").toBe(true);
-    const announced = /announce[sd]?/i.test(lower);
-    expect(announced, "the mint must be announced (never silent)").toBe(true);
-    const correctable = /correct it|can correct|so the user can correct|user can correct/i.test(lower);
-    expect(correctable, "the inferred niche must be stated so the user can correct it").toBe(true);
-    const beforeSearch = /before (?:searching|any (?:sil_search|search))/i.test(lower);
-    expect(beforeSearch, "the mint must precede search").toBe(true);
-  });
-});
-
-describe("sil-shopping/SKILL.md — the profile-less stage keeps the bare lane bare; the domain gate does not bleed in (BR3/AC4; add-only)", () => {
-  it("routes name-absent → the profile-less stage arm, which keeps the bare 'find X' → sil_search path with NO affirmative domain gate", () => {
-    const body = skillBody(readFileSync(SKILL_PATH, "utf8"));
-    const lower = body.toLowerCase();
-    // NET-NEW RED driver: a dedicated `### Profile-less stage` arm (0 in HEAD).
-    const at = lower.indexOf("\n### profile-less");
-    expect(at, "SKILL.md must carry a dedicated `### Profile-less stage` arm (NET-NEW — absent in HEAD)").toBeGreaterThanOrEqual(0);
-    const arm = headingScopedSection(body, at + 1).toLowerCase();
-    // The arm keeps the bare path (names sil_search + the 'find X' lane, unchanged).
-    expect(arm).toContain("sil_search");
-    const namesBareRow = arm.includes('"find x"') || arm.includes("find x");
-    expect(namesBareRow, "the profile-less arm must keep the bare 'find X' lane").toBe(true);
-    const unchanged = arm.includes("unchanged") || arm.includes("bare") || arm.includes("untouched");
-    expect(unchanged, "the profile-less bare lane must be stated unchanged").toBe(true);
-    // Negation-aware: NO AFFIRMATIVE domain-gate STEP bleeds into the profile-less arm
-    // (the arm's "no domain check, no mint, no pre-search question" are all disavowed). []
-    expect(affirmativeOffenders(arm, AFFIRMATIVE_DOMAIN_GATE_RE)).toEqual([]);
-  });
-});
-
-describe("sil-shopping/SKILL.md — the per-query self-check is a lightweight PROSE orientation aid, no new tool/table/telemetry (BR6/AC6; §3a — de-rigidified)", () => {
-  it("carries a labelled per-query self-check that keeps the shopper oriented (which beat / domain resolved before searching), disavowing any new machinery", () => {
-    const lower = routingLower();
-    // A labelled self-check / guardrail line exists (the rote profile_loaded → … recital
-    // is retired; a lightweight "know where you are in the flow" aid stays).
-    const at = lower.search(/self-check|self-report|guardrail/);
-    expect(at, "SKILL.md must keep a labelled per-query self-check / guardrail line").toBeGreaterThanOrEqual(0);
-    const win = lower.slice(Math.max(0, at - 200), at + 500);
-    // It is about knowing where you are in the flow — the beat/stage, and that the domain
-    // was resolved before searching — NOT a fixed five-verb recital.
-    const orients =
-      win.includes("beat") || win.includes("stage") || win.includes("where you are") ||
-      win.includes("which step") || (win.includes("domain") && win.includes("before"));
-    expect(orients, "the self-check must orient the shopper (which beat/stage; domain resolved before searching)").toBe(true);
-    // No new machinery — POSITIVELY pin the disavowal.
-    const disavowsNewMachinery =
-      /not (?:a )?(?:new )?tool/i.test(win) && /telemetry|table/i.test(win);
-    expect(disavowsNewMachinery, "the self-check must disavow being a new tool / table / telemetry surface").toBe(true);
-  });
-
-  it("the tool surface stays at EIGHT — the self-check adds no registered tool (belt-and-braces rail)", () => {
-    // AC6's "no new machinery" tied to the real registration surface: the self-check is
-    // prose only, so registeredNames() is byte-unchanged at 8 (green today, stays green).
-    expect(registeredNames().size).toBe(8);
-  });
-});
-
-describe("sil-shopping/SKILL.md — a reused domain + fully-resolved query passes straight through, asking nothing (AC7; add-only)", () => {
-  it("states the shopper stage adds no friction on a resolved reused-domain query — it asks nothing and passes straight through", () => {
-    const lower = routingLower();
-    expect(NO_FRICTION_RE.test(lower), "a resolved query must ask nothing / pass straight through (no added friction)").toBe(true);
-    const reusedResolved =
-      /reused domain[^.]{0,80}(?:straight through|asks? nothing|no question|zero question)|passes? straight through|ask(?:s|ing)? nothing/i.test(lower);
-    expect(reusedResolved, "a reused domain + fully-resolved query must pass straight through with no questions").toBe(true);
-  });
-});
-
-describe("sil-shopping/SKILL.md — the domain step scopes to sil_search shopping only; identity / id re-check / management route normally (BR4/AC8; add-only)", () => {
-  it("leaves identity, direct sil_product_get id re-checks, and shopper-management intents ungated", () => {
-    const lower = routingLower();
-    const m = UNGATED_RE.exec(lower);
-    expect(m, "Routing must state the non-shopping intents route normally / ungated").not.toBeNull();
-    const at = m!.index;
-    const win = lower.slice(Math.max(0, at - 320), at + 60);
-    const namesIdentity = win.includes("sil_register") || win.includes("sil_whoami") || win.includes("identity");
-    expect(namesIdentity, "the ungated scope must name identity (sil_register / sil_whoami)").toBe(true);
-    const namesIdRecheck = win.includes("sil_product_get") && (win.includes("re-check") || win.includes("recheck") || win.includes("id "));
-    expect(namesIdRecheck, "the ungated scope must name a direct sil_product_get id re-check").toBe(true);
-    const namesManagement = win.includes("management") || win.includes("forget") || win.includes("view");
-    expect(namesManagement, "the ungated scope must name shopper-management intents").toBe(true);
-    const scopedToDiscovery = /scopes? (?:to|only to)[^.]{0,40}sil_search|sil_search-driven (?:product )?(?:discovery|shopping)|(?:product )?discovery only/i.test(lower);
-    expect(scopedToDiscovery, "the domain step must be scoped to sil_search-driven shopping only").toBe(true);
-  });
-});
-
-/* ===========================================================================
- * STAGED ONBOARDING PROGRESSION (founder redesign — round 2, 2026-07-10)
- * card: stage-aware-skill-md-that-gates-search-on-a-domain
- *
- * The shipped router (round 1) gates on a BINARY discriminator — shopper `name`
- * absent/present. The founder bounced it: the always-loaded SKILL.md (the FIRST
- * file loaded into a sil-shopping session) must present the whole setup as a
- * FIVE-STAGE onboarding PROGRESSION while setup is incomplete, then SHED all of it
- * once complete (usage-only). Every stage is READ from state (`sil_whoami` + the
- * no-arg `sil_profile_get` overview), never guessed:
- *   1. unregistered            → guide register + a data-use statement (how 4GPTs &
- *                                SIL use the user's data), grounded in real surfaces.
- *   2. registered, no shopper  → guide shopper setup, naming up front that it takes
- *                                "a couple of minutes and a few questions".
- *   3. shopper, no domain      → first intent mints the first domain (announced —
- *                                the round-1 `domains: []` force-mint pin, kept).
- *   4. shopper active          → check off completion milestones: first domain
- *                                created + (softer) the memory/reinforcement tool used.
- *   5. setup complete          → SHED every setup/onboarding beat; usage-only (the
- *                                domain-gated shop loop + Spec-Driven Shopping).
- *
- * ADD-ONLY. Every describe ABOVE stays UNEDITED + green — including the round-1
- * stage-gate pins (the `name`-discriminator, the domain gate, the loud-warn backstop,
- * the five self-check verbs, the `### Profile-less stage` arm), the Lane-1-stays-bare
- * pins, the spine-order pin, and the buy-window rail. No existing pin is loosened.
- *
- * Disavowal discipline (docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md):
- * positive NET-NEW anchors, window-scoped; the SHED stage is pinned with a POSITIVE
- * shed statement, NEVER a bare not.toContain("setup"/"onboarding") — the shed stage
- * legitimately NAMES setup/onboarding to say they are shed.
- *
- * RED-capability (grepped to ZERO in the shipped SKILL.md, 2026-07-10): "progression"/
- * "five stage(s)", "registered … no shopper", "4gpts", "couple of minutes", "a few
- * questions", "milestone"/"check off", "first domain", "setup complete", "sheds",
- * "usage". The recurring tokens ("stage", "sil_whoami", "sil_profile_get", "shopper",
- * "onboarding") are DELIBERATELY not used as RED anchors (they already appear → would
- * false-GREEN); they are only asserted WITHIN a net-new-anchored window.
- *
- * The `[e2e]` behavioural outcome (the agent actually reads state + sheds at runtime)
- * is DEFERRED — no host-load gate in this repo — and is NOT faked: these pins assert
- * only that the ROUTER PROSE ships the staged progression, never a runtime claim.
- * ========================================================================= */
-
-/** The SKILL.md body below the frontmatter, lowercased — the staged progression may
- * span the Session-start / after-register beats AND the `## Routing` stage gate, so
- * the per-stage anchors scan the whole body; only the progression-gate structure
- * (below) is scoped to `## Routing`, where the founder's delete-first rewrite lands. */
-function stagedBodyLower(): string {
-  return readBody(SETUP_ONBOARDING_PATH).toLowerCase();
-}
-
-// ---- NET-NEW positive anchors for the staged progression (all 0 in shipped SKILL.md) ----
-const STAGED_PROGRESSION_RE =
-  /progression|five stages?|five-stage|staged (?:onboarding|setup|progression)|stage 1|stage 5/i;
-const STAGE1_UNREG_RE =
-  /unregistered|no (?:sil )?identity|not (?:yet )?registered|no identity yet/i;
-const STAGE2_REGNOSHOP_RE =
-  /registered[^.]{0,60}no shopper|no shopper[^.]{0,60}registered|registered,?\s*(?:but )?no shopper/i;
-const STAGE4_ACTIVE_RE = /shopper active|milestone|first domain created/i;
-const STAGE5_COMPLETE_RE =
-  /setup (?:is )?complete|setup-complete|once setup is (?:complete|done)|setup (?:done|finished)/i;
-
-describe("sil-shopping/SKILL.md — Routing branches on sil_whoami + sil_profile_get; the staged progression lives in setup_onboarding.md (progressive-disclosure rewrite; add-only)", () => {
-  it("reads the stage from BOTH sil_whoami and sil_profile_get; the staged-progression naming lives in the on-demand setup reference", () => {
-    const raw = routingRaw();
-    const lower = raw.toLowerCase();
-    // The router thinned to a pure state branch (no identity / no shopper / shopper);
-    // the staged-progression NAMING moved to the on-demand setup reference, alongside
-    // the five-stage enumeration the sibling `stagedBodyLower` assertions already read there.
-    expect(
-      STAGED_PROGRESSION_RE.test(readBody(SETUP_ONBOARDING_PATH)),
-      "the staged onboarding progression must be presented in setup_onboarding.md (the router only branches + reads state)",
-    ).toBe(true);
-    // The stage is the JOINT signal — sil_whoami (registered?) + sil_profile_get (shopper?). The
-    // whoami→registration tie is the NET-NEW RED driver (in the binary router whoami is only a
-    // routing-table row, never tied to `regist`/`identit` — so this fired RED against HEAD).
-    expect(
-      lower.includes("sil_profile_get"),
-      "the staged progression must read the stage from sil_profile_get (the shopper signal)",
-    ).toBe(true);
-    // Tie whoami to the REGISTRATION *state* — "registered"/"registration" or a
-    // "finds/reports … (no) identity" read — NOT the bare tool-name `sil_register`
-    // nor the AC8 ungated-scope list "identity (`sil_register` / `sil_whoami`)", which
-    // is pre-existing and would false-GREEN a loose `sil_whoami…regist` scan.
-    const readsWhoamiForStage =
-      /sil_whoami[^.]{0,90}(?:registered|registration)|sil_whoami[^.]{0,50}(?:finds|reports|reads|tells)[^.]{0,40}(?:no )?(?:sil )?identity|(?:registered|registration)[^.]{0,90}sil_whoami/i.test(
-        lower,
-      );
-    expect(
-      readsWhoamiForStage,
-      "the staged progression must read sil_whoami as the REGISTRATION signal (NET-NEW — whoami is only a routing-table row / ungated-scope mention in the binary router), not just sil_profile_get",
-    ).toBe(true);
-  });
-
-  it("enumerates all five stages — unregistered → registered-no-shopper → shopper-no-domain → shopper-active(milestones) → setup-complete", () => {
-    const lower = stagedBodyLower();
-    const missing: string[] = [];
-    if (!STAGE1_UNREG_RE.test(lower)) missing.push("stage1 (unregistered)");
-    if (!STAGE2_REGNOSHOP_RE.test(lower)) missing.push("stage2 (registered, no shopper)");
-    if (!EMPTY_DOMAINS_RE.test(lower)) missing.push("stage3 (shopper, no domain)");
-    if (!STAGE4_ACTIVE_RE.test(lower)) missing.push("stage4 (shopper active / milestones)");
-    if (!STAGE5_COMPLETE_RE.test(lower)) missing.push("stage5 (setup complete)");
-    // stage3 (`domains: []`) is round-1 GREEN — the RED drivers are stages 2/4/5, all NET-NEW.
-    expect(
-      missing,
-      `staged progression missing stages (NET-NEW — the binary router names only profile-less/shopper): ${missing.join(", ")}`,
-    ).toEqual([]);
-  });
-});
-
-describe("sil-shopping/SKILL.md — the register stage states a data-use statement: how 4GPTs & SIL use the user's data (founder round-2; add-only)", () => {
-  it("names 4GPTs & SIL as the parties that use the user's data, grounded in the plugin's real surfaces (sil identity / local profile store / catalog search)", () => {
-    const lower = stagedBodyLower();
-    // NET-NEW RED driver: names the data controllers 4GPTs (& SIL) — 0 in shipped SKILL.md.
-    const at = lower.search(/4\s?gpts/);
-    expect(
-      at,
-      "the register stage must name 4GPTs as a party that uses the user's data (NET-NEW — 0 in HEAD)",
-    ).toBeGreaterThanOrEqual(0);
-    const win = lower.slice(Math.max(0, at - 300), at + 600);
-    // Both parties named together (4GPTs & SIL), not just 4GPTs.
-    const namesBothParties = /4\s?gpts[^.]{0,40}\bsil\b|\bsil\b[^.]{0,40}4\s?gpts/i.test(win);
-    expect(namesBothParties, "the data-use statement must name BOTH 4GPTs and SIL").toBe(true);
-    // It is a DATA-USE statement (states how the data is used), not a bare brand mention.
-    const namesDataUse =
-      /use[sd]?[^.]{0,40}data|data[^.]{0,40}(?:use[sd]?|handle)|what registering does|how (?:your |their )?data/i.test(
-        win,
-      );
-    expect(namesDataUse, "the register stage must STATE how the user's data is used (a data-use statement)").toBe(true);
-    // Grounded strictly in the plugin's real surfaces — no invented policy.
-    const groundedInRealSurfaces =
-      (win.includes("identity") || win.includes("regist")) &&
-      (win.includes("profile") || win.includes("catalog") || win.includes("search") || win.includes("local"));
-    expect(
-      groundedInRealSurfaces,
-      "the data-use statement must be grounded in the plugin's real surfaces (sil identity / local profile store / catalog search)",
-    ).toBe(true);
-  });
-});
-
-describe("sil-shopping/SKILL.md — the shopper-setup stage sets a 'couple of minutes / a few questions' expectation up front (founder round-2; add-only)", () => {
-  it("names the time-and-questions expectation for shopper setup, up front, before the onboarding starts", () => {
-    const lower = stagedBodyLower();
-    // NET-NEW RED drivers: the time + question-count expectation (0 in HEAD).
-    const t = /couple of minutes|few minutes|minute or two/i.exec(lower);
-    expect(t, "the shopper-setup stage must set a 'couple of minutes' time expectation (NET-NEW — 0 in HEAD)").not.toBeNull();
-    const q = /few questions|handful of questions|couple of questions/i.exec(lower);
-    expect(q, "the shopper-setup stage must set a 'few questions' expectation (NET-NEW — 0 in HEAD)").not.toBeNull();
-    // Both belong to the shopper-setup guidance (co-located, about setting up the shopper).
-    const at = Math.min(t!.index, q!.index);
-    const win = lower.slice(Math.max(0, at - 300), at + 500);
-    const aboutShopperSetup =
-      (win.includes("set up") || win.includes("setup") || win.includes("create")) && win.includes("shopper");
-    expect(aboutShopperSetup, "the minutes/questions expectation must be about setting up the shopper").toBe(true);
-    // Stated up front — before the onboarding/interview begins.
-    const upFront =
-      win.includes("up front") ||
-      win.includes("upfront") ||
-      win.includes("before the onboarding") ||
-      win.includes("before onboarding") ||
-      win.includes("before it starts") ||
-      win.includes("before starting") ||
-      win.includes("before the interview");
-    expect(upFront, "the expectation must be named up front, before the onboarding starts").toBe(true);
-  });
-});
-
-describe("sil-shopping/SKILL.md — the setup-complete stage sheds every setup/onboarding beat; usage-only (founder round-2; add-only)", () => {
-  it("carries a terminal setup-complete stage that sheds the setup/onboarding beats and presents only usage (the domain-gated shop loop + SDS)", () => {
-    const lower = stagedBodyLower();
-    // NET-NEW RED driver: the terminal 'setup complete' stage exists (0 in HEAD).
-    expect(STAGE5_COMPLETE_RE.test(lower), "SKILL.md must carry a terminal 'setup complete' stage (NET-NEW — 0 in HEAD)").toBe(true);
-    // Anchor on the usage-only statement UNIQUE to stage 5 (NET-NEW — 0 in HEAD). Anchoring on
-    // the first 'setup complete' mention was a bug: that occurrence is the progression's INTRO
-    // line, whose window does not reach the stage-5 usage content further down.
-    const at = lower.search(/show only how to use|only how to use the plugin|use the plugin well|usage[- ]only/);
-    expect(at, "the setup-complete stage must present ONLY usage (a 'show only how to use' statement — NET-NEW — 0 in HEAD)").toBeGreaterThanOrEqual(0);
-    const win = lower.slice(Math.max(0, at - 400), at + 300);
-    // POSITIVE shed statement — NEVER a bare not.toContain("onboarding"); the shed stage
-    // legitimately NAMES setup/onboarding/progression to say they are shed (disavowal discipline).
-    const shedsSetup =
-      /shed[s]?|drop(?:s|ped)?|no longer (?:show|present|carry|appl)|fall[s]? away|remove[sd]?|gone once|no onboarding beat applies/i.test(win) &&
-      (win.includes("setup") || win.includes("onboarding") || win.includes("progression"));
-    expect(shedsSetup, "the setup-complete stage must state the setup/onboarding beats are shed (POSITIVE shed statement)").toBe(true);
-    // The usage content is the domain-gated shop loop + Spec-Driven Shopping.
-    const usageContent =
-      win.includes("shop loop") ||
-      win.includes("shop_loop") ||
-      win.includes("spec-driven shopping") ||
-      win.includes("sds") ||
-      win.includes("domain-gated");
-    expect(usageContent, "the usage-only stage must name the domain-gated shop loop + Spec-Driven Shopping").toBe(true);
-  });
-});
-
-describe("sil-shopping/SKILL.md — stage 4 checks off completion milestones from state: first domain created + memory tool used (founder round-2; add-only)", () => {
-  it("checks off the completion milestones — first domain created (domains non-empty) and (softer) the memory/reinforcement tool used", () => {
-    const lower = stagedBodyLower();
-    // NET-NEW RED driver: milestone check-off vocabulary (0 in HEAD).
-    const at = lower.search(/milestone|check(?:ed|s)? (?:them )?off/);
-    expect(
-      at,
-      "SKILL.md must check off completion milestones (NET-NEW 'milestone' / 'check off' — 0 in HEAD)",
-    ).toBeGreaterThanOrEqual(0);
-    // The hard milestone: the first domain created (domains non-empty).
-    const firstDomainMilestone =
-      /first domain[^.]{0,40}(?:created|minted|exists|non-?empty)|domains?[^.]{0,20}non-?empty|a (?:learned )?domain (?:now )?exists/i.test(
-        lower,
-      );
-    expect(
-      firstDomainMilestone,
-      "a completion milestone must be 'first domain created' (domains non-empty) (NET-NEW — 0 in HEAD)",
-    ).toBe(true);
-    // The softer milestone: the memory/reinforcement tool has been used.
-    const win = lower.slice(Math.max(0, at - 200), at + 700);
-    const memoryMilestone =
-      win.includes("sil_remember") ||
-      win.includes("remember") ||
-      win.includes("memory") ||
-      win.includes("reinforcement");
-    expect(
-      memoryMilestone,
-      "the milestone check-off must include the memory/reinforcement tool having been used (softer milestone)",
-    ).toBe(true);
   });
 });
