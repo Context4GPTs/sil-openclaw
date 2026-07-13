@@ -67,8 +67,10 @@ function registerMaterialize(api: PluginAPI): void {
       + " carry across EVERY niche — with the shopper `name` in the file's own"
       + " frontmatter (there is NO manifest; the frontmatter IS the source of truth)."
       + " It does NOT mint any domain method or PRD — that is sil_learn create. `name`"
-      + " and `userSpec` are both REQUIRED; on any augment pass the full updated body"
-      + " (it overwrites atomically). Makes no network call and reads no token. The"
+      + " and `userSpec` are both REQUIRED. Run this ONCE at setup: post-setup user-spec"
+      + " refinement is sil_learn (append/amend), NEVER a re-materialize (a re-run"
+      + " overwrites the whole body, discarding what sil_learn added). Makes no network"
+      + " call and reads no token. The"
       + " persona is NOT written here — it is the host workspace SOUL.md. A blank"
       + " name/userSpec returns invalid_request and writes nothing; a write failure"
       + " returns persistence_failed.",

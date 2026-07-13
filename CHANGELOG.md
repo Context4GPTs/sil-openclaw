@@ -28,6 +28,14 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   fill → search-space → reflect → feedback — across new `references/shop_loop.md`,
   `method_and_prds.md`, and `fill_and_feedback.md` (the `manage_domains.md` /
   `refine_shopper.md` references are retired).
+- **`sil_search` forwards an open-vocabulary `specs` predicate list and returns
+  observable `specs_status` (Phase 2, #55).** Pure transport, no client-side
+  matching: the plugin passes typed predicates (`{ ns, key, op, value, unit?,
+  hard? }`) under one namespaced `filters.specs` key and surfaces the backend's
+  per-predicate `specs_status` (`{ ns, key, applied }[]`, a sibling of `products`)
+  for Beat 5's hard-constraint honesty pass. An unindexed key **fails green**
+  (`applied: false`) — never dropped, never a fabricated `applied: true` — and
+  converges as the spec registry populates.
 
 ### Added
 
@@ -43,6 +51,16 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   the reuse-before-mint primitive that replaces the deleted manifest's index role;
   malformed artefacts surface in an observable `unreadable[]`, never silently
   dropped. Tool floor 8 → 9.
+- **`sil_specs` — the spec-registry canonicalize-or-create tool (Phase 3, #57).**
+  The shopping method's Beat-2 mint submits the coined spec DEFINITIONS it invents
+  for a niche (`{ namespace, key, display_name, data_type, unit?, allowed_values?,
+  description? }`); each resolves 1:1 to a canonical name — **matched** an existing
+  spec (adopt its `canonical` `{ namespace, key }`, drop the coined synonym) or
+  **created** as new (yours is canonical going forward) — so the `filters.specs`
+  vocabulary converges across methods. Shares `sil_search`'s taxonomy (401
+  refresh-and-retry-once, `not_registered` / `forbidden` / `invalid_request` /
+  `retryable`) and degrades gracefully: a non-`ok` verdict never blocks the mint,
+  which proceeds with the raw coined names. Tool floor 9 → 10.
 
 ### Removed
 
