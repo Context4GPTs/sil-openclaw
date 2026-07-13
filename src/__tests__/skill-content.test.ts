@@ -729,20 +729,26 @@ describe("references/method_and_prds.md — Beat 2: method load (hot path) vs re
       (body.includes("common") || body.includes("widely") || body.includes("shared"));
     expect(conventionalForCommon).toBe(true);
 
-    // AC#2 (the WHY) — convergence keys on ALL spec fields within a `namespace` and is
-    // precision-first, so consistent + conventional naming is the lever that tips a coin
-    // to `matched` instead of a fresh fragment.
+    // AC#2 (the WHY) — convergence keys on EVERY spec field agreeing within a `namespace`
+    // + `data_type` (precision-first), so consistent + conventional naming is the lever
+    // that tips a coin to `matched` instead of a fresh fragment. Determiner-tolerant
+    // (every/each field · all its/their/the fields) so a benign reword survives; the
+    // "all…fields / every field" phrase is net-new (grep-0 in HEAD) → still RED there.
     const allFieldsWhy =
-      (body.includes("all fields") || body.includes("all its fields") ||
-        body.includes("all spec fields") || body.includes("all the fields") ||
-        body.includes("every field")) &&
+      (/(?:every|each) (?:coined |spec )?field/.test(body) ||
+        /all (?:its |their |the |of its |of their )?(?:coined |spec )?fields/.test(body)) &&
       (body.includes("namespace") || body.includes("precision-first") || body.includes("precision first"));
     expect(allFieldsWhy).toBe(true);
 
     // AC#3 — carry a concept-naming `description` as the load-bearing CORROBORATOR (the
-    // signal that tips a borderline coin, and the veto that keeps distinct concepts
-    // apart). `corroborat*` is net-new; bare "description" (11 hits) alone would false-green.
-    const corroboratingDescription = body.includes("corroborat");
+    // signal that merges true synonyms, and the veto that keeps distinct concepts apart).
+    // `corroborat*` is net-new (grep-0 in HEAD); the fallback still requires the
+    // `description` FIELD framed by a merge/veto role, never bare "description".
+    const corroboratingDescription =
+      body.includes("corroborat") ||
+      (body.includes("description") &&
+        (body.includes("veto") || body.includes("merge true synonym") ||
+          body.includes("distinguish") || body.includes("disambiguat")));
     expect(corroboratingDescription).toBe(true);
   });
 
