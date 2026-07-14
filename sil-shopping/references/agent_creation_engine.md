@@ -141,14 +141,14 @@ to mint/refresh domains; if defaults grant none, the bin reports `created` with 
 6. **Materialize the shared user spec** — `sil_profile_materialize { name, userSpec }`
    (singleton, no agentId) writes **`user_spec.md`** atomically, name in its
    frontmatter. **Setup-only: no domain, no method, no PRD.**
-7. **Attach skill + enable plugin + harden tools** (value-mode `config set
-   --strict-json`, the only mode the pinned `alpine/openclaw:2026.6.9` accepts):
-   `agents.list[<idx>].skills` ← `["sil"]`; `plugins.entries.sil.enabled` ← `true`;
-   **`agents.list[<idx>].tools.deny`** ← **`["exec","write","edit","apply_patch"]`** — a
-   per-agent **deny-list** removing the shell (`exec`) + filesystem mutators while
-   **keeping the sil tools + web**. A deny (not replacing the base tool set) is used
-   because per OpenClaw precedence it only *further-restricts* and can never strip the
-   sil grant.
+7. **Attach skill + enable plugin** (value-mode `config set --strict-json`, the only
+   mode the pinned `alpine/openclaw:2026.6.9` accepts):
+   `agents.list[<idx>].skills` ← `["sil-shopping"]`; `plugins.entries.sil.enabled` ←
+   `true`. **No per-agent `tools.deny`** — the shopper inherits the host default toolset.
+   An fs-mutator deny is inert while codex's own shell (surfaced as `bash`) stays open by
+   design: it reads the shopper's skill files and can write regardless. The shell stays
+   open (trusted single-operator posture); persistence is steered through the sil tools by
+   the skill, not enforced by tool policy.
 8. **Admit sil (plugin trust)** — the shipped **`sil-openclaw-allowlist`** helper
    additively merges the three trust surfaces (`plugins.allow` + `tools.alsoAllow` +
    `plugins.entries.sil`) — the only way to un-filter `sil_*` without clobbering a

@@ -97,14 +97,6 @@ const SIL_SKILL = basename(
     ) as { skills: string[] }
   ).skills[0]!,
 );
-/** The escape-hatch tools the shopper is DENIED at the per-agent level — the shell
- * (`exec`) + the filesystem mutators (`write`/`edit`/`apply_patch`). `deny` is the
- * SAFE subtractive lever: per the host's tool-precedence it only further-restricts and
- * can never re-grant, so it removes exactly these and CANNOT strip the sil grant —
- * unlike a `tools.profile` override, which replaces the base set and would risk it.
- * This is the SPEC: the create bin MUST pin the created agent to exactly this deny list
- * and set NO `tools.profile` override. */
-const SHOPPER_TOOL_DENY = ["exec", "write", "edit", "apply_patch"];
 /** Running as root bypasses filesystem permission bits, so the chmod-based
  * "unwritable $SIL_DATA_DIR" fault-injection cannot fire — skip it there. */
 const AS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
@@ -579,31 +571,28 @@ describe("created — one valid run wires every surface and returns the identity
     expect(agent.skills).toEqual([SIL_SKILL]);
   });
 
-  it("denies the created agent the escape-hatch tools via a per-agent tools.deny (subtractive), with NO tools.profile override", () => {
+  it("sets NO per-agent tools policy on the shopper — it inherits the host defaults (no deny, no profile override)", () => {
     writeConfig(freshConfig());
     const spec = validSpec();
     const r = runBin({ spec });
     expect(r.status).toBe(0);
 
     const c = readConfig();
-    // The shopper is leaned down SUBTRACTIVELY — a per-agent tools.deny removes the
-    // shell + filesystem mutators. Because deny only further-restricts (never re-grants),
-    // it can never strip the sil grant. Locate the agent by id (mirrors the skills
-    // read-back above).
+    // The shopper inherits the host's default toolset untouched. There is NO per-agent
+    // tools.deny (an fs-mutator deny is inert while codex's own shell stays open, by
+    // design — it reads the shopper's skill files and writes regardless) and NO
+    // tools.profile override — only the sil skill is attached to the agent entry.
     const idx = c.agents.list.findIndex((a: any) => a.id === spec.agentId);
     expect(idx).toBeGreaterThanOrEqual(0);
-    expect(c.agents.list[idx].tools.deny).toEqual(SHOPPER_TOOL_DENY);
-    // NO profile override — a tools.profile would REPLACE the base set and risk the sil
-    // grant, so the safe subtractive path must set the deny lever and nothing else.
-    expect(c.agents.list[idx].tools.profile).toBeUndefined();
-    // The global default is untouched (freshConfig ships `coding`) — only the shopper
-    // agent is leaned down, subtractively, not the whole host.
+    expect(c.agents.list[idx].tools?.deny).toBeUndefined();
+    expect(c.agents.list[idx].tools?.profile).toBeUndefined();
+    // The global default is untouched (freshConfig ships `coding`).
     expect(c.tools.profile).toBe("coding");
   });
 
   it("carries an EMPTY warnings array when the channel binds cleanly (no manual-bind hint)", () => {
     // With a resolvable channel that binds + verifies, the manual-bind hint is absent —
-    // the subtractive tools.deny is the intended end state, so it rides no warning.
+    // a clean bind is the happy path, so it rides no warning.
     writeConfig(freshConfig());
     const r = runBin({ spec: validSpec({ channel: "telegram" }) });
     expect(r.status).toBe(0);

@@ -10,6 +10,45 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Changed
+
+- **The shopper no longer sets a per-agent `tools.deny`.** `create-shopper.mjs` used to
+  deny `["exec","write","edit","apply_patch"]`; removed. On the codex runtime the shell is
+  codex-native (surfaced as `bash`) — a tool the deny never named, so it read skill files
+  and could write host files regardless, while the denied OpenClaw `exec` tool was one
+  codex never used. Denying fs-mutators while a shell stays open buys nothing (an open
+  shell writes anyway — documented OpenClaw behaviour). The shopper now inherits the host
+  default toolset; the shell is open by design (trusted single-operator posture) and is how
+  codex reads its progressively-disclosed skill references. Persistence is steered to the
+  sil tools by the skill, not by tool policy.
+- **`SKILL.md`'s always-on contract now pins two behaviours that lived only in read-once
+  references:** the shopper's memory is the sil store (`sil_learn` / `sil_profile_*`),
+  never a workspace `MEMORY.md`; and Beat 4 is bounded to **≤ 4 spec-filtered `sil_search`
+  calls** per request (core first, then widenings — never brand-by-brand). Both went stale
+  in attention when they lived two lazy reference-hops deep.
+- **`sil_learn`'s write model is now document-first: `create` / `write` / `attach-asset`.**
+  The surgical bullet ops (`append` / `amend` / `retract`) are removed. `create` mints a
+  NEW method/PRD (errors if one exists); `write` replaces an existing doc's whole body with
+  a reconciled version the model authors (read it first, carry every buyer line forward). A
+  correction now rewrites the line it changes instead of stacking a contradicting bullet —
+  the self-contradicting PRD (a "prefer transparency" requirement beside a "transparency not
+  valued" correction) becomes structurally impossible. The method now holds only the general
+  buying guide + coined spec **vocabulary** (never this-buyer values); the PRD carries a
+  **`## Search specs`** block — the resolved `{ns,key,op,value,hard?}` predicate set projected
+  verbatim into `sil_search`, so structured filters no longer decay to keyword-only
+  mid-session. Beat 1 pins the domain to the broad, reusable product category (never folding
+  the use-context into the slug), and a "prefer X, Y/Z acceptable" requirement becomes one
+  `op:in` set with the favourite applied as ranking, not an over-hard `eq`.
+
+### Fixed
+
+- **Artefacts no longer serialize two stacked frontmatter blocks.** A model-authored
+  `sil_learn create` body (or `sil_profile_materialize` userSpec) that began with its own
+  `--- … ---` block got the store's canonical frontmatter wrapped around it.
+  `serializeArtefact` now strips a leading frontmatter fence from the body first, so every
+  artefact carries exactly one (the store's — frontmatter-as-truth); existing
+  double-frontmatter files self-heal on their next write.
+
 ## [0.4.1] - 2026-07-14
 
 ### Fixed

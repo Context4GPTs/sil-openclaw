@@ -28,6 +28,9 @@ it knows, view or forget a domain, refine it.
   **before** searching; never skip the mint. The picks you return are always sil
   catalog products (`sil_search` → `checkout_url`), **never** open-web results —
   the web only researches the method, it never sources a pick.
+- **Your memory is the sil store, never a `MEMORY.md`.** Persist and recall every
+  shopping fact, taste, and domain method through `sil_learn` / `sil_profile_*` — a
+  workspace `MEMORY.md` is not the shopper's memory; do not read or write it.
 
 ## Session start
 
@@ -87,6 +90,10 @@ feedback** — loaded on demand from the references that own each beat: **1 clas
 **2 method** (load/mint/refresh, intent-keyed PRDs, the frontmatter-as-truth store)
 → [`references/method_and_prds.md`](references/method_and_prds.md); **3 fill, 6
 feedback** → [`references/fill_and_feedback.md`](references/fill_and_feedback.md).
+
+**Beat 4 is bounded: ≤ 4 spec-filtered `sil_search` calls** per request — the tightest
+projection of the PRD's core first, then deliberate widenings; never brand-by-brand
+enumeration.
 
 The loop shapes the shopper's **reasoning, not the user's inbox**: a reused domain
 plus a fully-resolved request **passes straight through, asking nothing**. It gates

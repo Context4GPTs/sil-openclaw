@@ -15,8 +15,8 @@
  *     does NOT write a manifest.
  *   - `sil_learn { target, domain?, prd?, kind, … }` — the single target+change verb
  *     owning the whole method/PRD lifecycle: `create` mints a whole method/PRD;
- *     `append`/`amend`/`retract` refine in place; `attach-asset` persists image bytes.
- *     REPLACES the deleted `sil_remember` (delete, not alias).
+ *     `write` replaces an EXISTING doc's whole body (reconciled, never stacked);
+ *     `attach-asset` persists image bytes. REPLACES the deleted `sil_remember`.
  *   - `sil_profile_search { domain?, product?, intent?, query? }` — NEW: query artefact
  *     FRONTMATTER (coordinates only, no bodies) — the discovery / reuse-before-mint
  *     primitive that replaces the manifest's index role. Malformed frontmatter is
@@ -90,6 +90,20 @@ function modeBits(path: string): number {
 function walkShopper(): string[] {
   if (!existsSync(shopperDir())) return [];
   return readdirSync(shopperDir(), { recursive: true }) as string[];
+}
+
+/** A sentinel `updated_at`/`created_at` older than any real `new Date()` — so a
+ * subsequent `write`'s timestamp bump (and `created_at` preservation) is
+ * DETERMINISTIC, never a wall-clock race between two sub-millisecond tool calls. */
+const OLD_TS = "2000-01-01T00:00:00.000Z";
+
+/** Backdate an on-disk artefact's timestamps to `OLD_TS` so a following `write` can
+ * prove it moved `updated_at` forward (and left `created_at` frozen). */
+function backdate(path: string): void {
+  const patched = readFileSync(path, "utf8")
+    .replace(/updated_at:.*/g, "updated_at: " + OLD_TS)
+    .replace(/created_at:.*/g, "created_at: " + OLD_TS);
+  writeFileSync(path, patched, { mode: 0o600 });
 }
 
 const USER_SPEC = "# The person\n- Ships to Berlin.\n- HARD-NO: leather.";
@@ -271,220 +285,233 @@ describe("sil_learn create — mints method + PRD into the frontmatter-as-truth 
     expect(existsSync(join(shopperDir(), "domains"))).toBe(false);
   });
 
-  it("a method change bumps the file's own frontmatter (no manifest) — updated_at present, frontmatter intact after append", async () => {
+  it("create REFUSES to clobber an existing method (create only mints) → invalid_request (field kind), on-disk body unchanged", async () => {
     const methodPath = await seedSkiMethod();
     const before = readFileSync(methodPath, "utf8");
-    expect(before).toMatch(/updated_at:/);
-    await getTool(api, LEARN).execute("b1", {
+    const payload = payloadOf(
+      await getTool(api, LEARN).execute("ce1", {
+        target: "method",
+        domain: "ski",
+        kind: "create",
+        name: "Ski",
+        body: "# a WHOLLY different guide that must NOT land\n",
+      }),
+    );
+    expect(payload["status"]).toBe("invalid_request");
+    // The error points the model at kind:write (the only path that overwrites).
+    expect(payload["field"]).toBe("kind");
+    // Nothing was clobbered — the seeded method is byte-for-byte intact.
+    expect(readFileSync(methodPath, "utf8")).toBe(before);
+  });
+
+  it("create REFUSES to clobber an existing PRD → invalid_request (field kind), on-disk body unchanged", async () => {
+    await getTool(api, MATERIALIZE).execute("cp0", { name: "sil shopper", userSpec: USER_SPEC });
+    await getTool(api, LEARN).execute("cp1", {
       target: "method",
       domain: "ski",
-      kind: "append",
-      section: "Taste & stance",
-      text: "Budget under 200.",
+      kind: "create",
+      name: "Ski",
+      body: "#g",
     });
-    const after = readFileSync(methodPath, "utf8");
-    expect(after.startsWith("---")).toBe(true);
-    expect(after).toMatch(/updated_at:/);
-    expect(after).toContain("Budget under 200.");
+    const prdCoords = {
+      target: "prd" as const,
+      domain: "ski",
+      prd: "gloves-slope",
+      product: "gloves",
+      intent: "slope",
+      title: "G",
+      kind: "create" as const,
+    };
+    const first = payloadOf(
+      await getTool(api, LEARN).execute("cp2", { ...prdCoords, body: "## Requirements\n- original\n" }),
+    );
+    expect(first["status"]).toBe("ok");
+    const prdPath = join(domainDir("ski"), "prds", "gloves-slope.md");
+    const before = readFileSync(prdPath, "utf8");
+    const second = payloadOf(
+      await getTool(api, LEARN).execute("cp3", { ...prdCoords, body: "## Requirements\n- DIFFERENT\n" }),
+    );
+    expect(second["status"]).toBe("invalid_request");
+    expect(second["field"]).toBe("kind");
+    expect(readFileSync(prdPath, "utf8")).toBe(before);
+  });
+
+  it("strips a model-authored leading frontmatter block from a create body — never stacks two blocks", async () => {
+    // A model sometimes prepends its OWN `--- … ---` to the body. The store owns
+    // frontmatter (frontmatter-as-truth), so serialization must strip it and emit
+    // exactly one block (the store's coordinates), never two stacked.
+    await getTool(api, MATERIALIZE).execute("fm0", { name: "sil shopper", userSpec: USER_SPEC });
+    const bodyWithFm =
+      "---\nnote: MODEL-AUTHORED-FRONTMATTER\ntitle: not the real title\n---\n" +
+      "# Buying guide\n\nStability first, then sound.\n";
+    const payload = payloadOf(
+      await getTool(api, LEARN).execute("fm1", {
+        target: "method",
+        domain: "running",
+        name: "running shoes",
+        kind: "create",
+        body: bodyWithFm,
+      }),
+    );
+    expect(payload["status"]).toBe("ok"); // create succeeded
+    const raw = readFileSync(join(domainDir("running"), "method.md"), "utf8");
+    // Exactly one frontmatter block: the file opens with the store's fence, and after its
+    // close fence the body begins with the real content — NOT a second `---` fence.
+    expect(raw.startsWith("---")).toBe(true);
+    const afterOpen = raw.slice(3);
+    const close = afterOpen.match(/\n---[ \t]*\r?\n/)!;
+    const body = afterOpen.slice(close.index! + close[0].length);
+    expect(body.startsWith("# Buying guide")).toBe(true);
+    // The model's stray frontmatter content is gone entirely (stripped, not embedded).
+    expect(raw).not.toContain("MODEL-AUTHORED-FRONTMATTER");
+    // The store's own coordinates ARE present in the single frontmatter block.
+    expect(raw).toContain("domain: running");
+    expect(raw).toContain("name: running shoes");
   });
 });
 
 /* ===========================================================================
- * sil_learn append / amend / retract — section-aware, single-match, fail-closed.
+ * sil_learn write — replace an EXISTING doc's WHOLE body with a reconciled version
+ * (the model reads current, reconciles in context, writes the whole doc back). No
+ * append/amend/retract: a correction can never stack a contradicting line. Coordinates
+ * + created_at are preserved and updated_at bumps (user_spec carries no timestamp).
+ * Fail-closed: not_found on an absent target (write never mints), unreadable on a
+ * present-but-corrupt one (never clobbers a recoverable artefact).
  * ========================================================================= */
-describe("sil_learn append / amend / retract — refine in place, fail-closed", () => {
-  it("append under a NAMED section adds a bullet; a missing section fails closed (invalid_request), never at EOF-by-accident", async () => {
-    await seedSkiMethod();
-    const ok = payloadOf(
-      await getTool(api, LEARN).execute("a1", {
-        target: "method",
-        domain: "ski",
-        kind: "append",
-        section: "Taste & stance",
-        text: "Shimano over SRAM.",
-      }),
-    );
-    expect(ok["status"]).toBe("ok");
-    expect(readFileSync(join(domainDir("ski"), "method.md"), "utf8")).toContain("Shimano over SRAM.");
-
-    const bad = payloadOf(
-      await getTool(api, LEARN).execute("a2", {
-        target: "method",
-        domain: "ski",
-        kind: "append",
-        section: "No Such Heading",
-        text: "orphan",
-      }),
-    );
-    expect(bad["status"]).toBe("invalid_request");
-  });
-
-  it("append/amend/retract require the target to already exist → not_found (never resurrects a seed-less doc)", async () => {
-    await getTool(api, MATERIALIZE).execute("n0", { name: "sil shopper", userSpec: USER_SPEC });
-    for (const kind of ["append", "amend", "retract"] as const) {
-      const payload = payloadOf(
-        await getTool(api, LEARN).execute("n1", {
-          target: "method",
-          domain: "never-minted",
-          kind,
-          text: "x",
-          from: "x",
-          to: "y",
-        }),
-      );
-      expect(payload["status"]).toBe("not_found");
-    }
-  });
-
-  it("amend replaces a single-occurrence match; an ambiguous (2+) match is invalid_request, not a silent multi-write", async () => {
+describe("sil_learn write — reconcile an existing doc's whole body, no stacking", () => {
+  it("write method REPLACES the whole body (old content GONE — reconciled, not stacked); domain/name preserved; updated_at bumped", async () => {
     const methodPath = await seedSkiMethod();
-    // Two identical bullets → an amend `from` that matches both must refuse.
-    await getTool(api, LEARN).execute("am0", {
-      target: "method", domain: "ski", kind: "append", section: "Taste & stance", text: "dup line",
-    });
-    await getTool(api, LEARN).execute("am1", {
-      target: "method", domain: "ski", kind: "append", section: "Taste & stance", text: "dup line",
-    });
-    const ambiguous = payloadOf(
-      await getTool(api, LEARN).execute("am2", {
-        target: "method", domain: "ski", kind: "amend", from: "dup line", to: "changed",
+    // Backdate so the bump is provable against a fixed sentinel (no wall-clock race).
+    backdate(methodPath);
+    const newBody = "# Buying guide — ski (rebuilt)\n\n## Fresh stance\n- Only current-year models.\n";
+    const payload = payloadOf(
+      await getTool(api, LEARN).execute("w1", {
+        target: "method",
+        domain: "ski",
+        kind: "write",
+        body: newBody,
       }),
     );
-    expect(ambiguous["status"]).toBe("invalid_request");
-    // The doc pins the ambiguous-match discriminant.
-    expect(JSON.stringify(ambiguous)).toContain("ambiguous");
-
-    // A unique match amends cleanly.
-    const unique = payloadOf(
-      await getTool(api, LEARN).execute("am3", {
-        target: "method", domain: "ski", kind: "amend", from: "Prefer last-year models.", to: "Prefer current-year models.",
-      }),
-    );
-    expect(unique["status"]).toBe("ok");
+    expect(payload["status"]).toBe("ok");
+    expect(payload["kind"]).toBe("write");
     const raw = readFileSync(methodPath, "utf8");
-    expect(raw).toContain("Prefer current-year models.");
+    // Reconciliation, not accretion: the seeded line is GONE, the new body is in.
     expect(raw).not.toContain("Prefer last-year models.");
+    expect(raw).toContain("Only current-year models.");
+    // Coordinates survive the whole-body rewrite.
+    expect(raw).toMatch(/domain:\s*ski/);
+    expect(raw).toMatch(/name:\s*Ski/);
+    // updated_at moved OFF the backdated sentinel to a real, strictly-newer stamp.
+    expect(raw).not.toContain(OLD_TS);
+    const updatedAt = raw.match(/updated_at:\s*(\S+)/)![1]!;
+    expect(updatedAt > OLD_TS).toBe(true);
   });
 
-  it("`hard` is valid only on append to user_spec / prd — rejected on a method target (category error)", async () => {
-    await seedSkiMethod();
+  it("write prd replaces the body; {key,product,intent,title,domain,created_at} preserved; updated_at bumped", async () => {
+    await getTool(api, MATERIALIZE).execute("wp0", { name: "sil shopper", userSpec: USER_SPEC });
+    await getTool(api, LEARN).execute("wp1", {
+      target: "method", domain: "ski", kind: "create", name: "Ski", body: "#g",
+    });
+    await getTool(api, LEARN).execute("wp2", {
+      target: "prd", domain: "ski", prd: "gloves-slope", product: "gloves", intent: "slope",
+      title: "Ski gloves for the slope", kind: "create", body: "## Requirements\n- original waterproofing\n",
+    });
+    const prdPath = join(domainDir("ski"), "prds", "gloves-slope.md");
+    backdate(prdPath);
     const payload = payloadOf(
-      await getTool(api, LEARN).execute("h1", {
-        target: "method",
-        domain: "ski",
-        kind: "append",
-        section: "Taste & stance",
-        text: "never leather",
-        hard: true,
+      await getTool(api, LEARN).execute("wp3", {
+        target: "prd", domain: "ski", prd: "gloves-slope", kind: "write",
+        body: "## Requirements\n- rebuilt: insulation over waterproofing\n",
       }),
     );
-    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["status"]).toBe("ok");
+    expect(payload["kind"]).toBe("write");
+    const raw = readFileSync(prdPath, "utf8");
+    expect(raw).not.toContain("original waterproofing");
+    expect(raw).toContain("rebuilt: insulation over waterproofing");
+    // Every PRD coordinate survives.
+    expect(raw).toMatch(/key:\s*gloves-slope/);
+    expect(raw).toMatch(/product:\s*gloves/);
+    expect(raw).toMatch(/intent:\s*slope/);
+    expect(raw).toMatch(/title:\s*Ski gloves for the slope/);
+    expect(raw).toMatch(/domain:\s*ski/);
+    // created_at is FROZEN at the seed; only updated_at moves forward.
+    expect(raw).toContain("created_at: " + OLD_TS);
+    const updatedAt = raw.match(/updated_at:\s*(\S+)/)![1]!;
+    expect(updatedAt > OLD_TS).toBe(true);
   });
 
-  it("`hard` append to user_spec writes the [hard] marker the reject-at-pick rule greps", async () => {
-    await getTool(api, MATERIALIZE).execute("h2", { name: "sil shopper", userSpec: USER_SPEC });
+  it("write user_spec replaces the body (old GONE, new in); the shopper `name` frontmatter is preserved; no updated_at is added", async () => {
+    await getTool(api, MATERIALIZE).execute("wu0", { name: "sil shopper", userSpec: USER_SPEC });
+    const userSpecPath = join(shopperDir(), "user_spec.md");
     const payload = payloadOf(
-      await getTool(api, LEARN).execute("h3", {
+      await getTool(api, LEARN).execute("wu1", {
         target: "user_spec",
-        kind: "append",
-        text: "allergic to wool",
-        hard: true,
+        kind: "write",
+        body: "# The person (rebuilt)\n- Ships to Munich now.\n",
       }),
     );
     expect(payload["status"]).toBe("ok");
-    expect(readFileSync(join(shopperDir(), "user_spec.md"), "utf8")).toContain("[hard]");
+    expect(payload["kind"]).toBe("write");
+    const raw = readFileSync(userSpecPath, "utf8");
+    expect(raw).not.toContain("Ships to Berlin");
+    expect(raw).toContain("Ships to Munich now.");
+    // The name in frontmatter is carried across the rewrite.
+    expect(raw).toMatch(/name:\s*sil shopper/);
+    // user_spec carries no timestamp — only method/prd do.
+    expect(raw).not.toContain("updated_at");
   });
-});
 
-/* ===========================================================================
- * GAP 1 — `hard:true` is REJECTED loudly on EVERY non-append kind (create /
- * amend / retract / attach-asset), never silently dropped. One top-level guard
- * in `learnArtefact` (subsuming the deleted method-only `rejectHardMisuse`) fires
- * BEFORE the kind switch, so `hard` wins error-precedence over per-kind field
- * checks and a hard-constraint promotion is never a silent no-op.
- * ========================================================================= */
-describe("sil_learn — hard:true is rejected on EVERY non-append kind (the silent drop is closed)", () => {
-  // A 1x1 transparent PNG (for the attach-asset kind).
-  const PNG_B64 =
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-
-  it("amend + hard:true → invalid_request (field `hard`) and the PRD bullet stays SOFT — not a silent promotion", async () => {
-    await getTool(api, MATERIALIZE).execute("g1m", { name: "sil shopper", userSpec: USER_SPEC });
-    await getTool(api, LEARN).execute("g1a", {
-      target: "method", domain: "ski", kind: "create", name: "Ski", body: "#g",
-    });
-    await getTool(api, LEARN).execute("g1b", {
-      target: "prd", domain: "ski", prd: "gloves-slope", product: "gloves", intent: "slope", title: "G", kind: "create",
-      body: "## Requirements\n- gore-tex preferred\n",
-    });
-    const payload = payloadOf(
-      await getTool(api, LEARN).execute("g1c", {
-        target: "prd", domain: "ski", prd: "gloves-slope", kind: "amend",
-        from: "gore-tex preferred", to: "gore-tex required", hard: true,
+  it("write on an ABSENT method / PRD → not_found (write never mints — that is create); nothing is written as a side effect", async () => {
+    await getTool(api, MATERIALIZE).execute("wn0", { name: "sil shopper", userSpec: USER_SPEC });
+    const method = payloadOf(
+      await getTool(api, LEARN).execute("wn1", {
+        target: "method", domain: "never-minted", kind: "write", body: "# nope\n",
       }),
     );
-    expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("hard");
-    // Nothing written: the amend did NOT land and the soft pref was NOT promoted to hard.
-    const raw = readFileSync(join(domainDir("ski"), "prds", "gloves-slope.md"), "utf8");
-    expect(raw).toContain("gore-tex preferred");
-    expect(raw).not.toContain("gore-tex required");
-    expect(raw).not.toContain("[hard]");
-  });
+    expect(method["status"]).toBe("not_found");
+    expect(existsSync(join(domainDir("never-minted"), "method.md"))).toBe(false);
 
-  it("create + hard:true → invalid_request (field `hard`) and NOTHING is minted", async () => {
-    await getTool(api, MATERIALIZE).execute("g1d", { name: "sil shopper", userSpec: USER_SPEC });
-    const payload = payloadOf(
-      await getTool(api, LEARN).execute("g1e", {
-        target: "method", domain: "ski", kind: "create", name: "Ski", body: "# guide", hard: true,
+    await getTool(api, LEARN).execute("wn2", { target: "method", domain: "ski", kind: "create", name: "Ski", body: "#g" });
+    const prd = payloadOf(
+      await getTool(api, LEARN).execute("wn3", {
+        target: "prd", domain: "ski", prd: "no-such-prd", kind: "write", body: "## nope\n",
       }),
     );
-    expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("hard");
-    expect(existsSync(join(domainDir("ski"), "method.md"))).toBe(false);
+    expect(prd["status"]).toBe("not_found");
+    expect(existsSync(join(domainDir("ski"), "prds", "no-such-prd.md"))).toBe(false);
   });
 
-  it("retract + hard:true → invalid_request (field `hard`) and the bullet is NOT removed", async () => {
+  it("write on a PRESENT-but-corrupt method → unreadable (never clobbers a recoverable artefact); the original bytes are untouched", async () => {
+    await getTool(api, MATERIALIZE).execute("wc0", { name: "sil shopper", userSpec: USER_SPEC });
+    // A hand-corrupted domain: method.md present but with NO valid frontmatter fence.
+    const brokenDir = domainDir("broken");
+    mkdirSync(brokenDir, { recursive: true, mode: 0o700 });
+    const garbage = "no frontmatter here at all\njust prose\n";
+    const methodPath = join(brokenDir, "method.md");
+    writeFileSync(methodPath, garbage, { mode: 0o600 });
+
+    const payload = payloadOf(
+      await getTool(api, LEARN).execute("wc1", {
+        target: "method", domain: "broken", kind: "write", body: "# a replacement that must NOT land\n",
+      }),
+    );
+    expect(payload["status"]).toBe("unreadable");
+    // Fail-closed: the corrupt-but-recoverable bytes are exactly as they were.
+    expect(readFileSync(methodPath, "utf8")).toBe(garbage);
+  });
+
+  it("write with NO body → invalid_request (field body) — write requires the reconciled whole body, and writes nothing", async () => {
     const methodPath = await seedSkiMethod();
+    const before = readFileSync(methodPath, "utf8");
     const payload = payloadOf(
-      await getTool(api, LEARN).execute("g1f", {
-        target: "method", domain: "ski", kind: "retract", from: "Prefer last-year models.", hard: true,
+      await getTool(api, LEARN).execute("wb1", {
+        target: "method", domain: "ski", kind: "write",
       }),
     );
     expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("hard");
-    expect(readFileSync(methodPath, "utf8")).toContain("Prefer last-year models.");
-  });
-
-  it("attach-asset + hard:true → invalid_request (field `hard`) BEFORE any bytes/link write (hard wins error-precedence)", async () => {
-    await seedSkiMethod();
-    const payload = payloadOf(
-      await getTool(api, LEARN).execute("g1g", {
-        target: "method", domain: "ski", kind: "attach-asset", bytes: PNG_B64, mime: "image/png", hard: true,
-      }),
-    );
-    expect(payload["status"]).toBe("invalid_request");
-    expect(payload["field"]).toBe("hard");
-    expect(existsSync(join(domainDir("ski"), "assets"))).toBe(false);
-    expect(readFileSync(join(domainDir("ski"), "method.md"), "utf8")).not.toContain("assets/");
-  });
-
-  it("append + hard:true is STILL honored on prd (the guard keys on kind+target, never over-narrow to user_spec only)", async () => {
-    await getTool(api, MATERIALIZE).execute("g1h", { name: "sil shopper", userSpec: USER_SPEC });
-    await getTool(api, LEARN).execute("g1i", {
-      target: "method", domain: "ski", kind: "create", name: "Ski", body: "#g",
-    });
-    await getTool(api, LEARN).execute("g1j", {
-      target: "prd", domain: "ski", prd: "gloves-slope", product: "gloves", intent: "slope", title: "G", kind: "create",
-      body: "## Requirements\n- baseline\n",
-    });
-    const payload = payloadOf(
-      await getTool(api, LEARN).execute("g1k", {
-        target: "prd", domain: "ski", prd: "gloves-slope", kind: "append", text: "waterproof to IPX7", hard: true,
-      }),
-    );
-    expect(payload["status"]).toBe("ok");
-    expect(readFileSync(join(domainDir("ski"), "prds", "gloves-slope.md"), "utf8")).toContain("[hard]");
+    expect(payload["field"]).toBe("body");
+    expect(readFileSync(methodPath, "utf8")).toBe(before);
   });
 });
 
@@ -851,13 +878,14 @@ describe("sil_profile_remove — removes a whole domain, or just one PRD", () =>
  * FRONTMATTER-AS-TRUTH — the whole flow leaves NO profile.json anywhere.
  * ========================================================================= */
 describe("frontmatter-as-truth — no manifest ever appears across the whole lifecycle", () => {
-  it("after create → learn → attach-asset → remove, not one profile.json exists under the shopper root", async () => {
+  it("after create → write → remove, not one profile.json exists under the shopper root", async () => {
     await seedSkiMethod();
     await getTool(api, LEARN).execute("z1", {
       target: "prd", domain: "ski", prd: "gloves-slope", product: "gloves", intent: "slope", title: "G", kind: "create", body: "#r",
     });
     await getTool(api, LEARN).execute("z2", {
-      target: "method", domain: "ski", kind: "append", section: "Taste & stance", text: "note",
+      target: "method", domain: "ski", kind: "write",
+      body: "# Buying guide — ski\n\n## Taste & stance\n- Prefer last-year models.\n- note\n",
     });
     await getTool(api, REMOVE).execute("z3", { domainSlug: "ski", prd: "gloves-slope" });
     expect(walkShopper().some((p) => p.endsWith("profile.json"))).toBe(false);

@@ -7,8 +7,8 @@
  *   - `sil_profile_materialize { name, userSpec }` — SETUP-ONLY: write user_spec.md
  *     (its frontmatter carries the shopper name). Does NOT mint methods/PRDs.
  *   - `sil_learn { target, domain?, prd?, kind, … }` — the single target+change verb
- *     for the whole method/PRD lifecycle: create mints a whole doc; append/amend/
- *     retract refine in place; attach-asset persists image bytes by path.
+ *     for the whole method/PRD lifecycle: create mints a NEW doc; write replaces an
+ *     existing doc's whole body (reconciled); attach-asset persists image bytes by path.
  *   - `sil_profile_search { domain?, product?, intent?, query? }` — query artefact
  *     FRONTMATTER (coordinates only, no bodies); the discovery / reuse-before-mint
  *     primitive. Malformed frontmatter surfaces in `unreadable`, never dropped.
@@ -100,12 +100,14 @@ function registerLearn(api: PluginAPI): void {
     description:
       "The single target+change verb owning the sil shopper's method/PRD lifecycle."
       + " `target` (user_spec | method | prd) picks WHERE the change lands; `kind`"
-      + " (create | append | amend | retract | attach-asset) picks the change — the"
-      + " per-field schema names which fields each needs. `create` mints a whole method/"
-      + "PRD (not valid for user_spec); append/amend/retract/attach-asset need the target"
-      + " to exist (else not_found). `hard` (append to user_spec/prd only) marks an"
-      + " inviolable constraint. Local-only, atomic, owner-only, no network; a bad field"
-      + " → invalid_request and writes nothing.",
+      + " (create | write | attach-asset) picks the change. `create` mints a NEW method/"
+      + "PRD (not valid for user_spec; errors if one already exists — use write). `write`"
+      + " replaces an EXISTING doc's whole body with a reconciled version you author (read"
+      + " it first with sil_profile_get and carry every buyer line forward; else not_found)."
+      + " `attach-asset` links image bytes. To change anything, WRITE the whole reconciled"
+      + " doc — there is no append/amend, so a correction never stacks a contradicting"
+      + " line. Local-only, atomic, owner-only, no network; a bad field → invalid_request"
+      + " and writes nothing.",
     parameters: Type.Object({
       target: Type.Union(
         [Type.Literal("user_spec"), Type.Literal("method"), Type.Literal("prd")],
@@ -114,12 +116,10 @@ function registerLearn(api: PluginAPI): void {
       kind: Type.Union(
         [
           Type.Literal("create"),
-          Type.Literal("append"),
-          Type.Literal("amend"),
-          Type.Literal("retract"),
+          Type.Literal("write"),
           Type.Literal("attach-asset"),
         ],
-        { description: "The change: create | append | amend | retract | attach-asset." },
+        { description: "The change: create (mint new) | write (replace whole body) | attach-asset." },
       ),
       domain: Type.Optional(
         Type.String({ description: "The domain slug (lower-kebab, not \"main\") — required for method/prd." }),
@@ -128,17 +128,10 @@ function registerLearn(api: PluginAPI): void {
         Type.String({ description: "The PRD key <product>-<intent> (lower-kebab) — required for a prd target." }),
       ),
       name: Type.Optional(Type.String({ description: "create method: the human-readable domain name." })),
-      body: Type.Optional(Type.String({ description: "create: the whole markdown body to mint." })),
+      body: Type.Optional(Type.String({ description: "create / write: the whole markdown body (mint, or the reconciled replacement)." })),
       product: Type.Optional(Type.String({ description: "create prd: the product type." })),
       intent: Type.Optional(Type.String({ description: "create prd: the use-context (general when context-free)." })),
       title: Type.Optional(Type.String({ description: "create prd: the human-readable job title." })),
-      text: Type.Optional(Type.String({ description: "append: the one bullet to add." })),
-      from: Type.Optional(Type.String({ description: "amend/retract: the exact bullet text to match (single occurrence)." })),
-      to: Type.Optional(Type.String({ description: "amend: the replacement bullet text." })),
-      section: Type.Optional(Type.String({ description: "append/amend/retract: the `## section` to scope to." })),
-      hard: Type.Optional(
-        Type.Boolean({ description: "append to user_spec/prd only: mark an inviolable constraint the shop loop rejects against." }),
-      ),
       bytes: Type.Optional(Type.String({ description: "attach-asset: the image bytes, base64-encoded." })),
       mime: Type.Optional(Type.String({ description: "attach-asset: image/jpeg | image/png | image/webp | image/gif." })),
       caption: Type.Optional(Type.String({ description: "attach-asset: an optional caption for the markdown link." })),
@@ -146,7 +139,7 @@ function registerLearn(api: PluginAPI): void {
     async execute(_callId, params) {
       const spec: LearnSpec = {
         target: (params["target"] as LearnTarget) ?? "method",
-        kind: (params["kind"] as LearnKind) ?? "append",
+        kind: (params["kind"] as LearnKind) ?? "write",
         domain: optString(params["domain"]),
         prd: optString(params["prd"]),
         name: optString(params["name"]),
@@ -154,11 +147,6 @@ function registerLearn(api: PluginAPI): void {
         product: optString(params["product"]),
         intent: optString(params["intent"]),
         title: optString(params["title"]),
-        text: optString(params["text"]),
-        from: optString(params["from"]),
-        to: optString(params["to"]),
-        section: optString(params["section"]),
-        hard: params["hard"] === true ? true : undefined,
         bytes: optString(params["bytes"]),
         mime: optString(params["mime"]),
         caption: optString(params["caption"]),
