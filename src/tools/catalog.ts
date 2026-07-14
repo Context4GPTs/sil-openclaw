@@ -717,25 +717,15 @@ function registerSpecs(api: PluginAPI): void {
     name: "sil_specs",
     label: "Canonicalize coined spec definitions",
     description:
-      "Canonicalize the coined spec DEFINITIONS a shopping method invents for a"
-      + " niche — the dedupe-or-create registry call at method mint/refresh (Beat 2)."
-      + " Pass the motivating `query` (what the shopper is buying — governance /"
-      + " dedupe context) and `specs`, a list of coined definitions ({ namespace,"
-      + " key, display_name, data_type, description?, unit?, allowed_values? }). Each"
-      + " submitted spec resolves 1:1: a `matched` result means an equivalent"
-      + " canonical spec already exists — ADOPT its `canonical` { namespace, key }"
-      + " and DROP your coined synonym (this convergence is what makes filters.specs"
-      + " actually filter across methods); a `created` result means yours is novel and"
-      + " registered as canonical (`canonical` === `submitted`, keep it). Rewrite the"
-      + " method's `## Search vocabulary` and any PRD `specs` predicates to the"
-      + " returned canonical names BEFORE persisting — the method is born canonical,"
-      + " never write-then-amend. On REFRESH submit ONLY the specs that do not yet"
-      + " carry a canonical name; already-canonical names are stable, do not resubmit"
-      + " them. This is INTERNAL plumbing: never surface `ns.key` names or"
-      + " \"converged your specs\" to the buyer. If the call is not `ok` (retryable /"
-      + " forbidden / must_reregister), do NOT block the mint — persist the method"
-      + " with the raw coined names and shop on; convergence retries on the next"
-      + " mint/refresh. Requires registration (run sil_register first).",
+      "Canonicalize the coined spec DEFINITIONS a method invents for a niche — the"
+      + " dedupe-or-create registry call at method mint/refresh. Pass the motivating"
+      + " `query` and `specs` (coined { namespace, key, display_name, data_type,"
+      + " description?, unit?, allowed_values? }). Each resolves 1:1: `matched` → adopt"
+      + " the returned canonical { namespace, key } and drop your synonym; `created` →"
+      + " yours is novel, keep it. Rewrite the method's search vocabulary + any PRD"
+      + " predicates to the canonical names before persisting. Internal plumbing — never"
+      + " surface ns.key to the buyer. If not `ok`, do NOT block the mint: persist raw and"
+      + " converge on the next mint/refresh. Requires registration.",
     parameters: Type.Object({
       query: Type.String({
         description:

@@ -31,7 +31,8 @@
  *   7. materializeProfile          — REUSED; SETUP-ONLY { name, userSpec } ⇒ shared
  *                                    user_spec.md (its frontmatter carries the name);
  *                                    NO manifest, no domain minted at create
- *   8. attach the sil skill + enable the sil plugin (openclaw config set --strict-json)
+ *   8. attach the sil skill + deny the escape-hatch tools (exec/write/edit/apply_patch,
+ *      a per-agent tools.deny that keeps sil + web) + enable the sil plugin (config set)
  *   9. sil-openclaw-allowlist      — REUSED whole; additive/idempotent/atomic three-surface
  *                                    trust merge (plugins.allow + tools.alsoAllow + plugins.entries.sil)
  *  10. bind the current channel    — FAIL-OPEN convenience, NOT fail-closed: resolve the channel
@@ -96,6 +97,38 @@ const MANIFEST_PATH = resolve(ROOT, "openclaw.plugin.json");
 
 /** A shopper id path-segment shape — lower-kebab, never `main` (host-reserved). */
 const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+/** The escape-hatch tools the shopper is DENIED at the per-agent level — the shell
+ * (`exec`) and the filesystem mutators (`write`/`edit`/`apply_patch`). A shopper shops
+ * through the sil tools; it has no business running a shell (which it wasted re-reading
+ * its own skill files) or writing host files (which it used to persist shopping memory
+ * into the workspace instead of the sil store). `deny` is the SAFE lever: per the host's
+ * tool-precedence model it only further-RESTRICTS and cannot re-grant, so it removes
+ * exactly these and CANNOT strip the sil tools (a per-agent `tools.profile` override,
+ * by contrast, replaces the base set and would risk the sil grant). Web + messaging
+ * tools are intentionally kept — web still feeds gap-filling method research. */
+const SHOPPER_TOOL_DENY = ["exec", "write", "edit", "apply_patch"];
+
+/** Standing sil operating rules appended to every shopper's SOUL.md at create — the
+ * IDENTITY-level reinforcement of the sil-shopping skill's always-on contract. Baked
+ * into the persona (always in context, high salience) so the shopper's tool discipline
+ * does not rest on the skill alone: the load-bearing rules are stated where the model
+ * weights identity, not only where it reads capabilities. */
+const SOUL_SIL_RULES =
+  "\n## Shopping with sil (standing rules)\n\n"
+  + "- You shop through the **sil tools**. The **sil catalog** (`sil_search` /"
+  + " `sil_product_get`) is your source of truth for what to buy — every pick you return"
+  + " is a sil product with a `checkout_url`.\n"
+  + "- **Never answer a buy-intent from the open web.** A web tool, when you have one, is"
+  + " only for researching a niche's buying guide while you mint its domain — never for"
+  + " sourcing the products you recommend.\n"
+  + "- A niche you have **not learned** is a MISS (`sil_profile_search` returns"
+  + " `next_step: mint_domain`): **mint the domain first** — draft its method from what"
+  + " you already know, `sil_learn create` it — then search.\n"
+  + "- Persist what you learn **only** through `sil_learn`. It is your memory; never"
+  + " write it to host files or elsewhere.\n"
+  + "- Exact tool behaviours + the six-beat loop live in the attached `sil-shopping`"
+  + " skill — follow it.\n";
 
 const CREATED_EVENT = "sil_shopper_created";
 const FAILED_EVENT = "sil_shopper_create_failed";
@@ -284,23 +317,10 @@ function agentIndex(config, agentId) {
   return list.findIndex((a) => a?.id === agentId);
 }
 
-/** Best-effort web-capability check (SA ruling: warn, never hard-fail). The shopper
- * lazily mints/refreshes a domain over the web (inherited from `agents.defaults`);
- * bare `sil_search` works without it. Warn ONLY when `agents.defaults` is present
- * yet names no web/fetch capability — never fabricate a gap on an absent defaults
- * block (the host may grant web by other means). */
-function webCapabilityWarnings(config) {
-  const defaults = config?.agents?.defaults;
-  if (defaults === undefined || defaults === null || typeof defaults !== "object") return [];
-  const json = JSON.stringify(defaults).toLowerCase();
-  const WEB_TOKENS = ["web", "fetch", "browse", "http"];
-  if (WEB_TOKENS.some((t) => json.includes(t))) return [];
-  return [
-    "the created shopper inherits its tool profile from agents.defaults, which does not appear to"
-      + " grant a web/fetch tool — a domain cannot be lazily minted or web-refreshed without it"
-      + " (bare sil_search still works). Confirm agents.defaults grants a web capability.",
-  ];
-}
+// The shopper's per-agent escape-hatch deny-list (step 8) is the INTENDED end state, not
+// a degradation — so it rides no `warnings` entry (that rail is for real gaps, and the
+// happy path stays clean). What the shopper keeps (sil tools + web) and drops (the shell
+// + fs mutators) is documented in CHANGELOG.md + agent_creation_engine.md.
 
 /** True iff `openclaw config validate --json` reported `{valid:true}`. The host
  * writes its verdict to stdout even on a non-zero exit, so read stdout, never the
@@ -540,10 +560,13 @@ function main() {
     failAndTeardown(configPath, "`openclaw agents add` failed: " + (addRes.stderr || "non-zero exit"));
   }
 
-  // --- 6. Write the persona into the workspace SOUL.md (host CLI has no writer) ---
+  // --- 6. Write the persona + standing sil rules into the workspace SOUL.md ---
+  // The endorsed persona, then SOUL_SIL_RULES — the identity-level restatement of the
+  // shopping contract, so the shopper's tool discipline is anchored in its soul, not the
+  // skill alone (host CLI has no SOUL.md writer, so the bin does it).
   const soulPath = join(workspace, "SOUL.md");
   try {
-    atomicWrite(soulPath, persona.endsWith("\n") ? persona : persona + "\n");
+    atomicWrite(soulPath, (persona.endsWith("\n") ? persona : persona + "\n") + SOUL_SIL_RULES);
   } catch (err) {
     failAndTeardown(soulPath, "could not write SOUL.md: " + errCause(err));
   }
@@ -570,6 +593,21 @@ function main() {
   );
   if (!skillRes.ok) {
     failAndTeardown(configPath, "attaching the sil skill failed: " + (skillRes.stderr || "non-zero exit"));
+  }
+  // Deny the shopper the escape-hatch tools at the per-agent level — sibling of the
+  // `.skills` set above. This subtracts the shell + fs mutators from whatever the host's
+  // global profile grants, so the sil tools (admitted via plugin trust, step 9) and web
+  // survive while the shell/file-write hatches are gone. `deny` is chosen over a
+  // per-agent `tools.profile` override precisely because it only further-restricts and
+  // can never strip the sil grant (SHOPPER_TOOL_DENY rationale). `--strict-json` requires
+  // a valid-JSON value, so the array is passed via JSON.stringify (→ '["exec",…]'),
+  // exactly like the `["…"]` / `true` values above; a bare token would exit 0 but no-op.
+  const denyRes = runOpenclaw(
+    ["config", "set", `agents.list[${idx}].tools.deny`, JSON.stringify(SHOPPER_TOOL_DENY), "--strict-json"],
+    configPath,
+  );
+  if (!denyRes.ok) {
+    failAndTeardown(configPath, "setting the shopper tool deny-list failed: " + (denyRes.stderr || "non-zero exit"));
   }
   const enableRes = runOpenclaw(
     ["config", "set", "plugins.entries.sil.enabled", "true", "--strict-json"],
@@ -665,7 +703,7 @@ function main() {
   }
 
   // --- 12. Declare created — carry the identity + the bound channel (honesty rail) ---
-  const warnings = [...webCapabilityWarnings(readConfig(configPath) ?? postAddConfig), ...bindWarnings];
+  const warnings = [...bindWarnings];
   emitCreated({ name, agentId, workspace, boundChannel, warnings });
 }
 

@@ -61,19 +61,13 @@ function registerMaterialize(api: PluginAPI): void {
     name: "sil_profile_materialize",
     label: "Set up the sil shopper",
     description:
-      "SETUP-ONLY: create the one sil shopper by writing its shared user spec into the"
-      + " sil data directory. Writes user_spec.md — the person's standing facts + hard"
-      + " constraints (addresses, sizes, allergy/ethics rules, budget psychology) that"
-      + " carry across EVERY niche — with the shopper `name` in the file's own"
-      + " frontmatter (there is NO manifest; the frontmatter IS the source of truth)."
-      + " It does NOT mint any domain method or PRD — that is sil_learn create. `name`"
-      + " and `userSpec` are both REQUIRED. Run this ONCE at setup: post-setup user-spec"
-      + " refinement is sil_learn (append/amend), NEVER a re-materialize (a re-run"
-      + " overwrites the whole body, discarding what sil_learn added). Makes no network"
-      + " call and reads no token. The"
-      + " persona is NOT written here — it is the host workspace SOUL.md. A blank"
-      + " name/userSpec returns invalid_request and writes nothing; a write failure"
-      + " returns persistence_failed.",
+      "SETUP-ONLY: create the one sil shopper by writing its shared user_spec.md — the"
+      + " person's cross-niche facts + hard constraints — with the shopper `name` in the"
+      + " file's frontmatter (no manifest). Does NOT mint any domain method or PRD (that"
+      + " is sil_learn create). Run ONCE at setup; refine later with sil_learn, never a"
+      + " re-materialize (it overwrites the whole body). `name` + `userSpec` required and"
+      + " non-empty. Local-only, no network. Blank input → invalid_request; write failure"
+      + " → persistence_failed.",
     parameters: Type.Object({
       name: Type.String({
         description: "The human-readable shopper name (recorded in user_spec.md frontmatter).",
@@ -104,22 +98,14 @@ function registerLearn(api: PluginAPI): void {
     name: "sil_learn",
     label: "Teach the sil shopper (create or refine a method / PRD)",
     description:
-      "The single target+change verb that owns the whole method/PRD lifecycle for the"
-      + " sil shopper — create a whole doc, or refine one in place. `target` selects"
-      + " WHERE the change lands: `user_spec` (the shared person spec, no selector),"
-      + " `method` (needs `domain`), or `prd` (needs `domain` + `prd`, the"
-      + " <product>-<intent> key). `kind` selects the change: `create` mints a whole"
-      + " method (domain, name, body) or PRD (domain, prd, product, intent, title,"
-      + " body) — NOT valid for user_spec; `append` adds one `- text` bullet under a"
-      + " named `## section` (fail-closed if that heading is absent) else at EOF;"
-      + " `amend` replaces the single bullet matching `from` with `to` (an ambiguous"
-      + " 2+ match is refused); `retract` removes the single bullet matching `from`;"
-      + " `attach-asset` persists image `bytes` (base64 + `mime`) into the domain's"
-      + " assets and links them by relative path. `hard` marks an inviolable"
-      + " constraint — valid only on append to user_spec or prd. append/amend/retract/"
-      + " attach-asset require the target to already exist (else not_found). Makes no"
-      + " network call and reads no token; writes are atomic + owner-only. A bad field"
-      + " returns invalid_request and writes nothing.",
+      "The single target+change verb owning the sil shopper's method/PRD lifecycle."
+      + " `target` (user_spec | method | prd) picks WHERE the change lands; `kind`"
+      + " (create | append | amend | retract | attach-asset) picks the change — the"
+      + " per-field schema names which fields each needs. `create` mints a whole method/"
+      + "PRD (not valid for user_spec); append/amend/retract/attach-asset need the target"
+      + " to exist (else not_found). `hard` (append to user_spec/prd only) marks an"
+      + " inviolable constraint. Local-only, atomic, owner-only, no network; a bad field"
+      + " → invalid_request and writes nothing.",
     parameters: Type.Object({
       target: Type.Union(
         [Type.Literal("user_spec"), Type.Literal("method"), Type.Literal("prd")],
@@ -207,15 +193,13 @@ function registerSearch(api: PluginAPI): void {
     label: "Search what the sil shopper knows (domains + PRDs)",
     description:
       "Query the sil shopper's artefact FRONTMATTER — the discovery / reuse-before-mint"
-      + " primitive. Returns COORDINATES only (no document bodies): the domains the"
-      + " shopper has learned ({slug, name}) and its PRDs ({domain, key, product,"
-      + " intent, title, …}). All filters are optional — pass none for the full"
-      + " overview, or narrow by `domain` / `product` / `intent` / a free-text"
-      + " `query`. This is a filesystem SCAN, not an index read; a domain or PRD whose"
-      + " frontmatter is malformed is SKIPPED and surfaced in `unreadable` (never"
-      + " silently dropped, never half-read) while healthy siblings still list. An"
-      + " empty store returns ok with empty domains/prds (healthy). Makes no network"
-      + " call and reads no token.",
+      + " primitive. Returns COORDINATES only (no bodies): the domains learned ({slug,"
+      + " name}) and their PRDs ({domain, key, product, intent, title}). All filters"
+      + " optional — none = full overview; narrow by domain/product/intent/query. A"
+      + " filesystem scan: malformed frontmatter is surfaced in `unreadable`, never"
+      + " dropped; healthy siblings still list. Empty store → ok with empty lists. When"
+      + " NO domain matches, the result carries `next_step: mint_domain` — the cue to"
+      + " mint the niche (sil_learn create) BEFORE shopping. Local-only, no network.",
     parameters: Type.Object({
       domain: Type.Optional(Type.String({ description: "Filter to one domain slug." })),
       product: Type.Optional(Type.String({ description: "Filter PRDs by product type." })),
@@ -234,11 +218,28 @@ function registerSearch(api: PluginAPI): void {
         prd_count: result.prds.length,
         unreadable_count: result.unreadable.length,
       });
+      // The mint trigger. No matching domain came back (an empty store, or a
+      // filtered miss on a populated one) — this IS the reuse-before-mint MISS, and
+      // it is where a first shop silently stalls: the model finds nothing to reuse
+      // and, with no next move in hand, answers a buy-intent off the open web. Carry
+      // the next action in the result so the MISS itself points at the mint, the way
+      // the catalog tools carry `recovery`. Absent when a domain matched.
+      const noMatch = result.domains.length === 0;
       return jsonResult({
         status: "ok",
         domains: result.domains,
         prds: result.prds,
         unreadable: result.unreadable,
+        ...(noMatch
+          ? {
+              next_step: "mint_domain",
+              guidance:
+                "No learned domain matches this request. To shop this niche, mint"
+                + " its domain FIRST: research the buying guide, then sil_learn create"
+                + " (target: method). Then shop with sil_search — a buy-intent is"
+                + " answered from the sil catalog, never from the open web.",
+            }
+          : {}),
       });
     },
   });
@@ -249,16 +250,13 @@ function registerGet(api: PluginAPI): void {
     name: "sil_profile_get",
     label: "Read one sil shopper document (method or PRD)",
     description:
-      "Read ONE full body from the sil shopper's store — the rich read. With a"
-      + " `domainSlug` only, returns that domain's method body (its buying guide +"
-      + " taste + search vocabulary); with `domainSlug` + `prd`, returns that PRD's"
-      + " body (its requirements + filled preferences). Use sil_profile_search first"
-      + " to discover which domains/PRDs exist (coordinates), then this to read one in"
-      + " full. A missing method/PRD returns not_found; a present-but-corrupt body"
-      + " (malformed/absent frontmatter) returns unreadable (inspect / repair — do NOT"
-      + " overwrite it, it may be recoverable), distinct from not_found; a malformed/"
-      + "traversal/\"main\" slug returns invalid_request. Makes no network call and reads"
-      + " no token.",
+      "Read ONE full body from the sil shopper's store. `domainSlug` alone → the method"
+      + " body (buying guide + taste + search vocabulary); `domainSlug` + `prd` → that"
+      + " PRD body (requirements + filled preferences). Discover coordinates with"
+      + " sil_profile_search first. Missing → not_found; present-but-corrupt frontmatter"
+      + " → unreadable (inspect/repair — do NOT overwrite, it may be recoverable), distinct"
+      + " from not_found; a bad/traversal/\"main\" slug → invalid_request. Local-only, no"
+      + " network.",
     parameters: Type.Object({
       domainSlug: Type.String({
         description: "The domain slug to read (lower-kebab, not \"main\"). REQUIRED.",
@@ -291,15 +289,12 @@ function registerRemove(api: PluginAPI): void {
     name: "sil_profile_remove",
     label: "Remove a sil shopper domain, or one of its PRDs",
     description:
-      "Remove artefacts from the sil shopper's store — the SIL-SIDE half only. With a"
-      + " `domainSlug` only, removes the WHOLE domain subtree (method + all PRDs +"
-      + " assets); with `domainSlug` + `prd`, removes just that ONE PRD (the method and"
-      + " sibling PRDs survive). Scoped and fail-closed: a malformed/traversal/\"main\""
-      + " slug returns invalid_request and deletes nothing; an unregistered domain/PRD"
-      + " returns not_found (idempotent — safe to re-run); a genuine filesystem failure"
-      + " returns persistence_failed. Never removes the shopper itself (that is a host"
-      + " concern). Confirm with the user before removing — it is destructive. Makes no"
-      + " network call and reads no token.",
+      "Remove artefacts from the sil shopper's store. `domainSlug` alone removes the"
+      + " WHOLE domain subtree (method + all PRDs + assets); `domainSlug` + `prd` removes"
+      + " just that ONE PRD (method + siblings survive). Destructive — confirm with the"
+      + " user first. A bad/traversal/\"main\" slug → invalid_request (deletes nothing); an"
+      + " unregistered domain/PRD → not_found (idempotent); a filesystem failure →"
+      + " persistence_failed. Never removes the shopper itself. Local-only, no network.",
     parameters: Type.Object({
       domainSlug: Type.String({
         description: "The domain slug to remove from (lower-kebab, not \"main\"). REQUIRED.",
