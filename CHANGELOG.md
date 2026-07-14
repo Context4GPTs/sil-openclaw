@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-14
+
 ### Fixed
 
 - **First shop now reliably mints its domain.** A buy-intent in an unlearned niche
