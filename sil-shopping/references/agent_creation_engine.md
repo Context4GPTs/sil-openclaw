@@ -1,140 +1,198 @@
 ---
 name: agent-creation-engine
-description: The ordered, one-command engine that persists the single sil-wired shopper after the user endorses the assembled draft. Load only after explicit endorsement in the interview.
+description: Create the single sil-wired shopper end to end — the two-touchpoint onboarding interview (persona + shared user-spec seed, endorsement-gated) then the one-command engine that persists it. Load when the user asks to set up or create their shopper.
 ---
 
-# Create your sil-wired shopper — the agent-creation engine
+# Create the shopper
 
-**Precondition: run this ONLY after the user has explicitly endorsed the assembled draft
-from [`brainstorm_interview.md`](brainstorm_interview.md).** The interview owns that gate.
+Two parts, in order: an **onboarding interview** that shapes the shopper *with* the
+user, then the **engine** that persists it. Nothing is created until the user
+**explicitly endorses** the draft — the gate lives in Part 1 and the engine refuses
+to run before it.
 
-This persists **one** valid OpenClaw agent — the user's **shopper**: a real agent under
-the host `agents` config, sil plugin enabled, sil skill attached, its persona in the
-workspace **`SOUL.md`**, plus the **shared user spec** in the sil data dir — so it shops
-with **no further setup**. The shopper is a **singleton**: created once, then it learns
-**domains** lazily on first shop, so a fresh shopper has an **empty `domains` map** —
-healthy. Creation is **local and offline**: no token is read, no `sil_register` /
-`sil_whoami`, no network call. The shopper registers the user later, on first shop.
+---
 
-## The one command
+## Part 1 — The onboarding interview
 
-After the endorsement, run exactly **one** shipped command — the package bin
-**`sil-openclaw-create-shopper`** — and it runs the whole choreography **atomically** and
-**fail-closed**, then returns one structured JSON result. You do **not** hand-run the
-host-CLI steps; the bin runs them **for you, in order, as one transaction**. Feed it the
-endorsed spec as one JSON object on **`stdin`** (or via **`--spec <path>`**):
+When the user asks to **set up shopping** ("create my shopper"), do **not** jump to
+the engine. Run a short, **two-touchpoint** onboarding — **pre-seeded from what they
+already said this session** — and create nothing until they endorse the draft.
+
+This is a **conversation, not a form-fill**. The shopper is a **generalist**: it goes
+deep on whatever the user later buys, **lazily minting a domain on first shop**.
+Onboarding researches **no niche** and picks **none** — it touches exactly two things:
+the **persona** and a **shared user-spec seed**.
+
+### Open with a reflected draft
+
+Before asking anything, **pre-seed** from what the user said *this session* — the
+persona (how it should behave) and the user-spec seed (sizes, hard limits, ethics
+rules mentioned in passing) — then **reflect it back** ("from what you've told me,
+here's the shopper I'd set up…") and ask only to confirm-or-adjust.
+
+- **Pre-fill, don't interrogate** — fill only genuine gaps. Little said? Seed a
+  **minimal honest** draft ("facts to be learned as we shop; no hard constraints
+  yet") and say so — never fabricate a size or limit.
+- **Session-only, local + offline** — no token, no `sil_whoami`, no network.
+- **The pre-fill is a proposal, never consent** — the endorsement gate stands.
+
+### The two touchpoints
+
+| Artefact | Where | Holds |
+|---|---|---|
+| **`SOUL.md`** (persona) | host workspace | the shopper's voice / standing rules — a **generalist** |
+| **`user_spec.md`** (shared) | sil data dir (**required**) | **cross-niche** facts + hard constraints (addresses, sizes, allergy/ethics rules, budget psychology) |
+
+The niche packs — deep know-how, per-request template, niche taste — are **not
+authored here**; they mint **lazily on first shop** ([`shop_loop.md`](shop_loop.md)).
+
+1. **Persona** — confirm-or-adjust the seeded **voice/tone** and any **standing
+   rules**. This surfaces voice, **not a niche**. Becomes the workspace **`SOUL.md`**.
+2. **Shared user spec** — pre-fill the **cross-niche** facts and any **hard
+   constraints** holding in *every* niche (addresses/sizes, an allergy or ethics rule,
+   budget psychology). Reflect back; mark each **hard** (inviolable) vs **soft**
+   (bendable). Seed what's offered; the rest is augmented per-query at shop time.
+   Lands in `userSpec`. **No niche taste, no domain question, no intent dimensions
+   here.**
+
+### Assemble + endorse — the gate
+
+- **Identity** — propose an `agentId` (lower-kebab, ≠ `main`) and a `name`; confirm both.
+- **Assemble** — compose **`{ agentId, name, persona, userSpec }`**, present a readable
+  summary, self-check the shape (`agentId` lower-kebab & ≠ `main`; non-blank
+  `name`/`persona`/`userSpec`). Writes nothing — the engine's validate-first step is the
+  authoritative gate.
+- **Endorse** — ask for an explicit go-ahead. Endorsement is an affirmative act
+  ("yes, create it") — **not** inferred from the last answer or from silence. **Only on
+  that explicit yes** do you run Part 2.
+
+### Interview invariants
+
+- **No creation without explicit endorsement** — zero engine steps before the "yes";
+  the draft lives only in the conversation, so an abandoned interview leaves no partial
+  shopper.
+- **Two touchpoints only** — persona, then shared user spec, both session-seeded. No
+  niche researched or chosen; that is first-shop lazy mint.
+- **Converge each touchpoint before advancing; stay re-entrant** — the user can revise
+  earlier.
+- **Singleton** — if a shopper exists the engine refuses (its `collision`); surface it,
+  steer to shop-a-new-niche or refine, never clobber the existing.
+- **Local + offline for identity** — never present registration or a token as a
+  prerequisite, never pull `sil_whoami` to seed.
+
+---
+
+## Part 2 — The creation engine
+
+**Run ONLY after the endorsement gate above clears.** The engine persists **one**
+OpenClaw agent — the **shopper**: a host `agents` entry, sil plugin enabled + skill
+attached, persona in the workspace **`SOUL.md`**, the **shared user spec** in the sil
+data dir. A **singleton** that learns **domains** lazily on first shop — a fresh
+shopper's `domains` map is empty, which is healthy. Creation is **local + offline**: no
+token, no `sil_register`/`sil_whoami`, no network — it registers the user later, on
+first shop.
+
+### The one command
+
+Run one shipped bin — **`sil-openclaw-create-shopper`** — **non-interactive**,
+**atomic**, **fail-closed**; it emits one JSON result. It is a standalone operator
+script, not the plugin process, so the plugin's "never write host config" guarantee
+holds. Feed the endorsed spec as one JSON object on **`stdin`** (or `--spec <path>`):
 
 ```
 sil-openclaw-create-shopper <<'JSON'
 { "agentId": "my-shopper", "name": "My Shopper",
   "workspace": "~/.openclaw/workspace-my-shopper",
-  "persona": "…the endorsed persona…", "userSpec": "…the seeded shared user spec…",
+  "persona": "…endorsed persona…", "userSpec": "…seeded shared user spec…",
   "channel": "telegram" }
 JSON
 ```
 
-The bin is **non-interactive**: it executes an **already-assembled, already-endorsed**
-spec — it **never re-runs the interview** and never prompts. The sil **plugin** and sil
-**skill** are always wired — that is what makes it *sil-wired*. It is a standalone
-operator script, **not** the plugin process, so the plugin's "never write host config"
-guarantee holds; the bin legitimately drives `openclaw …` on your behalf.
-
-## The spec (input)
+### The spec (input)
 
 | Field | Meaning | Goes to | Required? |
 |---|---|---|---|
-| **agentId** | Lower-kebab id → `agents.list[].id`. Unique, never `main`. | host | Required |
-| **name** | Human-readable name ("My Shopper"). | sil manifest | Required |
-| **persona** | Who the shopper is / how it shops — a generalist, voice, standing rules. | host **`SOUL.md`** (no separate persona file) | Required |
-| **workspace** | The shopper's workspace directory. | host | Required |
-| **userSpec** | The user's **shared, cross-niche** facts + hard constraints. Seeded partial by the interview. | sil `user_spec.md` | **Required** |
-| **channel** | The channel the setup conversation is on — bound to the new shopper. | host `openclaw.json` bindings | **Optional (fail-open)** |
+| **agentId** | Lower-kebab (`^[a-z0-9][a-z0-9-]*$`), never `main`. | host | yes |
+| **name** | Human-readable name. | sil store | yes |
+| **persona** | Who the shopper is — a generalist, its voice, standing rules. | host **`SOUL.md`** | yes |
+| **workspace** | The shopper's workspace directory. | host | yes |
+| **userSpec** | Shared **cross-niche** facts + hard constraints (seeded partial). | sil `user_spec.md` | yes |
+| **channel** | Setup conversation's channel, bound to the shopper. | host bindings | optional (fail-open) |
 
-There is **no per-niche input at create** — no method and no PRD; those are minted lazily
-on first shop via `sil_learn create`. The shopper reaches the web to mint and refresh
-domains, so the agent needs web/fetch tools (inherited from `agents.defaults`); if
-defaults grant none, the bin reports `created` with a `warnings` entry naming the gap
-(bare `sil_search` still works) — surface it.
+**No per-niche input at create** — no method, no PRD; those mint lazily on first shop
+via `sil_learn create`. The shopper needs web tools (inherited from `agents.defaults`)
+to mint/refresh domains; if defaults grant none, the bin reports `created` with a
+`warnings` gap (bare `sil_search` still works) — surface it.
 
-## What the bin does atomically (in this exact order)
+### What the bin does, in order (atomic, fail-closed)
 
-1. **Validate the spec FIRST** — `agentId` (present, lower-kebab, ≠ `main`), `name`,
-   `persona`, `workspace`, and the shared **`userSpec`** (present, non-blank — the only
-   sil artefact at create). No per-domain method or PRD to validate. Any failure stops with
-   **`invalid_request`** naming the field and **writes nothing**, ahead of every host
-   command.
-2. **Singleton check.** Run `openclaw agents list --json` and read the sil store (whether a
-   shopper `user_spec.md` already exists) **before** the add. If a sil shopper already
-   exists, stop with **`collision`** — **"a shopper already exists"** — and do **not** run
-   `openclaw agents add`; steer to shop-a-new-niche (lazy mint) or refine — **never mint a
-   second shopper**. An `agentId` clashing with any existing agent is likewise
-   `collision`. An inconclusive read fails closed.
-3. **Create the agent shell.** `openclaw agents add <agentId> --workspace <workspace>
-   --non-interactive --json` — the real `agents.list[]` entry + workspace bootstrap
-   (`SOUL.md`, `AGENTS.md`, …), inheriting model and tool profile from `agents.defaults`.
-4. **Write the persona straight into the workspace `SOUL.md`** (host CLI). The persona is
-   the shopper's soul — the host's `SOUL.md`, not a sil artefact. There is **no separate
-   persona file** and **no copy** step.
-5. **Materialize the shared user spec — SETUP-ONLY, NO `domain`.** Call
-   `sil_profile_materialize { name, userSpec }` (the singleton takes no `agentId`). It is
-   **setup-only**: it writes the shared **`user_spec.md`** into `$SIL_DATA_DIR/shopper/`,
-   atomically, with the shopper **name in its frontmatter** — there is **no manifest**, and
-   it mints **no method or PRD**. Those are minted lazily on first shop via
-   `sil_learn create`.
-6. **Wire the sil skill + plugin** (host CLI). Asserted against the pinned host
-   **`alpine/openclaw:2026.6.9`**, both value-mode sets with `--strict-json` (the only set
-   mode this image accepts):
-   ```
-   openclaw config set 'agents.list[<i>].skills' '["sil"]' --strict-json
-   openclaw config set plugins.entries.sil.enabled true --strict-json
-   ```
-   The skill **attach** makes the agent know how to drive the tools; the plugin **enable**
-   turns sil on — but does not un-filter the tools by itself (next step).
-7. **Admit sil at the host allow surfaces.** Until sil is admitted at `plugins.allow` +
-   **`tools.alsoAllow`**, the host keeps the `sil_*` tools filtered. The value-mode `config
-   set` above is overwrite-only, so it cannot additively merge those shared arrays without
-   clobbering another admitted plugin (e.g. `klodi`). The bin runs the shipped admission
-   helper — the sibling bin `sil-openclaw-allowlist` (the `openclaw:allowlist` script) —
-   the additive, idempotent, self-validating three-surface merge. **If the helper exits
-   non-zero (a failed admission), the bin reports `persistence_failed` with the path +
-   cause and does NOT declare `created`** — never a green `created` over filtered tools.
-8. **Bind the current channel — FAIL-OPEN.** Resolve the channel (`spec.channel`, else the
-   host's `OPENCLAW_MCP_MESSAGE_CHANNEL`) and, if one resolves, run `openclaw agents bind
-   --agent <agentId> --bind <channel> --json`, then **verify** the route stuck (read-back +
-   `openclaw config validate` still passes). If undetermined, owned by another agent (no
-   `--force`), or unverifiable, revert any partial route and degrade to a manual-bind hint
-   in `warnings` — this step **never fails creation**.
-9. **Validate with the host's own check, THEN declare created.** `openclaw config validate
-   --json` returns `{ valid, path, issues? }` — success keys off **`.valid`**, never an
-   `ok` field. Only when `valid: true` **and** admission (step 7) succeeded does it report
-   **`created`**, carrying `boundChannel` (or `null`). Otherwise it reports
-   **`persistence_failed`** with the failing **path** + **cause**.
-10. **On any failure after writes begin, tear down** — restore the pre-run `openclaw.json`
-    snapshot (reversing the agent entry + skill + plugin + admission + any channel
-    binding), remove the workspace dir (only if it created it) and the singleton shopper
-    dir (only if it did not pre-exist). `persistence_failed` truthfully means **nothing
-    partial** is left. In the rare case teardown cannot fully revert, the bin reports a
-    distinct, louder outcome that **names the residue** — never voiced as "nothing partial".
+1. **Validate first** — bad/blank `agentId` (lower-kebab, ≠ `main`), `name`, `persona`,
+   `workspace`, or `userSpec` → **`invalid_request`** naming the field; **nothing
+   written**.
+2. **Config + singleton pre-flight** — no host config → `persistence_failed`. An
+   existing shopper `user_spec.md`, or an `agentId` clash → **`collision`** ("a shopper
+   already exists"); steer to shop-a-new-niche or refine, **never a second shopper**. An
+   inconclusive read fails closed.
+3. **Snapshot `openclaw.json`** — the teardown anchor, before any write.
+4. **`openclaw agents add`** — the real `agents.list[]` entry + workspace bootstrap,
+   inheriting model + tools from `agents.defaults`.
+5. **Write `SOUL.md`** = endorsed **persona + the standing "The sil way" creed block**
+   (below).
+6. **Materialize the shared user spec** — `sil_profile_materialize { name, userSpec }`
+   (singleton, no agentId) writes **`user_spec.md`** atomically, name in its
+   frontmatter. **Setup-only: no domain, no method, no PRD.**
+7. **Attach skill + enable plugin + harden tools** (value-mode `config set
+   --strict-json`, the only mode the pinned `alpine/openclaw:2026.6.9` accepts):
+   `agents.list[<idx>].skills` ← `["sil"]`; `plugins.entries.sil.enabled` ← `true`;
+   **`agents.list[<idx>].tools.deny`** ← **`["exec","write","edit","apply_patch"]`** — a
+   per-agent **deny-list** removing the shell (`exec`) + filesystem mutators while
+   **keeping the sil tools + web**. A deny (not replacing the base tool set) is used
+   because per OpenClaw precedence it only *further-restricts* and can never strip the
+   sil grant.
+8. **Admit sil (plugin trust)** — the shipped **`sil-openclaw-allowlist`** helper
+   additively merges the three trust surfaces (`plugins.allow` + `tools.alsoAllow` +
+   `plugins.entries.sil`) — the only way to un-filter `sil_*` without clobbering a
+   co-installed plugin. A non-zero exit → **`persistence_failed`** (never a green
+   `created` over filtered tools).
+9. **Bind the channel — FAIL-OPEN** — resolve (`spec.channel`, else
+   `OPENCLAW_MCP_MESSAGE_CHANNEL`), bind, **verify** the route stuck. Undetermined /
+   owned / unverifiable → revert + a manual-bind hint in `warnings`. Never fails
+   creation.
+10. **Validate then declare** — `config validate --json` keys off **`.valid`**. Only
+    `valid: true` **and** step 8 ok → **`created`** (with `boundChannel`, or `null`).
+    Any failure **after step 4** tears down (restore the snapshot; remove the workspace
+    + shopper dir only if it created them), so `persistence_failed` means **nothing
+    partial**. If teardown cannot fully revert, a louder **`teardown_failed`** names the
+    residue.
 
-The bin emits **one** `{ status, … }` result and exits 0 **only** on `created`.
+Exit 0 **only** on `created`.
 
-## Status taxonomy
+### The `SOUL.md` "The sil way" creed block
 
-| `status` | Meaning | What to do |
+The persona is followed by a standing **"The sil way"** creed — an identity-level
+restatement (a philosophy, not a rulebook; the mechanics live in the attached skill)
+carrying the **explore-first** mantra, the loop in three lines, and the one distinction
+that matters: the shopper **mints an unlearned niche first** (a `sil_profile_search`
+MISS → `sil_learn create`, then search); **the sil catalog is where you buy, the open
+web is where you learn** (web only researches a niche's buying guide, never sources a
+pick); **persists only through `sil_learn`**, never to host files.
+
+### Status taxonomy
+
+| `status` | Meaning | Do |
 |---|---|---|
-| `created` | Shopper added, shared user spec materialized, plugin + skill wired, `openclaw config validate` accepted it. Carries `name` + `agentId` + `workspace` + `boundChannel` (or `null`). | Tell the user it's ready; if `boundChannel` is `null`, relay the manual-bind hint. |
-| `invalid_request` | Spec failed validation. **Nothing attempted.** | Name the field, fix it, run again. |
-| `collision` | A shopper already exists (the singleton), or the `agentId` clashes. **Nothing written.** | Surface "a shopper already exists"; steer to shop-a-new-niche or refine. **Never a second shopper.** |
-| `persistence_failed` | A write, the allow-list helper (non-zero exit), or `openclaw config validate` failed. Teardown ran — **nothing partial** left. | Fix the reported path/cause and re-run (safe). |
+| `created` | Shopper added, spec materialized, plugin + skill + hardening wired, config valid. Carries `name`/`agentId`/`workspace`/`boundChannel` (or `null`). | Tell the user; if `boundChannel` null, relay the manual-bind hint. |
+| `invalid_request` | Spec failed validation. Nothing attempted. | Name the field, fix, re-run. |
+| `collision` | A shopper (singleton) or `agentId` already exists. Nothing written. | Steer to shop-a-new-niche or refine — never a second shopper. |
+| `persistence_failed` | A write, the allow-list helper, or `config validate` failed; teardown fully reverted. | Fix the path/cause, re-run (safe). |
+| `teardown_failed` | Teardown could NOT fully revert. | Louder — names the residue; the host is not at its pre-run state. |
 
-## Runtime — how the shopper loads its behaviour
+### Runtime
 
-When you (the sil skill) start a session as the shopper, the host has already injected the
-persona via **`SOUL.md`**. Load the shared **`user_spec.md`** (cross-niche facts + hard
-constraints, reused across every niche); its frontmatter carries the shopper **name**, and
-`sil_profile_search` scans the domains it has learned — an empty set is healthy, and each
-per-domain method loads **lazily at shop time**. Because the `sil_*` tools were admitted at
-create, the shopper calls **`sil_search`** / **`sil_product_get`** (and `sil_register` /
-`sil_whoami` as needed) with **no further setup**, minting each niche on the fly the first
-time the user shops it, per [`shop_loop.md`](shop_loop.md). To sharpen the shopper or a
-domain, see [`fill_and_feedback.md`](fill_and_feedback.md).
+At session start the host has injected the persona via **`SOUL.md`**. Load the shared
+**`user_spec.md`** (cross-niche facts + hard constraints; frontmatter carries the name);
+`sil_profile_search` scans the learned domains (empty is healthy) and each per-domain
+method loads **lazily at shop time**. The `sil_*` tools admitted at create, the shopper
+shops with no further setup, minting each niche on the fly on first shop
+([`shop_loop.md`](shop_loop.md)). To sharpen it, see
+[`fill_and_feedback.md`](fill_and_feedback.md).

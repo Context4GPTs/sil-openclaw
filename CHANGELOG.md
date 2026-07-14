@@ -10,6 +10,68 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Fixed
+
+- **First shop now reliably mints its domain.** A buy-intent in an unlearned niche
+  used to stall silently — the model classified the miss, found nothing to reuse,
+  and, with no next move in hand, answered off the open web instead of minting the
+  domain and shopping the sil catalog. The mint trigger is now **structural**:
+  `sil_profile_search` returns `next_step: "mint_domain"` (plus `guidance`) whenever
+  no learned domain matches (an empty store OR a filtered miss on a populated one),
+  so the MISS itself points at the mint — the same way the catalog tools carry
+  `recovery`. The always-on `SKILL.md` contract now states the rule up front
+  (mint-first-on-buy-intent; the picks are always sil catalog products, never
+  open-web results — the web only researches the method), instead of burying it two
+  lazy reference-hops deep.
+- **Onboarding read the wrong tool for shopper state.** `setup_onboarding.md` steered
+  the model to a no-arg `sil_profile_get` overview, but `sil_profile_get` *requires* a
+  `domainSlug` — the coordinates-only overview tool is `sil_profile_search`. All stage
+  reads now use `sil_whoami` + `sil_profile_search`.
+
+### Changed
+
+- **The shopper's soul carries the sil creed.** Every new shopper's `SOUL.md` gets a
+  "The sil way" block appended after its persona — a creed, not a rulebook: the mantra
+  (*explore first*), the loop in three lines (learn the domain → know the person → find
+  the thing), and the one distinction that matters — **the sil catalog is where you buy;
+  the open web is where you learn**. The method lives in the skill; the philosophy lives
+  in the soul, where the model weights identity.
+- **The skill bundle is leaner.** The whole `sil-shopping/` bundle (router + references +
+  example) was cut to its load-bearing contract — narration, hedging, and cross-section
+  restatement removed. The 1341-line `skill-content.test.ts`, which pinned prose clauses
+  as spec (and stayed green while the mint bug was live), is deleted and replaced by a
+  lean behavioral guard that pins the contract: frontmatter + name-agreement, the
+  registered tool set appearing in the bundle, cross-link integrity, no dead tokens, and
+  the mint-first / catalog-of-record rule.
+- **The shopper is denied the shell + file-write escape hatches.** `create-shopper.mjs`
+  now sets `agents.list[<idx>].tools.deny = ["exec","write","edit","apply_patch"]` (a
+  per-agent deny, never a global host change) so a new shopper can no longer run a shell
+  (`exec` — which it wasted re-reading its own skill files) or mutate host files
+  (`write`/`edit`/`apply_patch` — which it used to persist shopping memory into the host
+  workspace instead of the sil store). `deny` is used deliberately over a `tools.profile`
+  override: per OpenClaw's tool-precedence model a deny only *further-restricts* and
+  cannot strip the sil grant, whereas a profile swap replaces the agent's base tool set
+  and would risk removing the sil tools entirely. The sil tools and web (for domain
+  research) are kept.
+- **Minting is where the shopper explores; the catalog is where it buys.**
+  `method_and_prds.md`'s MINT step now encourages web research **freely and often** to
+  learn how a niche is really bought (its load-bearing attributes, failure modes, what
+  separates a good buy from a bad one) — that exploration is the point of a first shop.
+  The one boundary: the shopper researches the **domain** on the web, never the
+  **products** — recommended products always come from `sil_search`, and if the catalog's
+  results aren't satisfactory that is the answer, not an open-web fallback.
+- **Consolidated the reference set.** Deleted `references/catalog_tools_reference.md` and
+  `references/search_param_mapping.md` — the per-tool behaviour, status taxonomy, and
+  search params they restated already live in the tool definitions. Merged
+  `references/brainstorm_interview.md` into `references/agent_creation_engine.md` so the
+  onboarding interview and the creation engine are one endorsement-gated "create the
+  shopper" doc.
+- **Leaner tool descriptions.** The five `sil_profile_*` / `sil_learn` verbs and
+  `sil_specs` had their descriptions cut to their load-bearing core (the store rules
+  they restated are already enforced by the code and named by the per-field schema),
+  reducing the per-turn token cost. `sil_profile_search` now advertises its
+  `next_step: mint_domain` cue.
+
 ## [0.4.0] - 2026-07-13
 
 ### Changed

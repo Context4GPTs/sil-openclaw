@@ -97,6 +97,14 @@ const SIL_SKILL = basename(
     ) as { skills: string[] }
   ).skills[0]!,
 );
+/** The escape-hatch tools the shopper is DENIED at the per-agent level — the shell
+ * (`exec`) + the filesystem mutators (`write`/`edit`/`apply_patch`). `deny` is the
+ * SAFE subtractive lever: per the host's tool-precedence it only further-restricts and
+ * can never re-grant, so it removes exactly these and CANNOT strip the sil grant —
+ * unlike a `tools.profile` override, which replaces the base set and would risk it.
+ * This is the SPEC: the create bin MUST pin the created agent to exactly this deny list
+ * and set NO `tools.profile` override. */
+const SHOPPER_TOOL_DENY = ["exec", "write", "edit", "apply_patch"];
 /** Running as root bypasses filesystem permission bits, so the chmod-based
  * "unwritable $SIL_DATA_DIR" fault-injection cannot fire — skip it there. */
 const AS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
@@ -523,7 +531,7 @@ describe("created — one valid run wires every surface and returns the identity
     expect(existsSync(join(shopperDir(), "domains"))).toBe(false);
   });
 
-  it("writes the persona into the workspace SOUL.md (host workspace, not a sil artefact)", () => {
+  it("writes the persona into SOUL.md AND appends the sil creed (identity-level reinforcement)", () => {
     writeConfig(freshConfig());
     const spec = validSpec();
     const r = runBin({ spec });
@@ -531,8 +539,18 @@ describe("created — one valid run wires every surface and returns the identity
 
     const soul = join(spec.workspace, "SOUL.md");
     expect(existsSync(soul)).toBe(true);
-    expect(readFileSync(soul, "utf8")).toContain(PERSONA_SECRET);
-    // The persona lives in exactly one place — never a sil persona.md.
+    const soulText = readFileSync(soul, "utf8");
+    // The persona survives verbatim — the creed is APPENDED after it, never a replacement.
+    expect(soulText).toContain(PERSONA_SECRET);
+    // The sil creed is baked into SOUL.md at IDENTITY level (a philosophy, not a rulebook —
+    // the mechanics live in the attached skill). Tolerant markers, not whole sentences:
+    // its heading, the `explore first` mantra, memory via sil_learn, and the one
+    // distinction that matters — the catalog is where you buy, the web is where you learn.
+    expect(soulText).toContain("## The sil way");
+    expect(soulText).toMatch(/explore first/i);
+    expect(soulText).toContain("sil_learn");
+    expect(soulText).toMatch(/catalog is where you buy/i);
+    // The persona + creed live in exactly one place — never a sil persona.md.
     expect(existsSync(join(shopperDir(), "persona.md"))).toBe(false);
   });
 
@@ -561,9 +579,31 @@ describe("created — one valid run wires every surface and returns the identity
     expect(agent.skills).toEqual([SIL_SKILL]);
   });
 
-  it("carries an EMPTY warnings array when there is no web-capability gap AND the channel binds cleanly", () => {
-    // With a resolvable channel that binds + verifies, the manual-bind hint is absent;
-    // freshConfig has no agents.defaults gap ⇒ no web-capability warning either.
+  it("denies the created agent the escape-hatch tools via a per-agent tools.deny (subtractive), with NO tools.profile override", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec();
+    const r = runBin({ spec });
+    expect(r.status).toBe(0);
+
+    const c = readConfig();
+    // The shopper is leaned down SUBTRACTIVELY — a per-agent tools.deny removes the
+    // shell + filesystem mutators. Because deny only further-restricts (never re-grants),
+    // it can never strip the sil grant. Locate the agent by id (mirrors the skills
+    // read-back above).
+    const idx = c.agents.list.findIndex((a: any) => a.id === spec.agentId);
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(c.agents.list[idx].tools.deny).toEqual(SHOPPER_TOOL_DENY);
+    // NO profile override — a tools.profile would REPLACE the base set and risk the sil
+    // grant, so the safe subtractive path must set the deny lever and nothing else.
+    expect(c.agents.list[idx].tools.profile).toBeUndefined();
+    // The global default is untouched (freshConfig ships `coding`) — only the shopper
+    // agent is leaned down, subtractively, not the whole host.
+    expect(c.tools.profile).toBe("coding");
+  });
+
+  it("carries an EMPTY warnings array when the channel binds cleanly (no manual-bind hint)", () => {
+    // With a resolvable channel that binds + verifies, the manual-bind hint is absent —
+    // the subtractive tools.deny is the intended end state, so it rides no warning.
     writeConfig(freshConfig());
     const r = runBin({ spec: validSpec({ channel: "telegram" }) });
     expect(r.status).toBe(0);
@@ -592,27 +632,6 @@ describe("created — additive: a co-installed peer (klodi) keeps its trust", ()
       enabled: true,
       config: { apiKey: "operator-set" },
     });
-  });
-});
-
-// ===========================================================================
-// created — the web-capability gap is a WARNING, never a hard-fail (SA ruling).
-// ===========================================================================
-describe("created — a web-capability gap warns but never blocks (bare sil_search still works)", () => {
-  it("still reaches created, carrying a non-empty warnings entry naming the gap", () => {
-    const cfg = freshConfig() as any;
-    // agents.defaults is present but grants NO web/fetch/browse/http capability.
-    cfg.agents = { defaults: { tools: { profile: "coding", alsoAllow: [] } } };
-    writeConfig(cfg);
-    // Bind a channel cleanly so the only warning is the web-capability one — the
-    // assertion stays sharp now that a channel-less create ALSO carries a bind hint.
-    const r = runBin({ spec: validSpec({ channel: "telegram" }) });
-    expect(r.status).toBe(0);
-    const m = parseMarker(r.stdout);
-    expect(m["status"]).toBe("created");
-    expect(Array.isArray(m["warnings"])).toBe(true);
-    expect((m["warnings"] as string[]).length).toBeGreaterThan(0);
-    expect((m["warnings"] as string[]).some((w) => w.includes("agents.defaults"))).toBe(true);
   });
 });
 

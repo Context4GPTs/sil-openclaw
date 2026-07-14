@@ -191,9 +191,14 @@ describe("skill basename is sil-unique — no stale `./skill` literal, ships und
   });
 
   it("the skill subtree (references + example) moved under sil-shopping/ intact", () => {
+    // A representative-but-stable probe: the two most router-central references
+    // (method_and_prds — the method/PRD store, agent_creation_engine — onboarding +
+    // the creation engine) plus the example. Deliberately NOT the full reference set:
+    // that set churns as the skill is reshaped, so pinning it would be brittle — this
+    // guard proves the subtree shipped, not which exact files it holds today.
     const root = join(REPO_ROOT, "sil-shopping");
     expect(
-      existsSync(join(root, "references", "catalog_tools_reference.md")),
+      existsSync(join(root, "references", "method_and_prds.md")),
     ).toBe(true);
     expect(
       existsSync(join(root, "references", "agent_creation_engine.md")),

@@ -658,6 +658,71 @@ describe("sil_profile_search — the frontmatter-as-truth discovery primitive (c
     expect((unreadable as unknown[]).length).toBeGreaterThan(0);
     expect(JSON.stringify(unreadable)).toContain("broken");
   });
+
+  // ---------------------------------------------------------------------------
+  // The MINT TRIGGER — an empty `domains` result (an empty store OR a filtered
+  // miss on a populated one) IS the reuse-before-mint MISS, the exact point a
+  // first shop silently stalls onto the open web. The MISS must carry
+  // `next_step: mint_domain` + a `guidance` cue so the model mints before it
+  // shops. A MATCH carries NEITHER field. These pin that forcing function.
+  // ---------------------------------------------------------------------------
+  it("an EMPTY store → the mint trigger: next_step === mint_domain + a non-empty guidance string (a first shop never silently stalls)", async () => {
+    const payload = payloadOf(await getTool(api, SEARCH).execute("mt0", {}));
+    expect(payload["status"]).toBe("ok");
+    expect(payload["domains"]).toEqual([]);
+    expect(payload["next_step"]).toBe("mint_domain");
+    expect(typeof payload["guidance"]).toBe("string");
+    expect((payload["guidance"] as string).length).toBeGreaterThan(0);
+  });
+
+  it("a FILTERED miss on a POPULATED store → the mint trigger fires per-REQUEST, not only on an empty store", async () => {
+    await seedSkiMethod();
+    // `espresso` is a niche that was never learned — a per-request miss on a store
+    // that DOES hold `ski`. The trigger must key on the filtered result, not the store.
+    const payload = payloadOf(await getTool(api, SEARCH).execute("mt1", { domain: "espresso" }));
+    expect(payload["status"]).toBe("ok");
+    expect(payload["domains"]).toEqual([]);
+    expect(payload["next_step"]).toBe("mint_domain");
+  });
+
+  it("a MATCH carries NO mint trigger — neither next_step nor guidance is present when a domain came back", async () => {
+    await seedSkiMethod();
+    // Both the unfiltered overview and an explicit `ski` filter MATCH → no cue.
+    const cases: Array<Record<string, unknown>> = [{}, { domain: "ski" }];
+    for (const params of cases) {
+      const payload = payloadOf(await getTool(api, SEARCH).execute("mt2", params));
+      const domains = payload["domains"] as Array<Record<string, unknown>>;
+      expect(domains.map((d) => d["slug"])).toEqual(["ski"]);
+      // Absence is the spec — assert the KEYS are gone, not merely falsy.
+      expect(payload).not.toHaveProperty("next_step");
+      expect(payload).not.toHaveProperty("guidance");
+    }
+  });
+
+  it("the mint-trigger guidance names the mint verb (sil_learn) + steers to the sil catalog over the open web, and leaks NO artefact body", async () => {
+    // Mint a method whose body carries a unique token, then MISS on another niche:
+    // the guidance is a static cue, so not one byte of the minted body may appear.
+    const BODY_TOKEN = "unique-body-token-must-NOT-leak-mint-42";
+    await getTool(api, MATERIALIZE).execute("mt3", { name: "sil shopper", userSpec: USER_SPEC });
+    await getTool(api, LEARN).execute("mt4", {
+      target: "method",
+      domain: "ski",
+      kind: "create",
+      name: "Ski",
+      body: `# Buying guide\n${BODY_TOKEN}\n`,
+    });
+    const payload = payloadOf(await getTool(api, SEARCH).execute("mt5", { domain: "espresso" }));
+    expect(payload["next_step"]).toBe("mint_domain");
+    const guidance = payload["guidance"] as string;
+    // Names the mint path…
+    expect(guidance).toContain("sil_learn");
+    // …and steers a buy-intent to the sil catalog over the open web.
+    expect(guidance).toMatch(/catalog/i);
+    expect(guidance).toMatch(/open web/i);
+    // No artefact body text leaks — not into the guidance, not anywhere in the payload.
+    expect(guidance).not.toContain(BODY_TOKEN);
+    expect(JSON.stringify(payload)).not.toContain(BODY_TOKEN);
+  });
 });
 
 /* ===========================================================================
