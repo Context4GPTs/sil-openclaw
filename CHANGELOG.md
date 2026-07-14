@@ -30,12 +30,12 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
-- **The shopper's identity carries the shopping rules.** Every new shopper's `SOUL.md`
-  now gets a standing "Shopping with sil" block appended after its persona — the
-  identity-level restatement of the always-on contract (shop via the sil tools; the sil
-  catalog is the source of truth; mint an unlearned niche before searching; never answer
-  a buy-intent from the open web; persist only via `sil_learn`). Tool discipline no
-  longer rests on the skill alone.
+- **The shopper's soul carries the sil creed.** Every new shopper's `SOUL.md` gets a
+  "The sil way" block appended after its persona — a creed, not a rulebook: the mantra
+  (*explore first*), the loop in three lines (learn the domain → know the person → find
+  the thing), and the one distinction that matters — **the sil catalog is where you buy;
+  the open web is where you learn**. The method lives in the skill; the philosophy lives
+  in the soul, where the model weights identity.
 - **The skill bundle is leaner.** The whole `sil-shopping/` bundle (router + references +
   example) was cut to its load-bearing contract — narration, hedging, and cross-section
   restatement removed. The 1341-line `skill-content.test.ts`, which pinned prose clauses
@@ -51,13 +51,21 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   workspace instead of the sil store). `deny` is used deliberately over a `tools.profile`
   override: per OpenClaw's tool-precedence model a deny only *further-restricts* and
   cannot strip the sil grant, whereas a profile swap replaces the agent's base tool set
-  and would risk removing the sil tools entirely. The sil tools and web (for gap-filling
-  method research) are kept.
-- **The mint is faster.** `method_and_prds.md` now drafts a cold niche's method from
-  the shopper's own domain knowledge first, using a web tool only to fill real gaps
-  in the buying guide — a few bounded queries, never an open-ended crawl (the
-  unbounded crawl was the first-shop latency killer) — and states plainly that
-  minting is research→draft→persist, not a product-browsing trip.
+  and would risk removing the sil tools entirely. The sil tools and web (for domain
+  research) are kept.
+- **Minting is where the shopper explores; the catalog is where it buys.**
+  `method_and_prds.md`'s MINT step now encourages web research **freely and often** to
+  learn how a niche is really bought (its load-bearing attributes, failure modes, what
+  separates a good buy from a bad one) — that exploration is the point of a first shop.
+  The one boundary: the shopper researches the **domain** on the web, never the
+  **products** — recommended products always come from `sil_search`, and if the catalog's
+  results aren't satisfactory that is the answer, not an open-web fallback.
+- **Consolidated the reference set.** Deleted `references/catalog_tools_reference.md` and
+  `references/search_param_mapping.md` — the per-tool behaviour, status taxonomy, and
+  search params they restated already live in the tool definitions. Merged
+  `references/brainstorm_interview.md` into `references/agent_creation_engine.md` so the
+  onboarding interview and the creation engine are one endorsement-gated "create the
+  shopper" doc.
 - **Leaner tool descriptions.** The five `sil_profile_*` / `sil_learn` verbs and
   `sil_specs` had their descriptions cut to their load-bearing core (the store rules
   they restated are already enforced by the code and named by the per-field schema),

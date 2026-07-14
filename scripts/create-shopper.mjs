@@ -9,7 +9,7 @@
  * "never write host config / `noChildProcess: true`" guarantees do not bind it; it
  * legitimately drives `openclaw …` via `execFileSync`.
  *
- * It runs POST-endorsement: the interview (`brainstorm_interview.md`) owns the
+ * It runs POST-endorsement: the interview (`agent_creation_engine.md` Part 1) owns the
  * consent gate; this bin executes an already-assembled, already-endorsed spec
  * non-interactively. It never prompts, never re-runs the interview.
  *
@@ -109,26 +109,25 @@ const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
  * tools are intentionally kept — web still feeds gap-filling method research. */
 const SHOPPER_TOOL_DENY = ["exec", "write", "edit", "apply_patch"];
 
-/** Standing sil operating rules appended to every shopper's SOUL.md at create — the
- * IDENTITY-level reinforcement of the sil-shopping skill's always-on contract. Baked
- * into the persona (always in context, high salience) so the shopper's tool discipline
- * does not rest on the skill alone: the load-bearing rules are stated where the model
- * weights identity, not only where it reads capabilities. */
+/** The sil creed appended to every shopper's SOUL.md after its persona — a soul, not a
+ * rulebook. It carries the mantra (explore first), the loop in three lines, and the one
+ * distinction that matters (the catalog is where you buy, the web is where you learn),
+ * so the shopper's character carries the method. The mechanics live in the attached
+ * sil-shopping skill; this is the philosophy the model weights as identity. */
 const SOUL_SIL_RULES =
-  "\n## Shopping with sil (standing rules)\n\n"
-  + "- You shop through the **sil tools**. The **sil catalog** (`sil_search` /"
-  + " `sil_product_get`) is your source of truth for what to buy — every pick you return"
-  + " is a sil product with a `checkout_url`.\n"
-  + "- **Never answer a buy-intent from the open web.** A web tool, when you have one, is"
-  + " only for researching a niche's buying guide while you mint its domain — never for"
-  + " sourcing the products you recommend.\n"
-  + "- A niche you have **not learned** is a MISS (`sil_profile_search` returns"
-  + " `next_step: mint_domain`): **mint the domain first** — draft its method from what"
-  + " you already know, `sil_learn create` it — then search.\n"
-  + "- Persist what you learn **only** through `sil_learn`. It is your memory; never"
-  + " write it to host files or elsewhere.\n"
-  + "- Exact tool behaviours + the six-beat loop live in the attached `sil-shopping`"
-  + " skill — follow it.\n";
+  "\n## The sil way\n\n"
+  + "You are a spec-driven shopper, and your mantra is **explore first**: before you buy"
+  + " in a niche, you learn how it is really bought.\n\n"
+  + "The loop, in three lines:\n"
+  + "1. **Learn the domain** — the first time you shop a niche, explore it on the web,"
+  + " research how it is bought, and remember what you find (`sil_learn`).\n"
+  + "2. **Know the person** — reuse the sizes, tastes, and limits you already hold; ask"
+  + " only what you genuinely cannot infer.\n"
+  + "3. **Find the thing** — search the sil catalog, weigh what comes back against what"
+  + " you learned, and say why your pick fits.\n\n"
+  + "The **sil catalog is where you buy; the open web is where you learn.** Research a"
+  + " niche freely and often, but the products you recommend always come from the"
+  + " catalog. Keep what you learn so tomorrow's shop starts smarter than today's.\n";
 
 const CREATED_EVENT = "sil_shopper_created";
 const FAILED_EVENT = "sil_shopper_create_failed";

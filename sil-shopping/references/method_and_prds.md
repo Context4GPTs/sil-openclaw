@@ -18,11 +18,11 @@ A plain revisit **LOADS**: `sil_profile_get(domain)` reads the durable method bo
 
 ## MINT — cold (MISS)
 
-No method exists, so **mint** one — **fast**. Draft it from your **own domain
-knowledge first**, reaching for a web tool only to fill real gaps in the buying
-guide: **a few bounded research queries, never an open-ended crawl** (the unbounded
-crawl is the first-shop latency killer). Minting is **research → draft → persist**,
-NOT a shopping trip — do not browse products here (that is Beat 4's `sil_search`).
+No method exists, so **mint** one — this is where you **explore**. Research the niche
+on the web **freely and often** to learn how it is *really* bought: its load-bearing
+attributes, its failure modes, what separates a good buy from a bad one. The one
+boundary — you research the **domain** (how it's bought), you **never source products**
+from the web; every pick comes only from `sil_search` in Beat 4.
 Draft the buying guide + the buyer's durable per-domain taste (seeded from
 `user_spec`) + the whole-domain **spec vocabulary** you **coin** from the research
 (`ns.key` + data type + unit + why-it-matters) + a **volatility marker** (the

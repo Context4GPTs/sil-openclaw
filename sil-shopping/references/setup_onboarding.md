@@ -40,8 +40,9 @@ registration. Run a no-arg **`sil_profile_search`**, then branch:
 - **No domains, no shopper:** introduce the shopper in one beat and offer to set it up — name
   the value (shops each niche in depth; reuses the sizes + hard limits it knows so nothing is
   re-asked; explains why each pick fits). Load
-  [`brainstorm_interview.md`](brainstorm_interview.md) **only if the user accepts**. Take no
-  for an answer; bare `sil_search` stays first-class.
+  [`agent_creation_engine.md`](agent_creation_engine.md) **only if the user accepts** — its
+  Part 1 onboarding runs first, the engine only after endorsement. Take no for an answer; bare
+  `sil_search` stays first-class.
 - **A shopper exists:** **skip this beat.** The shopper is a **singleton** — never offer a
   second.
 

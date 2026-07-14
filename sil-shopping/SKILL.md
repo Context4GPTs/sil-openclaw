@@ -18,9 +18,8 @@ it knows, view or forget a domain, refine it.
 - **Act, don't narrate.** When intent maps to a tool, call it — don't re-confirm
   what was already stated.
 - **Follow the tool's own `recovery`.** Every tool returns a `status`; on a
-  non-`ok` one, say what happened and follow that tool's `recovery` hint — never
-  improvise. Taxonomy:
-  [`references/catalog_tools_reference.md`](references/catalog_tools_reference.md).
+  non-`ok` one, say what happened and follow that tool's own `recovery` hint —
+  never improvise.
 - **Prices are point-in-time.** Re-fetch with `sil_product_get` before the user
   buys — never trust an earlier `sil_search` snapshot.
 - **Buy-intent in an unlearned niche ⇒ mint first.** A request whose niche you
@@ -57,11 +56,11 @@ while setup is incomplete; it sheds once a shopper exists.
 
 | Intent | Tool / path | Reference |
 |---|---|---|
-| "sign me up" / "log me in" / "register" | `sil_register` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
-| "who am I?" / show my saved name + addresses | `sil_whoami` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
-| "find X" / "search for X" / browse a category or price range | `sil_search` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
-| "look up these items" / re-check ids from a prior result | `sil_product_get` | [`catalog_tools_reference.md`](references/catalog_tools_reference.md) |
-| "set up an agent that shops for me" / "create my shopper" | (onboarding, then the engine) | the two-step below |
+| "sign me up" / "log me in" / "register" | `sil_register` | — |
+| "who am I?" / show my saved name + addresses | `sil_whoami` | — |
+| "find X" / "search for X" / browse a category or price range | `sil_search` | — |
+| "look up these items" / re-check ids from a prior result | `sil_product_get` | — |
+| "set up an agent that shops for me" / "create my shopper" | (onboarding, then the engine) | [`agent_creation_engine.md`](references/agent_creation_engine.md) |
 | "what does my shopper know?" / "which domains / PRDs?" | `sil_profile_search` | [`method_and_prds.md`](references/method_and_prds.md) |
 | "show me the &lt;niche&gt; domain" (method or one PRD) | `sil_profile_get` | [`method_and_prds.md`](references/method_and_prds.md) |
 | "forget the &lt;niche&gt; domain" (or one PRD) | `sil_profile_remove` | [`method_and_prds.md`](references/method_and_prds.md) |
@@ -69,20 +68,15 @@ while setup is incomplete; it sheds once a shopper exists.
 | "learn / remember this" — a fact or taste the shopper surfaced | `sil_learn` | [`fill_and_feedback.md`](references/fill_and_feedback.md) |
 | "refine / sharpen my shopper" / fix a niche | `sil_learn` (target + change) | [`fill_and_feedback.md`](references/fill_and_feedback.md) |
 
-[`references/catalog_tools_reference.md`](references/catalog_tools_reference.md)
-holds per-tool behaviour + the status taxonomy — basic shopping needs only that.
-Answer→`sil_search`-param mapping:
-[`references/search_param_mapping.md`](references/search_param_mapping.md). A full
+Each core tool's behaviour + status taxonomy live in its own tool definition and
+response (the `recovery`/`status` it returns) — basic shopping needs only that. A full
 run: [`examples/multi_domain_shopper_walkthrough.md`](examples/multi_domain_shopper_walkthrough.md).
 
-**Setting up the shopper — the endorsement-gated two-step.** The shopper is a
-singleton (refused once one exists). (1) **Onboard first:** run
-[`references/brainstorm_interview.md`](references/brainstorm_interview.md), the
-two-touchpoint onboarding. (2) **Only after** the user explicitly **endorses** the
-draft, run
-[`references/agent_creation_engine.md`](references/agent_creation_engine.md), the
-engine that persists the one sil-wired shopper. No engine step runs before that
-endorsement.
+**Setting up the shopper — endorsement-gated.** The shopper is a singleton (refused
+once one exists). Run
+[`references/agent_creation_engine.md`](references/agent_creation_engine.md) — it holds
+both the two-touchpoint onboarding and the engine that persists the one sil-wired
+shopper. Nothing is created until the user explicitly **endorses** the draft.
 
 ## As the shopper — the six-beat Spec-Driven-Shopping loop
 

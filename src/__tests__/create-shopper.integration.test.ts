@@ -531,7 +531,7 @@ describe("created — one valid run wires every surface and returns the identity
     expect(existsSync(join(shopperDir(), "domains"))).toBe(false);
   });
 
-  it("writes the persona into SOUL.md AND appends the standing sil shopping rules (identity-level reinforcement)", () => {
+  it("writes the persona into SOUL.md AND appends the sil creed (identity-level reinforcement)", () => {
     writeConfig(freshConfig());
     const spec = validSpec();
     const r = runBin({ spec });
@@ -540,16 +540,17 @@ describe("created — one valid run wires every surface and returns the identity
     const soul = join(spec.workspace, "SOUL.md");
     expect(existsSync(soul)).toBe(true);
     const soulText = readFileSync(soul, "utf8");
-    // The persona survives verbatim — the standing rules are APPENDED after it, never
-    // a replacement.
+    // The persona survives verbatim — the creed is APPENDED after it, never a replacement.
     expect(soulText).toContain(PERSONA_SECRET);
-    // The always-on sil operating contract is baked into SOUL.md at IDENTITY level (not
-    // left to the skill alone) — its heading, plus the two load-bearing rules: memory
-    // persists ONLY through sil_learn, and a buy-intent is NEVER answered from the open web.
-    expect(soulText).toContain("## Shopping with sil");
+    // The sil creed is baked into SOUL.md at IDENTITY level (a philosophy, not a rulebook —
+    // the mechanics live in the attached skill). Tolerant markers, not whole sentences:
+    // its heading, the `explore first` mantra, memory via sil_learn, and the one
+    // distinction that matters — the catalog is where you buy, the web is where you learn.
+    expect(soulText).toContain("## The sil way");
+    expect(soulText).toMatch(/explore first/i);
     expect(soulText).toContain("sil_learn");
-    expect(soulText).toMatch(/never answer[^\n]*open web/i);
-    // The persona + rules live in exactly one place — never a sil persona.md.
+    expect(soulText).toMatch(/catalog is where you buy/i);
+    // The persona + creed live in exactly one place — never a sil persona.md.
     expect(existsSync(join(shopperDir(), "persona.md"))).toBe(false);
   });
 

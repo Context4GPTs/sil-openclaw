@@ -73,10 +73,10 @@ call is a round-trip + tokens):
      transport**: it never folds a predicate into `query`, so a requirement that
      belongs in `filters.specs` stays a predicate, never `query` prose.
   Leave **`ship_to`** empty (the server resolves the registered default). **Never
-  invent** a param or predicate that isn't real — params live in the `sil_search`
-  description, the predicate vocabulary in the domain method (see
-  [`search_param_mapping.md`](search_param_mapping.md)). Then read the per-predicate
-  **`specs_status`** the response returns (each `{ns, key, applied}`) — it feeds
+  invent** a param or predicate that isn't real — the real `sil_search` params live in
+  its tool description, the predicate vocabulary in the domain method. Then read the
+  per-predicate **`specs_status`** the response returns (each `{ns, key, applied}`) — it
+  feeds
   Beat 5's honesty pass, which rejects at pick any `hard` predicate the backend left
   `applied:false`.
 
