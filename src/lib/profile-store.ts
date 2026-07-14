@@ -61,10 +61,6 @@ const METHOD_FILE = "method.md";
  * are joined as filesystem path segments, so they carry this guard before any join. */
 const SEGMENT_RE = /^[a-z0-9][a-z0-9-]*$/;
 
-/** The stable marker the shop loop's reject-at-pick rule greps for an inviolable
- * constraint (e.g. `- [hard] never leather`). */
-const HARD_MARKER = "[hard]";
-
 /** attach-asset limits: ~8 MB decoded, image MIME allowlist → file extension. */
 const MAX_ASSET_BYTES = 8 * 1024 * 1024;
 const MIME_EXT: Readonly<Record<string, string>> = {
@@ -209,7 +205,10 @@ function serializeArtefact(fields: Record<string, string>, body: string): string
   const fm = Object.entries(fields)
     .map(([k, v]) => k + ": " + scalar(v))
     .join("\n");
-  const b = body.endsWith("\n") ? body : body + "\n";
+  // The store owns frontmatter — strip any block a model prepended to the body so the
+  // artefact never stacks two (self-heals a previously double-wrapped file on re-write).
+  const clean = stripLeadingFrontmatter(body);
+  const b = clean.endsWith("\n") ? clean : clean + "\n";
   return "---\n" + fm + "\n---\n" + b;
 }
 
@@ -229,6 +228,16 @@ function parseArtefact(raw: string): Artefact | null {
   }
   if (Object.keys(fields).length === 0) return null;
   return { fields, body };
+}
+
+/** Strip a leading `--- … ---` frontmatter block a model may have prepended to a body,
+ * reusing `parseArtefact` so ONLY a fence whose content is real frontmatter (≥1
+ * `key: value`) is removed — a body opening with a bare `---` thematic break parses to
+ * null and is returned untouched. The store owns frontmatter (frontmatter-as-truth), so a
+ * model-authored block must never survive into the serialized body and stack a second. */
+function stripLeadingFrontmatter(body: string): string {
+  const parsed = parseArtefact(body);
+  return parsed === null ? body : parsed.body;
 }
 
 /** Read + parse one artefact file, or null if absent/unreadable/malformed. */
@@ -336,11 +345,14 @@ export function readShopperIdentity(): ShopperIdentity {
 }
 
 // ===========================================================================
-// sil_learn — the single target+change verb. `create` mints a whole method/PRD;
-// `append`/`amend`/`retract` refine in place; `attach-asset` persists image bytes.
+// sil_learn — the single target+change verb. `create` mints a NEW method/PRD;
+// `write` replaces an existing doc's whole body (reconciled); `attach-asset`
+// persists image bytes. The model reads current (sil_profile_get), reconciles in
+// context, and writes the whole doc back — no surgical bullet ops, so a correction
+// can never stack a contradicting line.
 // ===========================================================================
 
-export type LearnKind = "create" | "append" | "amend" | "retract" | "attach-asset";
+export type LearnKind = "create" | "write" | "attach-asset";
 export type LearnTarget = "user_spec" | "method" | "prd";
 
 export interface LearnSpec {
@@ -348,18 +360,13 @@ export interface LearnSpec {
   kind: LearnKind;
   domain?: string;
   prd?: string;
-  /** create: whole-body mint (+ coordinates for a new prd). */
+  /** create: mint a new doc (+ coordinates for a new prd). write: the reconciled
+   * whole body that replaces an existing doc. */
   name?: string;
   body?: string;
   product?: string;
   intent?: string;
   title?: string;
-  /** append/amend/retract change fields. */
-  text?: string;
-  from?: string;
-  to?: string;
-  section?: string;
-  hard?: boolean;
   /** attach-asset. */
   bytes?: string;
   mime?: string;
@@ -379,6 +386,7 @@ export type LearnResult =
     }
   | InvalidRequest
   | NotFound
+  | Unreadable
   | PersistenceFailed;
 
 /** A resolved target artefact + its human label. */
@@ -414,42 +422,28 @@ function resolveTarget(spec: LearnSpec): ResolvedTarget | InvalidRequest {
 }
 
 export function learnArtefact(spec: LearnSpec): LearnResult {
-  // `hard` is valid ONLY on append to user_spec / prd. Every other combination —
-  // all four non-append kinds on any target, and append to method — is rejected
-  // LOUDLY, never silently dropped: a buyer who passes `hard:true` expecting to
-  // promote a constraint must learn at once when the promotion does not land.
-  // Hoisted ABOVE the kind switch so a hard misuse wins error-precedence over the
-  // per-kind field checks (this subsumes the old method-only append guard).
-  if (spec.hard === true && !(spec.kind === "append" && spec.target !== "method")) {
-    return invalid(
-      "hard",
-      "hard is valid only on append to user_spec or prd — a method carries no hard"
-        + " constraints, and create/amend/retract/attach-asset take no hard flag.",
-    );
-  }
   switch (spec.kind) {
     case "create":
       return learnCreate(spec);
-    case "append":
-      return learnAppend(spec);
-    case "amend":
-    case "retract":
-      return learnAmendRetract(spec);
+    case "write":
+      return learnWrite(spec);
     case "attach-asset":
       return learnAttachAsset(spec);
     default:
-      return invalid("kind", "kind must be one of create|append|amend|retract|attach-asset.");
+      return invalid("kind", "kind must be one of create|write|attach-asset.");
   }
 }
 
-/** `create` mints a whole method or PRD body atomically — the file IS the
- * registration (no manifest). NOT valid for user_spec (that is materialize). */
+/** `create` mints a NEW method or PRD body atomically — the file IS the registration
+ * (no manifest). Refuses if one already exists at these coordinates (→ use `write` to
+ * replace it), so a mint never silently clobbers. NOT valid for user_spec (that is
+ * materialize; refine it with `write`). */
 function learnCreate(spec: LearnSpec): LearnResult {
   if (spec.target === "user_spec") {
     return invalid(
       "target",
       "create is not valid for user_spec — the shopper's shared spec is written by"
-        + " sil_profile_materialize (setup), then refined with append/amend/retract.",
+        + " sil_profile_materialize (setup), then refined with kind:write.",
     );
   }
   if (!nonBlank(spec.body)) return invalid("body", "body is required and must be non-empty.");
@@ -462,6 +456,13 @@ function learnCreate(spec: LearnSpec): LearnResult {
   if (spec.target === "method") {
     if (!nonBlank(spec.name)) return invalid("name", "name is required for a method.");
     const path = join(getDomainArtefactDir(slug), METHOD_FILE);
+    if (existsSync(path)) {
+      return invalid(
+        "kind",
+        'a method already exists for domain "' + slug + '" — use kind:write to replace its'
+          + " body (create only mints a new one, it never overwrites).",
+      );
+    }
     const fields = { domain: slug, name: spec.name as string, updated_at: now };
     try {
       atomicWrite(path, serializeArtefact(fields, spec.body as string));
@@ -479,16 +480,20 @@ function learnCreate(spec: LearnSpec): LearnResult {
     if (!nonBlank(spec[f])) return invalid(f, f + " is required for a prd.");
   }
   const path = join(getDomainArtefactDir(slug), PRDS_SUBDIR, prd + ".md");
-  // Preserve created_at on a re-mint; advance updated_at.
-  const prior = readArtefactFile(path);
-  const createdAt = prior?.fields["created_at"] ?? now;
+  if (existsSync(path)) {
+    return invalid(
+      "kind",
+      'a PRD "' + prd + '" already exists in domain "' + slug + '" — use kind:write to'
+        + " replace its body (create only mints a new one, it never overwrites).",
+    );
+  }
   const fields = {
     key: prd,
     product: spec.product as string,
     intent: spec.intent as string,
     title: spec.title as string,
     domain: slug,
-    created_at: createdAt,
+    created_at: now,
     updated_at: now,
   };
   try {
@@ -499,90 +504,25 @@ function learnCreate(spec: LearnSpec): LearnResult {
   return { ok: true, kind: "create", target: "prd", domain: slug, prd, path };
 }
 
-/** append — add `- <text>` (or `- [hard] <text>`) under `## <section>` when given
- * (fail-closed if that heading is absent), else at EOF. The target must already
- * exist → not_found (never resurrects a seed-less doc). `hard` is guarded up-front
- * in `learnArtefact` (append to method / any non-append kind is rejected there). */
-function learnAppend(spec: LearnSpec): LearnResult {
-  if (!nonBlank(spec.text)) return invalid("text", "text is required and must be non-empty.");
-
+/** `write` replaces the WHOLE body of an EXISTING method / PRD / user_spec with a
+ * reconciled version — the model reads current (`sil_profile_get`), reconciles in
+ * context, and writes the whole doc back. Frontmatter coordinates + `created_at` are
+ * preserved and `updated_at` bumps (user_spec carries no timestamp). Fail-closed on a
+ * missing doc (`not_found` — write never mints, that is create) and on a present-but-
+ * corrupt one (`unreadable` — inspect / repair, never clobber a recoverable artefact). */
+function learnWrite(spec: LearnSpec): LearnResult {
+  if (!nonBlank(spec.body)) return invalid("body", "body is required and must be non-empty.");
   const target = resolveTarget(spec);
   if ("ok" in target) return target;
   const existing = readArtefactFile(target.path);
   if (existing === null) {
+    if (existsSync(target.path)) return unreadable(target.path);
     return notFound(
-      "The target " + target.label + " does not exist — create it first (append never"
-        + " resurrects a seed-less doc).",
+      "The target " + target.label + " does not exist — mint it with kind:create first"
+        + " (write replaces an existing doc, it never mints).",
     );
   }
-
-  const mark = spec.hard === true ? HARD_MARKER + " " : "";
-  const bullet = "- " + mark + (spec.text as string).trim();
-
-  let body: string;
-  if (nonBlank(spec.section)) {
-    const inserted = insertUnderSection(existing.body, spec.section as string, bullet);
-    if (inserted === null) {
-      const sections = listSections(existing.body);
-      return invalid(
-        "section",
-        'no "## ' + spec.section + '" heading in the ' + target.label + "; existing sections: "
-          + (sections.length > 0 ? sections.join(", ") : "(none)"),
-      );
-    }
-    body = inserted;
-  } else {
-    body = existing.body.replace(/\n*$/, "\n") + bullet + "\n";
-  }
-
-  return writeArtefactBody(target, existing.fields, body, "append");
-}
-
-/** amend/retract — exact single-occurrence bullet match on `from`; 0 → not_found,
- * 2+ → invalid_request(ambiguous_match). A `[hard]` marker is preserved on amend. */
-function learnAmendRetract(spec: LearnSpec): LearnResult {
-  if (!nonBlank(spec.from)) return invalid("from", "from is required and must be non-empty.");
-  if (spec.kind === "amend" && !nonBlank(spec.to)) {
-    return invalid("to", "to is required for amend.");
-  }
-
-  const target = resolveTarget(spec);
-  if ("ok" in target) return target;
-  const existing = readArtefactFile(target.path);
-  if (existing === null) {
-    return notFound("The target " + target.label + " does not exist — nothing to change.");
-  }
-
-  const from = (spec.from as string).trim();
-  const lines = existing.body.split("\n");
-  const matches: number[] = [];
-  const scoped = nonBlank(spec.section)
-    ? sectionLineRange(lines, spec.section as string)
-    : { start: 0, end: lines.length };
-  for (let i = scoped.start; i < scoped.end; i++) {
-    const parsed = parseBullet(lines[i] as string);
-    if (parsed && parsed.text.trim() === from) matches.push(i);
-  }
-  if (matches.length === 0) {
-    return notFound('No bullet matching "' + from + '" in the ' + target.label + ".");
-  }
-  if (matches.length > 1) {
-    return invalid(
-      "ambiguous_match",
-      "the text matches " + matches.length + " bullets — refine `from` (or scope with"
-        + " `section`) so it matches exactly one; refusing an ambiguous multi-write.",
-    );
-  }
-
-  const idx = matches[0] as number;
-  if (spec.kind === "retract") {
-    lines.splice(idx, 1);
-  } else {
-    const parsed = parseBullet(lines[idx] as string)!;
-    const mark = parsed.hard ? HARD_MARKER + " " : "";
-    lines[idx] = parsed.indent + "- " + mark + (spec.to as string).trim();
-  }
-  return writeArtefactBody(target, existing.fields, lines.join("\n"), spec.kind);
+  return writeArtefactBody(target, existing.fields, spec.body as string, "write");
 }
 
 /** attach-asset — persist image bytes into `domains/<slug>/assets/<hash>.<ext>`
@@ -680,65 +620,6 @@ function writeArtefactBody(
     ...(target.prd !== undefined ? { prd: target.prd } : {}),
     path: target.path,
   };
-}
-
-// --- section/bullet helpers -------------------------------------------------
-
-interface Bullet {
-  indent: string;
-  hard: boolean;
-  text: string;
-}
-
-/** Parse a markdown bullet line (`- text` / `- [hard] text`), or null. */
-function parseBullet(line: string): Bullet | null {
-  const m = /^(\s*)-\s+(\[hard\]\s+)?(.*)$/.exec(line);
-  if (!m) return null;
-  return { indent: m[1] as string, hard: m[2] !== undefined, text: m[3] as string };
-}
-
-/** All `## <section>` heading texts present in a body (for a fail-closed message). */
-function listSections(body: string): string[] {
-  return body
-    .split("\n")
-    .map((l) => /^##\s+(.*)$/.exec(l))
-    .filter((m): m is RegExpExecArray => m !== null)
-    .map((m) => (m[1] as string).trim());
-}
-
-/** The [start,end) line range of a `## <section>` body (heading exclusive, up to the
- * next `## ` heading or EOF). `start === -1` when the heading is absent. */
-function sectionLineRange(lines: string[], section: string): { start: number; end: number } {
-  const target = section.trim();
-  let start = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const m = /^##\s+(.*)$/.exec(lines[i] as string);
-    if (m && (m[1] as string).trim() === target) {
-      start = i + 1;
-      break;
-    }
-  }
-  if (start === -1) return { start: 0, end: 0 };
-  let end = lines.length;
-  for (let i = start; i < lines.length; i++) {
-    if (/^##\s+/.test(lines[i] as string)) {
-      end = i;
-      break;
-    }
-  }
-  return { start, end };
-}
-
-/** Insert `bullet` at the end of `## <section>` (before the next heading, after the
- * section's last non-blank line), or null when the heading is absent. */
-function insertUnderSection(body: string, section: string, bullet: string): string | null {
-  if (!listSections(body).includes(section.trim())) return null;
-  const lines = body.split("\n");
-  const range = sectionLineRange(lines, section);
-  let at = range.end;
-  while (at > range.start && (lines[at - 1] as string).trim() === "") at--;
-  lines.splice(at, 0, bullet);
-  return lines.join("\n");
 }
 
 // ===========================================================================

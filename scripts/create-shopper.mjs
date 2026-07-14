@@ -31,8 +31,7 @@
  *   7. materializeProfile          — REUSED; SETUP-ONLY { name, userSpec } ⇒ shared
  *                                    user_spec.md (its frontmatter carries the name);
  *                                    NO manifest, no domain minted at create
- *   8. attach the sil skill + deny the escape-hatch tools (exec/write/edit/apply_patch,
- *      a per-agent tools.deny that keeps sil + web) + enable the sil plugin (config set)
+ *   8. attach the sil skill + enable the sil plugin (config set)
  *   9. sil-openclaw-allowlist      — REUSED whole; additive/idempotent/atomic three-surface
  *                                    trust merge (plugins.allow + tools.alsoAllow + plugins.entries.sil)
  *  10. bind the current channel    — FAIL-OPEN convenience, NOT fail-closed: resolve the channel
@@ -97,17 +96,6 @@ const MANIFEST_PATH = resolve(ROOT, "openclaw.plugin.json");
 
 /** A shopper id path-segment shape — lower-kebab, never `main` (host-reserved). */
 const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
-
-/** The escape-hatch tools the shopper is DENIED at the per-agent level — the shell
- * (`exec`) and the filesystem mutators (`write`/`edit`/`apply_patch`). A shopper shops
- * through the sil tools; it has no business running a shell (which it wasted re-reading
- * its own skill files) or writing host files (which it used to persist shopping memory
- * into the workspace instead of the sil store). `deny` is the SAFE lever: per the host's
- * tool-precedence model it only further-RESTRICTS and cannot re-grant, so it removes
- * exactly these and CANNOT strip the sil tools (a per-agent `tools.profile` override,
- * by contrast, replaces the base set and would risk the sil grant). Web + messaging
- * tools are intentionally kept — web still feeds gap-filling method research. */
-const SHOPPER_TOOL_DENY = ["exec", "write", "edit", "apply_patch"];
 
 /** The sil creed appended to every shopper's SOUL.md after its persona — a soul, not a
  * rulebook. It carries the mantra (explore first), the loop in three lines, and the one
@@ -315,11 +303,6 @@ function agentIndex(config, agentId) {
   const list = Array.isArray(config?.agents?.list) ? config.agents.list : [];
   return list.findIndex((a) => a?.id === agentId);
 }
-
-// The shopper's per-agent escape-hatch deny-list (step 8) is the INTENDED end state, not
-// a degradation — so it rides no `warnings` entry (that rail is for real gaps, and the
-// happy path stays clean). What the shopper keeps (sil tools + web) and drops (the shell
-// + fs mutators) is documented in CHANGELOG.md + agent_creation_engine.md.
 
 /** True iff `openclaw config validate --json` reported `{valid:true}`. The host
  * writes its verdict to stdout even on a non-zero exit, so read stdout, never the
@@ -593,21 +576,12 @@ function main() {
   if (!skillRes.ok) {
     failAndTeardown(configPath, "attaching the sil skill failed: " + (skillRes.stderr || "non-zero exit"));
   }
-  // Deny the shopper the escape-hatch tools at the per-agent level — sibling of the
-  // `.skills` set above. This subtracts the shell + fs mutators from whatever the host's
-  // global profile grants, so the sil tools (admitted via plugin trust, step 9) and web
-  // survive while the shell/file-write hatches are gone. `deny` is chosen over a
-  // per-agent `tools.profile` override precisely because it only further-restricts and
-  // can never strip the sil grant (SHOPPER_TOOL_DENY rationale). `--strict-json` requires
-  // a valid-JSON value, so the array is passed via JSON.stringify (→ '["exec",…]'),
-  // exactly like the `["…"]` / `true` values above; a bare token would exit 0 but no-op.
-  const denyRes = runOpenclaw(
-    ["config", "set", `agents.list[${idx}].tools.deny`, JSON.stringify(SHOPPER_TOOL_DENY), "--strict-json"],
-    configPath,
-  );
-  if (!denyRes.ok) {
-    failAndTeardown(configPath, "setting the shopper tool deny-list failed: " + (denyRes.stderr || "non-zero exit"));
-  }
+  // No per-agent `tools.deny` is set: the shopper inherits the host's default toolset
+  // untouched. A deny of the fs-mutators is inert here — codex brings its OWN shell
+  // (surfaced as `bash`), which the deny cannot name and which reads the shopper's
+  // skill files anyway, and an open shell writes files regardless of any fs-mutator
+  // deny. The shell stays open by design (trusted single-operator posture); persistence
+  // is steered through the sil tools by the skill, not enforced by tool policy.
   const enableRes = runOpenclaw(
     ["config", "set", "plugins.entries.sil.enabled", "true", "--strict-json"],
     configPath,

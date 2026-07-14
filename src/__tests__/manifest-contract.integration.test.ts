@@ -223,8 +223,8 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
 
   it("sil_learn is BOTH registered by register() and declared in contracts.tools", () => {
     // The spec-driven-shopping-redesign card's target+change feedback verb — the
-    // single write tool for the whole method/PRD lifecycle (create + append/amend/
-    // retract/attach-asset), replacing sil_remember. Added to the existing
+    // single write tool for the whole method/PRD lifecycle (create + write +
+    // attach-asset), replacing sil_remember. Added to the existing
     // registerProfileTools group (no new group, no src/index.ts change), so it is
     // auto-picked-up by codeRegisteredNames. The load-bearing 3rd "add a tool"
     // step: it MUST also be listed in openclaw.plugin.json#contracts.tools — a

@@ -24,11 +24,21 @@ This file owns Beats 1, 4 and 5.
 
 ## Beat 1 — Classify: `{domain, product, intent}`, reuse before mint
 
-Resolve the request through **three coordinates, top-down**: the **domain** (the
-niche that owns the method), the **product** type within it, and the **intent**
-(the use-context that reshapes the requirements). **Intent is always present**: a
-**context-free** request keys the `general` intent (`ski/boots-general`), so every
-job carries all three coordinates and stays uniformly queryable.
+Resolve the request through **three coordinates, top-down**:
+
+- **domain** — the **broad product category** that owns the reusable buying guide.
+  Pick the **widest** slug whose method generalises across use-contexts: `earbuds`,
+  not `wireless-gym-earbuds`; `ski`, not `ski-touring`.
+- **product** — the product type within the domain (`earbuds`, `boots`).
+- **intent** — the **use-context** that reshapes the requirements (`gym`, `slope`).
+
+**Never fold the use-context into the domain.** "Earbuds for the gym" is
+`domain: earbuds, product: earbuds, intent: gym` — the gym-ness is the **intent**, so
+next week's "earbuds for the office" reuses the same method and only mints a new PRD. A
+`wireless-gym-earbuds` domain forks a near-duplicate buying guide per use and kills that
+reuse. **Intent is always present**: a **context-free** request keys the `general`
+intent (`ski/boots-general`), so every job carries all three coordinates and stays
+uniformly queryable.
 
 **Reuse-before-mint.** Query existing coordinates with **`sil_profile_search`**
 (the frontmatter-as-truth discovery tool — never a filesystem guess) and
@@ -48,37 +58,32 @@ silent**. A reuse passes through unannounced.
 
 ## Beat 4 — Search-space: a bounded, priority-ordered fan-out (not a re-rank)
 
-Project the filled PRD onto **`sil_search`** as a **bounded ≤ 4 priority-ordered**
-fan-out — not one search, not unbounded (the bound is a production budget: each
-call is a round-trip + tokens):
+The PRD's **`## Search specs`** block is the resolved predicate set — Beat 4 **projects
+it, never re-derives it**. Send those `{ns, key, op, value, unit?, hard?}` predicates
+**verbatim** as `sil_search`'s `filters.specs`; the only per-call work is choosing the
+fan-out and lifting any attribute a **dedicated param** serves better.
 
-- **Call 1 is the tightest projection of the PRD's core** (its load-bearing
-  requirements); **calls 2–4 are deliberate widenings** — relax the least
-  load-bearing requirement, an adjacent phrasing that lifts recall, or an explicit
-  either/or branch. **Core first, widenings after** — the **priority order**.
+Project the filled PRD onto **`sil_search`** as a **bounded ≤ 4 priority-ordered**
+fan-out — not one search, not unbounded (the bound is a production budget: each call is
+a round-trip + tokens):
+
+- **Call 1 is the tightest projection** — the full `## Search specs` set. **Calls 2–4
+  are deliberate widenings**: relax the least load-bearing **soft** predicate, an
+  adjacent phrasing that lifts recall, or an explicit either/or branch. **Never relax a
+  `hard` predicate.** Core first, widenings after — the **priority order**.
 - **Merge = dedup + concatenate in issue order — NOT a re-rank.** Concatenate the
   per-call backend-ranked lists in issue order and **drop** any product already
-  **seen** earlier. Because issue order *is* priority order, this **never
-  re-ranks** — the engine owns order *within* a call, the fan-out *across* calls.
-- **Project each requirement onto the tightest real channel, in this order:**
-  1. an **existing** `sil_search` **param** where one fits (`category`,
-     `price_min`/`price_max`, `condition`, `available`, `local_merchants`);
-  2. else a **`filters.specs` predicate**, built from the method's Beat-2 canonical
-     `## Search vocabulary` (the `sil_specs`-coined names) — one `{ns, key, op,
-     value, unit?, hard?}` per annotated requirement, marking an inviolable one
-     `hard:true`. **Prefer a dedicated param over a predicate** for the SAME
-     attribute — never both (a `price_max` param OR a price spec);
-  3. else a purely descriptive residue (a colour, a phrasing) — fold it into the
-     free-text `query`, which **you author yourself**. The plugin is **pure
-     transport**: it never folds a predicate into `query`, so a requirement that
-     belongs in `filters.specs` stays a predicate, never `query` prose.
-  Leave **`ship_to`** empty (the server resolves the registered default). **Never
-  invent** a param or predicate that isn't real — the real `sil_search` params live in
-  its tool description, the predicate vocabulary in the domain method. Then read the
-  per-predicate **`specs_status`** the response returns (each `{ns, key, applied}`) — it
-  feeds
-  Beat 5's honesty pass, which rejects at pick any `hard` predicate the backend left
-  `applied:false`.
+  **seen** earlier. Because issue order *is* priority order, this **never re-ranks** —
+  the engine owns order *within* a call, the fan-out *across* calls.
+- **Prefer a dedicated param over a predicate** for the SAME attribute — a `price_max`
+  param OR a price spec, never both; likewise `category`, `condition`, `available`,
+  `local_merchants`. A purely descriptive residue (a colour, a phrasing) folds into the
+  free-text `query`, which **you author** — the plugin is **pure transport** and never
+  folds a predicate into `query`. Leave **`ship_to`** empty (the server resolves the
+  registered default); **never invent** a param or predicate that isn't real. Then read
+  the per-predicate **`specs_status`** the response returns (each `{ns, key, applied}`) —
+  it feeds Beat 5's honesty pass, which rejects at pick any `hard` predicate the backend
+  left `applied:false`.
 
 ## Beat 5 — Reflect: honesty pass first, judgment not threshold, propose-and-wait
 
