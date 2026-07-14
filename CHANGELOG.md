@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-14
+
 ### Changed
 
 - **The shopper no longer sets a per-agent `tools.deny`.** `create-shopper.mjs` used to
