@@ -32,7 +32,8 @@
   },
   "files": [
     "dist",
-    "scripts",
+    "scripts/create-shopper.mjs",
+    "scripts/allowlist-openclaw.mjs",
     "sil-shopping",
     "openclaw.plugin.json",
     "README.md",
