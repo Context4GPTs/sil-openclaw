@@ -25,6 +25,7 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
 import {
+  countShopperDomains,
   learnArtefact,
   materializeProfile,
   readArtefactBody,
@@ -34,6 +35,7 @@ import {
   type LearnSpec,
   type LearnTarget,
 } from "../lib/profile-store.js";
+import { takeMigrationLog } from "../lib/migrations/runner.js";
 import { jsonResult } from "../lib/tool-result.js";
 
 /** Narrow a host-validated param to a string, defaulting to "" so the store does the
@@ -46,6 +48,24 @@ function asString(value: unknown): string {
  * so a selector is never carried as a spurious empty value. */
 function optString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/** Emit the one-shot `sil_store_migrated` breadcrumb when THIS gated tool touch healed a
+ * behind-version store. A successful heal is SILENT to the agent (product §8.2 — no change
+ * to the tool's own result), but it rewrites the shopper's on-disk identity destructively
+ * (drops profile.json, folds each legacy domain triple into method.md) — exactly the state
+ * transition incident-#2 debugging needs a log for. Drained once from the runner (null on
+ * every non-migrating call), so a hot serve path never logs. `domain_count` is the sil-
+ * specific enrichment the logger-free runner can't compute. */
+function logStoreMigration(api: PluginAPI): void {
+  const migrated = takeMigrationLog();
+  if (migrated === null) return;
+  api.logger.info("sil_store_migrated", {
+    from: migrated.from,
+    to: migrated.to,
+    applied_count: migrated.applied.length,
+    domain_count: countShopperDomains(),
+  });
 }
 
 export function registerProfileTools(api: PluginAPI): void {
@@ -152,6 +172,7 @@ function registerLearn(api: PluginAPI): void {
         caption: optString(params["caption"]),
       };
       const result = learnArtefact(spec);
+      logStoreMigration(api);
       if (result.ok) {
         // Non-PII markers only — no artefact body/text is ever logged.
         api.logger.info("sil_learned", {
@@ -201,6 +222,7 @@ function registerSearch(api: PluginAPI): void {
         intent: optString(params["intent"]),
         query: optString(params["query"]),
       });
+      logStoreMigration(api);
       if (!result.ok) return mapFailure(api, "sil_profile_search", result);
       api.logger.info("sil_profile_searched", {
         domain_count: result.domains.length,
@@ -256,6 +278,7 @@ function registerGet(api: PluginAPI): void {
     }),
     async execute(_callId, params) {
       const result = readArtefactBody(asString(params["domainSlug"]), optString(params["prd"]));
+      logStoreMigration(api);
       if (result.ok) {
         api.logger.info("sil_profile_read", { target: result.target, domain_slug: result.domain, prd: result.prd });
         return jsonResult({
@@ -294,6 +317,7 @@ function registerRemove(api: PluginAPI): void {
     }),
     async execute(_callId, params) {
       const result = removeArtefact(asString(params["domainSlug"]), optString(params["prd"]));
+      logStoreMigration(api);
       if (result.ok) {
         api.logger.info("sil_profile_removed", { domain_slug: result.domainSlug, prd: result.prd });
         return jsonResult({

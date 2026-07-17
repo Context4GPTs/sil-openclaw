@@ -61,6 +61,7 @@ import {
   writeFileSync,
   existsSync,
   statSync,
+  chmodSync,
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -72,7 +73,7 @@ import {
   runStoreMigrations,
 } from "../../lib/migrations/runner.js";
 import { MIGRATIONS, CURRENT_STORE_VERSION } from "../../lib/migrations/registry.js";
-import type { Migration } from "../../lib/migrations/types.js";
+import type { Migration, MigrationRunResult } from "../../lib/migrations/types.js";
 
 let dataDir: string;
 let priorSilDataDir: string | undefined;
@@ -81,6 +82,10 @@ const MARKER = "store-format.json";
 const BACKUP_DIR = ".sil-migration-backup";
 const SHOPPER = "shopper";
 
+// Root bypasses the permission bits the fault-injection levers below rely on, so those
+// cases skip under root (idiom per create-shopper.integration.test.ts).
+const AS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
+
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-store-mig-runner-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
@@ -88,6 +93,15 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Defensive: restore any perms a fault-injection lever dropped on the data-dir root or the
+  // backup subtree, so the temp-dir teardown never EACCESes if a test threw before its finally.
+  for (const p of [dataDir, join(dataDir, BACKUP_DIR)]) {
+    try {
+      chmodSync(p, 0o700);
+    } catch {
+      /* may not exist */
+    }
+  }
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   rmSync(dataDir, { recursive: true, force: true });
@@ -428,4 +442,162 @@ describe("runStoreMigrations — a successful hop removes its own backup", () =>
     // The transient backup is gone on success (retained ONLY on failure).
     expect(existsSync(join(dataDir, BACKUP_DIR))).toBe(false);
   });
+});
+
+// ===========================================================================
+// Fail-closed I/O gap (review round 1, P2). The runner's contract is that NO path
+// escapes as a raw throw — EVERY failure surfaces as a structured migration_failed
+// (business rule 3). The apply/verify seam is already guarded; these pin the
+// previously-unguarded sites: createBackup, BOTH writeStoreVersion calls (the no-op
+// record and the post-verify record), and removeBackup. Real-fs fault injection
+// (chmod / marker-as-directory), no synthetic hook, mirroring the AC6 lever.
+//
+// The `reverted` discriminator is load-bearing here and differs BY SITE, keyed on
+// whether a transform was already COMMITTED when the I/O failed:
+//   - before any transform (createBackup, the no-op-branch record) ⇒ store is provably
+//     untouched ⇒ reverted:true (honest "prior state intact"), never a false-alarm dirty.
+//   - after a verified transform (the post-verify record) ⇒ the migration is CORRECT,
+//     only the marker could not be written ⇒ reverted:false, and the good transform is
+//     KEPT (never thrown away — reverting would re-expose the legacy store to a
+//     destructive re-migrate loop next boot).
+//   - a POST-SUCCESS cleanup failure (removeBackup, after apply+verify+record all passed)
+//     is NOT a data-integrity failure ⇒ the run still SUCCEEDS (a leftover backup is
+//     harmless; reporting failure would falsely tell the agent the shopper is broken).
+// ===========================================================================
+describe("runStoreMigrations — fail-closed: every guarded I/O site maps to migration_failed, never a raw throw", () => {
+  it.skipIf(AS_ROOT)(
+    "createBackup cannot snapshot (read-only data-dir root) ⇒ migration_failed, store untouched (reverted:true), version NOT advanced",
+    () => {
+      const sentinel = seedShopper("UNTOUCHED\n");
+      const before = walkShopper();
+      // A hop that WOULD transform — but the backup snapshot can't be created because the
+      // data-dir root is read-only, so createBackup (mkdir .sil-migration-backup) EACCESes
+      // BEFORE apply ever runs. Unguarded, createBackup raw-throws out of the runner (RED);
+      // the fail-closed contract requires a structured migration_failed instead.
+      const m1 = fakeMigration(1, {
+        apply: (dir) => writeFileSync(join(dir, SHOPPER, "should-never-exist.txt"), "x\n", { mode: 0o600 }),
+      });
+      chmodSync(dataDir, 0o500);
+
+      let result: MigrationRunResult;
+      try {
+        result = runStoreMigrations(dataDir, [m1.migration]);
+      } finally {
+        chmodSync(dataDir, 0o700);
+      }
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected failure");
+      expect(result.kind).toBe("migration_failed");
+      expect(result.version).toBe(1);
+      // createBackup failed BEFORE apply — the store was never mutated ⇒ reverted:true.
+      expect(result.reverted).toBe(true);
+      expect(result.recovery).toBe("inspect_store");
+      expect(result.reason.length).toBeGreaterThan(0);
+      // apply never ran (createBackup gates it) and the version was not advanced.
+      expect(m1.calls.apply).toBe(0);
+      expect(readStoreVersion(dataDir)).toBe(0);
+      // Byte-exact: the subtree is identical, no half-written file leaked in.
+      expect(readFileSync(sentinel, "utf8")).toBe("UNTOUCHED\n");
+      expect(walkShopper()).toEqual(before);
+    },
+  );
+
+  it.skipIf(AS_ROOT)(
+    "the no-op-branch writeStoreVersion fails (read-only root, detectApplicable false) ⇒ migration_failed, store untouched (reverted:true)",
+    () => {
+      seedShopper("PRISTINE\n");
+      // detectApplicable:false ⇒ the runner records the version WITHOUT a transform. On a
+      // read-only root that marker write EACCESes — unguarded it raw-throws (RED). Mapped:
+      // migration_failed with the store untouched.
+      const m1 = fakeMigration(1, { detect: () => false });
+      chmodSync(dataDir, 0o500);
+
+      let result: MigrationRunResult;
+      try {
+        result = runStoreMigrations(dataDir, [m1.migration]);
+      } finally {
+        chmodSync(dataDir, 0o700);
+      }
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected failure");
+      expect(result.kind).toBe("migration_failed");
+      expect(result.version).toBe(1);
+      // No transform of any kind ran (detect was false) — the store is untouched ⇒ reverted:true.
+      expect(result.reverted).toBe(true);
+      expect(m1.calls.apply).toBe(0);
+      expect(readStoreVersion(dataDir)).toBe(0);
+    },
+  );
+
+  it("the post-verify writeStoreVersion fails (marker path unwritable) ⇒ migration_failed, reverted:false, and the verified transform is KEPT", () => {
+    const sentinel = seedShopper("ORIGINAL\n");
+    // Make ONLY the record write fail while backup + apply + verify all succeed: pre-create
+    // the marker PATH as a NON-EMPTY directory, so writeStoreVersion's rename-onto-path
+    // EISDIRs. (This fault reproduces regardless of privilege — no skipIf needed.)
+    const markerAsDir = join(dataDir, MARKER);
+    mkdirSync(markerAsDir, { recursive: true });
+    writeFileSync(join(markerAsDir, "occupied"), "x\n", { mode: 0o600 });
+    const m1 = fakeMigration(1, {
+      apply: (dir) => writeFileSync(join(dir, SHOPPER, "sentinel.txt"), "MIGRATED\n", { mode: 0o600 }),
+      verify: () => null, // the transform met the floor; only recording it fails
+    });
+
+    const result = runStoreMigrations(dataDir, [m1.migration]);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.kind).toBe("migration_failed");
+    expect(result.version).toBe(1);
+    // A verified transform was already committed — the migration is CORRECT, only the marker
+    // could not be recorded ⇒ reverted:false (NOT reverted:true, which would claim a
+    // revert-to-prior that did not, and must not, happen).
+    expect(result.reverted).toBe(false);
+    // The verified transform SURVIVES — the runner did not throw away good, floor-meeting work.
+    expect(readFileSync(sentinel, "utf8")).toBe("MIGRATED\n");
+    expect(m1.calls.apply).toBe(1);
+    expect(m1.calls.verify).toBe(1);
+    // The marker never recorded (the unwritable dir parses as absent ⇒ still 0).
+    expect(readStoreVersion(dataDir)).toBe(0);
+  });
+
+  it.skipIf(AS_ROOT)(
+    "removeBackup fails AFTER a successful apply+verify+record ⇒ the run still SUCCEEDS (a post-success cleanup failure is not a data-integrity failure)",
+    () => {
+      seedShopper("PRISTINE\n");
+      // apply mutates the subtree AND drops write on the backup dir the runner created, so the
+      // post-success removeBackup (rmSync of .sil-migration-backup) EACCESes. The migration
+      // ITSELF fully succeeded — apply ran, verify passed, the marker recorded — only the
+      // transient-backup cleanup failed. Contract (pinned with the dev): a cleanup failure
+      // NEVER turns a succeeded migration into migration_failed; the shopper IS migrated and
+      // intact, so reporting failure here would falsely tell the agent the shopper is broken.
+      const m1 = fakeMigration(1, {
+        apply: (dir) => {
+          writeFileSync(join(dir, SHOPPER, "migrated.txt"), "done\n", { mode: 0o600 });
+          chmodSync(join(dir, BACKUP_DIR), 0o500); // block removeBackup's rmSync of the backup children
+        },
+        verify: () => null,
+      });
+
+      let result: MigrationRunResult;
+      try {
+        result = runStoreMigrations(dataDir, [m1.migration]);
+      } finally {
+        chmodSync(join(dataDir, BACKUP_DIR), 0o700); // restore so afterEach teardown succeeds
+      }
+
+      // The migration SUCCEEDED despite the cleanup failure.
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      expect(result.from).toBe(0);
+      expect(result.to).toBe(1);
+      expect(result.applied).toEqual([1]);
+      // The version WAS recorded and the transform is present — the shopper is intact.
+      expect(readStoreVersion(dataDir)).toBe(1);
+      expect(existsSync(join(dataDir, SHOPPER, "migrated.txt"))).toBe(true);
+      // The backup could not be cleaned up — a harmless leftover, tolerated (not fatal).
+      expect(existsSync(join(dataDir, BACKUP_DIR))).toBe(true);
+    },
+  );
 });

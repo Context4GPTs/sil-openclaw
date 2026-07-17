@@ -179,6 +179,14 @@ export function getDomainArtefactDir(slug: string): string {
   return join(getShopperArtefactDir(), DOMAINS_SUBDIR, slug);
 }
 
+/** Count the shopper's learned domains (dir entries under shopper/domains, 0 when absent).
+ * The `sil_store_migrated` breadcrumb reports it on the rare on-load heal — not a hot path. */
+export function countShopperDomains(): number {
+  const domainsRoot = join(getShopperArtefactDir(), DOMAINS_SUBDIR);
+  if (!existsSync(domainsRoot)) return 0;
+  return readdirSync(domainsRoot, { withFileTypes: true }).filter((d) => d.isDirectory()).length;
+}
+
 // ===========================================================================
 // materializeProfile — SETUP-ONLY. Write user_spec.md (frontmatter name); no
 // manifest, no domains. Re-run overwrites the shared user spec atomically.

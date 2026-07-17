@@ -36,10 +36,10 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 
-import { DIR_MODE, getDataDir } from "../credentials.js";
+import { DIR_MODE, ensureDataDir, getDataDir } from "../credentials.js";
 import { MIGRATIONS } from "./registry.js";
 import type { Migration, MigrationFailed, MigrationRunResult } from "./types.js";
 
@@ -78,10 +78,15 @@ export function readStoreVersion(dataDir: string): number {
   return typeof version === "number" && Number.isInteger(version) && version >= 0 ? version : 0;
 }
 
-/** Record the store-format version atomically (0600) at the data-dir root. */
+/** Record the store-format version atomically (0600) at the data-dir root. The data-home
+ * ROOT is created through the single-creator invariant `ensureDataDir()` — NOT a second
+ * bare `mkdirSync` — so every data-home is minted by one mode-consistent path. `dataDir`
+ * is `getDataDir()` on every caller (the on-load gate, the self-upgrade card, and the
+ * hermetic tests all point `$SIL_DATA_DIR` at it), so `ensureDataDir()` ensures exactly
+ * this root. */
 export function writeStoreVersion(dataDir: string, version: number): void {
+  ensureDataDir();
   const path = join(dataDir, MARKER_FILE);
-  mkdirSync(dirname(path), { recursive: true, mode: DIR_MODE });
   const tmp = path + "." + randomBytes(6).toString("hex") + ".tmp";
   writeFileSync(tmp, JSON.stringify({ version }) + "\n", { mode: MARKER_MODE });
   renameSync(tmp, path);
@@ -169,12 +174,24 @@ export function runStoreMigrations(
 
     if (!isApplicable) {
       // No-op for this store's shape → record the version, transform nothing, no backup.
-      writeStoreVersion(dataDir, m.version);
+      try {
+        writeStoreVersion(dataDir, m.version);
+      } catch (err) {
+        // The marker write is the ONLY mutation on this branch — an I/O failure (a
+        // read-only data-dir root) leaves the store byte-exact untouched → reverted:true.
+        return failed(m.version, errCause(err), true);
+      }
       to = m.version;
       continue;
     }
 
-    createBackup(dataDir, m.version);
+    try {
+      createBackup(dataDir, m.version);
+    } catch (err) {
+      // Backup failed BEFORE apply — no transform ran, the store is untouched → reverted:true.
+      return failed(m.version, errCause(err), true);
+    }
+
     try {
       m.apply(dataDir);
       const reason = m.verify(dataDir);
@@ -192,8 +209,24 @@ export function runStoreMigrations(
       return failed(m.version, reason, reverted);
     }
 
-    writeStoreVersion(dataDir, m.version); // record only after verify passes
-    removeBackup(dataDir);
+    try {
+      writeStoreVersion(dataDir, m.version); // record only after verify passes
+    } catch (err) {
+      // The transform is committed + verified (the store is in the healthy new format), but
+      // recording the version failed. Do NOT revert a good transform back to the broken
+      // legacy store — a next boot self-heals (detectApplicable is now false → re-records).
+      // This heal did not COMPLETE though, so fail closed: reverted:false is the honest
+      // signal (the store was NOT restored to prior state); the backup stays retained.
+      return failed(m.version, errCause(err), false);
+    }
+
+    try {
+      removeBackup(dataDir);
+    } catch {
+      // Best-effort cleanup — the hop already succeeded and is recorded. A retained backup
+      // is benign (identical to the retained-on-failure state) and recoverable, so a stray
+      // backup NEVER downgrades a recorded success to a failure.
+    }
     applied.push(m.version);
     to = m.version;
   }
@@ -206,6 +239,7 @@ export function runStoreMigrations(
 // ---------------------------------------------------------------------------
 
 const migrationMemo = new Map<string, MigrationRunResult>();
+const migrationLogged = new Set<string>();
 
 /**
  * The on-load gate the store primitives call on their first line (heal-before-serve).
@@ -220,4 +254,19 @@ export function ensureStoreMigrated(): MigrationRunResult {
   const result = runStoreMigrations(dataDir);
   migrationMemo.set(dataDir, result);
   return result;
+}
+
+/** The one-shot success breadcrumb for the active data-dir: the `{ from, to, applied }` of
+ * a heal that applied ≥1 hop, returned the FIRST time it is drained and null forever after
+ * (per data-dir). The tool boundary drains it after a gated store call and logs
+ * `sil_store_migrated` — a successful heal is SILENT to the agent (product §8.2) but a
+ * destructive on-disk identity rewrite MUST leave one operator breadcrumb (the incident-#2
+ * observability gap). The runner itself stays logger-free so it can be lifted cross-plugin. */
+export function takeMigrationLog(): { from: number; to: number; applied: number[] } | null {
+  const dataDir = getDataDir();
+  const result = migrationMemo.get(dataDir);
+  if (result === undefined || !result.ok || result.applied.length === 0) return null;
+  if (migrationLogged.has(dataDir)) return null;
+  migrationLogged.add(dataDir);
+  return { from: result.from, to: result.to, applied: result.applied };
 }

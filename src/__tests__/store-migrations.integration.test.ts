@@ -35,9 +35,12 @@
  *
  * Contract this file pins for the implementation (expert-developer):
  *   - src/lib/migrations/runner.ts exports `ensureStoreMigrated(): MigrationRunResult`,
- *     the memoized on-load gate wired as the FIRST line of the five store primitives in
- *     profile-store.ts (searchProfileFrontmatter / readArtefactBody / learnArtefact /
- *     materializeProfile / removeArtefact). The memo MUST key on the resolved data dir
+ *     the memoized on-load gate wired as the FIRST line of the FOUR serve-path store
+ *     primitives in profile-store.ts (searchProfileFrontmatter / readArtefactBody /
+ *     learnArtefact / removeArtefact). materializeProfile is deliberately NOT gated — it
+ *     is SETUP (writes a NEW shopper, never serves stale legacy data); gating it would
+ *     stamp the marker at plain setup, which AC8 below (materialize leaves NO marker)
+ *     forbids. The memo MUST key on the resolved data dir
  *     (NOT a single global slot) so that (a) AC2 holds within a process and (b) each
  *     hermetic test with a fresh $SIL_DATA_DIR re-arms the gate — the whole suite below
  *     depends on this, since with pool:'forks' + isolate all tests in this file share the
@@ -208,16 +211,28 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  // Defensive: restore perms an AC6-style test may have dropped, so teardown succeeds.
-  try {
-    chmodSync(shopperDir(), 0o700);
-  } catch {
-    /* dir may not exist */
+  // Defensive: restore perms an AC6-style or I/O-gap test may have dropped on the shopper
+  // subtree OR the data-dir root, so the temp-dir teardown never EACCESes.
+  for (const p of [dataDir, shopperDir()]) {
+    try {
+      chmodSync(p, 0o700);
+    } catch {
+      /* dir may not exist */
+    }
   }
   if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
   else process.env["SIL_DATA_DIR"] = priorSilDataDir;
   rmSync(dataDir, { recursive: true, force: true });
 });
+
+/** The args of every `api.logger.info(event, payload)` call recorded by the mock logger. */
+function infoCalls(): unknown[][] {
+  return (api.logger.info as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+}
+/** Just the structured success-observability breadcrumbs. */
+function migratedLogs(): unknown[][] {
+  return infoCalls().filter((c) => c[0] === "sil_store_migrated");
+}
 
 // ===========================================================================
 // Heal-before-serve / on-load gate — the migration runs on the first store-path
@@ -516,4 +531,107 @@ describe("AC8 — a fresh/empty store is never conjured into a shopper", () => {
     expect(readFileSync(join(shopperDir(), "user_spec.md"), "utf8")).toBe(userSpecBefore);
     expect(existsSync(join(dataDir, BACKUP_DIR))).toBe(false);
   });
+});
+
+// ===========================================================================
+// P2 (review round 1) — success-observability breadcrumb. A SUCCESSFUL on-load
+// migration mutates the shopper's on-disk identity destructively (deletes profile.json,
+// rewrites user_spec.md, folds each domain triple into method.md). "Silent on success"
+// is agent-facing — the operator STILL needs one structured breadcrumb that a
+// destructive migration ran (the exact datum incident-#2 debugging lacked). The tool
+// boundary emits `sil_store_migrated { from, to, applied_count, domain_count }` ONCE when
+// a transform actually ran (applied.length > 0) — the runner stays logger-free.
+// ===========================================================================
+describe("P2 — success-observability: a destructive heal emits ONE sil_store_migrated breadcrumb", () => {
+  it("logs sil_store_migrated { from, to, applied_count, domain_count } once on the heal, and NEVER again on a memoized touch", async () => {
+    seedLegacyStore({ domains: [SKI, ESPRESSO] });
+
+    await getTool(api, SEARCH).execute("obs1", {});
+
+    const logs = migratedLogs();
+    expect(logs).toHaveLength(1);
+    // applied_count (1 real migration ran) and domain_count (2 domains folded) are DISTINCT —
+    // the breadcrumb must not conflate them. from=0 (legacy) → to=CURRENT.
+    expect(logs[0]![1]).toMatchObject({
+      from: 0,
+      to: CURRENT_STORE_VERSION,
+      applied_count: 1,
+      domain_count: 2,
+    });
+
+    // Silent for every SUBSEQUENT touch: the memoized gate never re-logs the (already-run)
+    // destructive migration — a second touch adds no breadcrumb.
+    await getTool(api, SEARCH).execute("obs2", {});
+    expect(migratedLogs()).toHaveLength(1);
+  });
+
+  it("emits the breadcrumb regardless of WHICH gated tool triggers the heal (sil_profile_get as first touch)", async () => {
+    seedLegacyStore({ domains: [SKI, ESPRESSO] });
+
+    // A non-search first touch must ALSO record that a destructive migration ran — the
+    // incident-#2 observability gap exists for every store-path entry point, not just search.
+    await getTool(api, GET).execute("obs3", { domainSlug: "ski" });
+
+    const logs = migratedLogs();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]![1]).toMatchObject({ from: 0, to: CURRENT_STORE_VERSION, applied_count: 1, domain_count: 2 });
+  });
+
+  it("an already-current store emits NO breadcrumb (nothing destructive ran)", async () => {
+    await getTool(api, MATERIALIZE).execute("obs4", { name: "sil shopper", userSpec: "# person\n- x\n" });
+    writeFileSync(join(dataDir, MARKER), JSON.stringify({ version: CURRENT_STORE_VERSION }), { mode: 0o600 });
+
+    await getTool(api, SEARCH).execute("obs5", {});
+
+    expect(migratedLogs()).toHaveLength(0);
+  });
+
+  it("a store only STAMPED (already-new-format, no transform applied) emits NO breadcrumb — the log keys on applied>0, not on a marker change", async () => {
+    // A 0.4.x store created before the framework: new-format, no marker, no profile.json. The
+    // gate STAMPS the version (0 → current) but applies NO migration ⇒ no destructive change
+    // ⇒ no breadcrumb, even though the recorded version advanced.
+    await getTool(api, MATERIALIZE).execute("obs6", { name: "sil shopper", userSpec: "# person\n- NEW-FORMAT\n" });
+    expect(existsSync(join(dataDir, MARKER))).toBe(false);
+
+    await getTool(api, SEARCH).execute("obs7", {});
+
+    expect(readStoreVersion(dataDir)).toBe(CURRENT_STORE_VERSION); // stamped
+    expect(migratedLogs()).toHaveLength(0); // but NOT "migrated"
+  });
+});
+
+// ===========================================================================
+// P2 (review round 1) — the on-load gate must never let a runner I/O failure escape as
+// an UNHANDLED throw out of a gated tool. Business rule 3: EVERY failure surfaces a
+// structured status + recovery hint. Real-fs fault injection: a read-only data-dir root
+// makes the runner's createBackup (mkdir .sil-migration-backup at root) EACCES before
+// apply — an unguarded runner raw-throws through execute(); the fix maps it to the
+// migration_failed envelope. Skipped as root (root bypasses the permission bits).
+// ===========================================================================
+describe("P2 — the on-load gate surfaces migration_failed (never a raw crash) on a runner I/O failure", () => {
+  it.skipIf(AS_ROOT)(
+    "createBackup cannot snapshot (read-only data-dir root) ⇒ the tool returns a structured migration_failed, not an unhandled throw",
+    async () => {
+      seedLegacyStore();
+      // Read-only data-dir ROOT: Migration #1 detects the legacy store, but createBackup
+      // EACCESes before apply. The gated primitive must surface the structured envelope.
+      chmodSync(dataDir, 0o500);
+
+      let payload: Record<string, unknown>;
+      try {
+        payload = payloadOf(await getTool(api, SEARCH).execute("iogap", {}));
+      } finally {
+        chmodSync(dataDir, 0o700);
+      }
+
+      expect(payload["status"]).toBe("migration_failed");
+      // createBackup fails before apply ⇒ the store was never mutated ⇒ safely at prior state.
+      expect(payload["reverted"]).toBe(true);
+      expect(typeof payload["recovery"]).toBe("string");
+      expect((payload["recovery"] as string).length).toBeGreaterThan(0);
+      // The version was not advanced and the legacy signature is untouched (honest prior state).
+      expect(readStoreVersion(dataDir)).toBe(0);
+      expect(existsSync(join(shopperDir(), "profile.json"))).toBe(true);
+    },
+  );
 });
