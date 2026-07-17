@@ -41,6 +41,11 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
 import {
+  buildCreationEntrypointFinding,
+  probeCreationEntrypoint,
+  resolveCreationEntrypoint,
+} from "../lib/creation-entrypoint.js";
+import {
   DIR_MODE,
   getConfigPath,
   getDataDir,
@@ -95,6 +100,14 @@ export interface DoctorReport {
   /** Report CONTEXT, not a finding: WHICH install is being diagnosed. Local, so
    * never conditional on the probe. */
   installedVersion: string;
+  /** The absolute shopper-creation entrypoint — a path, never a secret, and the
+   * datum the creation flow is documented to RUN. It rides the report rather
+   * than a finding string because a finding is six flat fields of prose: an
+   * agent would have to regex a path out of it at the payoff moment. The
+   * VERDICT on this path is an ordinary finding (`creation.entrypoint_present`);
+   * this is the datum. Reported unconditionally — a path we cannot reach is
+   * still the path we mean, and suppressing it would hide the diagnosis. */
+  creationEntrypoint: string;
   counts: { info: number; warn: number; critical: number };
   findings: Finding[];
 }
@@ -139,6 +152,15 @@ export function registerDoctorTools(
       const compat = buildGatewayCompatFinding(readHostVersion(api));
       if (compat !== null) findings.push(compat);
 
+      // The creation entrypoint: resolved ONCE, then both reported and probed —
+      // so the path the report hands the agent to run is, by construction, the
+      // path the verdict is about. A local stat, so it still answers offline.
+      const creationEntrypoint = resolveCreationEntrypoint();
+      findings.push(buildCreationEntrypointFinding(
+        creationEntrypoint,
+        probeCreationEntrypoint(creationEntrypoint),
+      ));
+
       const installedVersion = readInstalledVersion();
       const behind = buildVersionBehindFinding(
         installedVersion,
@@ -146,7 +168,12 @@ export function registerDoctorTools(
       );
       if (behind !== null) findings.push(behind);
 
-      return jsonResult(buildDoctorReport({ dataDir, installedVersion, findings }));
+      return jsonResult(buildDoctorReport({
+        dataDir,
+        installedVersion,
+        creationEntrypoint,
+        findings,
+      }));
     },
   });
 }
@@ -156,9 +183,10 @@ export function registerDoctorTools(
 export function buildDoctorReport(input: {
   dataDir: string;
   installedVersion: string;
+  creationEntrypoint: string;
   findings: Finding[];
 }): DoctorReport {
-  const { dataDir, installedVersion, findings } = input;
+  const { dataDir, installedVersion, creationEntrypoint, findings } = input;
   const sorted = sortFindings(findings);
   const counts = { info: 0, warn: 0, critical: 0 };
   for (const f of sorted) counts[f.severity] += 1;
@@ -167,6 +195,7 @@ export function buildDoctorReport(input: {
     healthy: counts.warn === 0 && counts.critical === 0,
     dataDir,
     installedVersion,
+    creationEntrypoint,
     counts,
     findings: sorted,
   };

@@ -30,6 +30,7 @@ import { fileURLToPath } from "node:url";
 
 import type { PluginAPI } from "openclaw/plugin-sdk";
 
+import { resolveAllowlistScript } from "./creation-entrypoint.js";
 import type { Finding } from "./findings.js";
 
 /** The shipped manifest, resolved relative to this module — two levels up from
@@ -281,10 +282,16 @@ function buildToolsNotAdmittedFinding(
     // overwrite-only on 2026.6.9, so following such a "fix" would silently
     // un-admit every other plugin already in the array. A fix that breaks klodi
     // to fix sil is not a fix — and the user would discover it later, in a
-    // different plugin, with no trail back to us. The shipped bin is additive
+    // different plugin, with no trail back to us. The shipped script is additive
     // and idempotent across all three trust surfaces.
+    //
+    // By absolute path via `node`, NEVER the bare `sil-openclaw-allowlist` name:
+    // that name reaches PATH only through a global npm-style install's bin
+    // linking, which the plugin-install channel does not do. An operator who is
+    // already broken, follows this advice, and gets "command not found" learns
+    // that the doctor cannot be trusted.
     suggestedAction:
-      `Run the shipped \`sil-openclaw-allowlist\` bin — it admits "${facts.id}"`
+      `Run \`node "${resolveAllowlistScript()}"\` — it admits "${facts.id}"`
       + ` additively, preserving every other trusted plugin — then reload`
       + ` OpenClaw. The edit takes effect on the next reload, and sil never`
       + ` writes host config or reloads the gateway itself.`,

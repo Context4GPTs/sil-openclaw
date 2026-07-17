@@ -34,9 +34,13 @@ it knows, view or forget a domain, refine it.
 
 ## Session start
 
-Confirm the `sil_*` tools are exposed. If missing, the host is filtering them —
-run the shipped admission helper `sil-openclaw-allowlist` (it additively admits
-sil at `plugins.allow` + `tools.alsoAllow`), then reopen the session. Most flows
+Confirm the `sil_*` tools are exposed. If missing, the host is filtering them — the
+shipped admission helper repairs it (additively admitting sil at `plugins.allow` +
+`tools.alsoAllow`), then reopen the session. If `sil_doctor` still runs, its
+`wiring.tools_not_admitted` finding names the exact command: a `node "<absolute
+path>"` invocation, never a bare bin name (that name is on PATH only for some
+installs). If no sil tool runs at all, this is an operator fix — run
+`node scripts/allowlist-openclaw.mjs` from the sil plugin's install directory. Most flows
 need an identity: call a catalog tool first and let an unregistered outcome route
 to `sil_register`, or run `sil_register` up front when intent requires it.
 

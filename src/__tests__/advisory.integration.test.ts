@@ -660,7 +660,14 @@ describe("AC13 — register() is the only live surface when sil's tools are filt
 
     const emitted = JSON.stringify(vi.mocked(api.logger.warn).mock.calls[0]);
     expect(emitted).toContain(TOOLS_NOT_ADMITTED);
-    expect(emitted).toContain("sil-openclaw-allowlist");
+    // DELIBERATELY STRENGTHENED by card `creation-bin-unreachable-on-clawhub-installs`
+    // (founder ruling 2). This read `toContain("sil-openclaw-allowlist")`, which stays
+    // green on BOTH the old bare-bin advice and the new runnable form — so it would
+    // have silently certified advice this very operator cannot run. They are the last
+    // reader left (the drift that filters sil's tools filters sil_doctor too), so the
+    // fix they are handed must be executable as printed.
+    expect(emitted).toMatch(/node\s+.{0,4}\/[^"'`\s\\]*\/scripts\/allowlist-openclaw\.mjs/);
+    expect(emitted).not.toContain("sil-openclaw-allowlist");
     expect(emitted.toLowerCase()).not.toContain("config set");
   });
 
@@ -887,7 +894,19 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     // is that the plugin can't be its own installer and doesn't try. A source scan
     // is the honest guard for "this code CANNOT do X", rather than "it happened not
     // to today".
-    for (const file of ["src/lib/host-wiring.ts", "src/lib/version-advisory.ts"]) {
+    //
+    // ⚠️ THIS LIST IS A WHITELIST, NOT A SWEEP. A module absent from it is invisible
+    // to this guard — SILENTLY, with a green suite. That is worse than a red: the
+    // module ships unguarded on the posture the manifest declares. ADD EVERY NEW
+    // audit-scope module here (add-only). `creation-entrypoint.ts` was added by card
+    // `creation-bin-unreachable-on-clawhub-installs` (AC D2): it resolves and probes
+    // the creation script's path, and the ONE thing it must never do is RUN it —
+    // naming a path is not spawning it, which is what keeps `noChildProcess` true.
+    for (const file of [
+      "src/lib/host-wiring.ts",
+      "src/lib/version-advisory.ts",
+      "src/lib/creation-entrypoint.ts",
+    ]) {
       const source = readFileSync(join(REPO_ROOT, file), "utf8");
       for (const forbidden of [
         "child_process",
@@ -900,6 +919,50 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
         expect(source, `${file} must not reference ${forbidden}`).not.toContain(forbidden);
       }
     }
+  });
+
+  it("AC D1 — NO plugin source module reaches for a child process (a SWEEP, not a whitelist)", () => {
+    // The manifest declares `security.noChildProcess: true`, and this card's Out of
+    // scope exists to protect it: creation stays a separate operator script, and
+    // `sil_doctor` REPORTS the path rather than spawning it. Naming a path is not
+    // running it.
+    //
+    // Deliberately a SWEEP over every source file tsc compiles into `dist/` — the
+    // whitelist above cannot carry this claim, because a module absent from that list
+    // is invisible to it SILENTLY. This one has no list to forget: a new module is
+    // covered the moment it exists. (It is scoped to `child_process` alone precisely
+    // because the other five literals are NOT plugin-wide invariants — `credentials.ts`
+    // legitimately resolves `homedir` for the data dir, which is why that list is
+    // hand-maintained and this one is not.)
+    //
+    // Source, not `dist/`: `dist/` is derived from exactly these files by `tsc`, which
+    // injects no imports, and a scan of a possibly-stale `dist/` would certify the
+    // wrong bytes. `.mjs` operator scripts under `scripts/` are OUT of scope by design
+    // — they are separate processes, not the plugin, which is the whole architecture
+    // the audit line protects.
+    const sources: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== "__tests__") walk(path);
+        } else if (entry.name.endsWith(".ts")) {
+          sources.push(path);
+        }
+      }
+    };
+    walk(join(REPO_ROOT, "src"));
+
+    // Anti-vacuity: a walk that found nothing would pass this test forever.
+    expect(sources.length).toBeGreaterThan(10);
+    expect(sources.some((p) => p.endsWith("creation-entrypoint.ts"))).toBe(true);
+
+    const offenders = sources.filter((path) =>
+      /child_process|\bexecSync\b|\bspawnSync\b|\bexecFileSync\b|\bspawn\(/.test(
+        readFileSync(path, "utf8"),
+      ),
+    );
+    expect(offenders.map((p) => relative(REPO_ROOT, p))).toEqual([]);
   });
 });
 
@@ -959,10 +1022,22 @@ describe("AC11 — six flat fields, folded into the doctor's existing determinis
     for (const i of ourIndices) expect(i).toBeLessThan(firstInfo);
   });
 
-  it("sil_doctor's report SHAPE is unchanged — this card adds no report key", async () => {
+  it("sil_doctor's report carries EXACTLY the seven top-level keys — no extras", async () => {
+    // A SECOND exact-set mirror of the report shape (the first is
+    // `REPORT_KEYS` in `tools/doctor.test.ts`) — this one over the REAL `execute()`
+    // rather than the pure assembler, so it also proves the tool actually threads
+    // the field through. Both are `toEqual`, never a subset: an exact set is what
+    // catches drift in BOTH directions.
+    //
+    // Bumped ADD-ONLY by card `creation-bin-unreachable-on-clawhub-installs`, which
+    // adds `creationEntrypoint`. This test's previous title claimed "this card adds
+    // no report key" — true of #67, which wrote it, and false now. A key change
+    // bites HERE as well as in `tools/doctor.test.ts` and (silently, since a
+    // structural cast tolerates extras) `doctor.integration.test.ts`'s local mirror.
     const report = await runDoctor(allDriftConfig(), HOST_TOO_OLD);
     expect(Object.keys(report).sort()).toEqual([
       "counts",
+      "creationEntrypoint",
       "dataDir",
       "findings",
       "healthy",

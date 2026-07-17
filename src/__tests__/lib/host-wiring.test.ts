@@ -69,6 +69,7 @@ import {
   readHostVersion,
   type SilWiringFacts,
 } from "../../lib/host-wiring.js";
+import { resolveAllowlistScript } from "../../lib/creation-entrypoint.js";
 import { createMockPluginApi } from "../helpers/mock-plugin-api.js";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -266,12 +267,33 @@ describe("detectWiringDrift — tools not admitted: the half-trust state (AC8/AC
     ]);
   });
 
-  it("AC4 — `suggestedAction` names the shipped `sil-openclaw-allowlist` bin", () => {
-    // The bin is additive + idempotent across all three trust surfaces. It is the
-    // ONLY fix we may name.
+  it("AC4 — `suggestedAction` names the allowlist script by ABSOLUTE PATH, via node", () => {
+    // The additive, idempotent trust merge is still the ONLY fix we may name — but
+    // it must be named in a form the reader can actually RUN.
+    //
+    // DELIBERATELY STRENGTHENED by card `creation-bin-unreachable-on-clawhub-installs`
+    // (founder ruling 2). This assertion previously read
+    // `toContain("sil-openclaw-allowlist")`, which is INSENSITIVE to the very defect
+    // that card fixes: it passes on the old, unrunnable bare-bin advice, so it would
+    // have silently certified stale advice forever. `openclaw plugins install` links
+    // no bins, so that name reaches PATH only through a global npm-style install —
+    // an operator who is already broken, follows doctor's advice, and gets "command
+    // not found" learns that sil_doctor cannot be trusted.
     const finding = only({ ...healthy(), tools: { alsoAllow: ["klodi"] } }, TOOLS_NOT_ADMITTED);
     expect(finding.suggestedAction).not.toBeNull();
-    expect(finding.suggestedAction!).toContain("sil-openclaw-allowlist");
+    const fix = finding.suggestedAction!;
+    // The runnable form: `node "<absolute>/scripts/allowlist-openclaw.mjs"`.
+    expect(fix).toMatch(/node\s+["'`]*\/[^"'`\s]*\/scripts\/allowlist-openclaw\.mjs/);
+    expect(fix).toContain(resolveAllowlistScript());
+  });
+
+  it("AC4 — `suggestedAction` NEVER names the bare `sil-openclaw-allowlist` bin", () => {
+    // The bin entry survives in package.json#bin for npm-global operators, but it is
+    // no longer the advice: on the plugin-install channel it does not exist. Not even
+    // as a parenthetical — a model or a hurried operator lifts the shortest thing
+    // that looks like a command.
+    const finding = only({ ...healthy(), tools: { alsoAllow: ["klodi"] } }, TOOLS_NOT_ADMITTED);
+    expect(finding.suggestedAction!).not.toContain("sil-openclaw-allowlist");
   });
 
   it("AC4 — `suggestedAction` NEVER names an inline `openclaw config set` (it would clobber klodi)", () => {
