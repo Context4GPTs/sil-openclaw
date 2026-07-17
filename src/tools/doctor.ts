@@ -32,6 +32,7 @@ import {
   statSync,
   unlinkSync,
   writeFileSync,
+  type Stats,
 } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { join, relative } from "node:path";
@@ -75,7 +76,11 @@ const STALE_TMP_RE = /\.[0-9a-f]+\.tmp$/;
 const REREGISTER_HINT = "Run `sil_register` to re-register this install.";
 
 export interface DoctorReport {
-  /** The CALL always succeeds — the doctor is report-first and never throws. */
+  /** Always `"ok"`: a failed CHECK is a finding, never a failed call — the
+   * diagnosis IS the payload, so the sicker the install, the more this tool has
+   * to say. The lone exception is a corrupt install, where
+   * `readInstalledVersion()` throws rather than report on a build that cannot be
+   * identified. */
   status: "ok";
   /** No finding severity above `info`. */
   healthy: boolean;
@@ -173,7 +178,7 @@ function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean }
           detected: `The sil data directory ${dataDir} was missing.`,
           suggestedAction: null,
           appliedAction: `Created ${dataDir} (mode 0700).`,
-        }],
+        }, checkDataDirMode(dataDir)],
         usable: true,
       };
     } catch (err) {
@@ -232,7 +237,7 @@ function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean }
           `Make ${dataDir} writable by its owner (mode 0700), or point`
           + " $SIL_DATA_DIR at a writable directory.",
         appliedAction: null,
-      }],
+      }, checkDataDirMode(dataDir)],
       // The dir is readable, so the remaining checks still diagnose usefully —
       // they just may not be able to fix anything.
       usable: true,
@@ -247,8 +252,49 @@ function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean }
       detected: `The sil data directory ${dataDir} is present and writable.`,
       suggestedAction: null,
       appliedAction: null,
-    }],
+    }, checkDataDirMode(dataDir)],
     usable: true,
+  };
+}
+
+/**
+ * The data dir's OWN mode — the highest-value dir check in the tool, because this
+ * is the container holding `tokens.json`. Nothing else covers it: the enumerated
+ * walk only ever checks the *entries* it reads out of this dir, and `mkdirSync`
+ * on an ALREADY-EXISTING dir is a no-op that never chmods — so a pre-existing
+ * 0755 dir (an untarred backup, an older install's umask, another tool's mkdir)
+ * would otherwise survive forever behind a `healthy: true`.
+ *
+ * A singleton, like `fs.data_dir_writable`: one fixed path with a lifecycle, so
+ * it carries a stable id and reports `ok` when healthy — `fixed → re-run → ok`.
+ *
+ * `stat`, NOT `lstat` — deliberately the opposite of the walk. Inside the data
+ * dir sil never creates symlinks, so an entry symlink is reported, never
+ * chmod'd-through. The ROOT is different: `$SIL_DATA_DIR` pointing at a symlinked
+ * directory is a legitimate operator setup, and a symlink's own mode is always
+ * 0777 on Linux — `lstat` here would read 0777, tighten, have `chmod` FOLLOW the
+ * link to the target, then read 0777 again next run and re-report `fixed`
+ * forever. `stat` makes detect and fix agree on the same inode.
+ */
+function checkDataDirMode(dataDir: string): Finding {
+  const id = "fs.data_dir_mode";
+  const mode = statSync(dataDir).mode & 0o777;
+  return tightenMode({
+    id,
+    path: dataDir,
+    mode,
+    expected: DIR_MODE,
+    detected:
+      `The sil data directory ${dataDir} is mode ${oct(mode)} — readable beyond`
+      + " its owner. It holds this install's stored credentials and behaviour"
+      + ` artefacts, so it must be owner-only ${oct(DIR_MODE)}.`,
+  }) ?? {
+    id,
+    severity: "info",
+    status: "ok",
+    detected: `The sil data directory ${dataDir} is owner-only (mode ${oct(mode)}).`,
+    suggestedAction: null,
+    appliedAction: null,
   };
 }
 
@@ -289,7 +335,16 @@ function walkDataDir(dataDir: string): Finding[] {
 
     for (const entry of entries.sort()) {
       const path = join(dir, entry);
-      const stats = lstatSync(path);
+      let stats: Stats;
+      try {
+        stats = lstatSync(path);
+      } catch {
+        // This repo MANUFACTURES this race: the store's own atomic writes create
+        // `<path>.<hex>.tmp` and rename it away, and the shopper can be writing
+        // while the agent self-diagnoses. An entry that vanished between readdir
+        // and lstat is not a finding — and must never throw out of execute().
+        continue;
+      }
 
       if (stats.isSymbolicLink()) {
         findings.push({
@@ -341,12 +396,54 @@ function walkDataDir(dataDir: string): Finding[] {
 }
 
 /**
+ * The tighten-only mode fix — the one place the invariant lives, for all three
+ * mode checks (enumerated walk, tokens.json, the data dir itself).
+ *
  * Too-open means bits set OUTSIDE the expected mask — not merely `!== expected`.
- * That distinction is the tighten-only invariant: a stricter mode (0400 file,
- * 0500 dir) is not a problem, and "fixing" it to 0600/0700 would WIDEN it, which
- * is a security regression dressed up as a fix. The fix is `mode & expected`,
- * which can only ever CLEAR bits.
+ * That distinction IS the invariant: a stricter mode (0400 file, 0500 dir) is not
+ * a problem, and "fixing" it to 0600/0700 would WIDEN it — a security regression
+ * dressed up as a fix. The fix is `mode & expected`, which can only ever CLEAR
+ * bits.
+ *
+ * `null` = already within the mask. The caller decides what that silence means:
+ * an enumerated check emits nothing, a singleton emits its stable `ok`.
  */
+function tightenMode(input: {
+  id: string;
+  path: string;
+  /** Already masked to 0o777 — the caller needs it to write `detected` anyway. */
+  mode: number;
+  expected: number;
+  detected: string;
+}): Finding | null {
+  const { id, path, mode, expected, detected } = input;
+  if ((mode & ~expected & 0o777) === 0) return null;
+
+  const tightened = mode & expected;
+  try {
+    chmodSync(path, tightened);
+    return {
+      id,
+      severity: "warn",
+      status: "fixed",
+      detected,
+      suggestedAction: null,
+      appliedAction: `Tightened ${path} from ${oct(mode)} to ${oct(tightened)}.`,
+    };
+  } catch (err) {
+    // An un-applied fix is NEVER green-washed as `fixed`.
+    return {
+      id,
+      severity: "warn",
+      status: "fix_failed",
+      detected: `${detected} Tightening it failed: ${causeOf(err)}`,
+      suggestedAction: `Run \`chmod ${oct(tightened)} ${path}\` yourself.`,
+      appliedAction: null,
+    };
+  }
+}
+
+/** Enumerated ⇒ silence when healthy: 200 clean artefacts emit zero findings. */
 function checkMode(
   dataDir: string,
   path: string,
@@ -354,34 +451,16 @@ function checkMode(
   expected: number,
 ): Finding[] {
   const mode = rawMode & 0o777;
-  if ((mode & ~expected & 0o777) === 0) return [];
-
-  const id = `fs.mode:${rel(dataDir, path)}`;
-  const tightened = mode & expected;
-  const detected =
-    `${path} is mode ${oct(mode)}, which is more permissive than the`
-    + ` owner-only ${oct(expected)} sil requires.`;
-  try {
-    chmodSync(path, tightened);
-    return [{
-      id,
-      severity: "warn",
-      status: "fixed",
-      detected,
-      suggestedAction: null,
-      appliedAction: `Tightened ${path} from ${oct(mode)} to ${oct(tightened)}.`,
-    }];
-  } catch (err) {
-    // An un-applied fix is NEVER green-washed as `fixed`.
-    return [{
-      id,
-      severity: "warn",
-      status: "fix_failed",
-      detected: `${detected} Tightening it failed: ${causeOf(err)}`,
-      suggestedAction: `Run \`chmod ${oct(tightened)} ${path}\` yourself.`,
-      appliedAction: null,
-    }];
-  }
+  const finding = tightenMode({
+    id: `fs.mode:${rel(dataDir, path)}`,
+    path,
+    mode,
+    expected,
+    detected:
+      `${path} is mode ${oct(mode)}, which is more permissive than the`
+      + ` owner-only ${oct(expected)} sil requires.`,
+  });
+  return finding === null ? [] : [finding];
 }
 
 // ===========================================================================
@@ -459,45 +538,25 @@ function checkIdentity(): Finding[] {
  * tighten-only rule, same fix, but it reports `ok` when healthy so the
  * `fixed → re-run → ok` transition stays observable on one id. */
 function checkTokensPerms(tokensPath: string): Finding[] {
-  const mode = lstatSync(tokensPath).mode & 0o777;
   const id = "identity.tokens_perms";
-
-  if ((mode & ~FILE_MODE & 0o777) === 0) {
-    return [{
-      id,
-      severity: "info",
-      status: "ok",
-      detected: `${tokensPath} is owner-only (mode ${oct(mode)}).`,
-      suggestedAction: null,
-      appliedAction: null,
-    }];
-  }
-
-  const tightened = mode & FILE_MODE;
-  const detected =
-    `${tokensPath} is mode ${oct(mode)} — readable beyond its owner. Stored`
-    + " credentials must be owner-only.";
-  try {
-    chmodSync(tokensPath, tightened);
-    return [{
-      id,
-      severity: "warn",
-      status: "fixed",
-      detected,
-      suggestedAction: null,
-      appliedAction:
-        `Tightened ${tokensPath} from ${oct(mode)} to ${oct(tightened)}.`,
-    }];
-  } catch (err) {
-    return [{
-      id,
-      severity: "warn",
-      status: "fix_failed",
-      detected: `${detected} Tightening it failed: ${causeOf(err)}`,
-      suggestedAction: `Run \`chmod ${oct(tightened)} ${tokensPath}\` yourself.`,
-      appliedAction: null,
-    }];
-  }
+  const mode = lstatSync(tokensPath).mode & 0o777;
+  const tightened = tightenMode({
+    id,
+    path: tokensPath,
+    mode,
+    expected: FILE_MODE,
+    detected:
+      `${tokensPath} is mode ${oct(mode)} — readable beyond its owner. Stored`
+      + " credentials must be owner-only.",
+  });
+  return [tightened ?? {
+    id,
+    severity: "info",
+    status: "ok",
+    detected: `${tokensPath} is owner-only (mode ${oct(mode)}).`,
+    suggestedAction: null,
+    appliedAction: null,
+  }];
 }
 
 /**
