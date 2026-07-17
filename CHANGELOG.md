@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-07-17
+
 ### Added
 
 - **`sil_doctor` — a report-first diagnostic over `$SIL_DATA_DIR`.** It reads the
