@@ -1,0 +1,614 @@
+/**
+ * `sil_doctor` — report-first diagnosis of the plugin's `$SIL_DATA_DIR`-scoped
+ * state.
+ *
+ * The product is the findings array, not the fixes: a run that fixes nothing is
+ * a complete, successful run. Mutation is a bounded side-effect — the ONLY
+ * writes are the two safe auto-fixes (tighten a too-open mode, create the
+ * missing data dir), both under `getDataDir()`. Destructive fixes (anything that
+ * mutates the BYTES of an existing artefact, including clearing a corrupt
+ * `tokens.json`) are surfaced as `needs_confirmation` and never run: delete-first
+ * does not apply to user data.
+ *
+ * Every diagnosis is derived from local state and completes with the network
+ * down — a doctor is needed MOST when things are broken, and "broken" often
+ * includes the network. The one outbound request is the latest-version probe
+ * (bounded + fail-soft to silence); no sil-api/sil-web call, and NO token
+ * rotation — a diagnosis must have no auth side-effects.
+ *
+ * `register()` opens nothing: the probe lives inside `execute()` like every
+ * other I/O.
+ *
+ * No finding field may ever carry token bytes, a JWT claim value, or user PII.
+ * Token health is metadata only: present / mode / parses / expired.
+ */
+
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { randomBytes } from "node:crypto";
+import { join, relative } from "node:path";
+
+import type { PluginAPI } from "openclaw/plugin-sdk";
+import { Type } from "typebox";
+
+import {
+  DIR_MODE,
+  getConfigPath,
+  getDataDir,
+  getTokensPath,
+  hasTokens,
+  readConfig,
+  readTokens,
+} from "../lib/credentials.js";
+import { sortFindings, type Finding, type Severity } from "../lib/findings.js";
+import {
+  readShopperIdentity,
+  searchProfileFrontmatter,
+} from "../lib/profile-store.js";
+import { jsonResult } from "../lib/tool-result.js";
+import {
+  buildVersionBehindFinding,
+  probeLatestVersion,
+  readInstalledVersion,
+  type FetchLike,
+} from "../lib/version-advisory.js";
+
+/** Owner-only file mode. `DIR_MODE` (0o700) is owned by `credentials.ts` and
+ * imported; the file mode is private per-module there and in `profile-store.ts`,
+ * so this mirrors that pattern rather than exporting a fourth copy. */
+const FILE_MODE = 0o600;
+
+/** An interrupted atomic write leaves `<path>.<12 hex>.tmp` behind
+ * (`profile-store.ts`'s tmp → rename). Bytes on disk ⇒ surfaced, never deleted. */
+const STALE_TMP_RE = /\.[0-9a-f]{12}\.tmp$/;
+
+const REREGISTER_HINT = "Run `sil_register` to re-register this install.";
+
+export interface DoctorReport {
+  /** The CALL always succeeds — the doctor is report-first and never throws. */
+  status: "ok";
+  /** No finding severity above `info`. */
+  healthy: boolean;
+  /** Resolved `$SIL_DATA_DIR` — a path, never a secret. */
+  dataDir: string;
+  /** Report CONTEXT, not a finding: WHICH install is being diagnosed. Local, so
+   * never conditional on the probe. */
+  installedVersion: string;
+  counts: { info: number; warn: number; critical: number };
+  findings: Finding[];
+}
+
+export function registerDoctorTools(
+  api: PluginAPI,
+  // The probe's seam. Defaulted to global `fetch`, so production wiring is a
+  // bare `registerDoctorTools(api)`; a test drives up-to-date / newer /
+  // erroring / STALLING channels through it without a live network.
+  fetchImpl: FetchLike = fetch,
+): void {
+  api.registerTool({
+    name: "sil_doctor",
+    label: "Diagnose sil",
+    description:
+      "Diagnose this sil install: check the local data directory, file"
+      + " permissions, stored identity/token health, and behaviour artefacts,"
+      + " and report whether a newer sil plugin is published. Returns a"
+      + " machine-readable findings array. Safe permission fixes apply"
+      + " automatically; anything that could lose data is only reported, never"
+      + " run. Never reads out or logs token contents, and never updates"
+      + " anything itself.",
+    parameters: Type.Object({}),
+    async execute() {
+      const dataDir = getDataDir();
+      const findings: Finding[] = [];
+
+      const dir = checkDataDir(dataDir);
+      findings.push(...dir.findings);
+      if (dir.usable) {
+        findings.push(...walkDataDir(dataDir));
+        findings.push(...checkStore());
+      }
+      findings.push(...checkIdentity());
+
+      const installedVersion = readInstalledVersion();
+      const behind = buildVersionBehindFinding(
+        installedVersion,
+        await probeLatestVersion(fetchImpl),
+      );
+      if (behind !== null) findings.push(behind);
+
+      return jsonResult(buildReport(findings, dataDir, installedVersion));
+    },
+  });
+}
+
+/** Roll-ups the consumer would otherwise re-derive, over a deterministic order. */
+export function buildReport(
+  findings: Finding[],
+  dataDir: string,
+  installedVersion: string,
+): DoctorReport {
+  const sorted = sortFindings(findings);
+  const counts = { info: 0, warn: 0, critical: 0 };
+  for (const f of sorted) counts[f.severity] += 1;
+  return {
+    status: "ok",
+    healthy: counts.warn === 0 && counts.critical === 0,
+    dataDir,
+    installedVersion,
+    counts,
+    findings: sorted,
+  };
+}
+
+// ===========================================================================
+// Filesystem hygiene
+// ===========================================================================
+
+/** The data dir gates every other filesystem check: an unwritable or
+ * non-directory home means no artefact and no token can EVER persist. */
+function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean } {
+  const id = "fs.data_dir_writable";
+
+  if (!existsSync(dataDir)) {
+    // Creating a missing container dir is safe: idempotent, loses nothing.
+    try {
+      mkdirSync(dataDir, { recursive: true, mode: DIR_MODE });
+      return {
+        findings: [{
+          id,
+          severity: "info",
+          status: "fixed",
+          detected: `The sil data directory ${dataDir} was missing.`,
+          suggestedAction: null,
+          appliedAction: `Created ${dataDir} (mode 0700).`,
+        }],
+        usable: true,
+      };
+    } catch (err) {
+      return {
+        findings: [{
+          id,
+          severity: "critical",
+          status: "fix_failed",
+          detected:
+            `The sil data directory ${dataDir} is missing and could not be`
+            + ` created: ${causeOf(err)}`,
+          suggestedAction:
+            `Create ${dataDir} yourself (owner-only, mode 0700), or point`
+            + " $SIL_DATA_DIR at a writable location.",
+          appliedAction: null,
+        }],
+        usable: false,
+      };
+    }
+  }
+
+  if (!statSync(dataDir).isDirectory()) {
+    return {
+      findings: [{
+        id,
+        severity: "critical",
+        status: "advisory",
+        detected:
+          `The sil data directory path ${dataDir} exists but is not a`
+          + " directory, so no token or artefact can be stored.",
+        suggestedAction:
+          `Move or remove the file at ${dataDir}, or point $SIL_DATA_DIR at a`
+          + " writable directory.",
+        appliedAction: null,
+      }],
+      usable: false,
+    };
+  }
+
+  // Prove writability the way the store actually writes — an atomic tmp file —
+  // rather than trusting the mode bits (a read-only mount passes a mode check).
+  const probe = join(dataDir, `.doctor.${randomBytes(6).toString("hex")}.tmp`);
+  try {
+    writeFileSync(probe, "", { mode: FILE_MODE });
+    unlinkSync(probe);
+  } catch (err) {
+    return {
+      findings: [{
+        id,
+        severity: "critical",
+        status: "advisory",
+        detected:
+          `The sil data directory ${dataDir} is not writable, so every token`
+          + ` and artefact write would fail: ${causeOf(err)}`,
+        suggestedAction:
+          `Make ${dataDir} writable by its owner (mode 0700), or point`
+          + " $SIL_DATA_DIR at a writable directory.",
+        appliedAction: null,
+      }],
+      // The dir is readable, so the remaining checks still diagnose usefully —
+      // they just may not be able to fix anything.
+      usable: true,
+    };
+  }
+
+  return {
+    findings: [{
+      id,
+      severity: "info",
+      status: "ok",
+      detected: `The sil data directory ${dataDir} is present and writable.`,
+      suggestedAction: null,
+      appliedAction: null,
+    }],
+    usable: true,
+  };
+}
+
+/**
+ * Walk `$SIL_DATA_DIR` for too-open modes and orphaned tmp files.
+ *
+ * Enumerated ⇒ emits ONLY on a problem: a healthy store with 200 artefacts
+ * yields zero findings, not 200 `ok` ones.
+ *
+ * `lstat`, never `stat`: a symlink under the data dir is REPORTED, never
+ * chmod'd-through — chmod follows the link and would mutate a file outside
+ * `$SIL_DATA_DIR`.
+ */
+function walkDataDir(dataDir: string): Finding[] {
+  const findings: Finding[] = [];
+
+  const visit = (dir: string): void => {
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch (err) {
+      findings.push({
+        id: `fs.unreadable_dir:${rel(dataDir, dir)}`,
+        severity: "warn",
+        status: "advisory",
+        detected: `Could not list ${dir}: ${causeOf(err)}`,
+        suggestedAction: "Check the directory's permissions and ownership.",
+        appliedAction: null,
+      });
+      return;
+    }
+
+    for (const entry of entries.sort()) {
+      const path = join(dir, entry);
+      const stats = lstatSync(path);
+
+      if (stats.isSymbolicLink()) {
+        findings.push({
+          id: `fs.symlink:${rel(dataDir, path)}`,
+          severity: "warn",
+          status: "advisory",
+          detected:
+            `${path} is a symlink. sil never creates symlinks under its data`
+            + " directory, and its permissions are neither audited nor fixed"
+            + " through it (a chmod would follow the link outside $SIL_DATA_DIR).",
+          suggestedAction:
+            "Replace the symlink with a real file or directory if sil should"
+            + " manage it.",
+          appliedAction: null,
+        });
+        continue;
+      }
+
+      if (stats.isDirectory()) {
+        findings.push(...checkMode(dataDir, path, stats.mode, DIR_MODE));
+        visit(path);
+        continue;
+      }
+
+      if (!stats.isFile()) continue;
+
+      findings.push(...checkMode(dataDir, path, stats.mode, FILE_MODE));
+      if (STALE_TMP_RE.test(entry)) {
+        findings.push({
+          id: `fs.stale_tmp:${rel(dataDir, path)}`,
+          severity: "warn",
+          status: "advisory",
+          detected:
+            `${path} is an orphaned temporary file left by an interrupted`
+            + " atomic write.",
+          // Bytes on disk ⇒ destructive to remove ⇒ the doctor only reports it.
+          suggestedAction:
+            "Safe to delete once you have confirmed nothing else is writing"
+            + " it — sil does not delete artefact bytes itself.",
+          appliedAction: null,
+        });
+      }
+    }
+  };
+
+  visit(dataDir);
+  return findings;
+}
+
+/**
+ * Too-open means bits set OUTSIDE the expected mask — not merely `!== expected`.
+ * That distinction is the tighten-only invariant: a stricter mode (0400 file,
+ * 0500 dir) is not a problem, and "fixing" it to 0600/0700 would WIDEN it, which
+ * is a security regression dressed up as a fix. The fix is `mode & expected`,
+ * which can only ever CLEAR bits.
+ */
+function checkMode(
+  dataDir: string,
+  path: string,
+  rawMode: number,
+  expected: number,
+): Finding[] {
+  const mode = rawMode & 0o777;
+  if ((mode & ~expected & 0o777) === 0) return [];
+
+  const id = `fs.mode:${rel(dataDir, path)}`;
+  const tightened = mode & expected;
+  const detected =
+    `${path} is mode ${oct(mode)}, which is more permissive than the`
+    + ` owner-only ${oct(expected)} sil requires.`;
+  try {
+    chmodSync(path, tightened);
+    return [{
+      id,
+      severity: "warn",
+      status: "fixed",
+      detected,
+      suggestedAction: null,
+      appliedAction: `Tightened ${path} from ${oct(mode)} to ${oct(tightened)}.`,
+    }];
+  } catch (err) {
+    // An un-applied fix is NEVER green-washed as `fixed`.
+    return [{
+      id,
+      severity: "warn",
+      status: "fix_failed",
+      detected: `${detected} Tightening it failed: ${causeOf(err)}`,
+      suggestedAction: `Run \`chmod ${oct(tightened)} ${path}\` yourself.`,
+      appliedAction: null,
+    }];
+  }
+}
+
+// ===========================================================================
+// Identity / token health — metadata only, offline, never a token byte
+// ===========================================================================
+
+function checkIdentity(): Finding[] {
+  const findings: Finding[] = [];
+  const tokensPath = getTokensPath();
+
+  if (!hasTokens()) {
+    // A valid state, not an error: bare `sil_search` works unregistered.
+    findings.push({
+      id: "identity.tokens_present",
+      severity: "info",
+      status: "advisory",
+      detected: "This install is not registered — no tokens.json is stored.",
+      suggestedAction:
+        "Run `sil_register` to register, if you want personalised results.",
+      appliedAction: null,
+    });
+    return findings;
+  }
+
+  findings.push({
+    id: "identity.tokens_present",
+    severity: "info",
+    status: "ok",
+    detected: "This install is registered — tokens.json is present.",
+    suggestedAction: null,
+    appliedAction: null,
+  });
+
+  // A singleton artefact, so it carries a STABLE id every run — that is what
+  // makes the fix idempotence guarantee observable: fixed → re-run → ok.
+  findings.push(...checkTokensPerms(tokensPath));
+
+  const stored = readTokens();
+  if (stored === null) {
+    // Clearing it would mutate bytes ⇒ destructive ⇒ surfaced, never auto-run.
+    findings.push({
+      id: "identity.tokens_parse",
+      severity: "warn",
+      status: "needs_confirmation",
+      detected:
+        `${tokensPath} is present but could not be parsed as stored`
+        + " credentials. Authenticated calls will fail until it is replaced.",
+      suggestedAction:
+        `${REREGISTER_HINT} That replaces ${tokensPath}. sil does not clear or`
+        + " overwrite it automatically — it may still be recoverable.",
+      appliedAction: null,
+    });
+    return findings;
+  }
+
+  findings.push({
+    id: "identity.tokens_parse",
+    severity: "info",
+    status: "ok",
+    detected: `${tokensPath} parses as stored credentials.`,
+    suggestedAction: null,
+    appliedAction: null,
+  });
+  findings.push(expiryFinding(decodeTokenExpiry(stored.access_token)));
+  findings.push(configFinding());
+  return findings;
+}
+
+function checkTokensPerms(tokensPath: string): Finding[] {
+  const mode = lstatSync(tokensPath).mode & 0o777;
+  const id = "identity.tokens_perms";
+
+  if ((mode & ~FILE_MODE & 0o777) === 0) {
+    return [{
+      id,
+      severity: "info",
+      status: "ok",
+      detected: `${tokensPath} is owner-only (mode ${oct(mode)}).`,
+      suggestedAction: null,
+      appliedAction: null,
+    }];
+  }
+
+  const tightened = mode & FILE_MODE;
+  const detected =
+    `${tokensPath} is mode ${oct(mode)} — readable beyond its owner. Stored`
+    + " credentials must be owner-only.";
+  try {
+    chmodSync(tokensPath, tightened);
+    return [{
+      id,
+      severity: "warn",
+      status: "fixed",
+      detected,
+      suggestedAction: null,
+      appliedAction:
+        `Tightened ${tokensPath} from ${oct(mode)} to ${oct(tightened)}.`,
+    }];
+  } catch (err) {
+    return [{
+      id,
+      severity: "warn",
+      status: "fix_failed",
+      detected: `${detected} Tightening it failed: ${causeOf(err)}`,
+      suggestedAction: `Run \`chmod ${oct(tightened)} ${tokensPath}\` yourself.`,
+      appliedAction: null,
+    }];
+  }
+}
+
+/** Whether the stored access token has already expired. `inconclusive` is a real
+ * answer, not a failure — an opaque token is never called expired. */
+export type ExpiryVerdict = "valid" | "expired" | "inconclusive";
+
+/**
+ * Decode-only JWT `exp`. NO signature verification (this is a health hint, not
+ * an auth decision — real verification is server-side on the next authed call)
+ * and NO network.
+ *
+ * `StoredTokens` carries no `exp` of its own, so "expired" has to come from the
+ * token itself. Only `exp` is extracted; no token bytes and no other claim ever
+ * leave this function — the return value is a three-state verdict.
+ *
+ * Not a 3-segment JWT, undecodable, or no numeric `exp` ⇒ `inconclusive`. We
+ * never fabricate expiry.
+ */
+export function decodeTokenExpiry(
+  accessToken: string,
+  nowMs: number = Date.now(),
+): ExpiryVerdict {
+  const segments = accessToken.split(".");
+  if (segments.length !== 3) return "inconclusive";
+  try {
+    const payload: unknown = JSON.parse(
+      Buffer.from(segments[1], "base64url").toString("utf8"),
+    );
+    const exp = (payload as { exp?: unknown }).exp;
+    if (typeof exp !== "number" || !Number.isFinite(exp)) return "inconclusive";
+    return exp * 1_000 <= nowMs ? "expired" : "valid";
+  } catch {
+    return "inconclusive";
+  }
+}
+
+function expiryFinding(verdict: ExpiryVerdict): Finding {
+  const id = "identity.token_expiry";
+  if (verdict === "expired") {
+    // `warn`, not `critical`: a stored refresh token means the next authed call
+    // self-heals. The offline doctor won't network-refresh to confirm.
+    return {
+      id,
+      severity: "warn",
+      status: "advisory",
+      detected: "The stored access token has expired.",
+      suggestedAction:
+        "Authenticated tools refresh automatically on their next call. If they"
+        + ` keep failing: ${REREGISTER_HINT}`,
+      appliedAction: null,
+    };
+  }
+  return {
+    id,
+    severity: "info",
+    status: "ok",
+    detected:
+      verdict === "valid"
+        ? "The stored access token has not expired."
+        : "The stored access token carries no readable expiry; sil cannot tell"
+          + " offline whether it is still valid, and will refresh it on demand.",
+    suggestedAction: null,
+    appliedAction: null,
+  };
+}
+
+function configFinding(): Finding {
+  const id = "identity.config_parse";
+  const configPath = getConfigPath();
+  if (existsSync(configPath) && readConfig() === null) {
+    return {
+      id,
+      severity: "warn",
+      status: "needs_confirmation",
+      detected:
+        `${configPath} is present but could not be parsed, so the stored user`
+        + " identity is unreadable.",
+      suggestedAction:
+        `${REREGISTER_HINT} That rewrites ${configPath}. sil does not overwrite`
+        + " it automatically.",
+      appliedAction: null,
+    };
+  }
+  return {
+    id,
+    severity: "info",
+    status: "ok",
+    detected: existsSync(configPath)
+      ? `${configPath} parses as the stored user identity.`
+      : `No ${configPath} is stored.`,
+    suggestedAction: null,
+    appliedAction: null,
+  };
+}
+
+// ===========================================================================
+// Behaviour-artefact store
+// ===========================================================================
+
+/** Consume the store's OWN fail-closed `unreadable[]` surfacing — never re-parse
+ * the artefacts, never aggregate entries away, and never overwrite one. Each
+ * entry becomes exactly one finding. */
+function checkStore(): Finding[] {
+  return [
+    ...readShopperIdentity().unreadable,
+    ...searchProfileFrontmatter().unreadable,
+  ].map(({ id, error }) => ({
+    id: `store.unreadable:${id}`,
+    severity: "warn" as Severity,
+    status: "advisory" as const,
+    detected: error,
+    suggestedAction:
+      "Inspect and repair the artefact by hand — sil never overwrites a corrupt"
+      + " artefact, because it may still be recoverable.",
+    appliedAction: null,
+  }));
+}
+
+// ===========================================================================
+
+/** The OS cause, never a token or PII — mirrors the store's
+ * `persistence_failed.error` discipline. */
+function causeOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function oct(mode: number): string {
+  return `0${mode.toString(8).padStart(3, "0")}`;
+}
+
+function rel(dataDir: string, path: string): string {
+  return relative(dataDir, path) || ".";
+}
