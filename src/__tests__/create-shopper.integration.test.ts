@@ -20,7 +20,9 @@
  *                        carries the name — frontmatter-as-truth, no manifest, no
  *                        domain minted at create), the sil skill attached,
  *                        `sil` admitted at ALL THREE allow surfaces, exit 0, the
- *                        result carries name + agentId.
+ *                        result carries the friendly `name` + the DERIVED `agentId`
+ *                        (`agentId = deriveAgentId(name)` — no longer a spec input;
+ *                        an empty/`main` slug folds SILENTLY to `sil-shopper`).
  *   invalid_request    — a bad/blank/malformed spec ⇒ NOTHING attempted (validate-
  *                        first runs ahead of every host command); names the field.
  *   collision          — a singleton violation OR an agentId clash ⇒ NOTHING
@@ -76,6 +78,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { deriveAgentId } from "../lib/derive-agent-id.js";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** Repo root of the checkout under test (…/src/__tests__ → root). */
 const REPO_ROOT = join(HERE, "..", "..");
@@ -112,8 +116,9 @@ interface RunResult {
   stderr: string;
 }
 
+/** The endorsed create-shopper spec. `agentId` is NOT a field — the bin derives it
+ * from `name` (`deriveAgentId`), so the user authors ONE friendly display name. */
 interface Spec {
-  agentId: string;
   name: string;
   workspace: string;
   persona: string;
@@ -394,11 +399,10 @@ function readConfig(): Record<string, any> {
  * default — the fail-open "undetermined channel" baseline; pass `channel` to drive
  * the step-10 bind. */
 function validSpec(overrides: Partial<Spec> = {}): Spec {
-  const agentId = overrides.agentId ?? "my-shopper";
+  const name = overrides.name ?? "My Shopper";
   const spec: Spec = {
-    agentId,
-    name: overrides.name ?? "My Shopper",
-    workspace: overrides.workspace ?? join(workdir, `workspace-${agentId}`),
+    name,
+    workspace: overrides.workspace ?? join(workdir, `workspace-${deriveAgentId(name)}`),
     persona: overrides.persona ?? `A careful generalist buyer. ${PERSONA_SECRET}`,
     userSpec: overrides.userSpec ?? `Ships to Athens; UK size 10; ${USERSPEC_SECRET}`,
   };
@@ -491,17 +495,20 @@ function seedExistingShopper(): void {
 // created — the happy path: every surface wired, exit 0, identity returned.
 // ===========================================================================
 describe("created — one valid run wires every surface and returns the identity", () => {
-  it("exits 0 with status:created and the result carries name + agentId (so the agent can open it)", () => {
+  it("exits 0 with status:created; the result carries the friendly name + the DERIVED agentId", () => {
     writeConfig(freshConfig());
-    const spec = validSpec();
+    const spec = validSpec(); // name "My Shopper" ⇒ derived agentId "my-shopper"
     const r = runBin({ spec });
 
     expect(r.status).toBe(0);
     const m = parseMarker(r.stdout);
     expect(m["event"]).toBe("sil_shopper_created");
     expect(m["status"]).toBe("created");
-    expect(m["name"]).toBe(spec.name);
-    expect(m["agentId"]).toBe(spec.agentId);
+    // The friendly display name rides back verbatim …
+    expect(m["name"]).toBe("My Shopper");
+    // … and the agentId is the lower-kebab id DERIVED from it — a concrete literal,
+    // never echoed from an input (agentId is no longer a spec field).
+    expect(m["agentId"]).toBe("my-shopper");
     // No failure marker on stderr for a clean create.
     expect(r.stderr.includes("sil_shopper_create_failed")).toBe(false);
   });
@@ -566,7 +573,7 @@ describe("created — one valid run wires every surface and returns the identity
     // NAME (`sil-shopping` = manifest skills basename), the key the host resolves a
     // skill by — NEVER the plugin id `sil` (attaching the plugin id is the bug this
     // card kills: the host finds no skill named `sil` and `sil-shopping` never loads).
-    const agent = c.agents.list.find((a: any) => a.id === spec.agentId);
+    const agent = c.agents.list.find((a: any) => a.id === deriveAgentId(spec.name));
     expect(agent).toBeTruthy();
     expect(agent.skills).toEqual([SIL_SKILL]);
   });
@@ -582,7 +589,7 @@ describe("created — one valid run wires every surface and returns the identity
     // tools.deny (an fs-mutator deny is inert while codex's own shell stays open, by
     // design — it reads the shopper's skill files and writes regardless) and NO
     // tools.profile override — only the sil skill is attached to the agent entry.
-    const idx = c.agents.list.findIndex((a: any) => a.id === spec.agentId);
+    const idx = c.agents.list.findIndex((a: any) => a.id === deriveAgentId(spec.name));
     expect(idx).toBeGreaterThanOrEqual(0);
     expect(c.agents.list[idx].tools?.deny).toBeUndefined();
     expect(c.agents.list[idx].tools?.profile).toBeUndefined();
@@ -629,7 +636,6 @@ describe("created — additive: a co-installed peer (klodi) keeps its trust", ()
 // ===========================================================================
 describe("invalid_request — validate-first refuses a bad/blank spec, attempting NOTHING", () => {
   const REQUIRED: ReadonlyArray<keyof Spec> = [
-    "agentId",
     "name",
     "workspace",
     "persona",
@@ -674,21 +680,123 @@ describe("invalid_request — validate-first refuses a bad/blank spec, attemptin
     });
   }
 
-  it("rejects a host-reserved agentId `main` (never a shopper named main)", () => {
+  // NOTE: there is NO invalid_request for a bad/reserved/non-kebab agentId anymore —
+  // agentId is no longer a spec input. Slugify + the sil-shopper fallback GUARANTEE a
+  // conforming id, so that entire user-facing failure mode is gone (BR5). The former
+  // `main` and non-kebab agentId-INPUT rejections are REPLACED by the derive-side
+  // fallbacks below (a name slugging to `main`/empty folds to sil-shopper, still created).
+});
+
+// ===========================================================================
+// derive — agentId is DERIVED from the friendly display name (no agentId input).
+// The single friendly `name` is the ONLY identity the user supplies; the bin
+// derives `agentId = deriveAgentId(name)` and the id never surfaces as a second
+// thing they had to author. Empty/`main` slugs fold to `sil-shopper`, SILENTLY.
+// ===========================================================================
+describe("derive — the agentId is slugified from the display name (no agentId input)", () => {
+  it("name → derived lower-kebab id round-trips into the result, agents.list, AND the skill attach", () => {
     writeConfig(freshConfig());
-    const r = runBin({ spec: validSpec({ agentId: "main" }) });
-    expect(r.status).not.toBe(0);
-    const m = parseMarker(r.stderr);
-    expect(m["status"]).toBe("invalid_request");
-    expect(shimLog()).toBe("");
+    const spec = validSpec({ name: "My Shopper" });
+    const r = runBin({ spec });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    // Result carries the DERIVED id as a concrete literal (proves the derivation).
+    expect(m["agentId"]).toBe("my-shopper");
+    // The SAME id keys the new agents.list entry, and the sil skill is attached to it.
+    const c = readConfig();
+    const agent = c.agents.list.find((a: any) => a.id === "my-shopper");
+    expect(agent, "expected an agents.list entry keyed by the derived id").toBeTruthy();
+    expect(agent.skills).toEqual([SIL_SKILL]);
   });
 
-  it("rejects a non-lower-kebab agentId (path-segment shape guard)", () => {
+  it('an emoji-only name (empty slug) folds to the sil-shopper fallback — created, never ""', () => {
     writeConfig(freshConfig());
-    const r = runBin({ spec: validSpec({ agentId: "My_Shopper!" }) });
-    expect(r.status).not.toBe(0);
-    expect(parseMarker(r.stderr)["status"]).toBe("invalid_request");
-    expect(shimLog()).toBe("");
+    const spec = validSpec({ name: "🛍️" });
+    const r = runBin({ spec });
+
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    expect(m["agentId"]).toBe("sil-shopper");
+    // The host never sees an empty id — the fallback lands in agents.list, not "".
+    const c = readConfig();
+    expect(c.agents.list.some((a: any) => a.id === "sil-shopper")).toBe(true);
+    expect(c.agents.list.some((a: any) => a.id === "")).toBe(false);
+  });
+
+  it("a punctuation-only name (empty slug) folds to the sil-shopper fallback — created", () => {
+    writeConfig(freshConfig());
+    const r = runBin({ spec: validSpec({ name: "!!!" }) });
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    expect(m["agentId"]).toBe("sil-shopper");
+  });
+
+  it("a name whose slug is the reserved `main` folds to sil-shopper — created, never `main`", () => {
+    writeConfig(freshConfig());
+    const r = runBin({ spec: validSpec({ name: "Main" }) });
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    expect(m["agentId"]).toBe("sil-shopper");
+    expect(m["agentId"]).not.toBe("main");
+    // The host-reserved id is never added as an agent.
+    const c = readConfig();
+    expect(c.agents.list.some((a: any) => a.id === "main")).toBe(false);
+  });
+
+  it("the friendly name is stored verbatim AND returned DISTINCT from the derived id", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec({ name: "My Shopper" });
+    const r = runBin({ spec });
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    // The one friendly display name is preserved — verbatim in the result …
+    expect(m["name"]).toBe("My Shopper");
+    // … and verbatim in user_spec.md frontmatter (frontmatter-as-truth) …
+    const userSpec = readFileSync(userSpecPath(), "utf8");
+    expect(userSpec).toMatch(/name:\s*My Shopper/);
+    // … while the derived id is a DISTINCT value (the user authored one name, not two).
+    expect(m["agentId"]).toBe("my-shopper");
+    expect(m["name"]).not.toBe(m["agentId"]);
+  });
+
+  it("the empty/main fallback is SILENT — status is exactly created with NO warnings entry for it (BR4)", () => {
+    // A resolvable channel binds + verifies, so the ONLY thing that could add a warning
+    // is the id fallback. BR4: the fallback adds NONE — a deterministic derivation is
+    // not a convenience that failed to fire. warnings must be exactly [].
+    writeConfig(freshConfig());
+    const r = runBin({ spec: validSpec({ name: "Main", channel: "telegram" }) });
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    expect(m["agentId"]).toBe("sil-shopper");
+    // Silent fallback: the bind was clean, so warnings is empty — no id-fallback notice.
+    expect(Array.isArray(m["warnings"])).toBe(true);
+    expect(m["warnings"]).toEqual([]);
+    // The bind still worked with the fallback id (nothing about the id blocks it).
+    expect(m["boundChannel"]).toBe("telegram");
+    // The fallback minted no new status — the taxonomy is unchanged.
+    expect(m["status"]).not.toBe("invalid_request");
+  });
+
+  it("a STRAY `agentId` key in a hand-fed spec is IGNORED (not read, not rejected) — Q2", () => {
+    // The user-facing contract is "agentId is not an input." A stray key must neither be
+    // honored (the derived id from `name` wins) NOR rejected (no back-compat reject path).
+    writeConfig(freshConfig());
+    const strayed = { ...validSpec({ name: "My Shopper" }), agentId: "totally-different" };
+    const r = runBin({ stdin: JSON.stringify(strayed) });
+    expect(r.status).toBe(0);
+    const m = parseMarker(r.stdout);
+    expect(m["status"]).toBe("created");
+    // Derived from `name`, NOT taken from the stray key.
+    expect(m["agentId"]).toBe("my-shopper");
+    expect(m["agentId"]).not.toBe("totally-different");
+    const c = readConfig();
+    expect(c.agents.list.some((a: any) => a.id === "totally-different")).toBe(false);
   });
 });
 
@@ -788,23 +896,27 @@ describe("collision — a shopper already exists (singleton): refuse, write noth
     expect(first.status).toBe(0);
     expect(parseMarker(first.stdout)["status"]).toBe("created");
 
-    // Second run — same singleton, now populated by the first create.
+    // Second run — a DIFFERENT name (⇒ a different derived id), yet the singleton gate
+    // (keyed on the shopper store, not the id) still catches it before any add.
     rmSync(logPath, { force: true });
-    const second = runBin({ spec: validSpec({ agentId: "my-shopper-2", name: "Second" }) });
+    const second = runBin({ spec: validSpec({ name: "Second" }) });
     expect(second.status).not.toBe(0);
     expect(parseMarker(second.stderr)["status"]).toBe("collision");
     expect(shimLog()).not.toContain("agents add");
   });
 });
 
-describe("collision — an agentId clash refuses without overwriting the existing agent", () => {
-  it("the proposed agentId already in agents.list ⇒ collision, existing agent untouched, no shopper dir", () => {
+describe("collision — an agentId clash on the DERIVED id refuses without overwriting the existing agent", () => {
+  it("the id the name DERIVES to already sits in agents.list (no shopper yet) ⇒ collision, existing agent untouched, no shopper dir", () => {
+    // Seed the clash on `deriveAgentId("My Shopper")` = "my-shopper" — the DERIVED id,
+    // not an input id (agentId is no longer fed in). A pre-existing non-shopper agent on
+    // that id must block the create fail-closed (BR7).
     const cfg = freshConfig() as any;
-    cfg.agents = { list: [{ id: "my-shopper", skills: ["other"], workspace: "/pre/existing" }] };
+    cfg.agents = { list: [{ id: deriveAgentId("My Shopper"), skills: ["other"], workspace: "/pre/existing" }] };
     writeConfig(cfg);
     const preConfig = readFileSync(configPath, "utf8");
 
-    const r = runBin({ spec: validSpec({ agentId: "my-shopper" }) });
+    const r = runBin({ spec: validSpec({ name: "My Shopper" }) });
 
     expect(r.status).not.toBe(0);
     expect(parseMarker(r.stderr)["status"]).toBe("collision");
@@ -1089,7 +1201,7 @@ describe("no PII/secret leakage — the markers never echo the persona or userSp
     expect(ok.stdout).not.toContain(USERSPEC_SECRET);
 
     // A forced failure carries a path + cause — still never the persona/userSpec.
-    const fail = runBin({ spec: validSpec({ agentId: "leak-check" }), fail: ["config-validate"] });
+    const fail = runBin({ spec: validSpec({ name: "Leak Check" }), fail: ["config-validate"] });
     expect(fail.status).not.toBe(0);
     expect(fail.stderr).not.toContain(PERSONA_SECRET);
     expect(fail.stderr).not.toContain(USERSPEC_SECRET);
@@ -1102,11 +1214,12 @@ describe("no PII/secret leakage — the markers never echo the persona or userSp
 describe("input channels — the spec arrives via stdin (primary) OR a --spec file (fallback)", () => {
   it("a --spec <path> file drives an identical created outcome (no stdin needed)", () => {
     writeConfig(freshConfig());
-    const spec = validSpec({ agentId: "spec-file-shopper", name: "Spec File Shopper" });
+    const spec = validSpec({ name: "Spec File Shopper" });
     const r = runBin({ spec, viaSpecFile: true });
     expect(r.status).toBe(0);
     const m = parseMarker(r.stdout);
     expect(m["status"]).toBe("created");
+    // agentId is DERIVED from the name even on the --spec-file path.
     expect(m["agentId"]).toBe("spec-file-shopper");
     expect(existsSync(userSpecPath())).toBe(true);
   });
@@ -1184,10 +1297,10 @@ describe("bind-the-channel — a resolvable channel binds the new shopper by def
     const m = parseMarker(r.stdout);
     expect(m["status"]).toBe("created");
     // The route was actually written into openclaw.json bindings[] …
-    const route = routeFor(readConfig().bindings, spec.agentId, "telegram");
+    const route = routeFor(readConfig().bindings, deriveAgentId(spec.name), "telegram");
     expect(route, "expected a bindings[] route <shopper> → telegram").toBeTruthy();
     expect(route.match.channel).toBe("telegram");
-    expect(route.agentId).toBe(spec.agentId);
+    expect(route.agentId).toBe(deriveAgentId(spec.name));
     // … the bind WRITE was actually issued against the host …
     expect(shimLog()).toContain("agents bind --agent");
     // … the created result NAMES the bound channel (honesty rail: reported ⇒ verified) …
@@ -1205,7 +1318,7 @@ describe("bind-the-channel — a resolvable channel binds the new shopper by def
     expect(r.status).toBe(0);
     const m = parseMarker(r.stdout);
     expect(m["status"]).toBe("created");
-    expect(routeFor(readConfig().bindings, spec.agentId, "telegram")).toBeTruthy();
+    expect(routeFor(readConfig().bindings, deriveAgentId(spec.name), "telegram")).toBeTruthy();
     expect(m["boundChannel"]).toBe("telegram");
     expect(m["warnings"]).toEqual([]);
   });
@@ -1219,9 +1332,9 @@ describe("bind-the-channel — a resolvable channel binds the new shopper by def
     expect(r.status).toBe(0);
     const m = parseMarker(r.stdout);
     expect(m["boundChannel"]).toBe("telegram");
-    expect(routeFor(readConfig().bindings, spec.agentId, "telegram")).toBeTruthy();
+    expect(routeFor(readConfig().bindings, deriveAgentId(spec.name), "telegram")).toBeTruthy();
     // The env channel was NOT bound — spec took precedence, and there is no second route.
-    expect(routeFor(readConfig().bindings, spec.agentId, "whatsapp")).toBeFalsy();
+    expect(routeFor(readConfig().bindings, deriveAgentId(spec.name), "whatsapp")).toBeFalsy();
   });
 });
 
@@ -1240,7 +1353,7 @@ describe("bind-the-channel — fail-open: an undetermined channel still creates 
     // The hint must (a) name the shopper and (b) name a concrete one-command manual
     // step — never imply a broken create (product business rules).
     const hint = (m["warnings"] as string[]).find((w) => /\bbind\b/i.test(w)) ?? "";
-    expect(hint).toContain(spec.agentId);
+    expect(hint).toContain(deriveAgentId(spec.name));
     expect(hint).toMatch(/agents bind|\/agent/i);
     // No routing written, and the bind was never even attempted (no channel to bind).
     expect(readConfig().bindings ?? []).toEqual([]);
@@ -1322,7 +1435,7 @@ describe("bind-the-channel — a conflicting channel is NOT stolen (no --force; 
     // The prior owner's route survives EXACTLY; the shopper got NO route.
     const bindings = readConfig().bindings;
     expect(routeFor(bindings, "other-agent", "telegram")).toBeTruthy();
-    expect(routeFor(bindings, spec.agentId, "telegram")).toBeFalsy();
+    expect(routeFor(bindings, deriveAgentId(spec.name), "telegram")).toBeFalsy();
     expect(bindings).toEqual([
       { type: "route", agentId: "other-agent", match: { channel: "telegram" } },
     ]);
