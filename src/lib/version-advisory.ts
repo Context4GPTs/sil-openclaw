@@ -217,6 +217,89 @@ export async function probeLatestVersion(
  * minute before. Anything higher turns every install permanently yellow the
  * moment we publish, and the `healthy` roll-up stops meaning anything.
  */
+/**
+ * A single `>=X.Y.Z` floor — the ONLY range shape we parse.
+ *
+ * Every range we declare is exactly this (`package.json#openclaw.compat`), which
+ * is the whole licence for a ~20-line tuple compare instead of a `semver`
+ * dependency. The licence holds only because anything else FAILS CLOSED: a
+ * caret/tilde/OR/range-pair parsed "approximately" is how a working host gets
+ * told to update. No prerelease floor, no wildcards, no compound ranges — if we
+ * ever declare one for real, this parser grows to meet it FIRST.
+ */
+const GATEWAY_RANGE_RE = /^>=(\d+\.\d+\.\d+)$/;
+
+/**
+ * Our declared minimum gateway version, or `null` when it is absent or not a
+ * bare `>=X.Y.Z`.
+ *
+ * Read from `package.json#openclaw.compat` (not the manifest): compat lives ONLY
+ * there, and `package.json` is the source of truth `sync-version.mjs` mirrors
+ * outward. Unlike `readInstalledVersion()` this never throws — an unreadable
+ * floor is inconclusive, and a compat check that threw would be a worse failure
+ * than the one it diagnoses.
+ */
+function readDeclaredGatewayRange(): string | null {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(PACKAGE_JSON_PATH, "utf8"));
+    const range = (parsed as {
+      openclaw?: { compat?: { minGatewayVersion?: unknown } };
+    }).openclaw?.compat?.minGatewayVersion;
+    return typeof range === "string" ? range : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The host-compat advisory: a finding IFF the RUNNING gateway is below our
+ * declared floor. Local, synchronous, no probe — the question is "is my host new
+ * enough for me?", not "am I current?", so nothing here touches the network and
+ * it still fires with the network down.
+ *
+ * FAILS CLOSED TO INCONCLUSIVE — `null` (no finding) whenever we cannot be sure:
+ * an unreadable host version (`readHostVersion` → null), a host that is not
+ * semver, or a range we do not fully understand. Never a fabricated verdict in
+ * either direction: "your host is too old" is not something a user can un-learn,
+ * and a silent "you're fine" dressed up as a real check is worse.
+ *
+ * `warn`, not `info`: unlike a version-behind, this install may genuinely not
+ * run — that IS a degradation. Not `critical`: by the doctor's ladder that means
+ * the core path is broken, and a plugin that broken could not run a tool to say
+ * so.
+ */
+export function buildGatewayCompatFinding(
+  hostVersion: string | null,
+  requiredRange: string | null = readDeclaredGatewayRange(),
+): Finding | null {
+  if (hostVersion === null || requiredRange === null) return null;
+
+  const required = GATEWAY_RANGE_RE.exec(requiredRange.trim())?.[1];
+  if (required === undefined) return null;
+
+  // Parse-check the host explicitly rather than leaning on compareSemver's
+  // unparseable-sorts-equal rule: silence must be a decision here, not a
+  // by-product of a comparator contract that exists for a different caller.
+  if (!SEMVER_RE.test(hostVersion.trim())) return null;
+
+  if (compareSemver(hostVersion.trim(), required) >= 0) return null;
+
+  return {
+    id: "version.gateway_compat",
+    severity: "warn",
+    status: "advisory",
+    detected:
+      `This OpenClaw host is older than sil requires: sil needs ${required} or`
+      + ` newer, and the running host is ${hostVersion.trim()}. Some sil tools`
+      + " may not work correctly on this host.",
+    suggestedAction:
+      `Update OpenClaw itself to ${required} or newer using OpenClaw's own`
+      + " update path, then reload. sil never updates the host and ships no"
+      + " installer.",
+    appliedAction: null,
+  };
+}
+
 export function buildVersionBehindFinding(
   installed: string,
   latest: string | null,

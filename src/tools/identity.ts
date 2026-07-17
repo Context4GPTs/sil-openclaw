@@ -43,6 +43,7 @@ import {
   writeConfig,
   writeTokens,
 } from "../lib/credentials.js";
+import { wiringAdvisories } from "../lib/host-wiring.js";
 import { deriveChallenge, newSessionId, newVerifier } from "../lib/pkce.js";
 import {
   POLL_DEADLINE_MS,
@@ -92,6 +93,10 @@ function registerRegister(api: PluginAPI): void {
           status: "already_registered",
           user: config?.user ?? null,
           next_step: "offer_shopper",
+          // Folded here but NOT onto `awaiting_browser`: this is a terminal
+          // result, whereas that one is a mid-flow auth handoff whose whole job
+          // is to get one link in front of the user.
+          ...wiringAdvisories(api),
         });
       }
 
@@ -292,7 +297,7 @@ function identityOutcomeToResult(
 ) {
   switch (outcome.kind) {
     case "ok":
-      return identityResult(outcome.identity, originBlock);
+      return identityResult(api, outcome.identity, originBlock);
     case "forbidden":
       // Decision B — the dead-token clear is UNIFORM across all three sil-api tools.
       // `sil_whoami` is the tool that is legible TODAY; an agent that diagnoses the
@@ -319,8 +324,17 @@ function identityOutcomeToResult(
 /** Success: the identity payload + the web-origin visibility block (FIX B) —
  * no token, no Bearer header. The origin block (strings only) lets the agent
  * relay the resolved origin + its source so a wrong origin is diagnosable. */
-function identityResult(identity: Identity, originBlock: OriginBlock) {
-  return jsonResult({ status: "ok", identity, ...originBlock });
+function identityResult(
+  api: PluginAPI,
+  identity: Identity,
+  originBlock: OriginBlock,
+) {
+  return jsonResult({
+    status: "ok",
+    identity,
+    ...originBlock,
+    ...wiringAdvisories(api),
+  });
 }
 
 /** Not registered: a distinct, actionable outcome naming the recovery tool. No

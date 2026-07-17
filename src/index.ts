@@ -33,6 +33,7 @@ import {
   type SilPluginConfig,
 } from "./lib/config.js";
 import { ensureDataDir, getDataDir } from "./lib/credentials.js";
+import { detectWiringDrift, readSilWiringFacts } from "./lib/host-wiring.js";
 import { registerCatalogTools } from "./tools/catalog.js";
 import { registerDoctorTools } from "./tools/doctor.js";
 import { registerIdentityTools } from "./tools/identity.js";
@@ -82,6 +83,31 @@ export default definePluginEntry({
     registerCatalogTools(api);
     registerProfileTools(api);
     registerDoctorTools(api);
+
+    // Host-wiring drift, at the ONE surface that survives it.
+    //
+    // `tools.alsoAllow` is GLOBAL, so the state where sil's tools are filtered
+    // filters `sil_doctor` too — it is a sil tool. A detector living inside the
+    // plugin can only speak where its own surface is callable, and here the
+    // gateway log is all that is left; its audience (an operator wondering why
+    // their sil tools do nothing) is exactly the right one.
+    //
+    // Invariant-safe: a config read already in memory plus a synchronous log.
+    // The rule is "opens nothing" — no timer, no socket, no unawaited promise —
+    // and this opens nothing. `readSilWiringFacts()` also warms its cache here,
+    // so a broken build fails loud at load (as `ensureDataDir` does) instead of
+    // throwing inside a tool result later.
+    const drift = detectWiringDrift(api.config, readSilWiringFacts());
+    if (drift.length > 0) {
+      api.logger.warn("sil_plugin_wiring_drift", {
+        message:
+          "sil is installed but MIS-WIRED in this OpenClaw host, so part of it is"
+          + " not doing anything. Each finding names the exact one-line fix. sil"
+          + " only reports this — it never edits host config or reloads the"
+          + " gateway.",
+        findings: drift,
+      });
+    }
 
     api.logger.info("sil_plugin_loaded", {
       message: "sil plugin registered.",

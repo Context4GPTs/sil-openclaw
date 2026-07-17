@@ -51,11 +51,17 @@ import {
 } from "../lib/credentials.js";
 import { sortFindings, type Finding, type Severity } from "../lib/findings.js";
 import {
+  detectWiringDrift,
+  readHostVersion,
+  readSilWiringFacts,
+} from "../lib/host-wiring.js";
+import {
   readShopperIdentity,
   searchProfileFrontmatter,
 } from "../lib/profile-store.js";
 import { jsonResult } from "../lib/tool-result.js";
 import {
+  buildGatewayCompatFinding,
   buildVersionBehindFinding,
   probeLatestVersion,
   readInstalledVersion,
@@ -123,6 +129,15 @@ export function registerDoctorTools(
         findings.push(...checkStore());
       }
       findings.push(...checkIdentity());
+
+      // Host wiring + host compat: both read the tree already in memory, so they
+      // are local and unconditional — they still report with the network down.
+      // `sil_doctor` is the SECOND surface for the wiring advisory (it also rides
+      // every sil_* result); it is the ONLY one for compat, which answers a
+      // question nobody asked mid-search.
+      findings.push(...detectWiringDrift(api.config, readSilWiringFacts()));
+      const compat = buildGatewayCompatFinding(readHostVersion(api));
+      if (compat !== null) findings.push(compat);
 
       const installedVersion = readInstalledVersion();
       const behind = buildVersionBehindFinding(
