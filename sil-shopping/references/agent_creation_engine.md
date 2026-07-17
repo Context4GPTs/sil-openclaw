@@ -95,18 +95,41 @@ first shop.
 
 ### The one command
 
-Run one shipped bin — **`sil-openclaw-create-shopper`** — **non-interactive**,
-**atomic**, **fail-closed**; it emits one JSON result. It is a standalone operator
-script, not the plugin process, so the plugin's "never write host config" guarantee
-holds. Feed the endorsed spec as one JSON object on **`stdin`** (or `--spec <path>`):
+Run one shipped script — **non-interactive**, **atomic**, **fail-closed**; it emits one
+JSON result. It is a standalone operator script, not the plugin process, so the plugin's
+"never write host config" guarantee holds.
+
+**Get its path from `sil_doctor` — never guess it, and never derive it from this file's
+own location.** Call `sil_doctor` and read the report's top-level **`creationEntrypoint`**:
+an absolute path, reported every run. It is the only sound source. This file is published
+to you as a *symlink*, so a `../scripts/…` hop off this directory does not resolve for
+`node` even though `cat` and `ls` say it does; and the bare bin name is on PATH only for
+some installs. Both dead-end at this exact step.
+
+Feed the endorsed spec as a **file**, not a heredoc — shell quoting must never touch
+model-authored prose (apostrophes, quotes, backticks, `$`, newlines are the norm in a
+persona). Write it **0600 under a private dir**, run, then **remove it**: the spec carries
+the user's `userSpec` (address, sizes, allergy/ethics rules), so it must not linger
+world-readable. The script never deletes an input it does not own — that is yours.
 
 ```
-sil-openclaw-create-shopper <<'JSON'
+# 1. sil_doctor → creationEntrypoint (absolute path to the creation script)
+# 2. write the endorsed spec, owner-only, in a private dir:
+umask 077 && mkdir -p ~/.sil-tmp && SPEC=~/.sil-tmp/shopper-spec.json
+#    …write the JSON object below to "$SPEC"…
+# 3. run it by absolute path, via node:
+node "<creationEntrypoint>" --spec "$SPEC"
+# 4. remove it, whatever the result:
+rm -f "$SPEC"
+```
+
+The spec file's contents — one JSON object:
+
+```json
 { "name": "My Shopper",
   "workspace": "~/.openclaw/workspace-my-shopper",
   "persona": "…endorsed persona…", "userSpec": "…seeded shared user spec…",
   "channel": "telegram" }
-JSON
 ```
 
 ### The spec (input)
@@ -153,7 +176,8 @@ to mint/refresh domains; if defaults grant none, the bin reports `created` with 
    design: it reads the shopper's skill files and can write regardless. The shell stays
    open (trusted single-operator posture); persistence is steered through the sil tools by
    the skill, not enforced by tool policy.
-8. **Admit sil (plugin trust)** — the shipped **`sil-openclaw-allowlist`** helper
+8. **Admit sil (plugin trust)** — the shipped **`scripts/allowlist-openclaw.mjs`** helper
+   (which the script runs itself, by absolute path via `node` — never the bare name)
    additively merges the three trust surfaces (`plugins.allow` + `tools.alsoAllow` +
    `plugins.entries.sil`) — the only way to un-filter `sil_*` without clobbering a
    co-installed plugin. A non-zero exit → **`persistence_failed`** (never a green
