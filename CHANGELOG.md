@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-07-17
+
 ### Security
 
 - **Ship only the two runtime operator bins, not the whole `scripts/` dir.**
