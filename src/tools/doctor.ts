@@ -268,13 +268,22 @@ function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean }
  * A singleton, like `fs.data_dir_writable`: one fixed path with a lifecycle, so
  * it carries a stable id and reports `ok` when healthy — `fixed → re-run → ok`.
  *
- * `stat`, NOT `lstat` — deliberately the opposite of the walk. Inside the data
- * dir sil never creates symlinks, so an entry symlink is reported, never
- * chmod'd-through. The ROOT is different: `$SIL_DATA_DIR` pointing at a symlinked
- * directory is a legitimate operator setup, and a symlink's own mode is always
- * 0777 on Linux — `lstat` here would read 0777, tighten, have `chmod` FOLLOW the
- * link to the target, then read 0777 again next run and re-report `fixed`
- * forever. `stat` makes detect and fix agree on the same inode.
+ * `stat`, NOT `lstat` — deliberately the opposite of the walk, and NOT a
+ * containment hole. `chmod` follows symlinks unconditionally and Node exposes no
+ * `lchmodSync` on Linux (it is `undefined`), so `lstat` here could not prevent
+ * the follow — it would only change what we REPORT. It buys zero containment and
+ * costs convergence: a symlink's own mode is always 0777, so `lstat` would read
+ * 0777, tighten, have `chmod` follow to the target anyway, then read 0777 again
+ * next run and re-report `fixed` FOREVER — a non-idempotent lie that breaks the
+ * `fixed → re-run → ok` guarantee this singleton exists to provide. `stat` makes
+ * detect and fix agree on the same inode, so it is strictly better on both axes.
+ *
+ * Nor is following an escape: `getDataDir()` IS the sandbox root (it returns the
+ * env override verbatim, no `realpath`), so if the operator made it an
+ * indirection, the target IS the directory the plugin stores everything in. The
+ * trust boundary is `$SIL_DATA_DIR` itself — anyone who can set it can point it
+ * at the target directly, no symlink needed. The entry-walk's `lstat`+skip rule
+ * is what actually carries containment: entry symlinks are NOT operator-declared.
  */
 function checkDataDirMode(dataDir: string): Finding {
   const id = "fs.data_dir_mode";
