@@ -54,12 +54,14 @@ import {
 // unit core takes them as an argument so the test pins behaviour, not wiring).
 const SIL: SilAllowlistFacts = {
   id: "sil",
-  // The real 10-tool floor after the sds-specs-client-tool card added sil_specs
-  // (the coin/dedupe/register canonicalization primitive) to the catalog group,
-  // beside the five profile verbs and the four other core tools. (This carrier is
-  // the SILENT 7th — a stale entry stays GREEN here, so it is bumped for hygiene
-  // in lockstep with the six that bite.)
+  // The real 11-tool floor after the sil-doctor-tool-data-store-identity-health
+  // card added sil_doctor (report-first data-store/identity/version health) in
+  // the new doctor group, beside the five profile verbs and the five other core
+  // tools. (This carrier is the SILENT one — a stale entry stays GREEN here,
+  // because the loop below only asserts each name is ABSENT from a fresh config
+  // — so it is bumped for hygiene in lockstep with the mirrors that bite.)
   tools: [
+    "sil_doctor",
     "sil_learn",
     "sil_product_get",
     "sil_profile_get",
@@ -131,7 +133,7 @@ describe("AC1 (core) — fresh merge trusts sil at all three real surfaces", () 
     expect(changed).toBe(true);
   });
 
-  it("does NOT enumerate the 10 tool NAMES into config — admission is by plugin id only", () => {
+  it("does NOT enumerate the 11 tool NAMES into config — admission is by plugin id only", () => {
     const { config } = mergeSilAllowlist({}, SIL);
     const serialized = JSON.stringify(config);
     // The mechanism is plugin-id admission; tool names must never leak into the

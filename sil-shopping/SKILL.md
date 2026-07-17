@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use for any sil shopping, identity, or shopper-setup intent: register, check the account, search the sil catalog, look up products by id — plus the single-shopper lifecycle: create the shopper (a two-touchpoint onboarding), search what it knows or which domains (niches) it learned, view or forget a domain or PRD, refine it — or, as the shopper, run the six-beat Spec-Driven Shopping loop and learn a fact or taste it surfaces. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_specs, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, sil_learn.'
+description: 'Use for any sil shopping, identity, or shopper-setup intent: register, check the account, search the sil catalog, look up products by id — plus the single-shopper lifecycle: create the shopper (a two-touchpoint onboarding), search what it knows or which domains (niches) it learned, view or forget a domain or PRD, refine it — or, as the shopper, run the six-beat Spec-Driven Shopping loop and learn a fact or taste it surfaces. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_specs, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, sil_learn, sil_doctor.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -70,6 +70,7 @@ while setup is incomplete; it sheds once a shopper exists.
 | (as the shopper) a shopping intent on any niche | the six-beat loop | [`shop_loop.md`](references/shop_loop.md) |
 | "learn / remember this" — a fact or taste the shopper surfaced | `sil_learn` | [`fill_and_feedback.md`](references/fill_and_feedback.md) |
 | "refine / sharpen my shopper" / fix a niche | `sil_learn` (target + change) | [`fill_and_feedback.md`](references/fill_and_feedback.md) |
+| "sil is broken" / "check my sil install" / a store or identity read misbehaves | `sil_doctor` | — |
 
 Each core tool's behaviour + status taxonomy live in its own tool definition and
 response (the `recovery`/`status` it returns) — basic shopping needs only that. A full

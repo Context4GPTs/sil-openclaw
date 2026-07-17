@@ -34,6 +34,7 @@ import {
 } from "./lib/config.js";
 import { ensureDataDir, getDataDir } from "./lib/credentials.js";
 import { registerCatalogTools } from "./tools/catalog.js";
+import { registerDoctorTools } from "./tools/doctor.js";
 import { registerIdentityTools } from "./tools/identity.js";
 import { registerProfileTools } from "./tools/profile.js";
 
@@ -80,6 +81,7 @@ export default definePluginEntry({
     registerIdentityTools(api);
     registerCatalogTools(api);
     registerProfileTools(api);
+    registerDoctorTools(api);
 
     api.logger.info("sil_plugin_loaded", {
       message: "sil plugin registered.",
