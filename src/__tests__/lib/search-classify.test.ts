@@ -1083,3 +1083,82 @@ describe("classifySearchResponse — specs_status narrowing: no fabrication, dro
     expect(out.kind).toBe("retryable");
   });
 });
+
+/**
+ * CARD `verify-sil-search-render-contract-for-studio` (epic `studio-render-contract`,
+ * goal `sil-studio` Phase 1) — the pure-projection floor (AC2 `[unit]`) for Sil Studio's
+ * render `image` field. The wired ToolResult-boundary proof lives in
+ * `catalog-search.integration.test.ts`; here we pin the classifier's projection directly,
+ * the cheapest tier, so a projection regression bites without the wiring.
+ *
+ * The Studio render `image` is NOT a flat field the plugin emits — it is DERIVABLE from
+ * the opaque UCP `media[]` (first `type:"image"` url). This block pins the two halves of
+ * that contract, isolated to `classifySearchResponse`'s projection:
+ *   - `products[i].media` (and `variant.media`) carry the UCP media entries VERBATIM —
+ *     the render derives the image from them; and
+ *   - NO flat `image` field and NO `brand` field are fabricated — `brand` is not
+ *     UCP-native and neither is invented (absent stays absent; the renderer degrades
+ *     gracefully). Fabricating either would be a regression, not a fix.
+ * The verbatim opaque pass-through of media/seller/metadata as such is pinned at the
+ * integration tier (the `surface-product-url` block); this asserts only the render-
+ * framing novelties, at the pure-projection seam.
+ */
+describe("classifySearchResponse — Studio render: image derivable from media[], NO fabricated image/brand (AC2) [card verify-sil-search-render-contract-for-studio]", () => {
+  const RENDER_VIDEO = { type: "video", url: "https://media.example.com/render-clip.mp4" };
+  const RENDER_IMAGE = { type: "image", url: "https://media.example.com/render-hero.jpg", alt_text: "hero" };
+  const RENDER_IMAGE_2 = { type: "image", url: "https://media.example.com/render-side.jpg" };
+
+  /** A realistic UCP wire product carrying `media` (a VIDEO first, then two IMAGEs) and
+   * — deliberately — NO `brand` field anywhere. Featured variant carries a non-empty
+   * `checkout_url` (else the projection drops it). */
+  const RENDER_WIRE_PRODUCT = {
+    id: "gid://product/render",
+    title: "Studio Render Chair",
+    source: "acme-goods",
+    media: [RENDER_VIDEO, RENDER_IMAGE, RENDER_IMAGE_2],
+    variants: [
+      {
+        id: "gid://variant/render-1",
+        title: "Studio Render Chair — Default",
+        price: { amount: 12900, currency: "USD" },
+        availability: { available: true, status: "in_stock" },
+        checkout_url: "https://buy.example.com/render-1",
+        media: [RENDER_IMAGE],
+      },
+    ],
+  };
+
+  it("projects `media` VERBATIM at product + variant level, and image is derivable as the first type:\"image\" url (skipping non-image entries)", () => {
+    const out = classifySearchResponse(200, envelope({ products: [RENDER_WIRE_PRODUCT] }));
+    expect(out.kind).toBe("ok");
+    if (out.kind === "ok") {
+      const p = out.products[0]!;
+      // media forwarded verbatim, in order — the render derives the image from it.
+      expect(p.media).toEqual([RENDER_VIDEO, RENDER_IMAGE, RENDER_IMAGE_2]);
+      expect(p.variant.media).toEqual([RENDER_IMAGE]);
+      // image derivable as the FIRST type:"image" url — must skip the leading video.
+      const firstImage = p.media!.find((m) => (m as Record<string, unknown>)["type"] === "image");
+      expect(firstImage).toBeDefined();
+      expect((firstImage as Record<string, unknown>)["url"]).toBe(
+        "https://media.example.com/render-hero.jpg",
+      );
+      expect(firstImage).not.toBe(p.media![0]);
+    }
+  });
+
+  it("fabricates NO flat `image` field and NO `brand` field — absent stays absent (product + variant)", () => {
+    const out = classifySearchResponse(200, envelope({ products: [RENDER_WIRE_PRODUCT] }));
+    expect(out.kind).toBe("ok");
+    if (out.kind === "ok") {
+      const p = out.products[0]! as unknown as Record<string, unknown>;
+      const v = p["variant"] as Record<string, unknown>;
+      for (const forbidden of ["image", "brand"]) {
+        expect(p).not.toHaveProperty(forbidden);
+        expect(v).not.toHaveProperty(forbidden);
+      }
+      // The wire fixture carries no "brand" token, so any occurrence in the projection
+      // is a fabrication — pin its total absence.
+      expect(JSON.stringify(out.products)).not.toContain("brand");
+    }
+  });
+});

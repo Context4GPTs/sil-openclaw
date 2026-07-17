@@ -3145,3 +3145,181 @@ describe("sil_search — all-applied:false is a NORMAL success with an OBSERVABL
     expect(hardEntry!.applied).toBe(false);
   });
 });
+
+/**
+ * CARD `verify-sil-search-render-contract-for-studio` (epic `studio-render-contract`,
+ * goal `sil-studio` Phase 1) — the render-contract SHAPE PIN for Sil Studio's product
+ * card. Studio reads the `sil_search` result off the terminal-phase `session.tool`
+ * `data.result` frame; the plugin's controllable contribution to that frame is the
+ * `ToolResult` this suite drives. Discovery verdict: CONFORMS — the render-load-bearing
+ * contract is ALREADY emitted; this suite proves it and would bite if a future change
+ * broke it. NO source change.
+ *
+ * SCOPE — this block pins ONLY the render-framing invariants NOT already covered by the
+ * `surface-product-url` enriched-projection block above (which already pins media/seller/
+ * metadata verbatim opaque pass-through). The NET-NEW render invariants:
+ *   1. the named-and-guaranteed triplet (`title`, `variant.price {amount,currency}`,
+ *      non-empty `variant.checkout_url`) AND its LOAD-BEARING nesting — price + the BUY
+ *      target live on the featured `variant`, NEVER at the top level (the ranked match is
+ *      the product; the buy target is the variant);
+ *   2. `image` is DERIVABLE from the opaque `media[]` (first `type:"image"` url), and the
+ *      plugin does NOT flatten it to a top-level `image` field — absent stays absent;
+ *   3. `brand` is NOT surfaced as a named field (not UCP-native) and is NEVER fabricated —
+ *      the downstream renderer treats it as optional (Discovery OQ2 / signal line 80);
+ *   4. the FULL `products[]` payload rides the single `ToolResult` text part — the plugin
+ *      strips NOTHING by tool level (it has no verbosity gate). Whether the gateway
+ *      broadcasts `data.result` at on/verbose is the HOST contract, verified by the paired
+ *      `sil-stage:phase-1-contract-harness-golden-frame-capture` — NOT assertable here.
+ *
+ * STUB-FREE (complete-work-is-stub-free): the fixture is a realistic UCP `SilCatalogProduct`
+ * (required `source`, a featured variant with a non-empty `checkout_url`, UCP `media`) run
+ * through the REAL extract/execute path — never a hand-built `{status,products}` literal.
+ * The only mock is `fetch`.
+ */
+
+/** UCP `Media` entries. The product carries a VIDEO first, then two IMAGEs — so the
+ * render's "first `type:"image"` url" derivation is non-trivial (it must skip the video,
+ * not merely take `media[0]`). Surfaced OPAQUE / verbatim; the plugin reads no inner field. */
+const RENDER_VIDEO = { type: "video", url: "https://media.example.com/render-clip.mp4" };
+const RENDER_IMAGE = { type: "image", url: "https://media.example.com/render-hero.jpg", alt_text: "hero" };
+const RENDER_IMAGE_2 = { type: "image", url: "https://media.example.com/render-side.jpg" };
+
+/** A realistic UCP `SilCatalogProduct` carrying the render triplet + opaque `media` and
+ * — DELIBERATELY — NO `brand` field anywhere (brand is not in the UCP catalog contract;
+ * the plugin must never invent one). Featured variant has a non-empty `checkout_url`
+ * (a variant without one is DROPPED by the extractor — the fixture must carry a real one). */
+const RENDER_PRODUCT = {
+  id: "gid://product/render",
+  title: "Studio Render Chair",
+  source: "acme-goods",
+  media: [RENDER_VIDEO, RENDER_IMAGE, RENDER_IMAGE_2],
+  variants: [
+    {
+      id: "gid://variant/render-1",
+      title: "Studio Render Chair — Default",
+      price: { amount: 12900, currency: "USD" },
+      availability: { available: true, status: "in_stock" },
+      checkout_url: "https://buy.example.com/render-1",
+      media: [RENDER_IMAGE],
+    },
+  ],
+};
+
+describe("sil_search — Studio render contract (data.result shape) [card verify-sil-search-render-contract-for-studio]", () => {
+  /** Drive the real tool against a single RENDER_PRODUCT and return the parsed payload. */
+  async function renderPayload(): Promise<Record<string, unknown>> {
+    seedTokens("the-access-token", "the-refresh-token");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([RENDER_PRODUCT]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", { query: "office chair" }));
+    expect(payload["status"]).toBe("ok");
+    return payload;
+  }
+
+  it("AC1 — the render triplet is named+guaranteed AND price/checkout_url are NESTED on the featured variant, never top-level", async () => {
+    // The three named-and-guaranteed render fields, plus the load-bearing nesting: the
+    // BUY target (`checkout_url`) and `price` live on `variant`, NOT on the product — a
+    // renderer reading a top-level `product.checkout_url` would render a dead BUY link.
+    const payload = await renderPayload();
+    const products = payload["products"] as Array<Record<string, unknown>>;
+    expect(Array.isArray(products)).toBe(true);
+    expect(products).toHaveLength(1);
+    const product = products[0]!;
+
+    // title — named, required, non-empty string.
+    expect(typeof product["title"]).toBe("string");
+    expect((product["title"] as string).length).toBeGreaterThan(0);
+
+    const variant = product["variant"] as Record<string, unknown>;
+    // price — named, required, on the VARIANT, as { amount (minor units), currency }.
+    expect(variant["price"]).toEqual({ amount: 12900, currency: "USD" });
+    const price = variant["price"] as Record<string, unknown>;
+    expect(typeof price["amount"]).toBe("number");
+    expect(typeof price["currency"]).toBe("string");
+    // checkout_url — named, required, NON-EMPTY, on the VARIANT (the BUY affordance).
+    expect(typeof variant["checkout_url"]).toBe("string");
+    expect((variant["checkout_url"] as string).length).toBeGreaterThan(0);
+
+    // The NESTING is load-bearing: price + checkout_url are NOT hoisted to the product.
+    expect(product).not.toHaveProperty("price");
+    expect(product).not.toHaveProperty("checkout_url");
+  });
+
+  it("AC2 — image is DERIVABLE from the opaque media[] (first type:\"image\" url) and is NOT flattened to a top-level `image`", async () => {
+    // Studio extracts the image from `media[]`; the plugin passes `media` through verbatim
+    // and does NOT synthesize a flat `image` field. The fixture puts a VIDEO first so the
+    // derivation must find the first `type:"image"`, not merely `media[0]`.
+    const payload = await renderPayload();
+    const product = (payload["products"] as Array<Record<string, unknown>>)[0]!;
+    const variant = product["variant"] as Record<string, unknown>;
+
+    // media passes through verbatim (video + both images, in order) at product level …
+    expect(product["media"]).toEqual([RENDER_VIDEO, RENDER_IMAGE, RENDER_IMAGE_2]);
+    // … and at variant level (the second derivation path).
+    expect(variant["media"]).toEqual([RENDER_IMAGE]);
+
+    // image is DERIVABLE as the first type:"image" url — skipping the leading video.
+    const productMedia = product["media"] as Array<Record<string, unknown>>;
+    const firstImage = productMedia.find((m) => m["type"] === "image");
+    expect(firstImage).toBeDefined();
+    expect(firstImage!["url"]).toBe("https://media.example.com/render-hero.jpg");
+    expect(firstImage).not.toBe(productMedia[0]); // proves it skipped the non-image entry
+
+    // The plugin does NOT fabricate a flat `image` field on the product or the variant.
+    expect(product).not.toHaveProperty("image");
+    expect(variant).not.toHaveProperty("image");
+  });
+
+  it("AC2 — brand is NOT surfaced as a named field and is NEVER fabricated (absent stays absent)", async () => {
+    // brand is not UCP-native (absent from the UCP catalog contract). The wire fixture
+    // carries none; the projection must surface none — the renderer treats brand as
+    // optional. Fabricating one would be a regression, not a fix (Discovery signal l.80).
+    const payload = await renderPayload();
+    const product = (payload["products"] as Array<Record<string, unknown>>)[0]!;
+    const variant = product["variant"] as Record<string, unknown>;
+    expect(product).not.toHaveProperty("brand");
+    expect(variant).not.toHaveProperty("brand");
+    // Belt-and-braces: the token appears NOWHERE in the emitted payload (the fixture
+    // carries no "brand" anywhere, so any occurrence would be a fabrication).
+    expect(JSON.stringify(payload)).not.toContain("brand");
+  });
+
+  it("AC3 — the FULL products[] payload rides the single ToolResult text part; the plugin strips nothing by tool level (no verbosity gate)", async () => {
+    // The plugin exposes ONE output channel — a single `type:"text"` content part whose
+    // JSON body carries the whole `products[]` (jsonResult). There is no verbosity flag in
+    // the plugin that could suppress `products` or any enriched field. The gateway's
+    // on/verbose broadcast of `session.tool` `data.result` is the HOST contract, verified
+    // by the paired sil-stage golden-frame card — NOT reachable from this SDK boundary.
+    seedTokens("the-access-token", "the-refresh-token");
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([RENDER_PRODUCT]) }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerCatalogTools(api);
+
+    const result = await getTool(api, TOOL).execute("c1", { query: "office chair" });
+
+    // Exactly ONE text content part — the canonical ToolResult envelope the gateway wraps.
+    expect(result.content).toHaveLength(1);
+    expect(result.content[0]!.type).toBe("text");
+    const text = result.content[0]!.text;
+    expect(typeof text).toBe("string");
+
+    // The parsed body carries the COMPLETE product — nothing stripped between the
+    // projection and the ToolResult (media survives whole to the boundary).
+    const payload = JSON.parse(text as string) as Record<string, unknown>;
+    expect(payload["status"]).toBe("ok");
+    const product = (payload["products"] as Array<Record<string, unknown>>)[0]!;
+    expect(product["media"]).toEqual([RENDER_VIDEO, RENDER_IMAGE, RENDER_IMAGE_2]);
+    const variant = product["variant"] as Record<string, unknown>;
+    expect(variant["checkout_url"]).toBe("https://buy.example.com/render-1");
+    expect(variant["media"]).toEqual([RENDER_IMAGE]);
+  });
+});
