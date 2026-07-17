@@ -201,6 +201,7 @@ function registerSearch(api: PluginAPI): void {
         intent: optString(params["intent"]),
         query: optString(params["query"]),
       });
+      if (!result.ok) return mapFailure(api, "sil_profile_search", result);
       api.logger.info("sil_profile_searched", {
         domain_count: result.domains.length,
         prd_count: result.prds.length,
@@ -314,7 +315,8 @@ function mapFailure(
     | { ok: false; kind: "invalid_request"; field: string; message: string }
     | { ok: false; kind: "not_found"; message: string }
     | { ok: false; kind: "unreadable"; message: string }
-    | { ok: false; kind: "persistence_failed"; error: string; message: string; recovery: "fix_data_dir" },
+    | { ok: false; kind: "persistence_failed"; error: string; message: string; recovery: "fix_data_dir" }
+    | { ok: false; kind: "migration_failed"; version: number; reason: string; reverted: boolean; recovery: "inspect_store" },
 ) {
   if (result.kind === "invalid_request") {
     api.logger.warn(tool + "_invalid_request", { field: result.field });
@@ -329,6 +331,30 @@ function mapFailure(
     // over it (silent data loss on a recoverable artefact). Distinct from not_found.
     api.logger.warn(tool + "_unreadable", {});
     return jsonResult({ status: "unreadable", message: result.message, recovery: "inspect_artefact" });
+  }
+  if (result.kind === "migration_failed") {
+    // A behind-version store failed to self-migrate on this touch (heal-before-serve).
+    // `reverted` is the honesty rail: true = safely reverted to the exact prior state
+    // (nothing half-applied), false = the revert ITSELF failed and the store is LEFT
+    // DIRTY — the agent must NOT proceed as if the shopper is intact.
+    api.logger.error(tool + "_migration_failed", { version: result.version, reverted: result.reverted });
+    return jsonResult({
+      status: "migration_failed",
+      version: result.version,
+      reason: result.reason,
+      reverted: result.reverted,
+      recovery: result.recovery,
+      message: result.reverted
+        ? "The sil store was behind the current format and a self-migration failed at store"
+          + " version " + result.version + ". It was reverted to its exact prior state — nothing"
+          + " was half-applied, and the store still reads its honest prior status. Cause: "
+          + result.reason + ". Inspect the data directory (a backup is retained under"
+          + " .sil-migration-backup), then retry."
+        : "The sil store self-migration failed at store version " + result.version + " AND could"
+          + " NOT be reverted — the store is LEFT DIRTY (possibly half-migrated). Do NOT proceed as"
+          + " if the shopper is intact. Cause: " + result.reason + ". A backup is retained under"
+          + " .sil-migration-backup — inspect / restore it manually.",
+    });
   }
   api.logger.error(tool + "_persistence_failed", { error: result.error });
   return jsonResult({

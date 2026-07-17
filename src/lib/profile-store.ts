@@ -26,25 +26,19 @@
  * sil artefact — it is the host workspace SOUL.md, written by the host CLI.
  */
 
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import { DIR_MODE, ensureDataDir, getDataDir } from "./credentials.js";
-
-/** Owner-only file mode — artefacts are user-scoped, like tokens. The dir mode
- * (`DIR_MODE`, `0o700`) is owned by `credentials.ts` and imported, so the data-home
- * permission lives in exactly one place. */
-const FILE_MODE = 0o600;
+import {
+  atomicWrite,
+  atomicWriteBytes,
+  readArtefactFile,
+  serializeArtefact,
+} from "./artefact-io.js";
+import { ensureStoreMigrated } from "./migrations/runner.js";
+import type { MigrationFailed } from "./migrations/types.js";
 
 /** Fixed, compile-time-constant sub-tree under `$SIL_DATA_DIR` that holds the ONE
  * shopper's behaviour artefacts. A SINGLETON, so this is a constant — NOT caller
@@ -186,93 +180,6 @@ export function getDomainArtefactDir(slug: string): string {
 }
 
 // ===========================================================================
-// Frontmatter serialize / parse — coordinates are single-line scalars; the body is
-// opaque prose. `parseArtefact` returns null on a malformed/absent-frontmatter file
-// so a corrupt leaf reads `unreadable`, never half-read.
-// ===========================================================================
-
-interface Artefact {
-  fields: Record<string, string>;
-  body: string;
-}
-
-/** One-line scalar for a coordinate value: newlines folded to spaces, trimmed. */
-function scalar(value: string): string {
-  return String(value).replace(/\r?\n/g, " ").trim();
-}
-
-function serializeArtefact(fields: Record<string, string>, body: string): string {
-  const fm = Object.entries(fields)
-    .map(([k, v]) => k + ": " + scalar(v))
-    .join("\n");
-  // The store owns frontmatter — strip any block a model prepended to the body so the
-  // artefact never stacks two (self-heals a previously double-wrapped file on re-write).
-  const clean = stripLeadingFrontmatter(body);
-  const b = clean.endsWith("\n") ? clean : clean + "\n";
-  return "---\n" + fm + "\n---\n" + b;
-}
-
-/** Parse `--- key: value … ---` frontmatter + body. Returns null (⇒ `unreadable`) on
- * a missing open fence, a missing close fence, or an empty frontmatter block — a
- * fail-closed read, never a silent coercion. */
-function parseArtefact(raw: string): Artefact | null {
-  if (!raw.startsWith("---")) return null;
-  const close = raw.slice(3).match(/\n---[ \t]*\r?\n/);
-  if (!close || close.index === undefined) return null;
-  const fmRaw = raw.slice(3, 3 + close.index);
-  const body = raw.slice(3 + close.index + close[0].length);
-  const fields: Record<string, string> = {};
-  for (const line of fmRaw.split(/\r?\n/)) {
-    const m = /^([A-Za-z0-9_]+):\s*(.*)$/.exec(line);
-    if (m && m[2] !== "") fields[m[1] as string] = (m[2] as string).trim();
-  }
-  if (Object.keys(fields).length === 0) return null;
-  return { fields, body };
-}
-
-/** Strip a leading `--- … ---` frontmatter block a model may have prepended to a body,
- * reusing `parseArtefact` so ONLY a fence whose content is real frontmatter (≥1
- * `key: value`) is removed — a body opening with a bare `---` thematic break parses to
- * null and is returned untouched. The store owns frontmatter (frontmatter-as-truth), so a
- * model-authored block must never survive into the serialized body and stack a second. */
-function stripLeadingFrontmatter(body: string): string {
-  const parsed = parseArtefact(body);
-  return parsed === null ? body : parsed.body;
-}
-
-/** Read + parse one artefact file, or null if absent/unreadable/malformed. */
-function readArtefactFile(path: string): Artefact | null {
-  if (!existsSync(path)) return null;
-  let raw: string;
-  try {
-    raw = readFileSync(path, "utf8");
-  } catch {
-    return null;
-  }
-  return parseArtefact(raw);
-}
-
-/** Atomic single-file write: tmp sibling → write → rename over target → chmod. A
- * reader sees the old file or the new one, never a half-written one (mirrors
- * `credentials.ts`). Ensures the containing dir (0700) first. */
-function atomicWrite(path: string, contents: string): void {
-  mkdirSync(dirname(path), { recursive: true, mode: DIR_MODE });
-  const tmp = path + "." + randomBytes(6).toString("hex") + ".tmp";
-  writeFileSync(tmp, contents, { mode: FILE_MODE });
-  renameSync(tmp, path);
-  chmodSync(path, FILE_MODE);
-}
-
-/** Write binary bytes atomically, owner-only. */
-function atomicWriteBytes(path: string, bytes: Buffer): void {
-  mkdirSync(dirname(path), { recursive: true, mode: DIR_MODE });
-  const tmp = path + "." + randomBytes(6).toString("hex") + ".tmp";
-  writeFileSync(tmp, bytes, { mode: FILE_MODE });
-  renameSync(tmp, path);
-  chmodSync(path, FILE_MODE);
-}
-
-// ===========================================================================
 // materializeProfile — SETUP-ONLY. Write user_spec.md (frontmatter name); no
 // manifest, no domains. Re-run overwrites the shared user spec atomically.
 // ===========================================================================
@@ -292,6 +199,14 @@ export type MaterializeResult =
  * shopper `name` and whose body is the shared user spec. SETUP-ONLY: it mints no
  * method/PRD (that is `sil_learn create`) and writes no manifest. Validate-first: a
  * blank `name`/`userSpec` returns `invalid_request` and writes nothing.
+ *
+ * NOT migration-gated. Unlike the four serve-path primitives, materialize is SETUP: it
+ * writes a NEW shopper's user_spec, never serving stale legacy data. Gating it would
+ * (a) stamp the store-format marker at plain setup and (b) hijack the create-shopper
+ * bin's `persistence_failed` taxonomy on an unwritable data dir. The create-shopper bin
+ * can never reach materialize on a LEGACY store anyway — its `readShopperIdentity`
+ * pre-flight reads a frontmatter-less legacy user_spec as `unreadable` and aborts — so a
+ * legacy store heals via the first serve-path tool touch, never through setup.
  */
 export function materializeProfile(spec: ProfileSpec): MaterializeResult {
   if (!nonBlank(spec.name)) return invalid("name", "name is required and must be non-empty.");
@@ -387,7 +302,8 @@ export type LearnResult =
   | InvalidRequest
   | NotFound
   | Unreadable
-  | PersistenceFailed;
+  | PersistenceFailed
+  | MigrationFailed;
 
 /** A resolved target artefact + its human label. */
 interface ResolvedTarget {
@@ -422,6 +338,8 @@ function resolveTarget(spec: LearnSpec): ResolvedTarget | InvalidRequest {
 }
 
 export function learnArtefact(spec: LearnSpec): LearnResult {
+  const migrated = ensureStoreMigrated();
+  if (!migrated.ok) return migrated;
   switch (spec.kind) {
     case "create":
       return learnCreate(spec);
@@ -657,7 +575,9 @@ export interface SearchResult {
   unreadable: Array<{ id: string; error: string }>;
 }
 
-export function searchProfileFrontmatter(query: SearchQuery = {}): SearchResult {
+export function searchProfileFrontmatter(query: SearchQuery = {}): SearchResult | MigrationFailed {
+  const migrated = ensureStoreMigrated();
+  if (!migrated.ok) return migrated;
   const domainsRoot = join(getShopperArtefactDir(), DOMAINS_SUBDIR);
   const domains: DomainCoord[] = [];
   const prds: PrdCoord[] = [];
@@ -740,9 +660,12 @@ export type ReadResult =
     }
   | NotFound
   | Unreadable
-  | InvalidRequest;
+  | InvalidRequest
+  | MigrationFailed;
 
 export function readArtefactBody(domainSlug: string, prd?: string): ReadResult {
+  const migrated = ensureStoreMigrated();
+  if (!migrated.ok) return migrated;
   const badSlug = rejectBadSegment(domainSlug, "domainSlug");
   if (badSlug) return badSlug;
 
@@ -775,9 +698,12 @@ export type RemoveResult =
   | { ok: true; domainSlug: string; prd?: string }
   | NotFound
   | InvalidRequest
-  | PersistenceFailed;
+  | PersistenceFailed
+  | MigrationFailed;
 
 export function removeArtefact(domainSlug: string, prd?: string): RemoveResult {
+  const migrated = ensureStoreMigrated();
+  if (!migrated.ok) return migrated;
   const badSlug = rejectBadSegment(domainSlug, "domainSlug");
   if (badSlug) return badSlug;
 
