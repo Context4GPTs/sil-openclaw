@@ -160,9 +160,11 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       .mock.calls.filter(([marker]) => marker === "sil_plugin_loaded");
     expect(markerCalls).toHaveLength(1);
     // The full real tool set — the data-dir creation does not add/drop a tool.
-    // 10 tools after the sds-specs-client-tool card added sil_specs (the
-    // coin/dedupe/register canonicalization primitive) to the catalog group.
+    // 11 tools after the sil-doctor-tool-data-store-identity-health card added
+    // sil_doctor (report-first data-store/identity/version health) in the new
+    // doctor group.
     expect([...api._tools.keys()].sort()).toEqual([
+      "sil_doctor",
       "sil_learn",
       "sil_product_get",
       "sil_profile_get",

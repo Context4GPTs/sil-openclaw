@@ -35,6 +35,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { registerIdentityTools } from "../../tools/identity.js";
 import { registerCatalogTools } from "../../tools/catalog.js";
 import { registerProfileTools } from "../../tools/profile.js";
+import { registerDoctorTools } from "../../tools/doctor.js";
 import {
   createMockPluginApi,
   getTool,
@@ -192,6 +193,7 @@ describe("registered tool descriptions carry NO per-niche-expert vocabulary (who
     registerIdentityTools(api);
     registerCatalogTools(api);
     registerProfileTools(api);
+    registerDoctorTools(api);
     return api;
   }
 

@@ -66,9 +66,11 @@ import {
  * so this mirrors that pattern rather than exporting a fourth copy. */
 const FILE_MODE = 0o600;
 
-/** An interrupted atomic write leaves `<path>.<12 hex>.tmp` behind
- * (`profile-store.ts`'s tmp → rename). Bytes on disk ⇒ surfaced, never deleted. */
-const STALE_TMP_RE = /\.[0-9a-f]{12}\.tmp$/;
+/** An interrupted atomic write leaves `<path>.<hex>.tmp` behind
+ * (`profile-store.ts`'s tmp → rename). The hex length is not pinned: it is a
+ * detail of one call site's `randomBytes(n)`, and an orphan is an orphan.
+ * Bytes on disk ⇒ surfaced, never deleted. */
+const STALE_TMP_RE = /\.[0-9a-f]+\.tmp$/;
 
 const REREGISTER_HINT = "Run `sil_register` to re-register this install.";
 
@@ -262,10 +264,11 @@ function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean }
  */
 function walkDataDir(dataDir: string): Finding[] {
   const findings: Finding[] = [];
-  // tokens.json is a SINGLETON with its own stable `identity.tokens_perms`
-  // check, so the enumerated walk must not also claim it: two findings for one
-  // mode, and — because the walk runs first — the singleton would report `ok`
-  // on the very run that fixed it, hiding the fix from its own `appliedAction`.
+  // tokens.json has its own stable `identity.tokens_perms` check. Without this
+  // exclusion the walk claims the same mode twice — and, running first, it
+  // would fix the file before the singleton looked, so the singleton would
+  // report `ok` on the very run that fixed it and the fix would vanish from
+  // its own `appliedAction`.
   const tokensPath = getTokensPath();
 
   const visit = (dir: string): void => {
@@ -412,12 +415,17 @@ function checkIdentity(): Finding[] {
     appliedAction: null,
   });
 
-  // A singleton artefact, so it carries a STABLE id every run — that is what
-  // makes the fix idempotence guarantee observable: fixed → re-run → ok.
+  // tokens.json is a SINGLETON artefact, so its mode carries a STABLE id every
+  // run — that is what makes the fix's idempotence observable to a consumer:
+  // `fixed → re-run → ok` needs the same id to still be there. The enumerated
+  // `fs.mode:` walk could not provide that: it emits only on a problem, so it
+  // would report nothing at all on the run after the fix.
   findings.push(...checkTokensPerms(tokensPath));
 
+  // A file that parses as JSON but carries no `access_token` is corrupt too:
+  // there is nothing to authenticate with, and nothing to decode an expiry from.
   const stored = readTokens();
-  if (stored === null) {
+  if (stored === null || typeof stored.access_token !== "string") {
     // Clearing it would mutate bytes ⇒ destructive ⇒ surfaced, never auto-run.
     findings.push({
       id: "identity.tokens_parse",
@@ -447,6 +455,9 @@ function checkIdentity(): Finding[] {
   return findings;
 }
 
+/** The stable singleton counterpart to the enumerated `fs.mode:` walk — same
+ * tighten-only rule, same fix, but it reports `ok` when healthy so the
+ * `fixed → re-run → ok` transition stays observable on one id. */
 function checkTokensPerms(tokensPath: string): Finding[] {
   const mode = lstatSync(tokensPath).mode & 0o777;
   const id = "identity.tokens_perms";
@@ -591,7 +602,9 @@ function checkStore(): Finding[] {
     id: `store.unreadable:${id}`,
     severity: "warn" as Severity,
     status: "advisory" as const,
-    detected: error,
+    // Name the artefact AND the corruption — this is what a human reads to go
+    // repair the file. The store's own error text describes only the corruption.
+    detected: `${id}: ${error}`,
     suggestedAction:
       "Inspect and repair the artefact by hand — sil never overwrites a corrupt"
       + " artefact, because it may still be recoverable.",

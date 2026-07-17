@@ -182,8 +182,12 @@ export async function probeLatestVersion(
     });
     if (!res.ok) return null;
     const body: unknown = await res.json();
-    const latest = (body as { package?: { latestVersion?: unknown } })
-      ?.package?.latestVersion;
+    const pkg = (body as {
+      package?: { latestVersion?: unknown; tags?: { latest?: unknown } } | null;
+    })?.package;
+    // `latestVersion ?? tags.latest` — the resolution ClawHub's own CLI does.
+    // A real body carries both in agreement; only the tag is a real shape too.
+    const latest = pkg?.latestVersion ?? pkg?.tags?.latest;
     // The registry's string is used for ONE comparison and ONE report string —
     // never a path, never a URL to follow, never eval'd, never written to disk.
     return typeof latest === "string" && SEMVER_RE.test(latest.trim())

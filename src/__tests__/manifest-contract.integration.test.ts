@@ -44,6 +44,7 @@ import { fileURLToPath } from "node:url";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerProfileTools } from "../tools/profile.js";
+import { registerDoctorTools } from "../tools/doctor.js";
 import {
   createMockPluginApi,
   registeredToolNames,
@@ -86,6 +87,7 @@ function codeRegisteredNames(): Set<string> {
   registerIdentityTools(api);
   registerCatalogTools(api);
   registerProfileTools(api);
+  registerDoctorTools(api);
   return registeredToolNames(api);
 }
 
@@ -128,10 +130,12 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // The card's spine: after removing the skeleton examples, the manifest
     // AND the code both name exactly the real tools. Pinned by literal
     // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
-    // not just the symmetric drift check above. Now 10 tools — the
-    // sds-specs-client-tool card ADDS sil_specs (the coin/dedupe/register
-    // canonicalization primitive) to the existing 9: 9 → 10, add-only.
+    // not just the symmetric drift check above. Now 11 tools — the
+    // sil-doctor-tool-data-store-identity-health card ADDS sil_doctor (the
+    // report-first data-store/identity/version health tool) in a NEW group
+    // (registerDoctorTools, wired above): 10 → 11, add-only.
     const expected = [
+      "sil_doctor",
       "sil_learn",
       "sil_product_get",
       "sil_profile_get",
@@ -154,6 +158,17 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
       expect(code.has(removed)).toBe(false);
       expect(manifest.has(removed)).toBe(false);
     }
+  });
+
+  it("sil_doctor is BOTH registered by register() and declared in contracts.tools", () => {
+    // The doctor's self-enforcing-registration criterion, pinned by name. Unlike
+    // sil_specs (which joined the existing catalog group), sil_doctor arrives in
+    // a NEW group — so it reaches this guard only once registerDoctorTools is
+    // wired into register() in src/index.ts AND into codeRegisteredNames above.
+    // Both sides must name it: registered by registerDoctorTools AND listed in
+    // openclaw.plugin.json#contracts.tools.
+    expect(codeRegisteredNames().has("sil_doctor")).toBe(true);
+    expect(manifestToolNames().has("sil_doctor")).toBe(true);
   });
 
   it("sil_search is BOTH registered by register() and declared in contracts.tools", () => {

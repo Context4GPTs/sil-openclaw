@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerProfileTools } from "../tools/profile.js";
+import { registerDoctorTools } from "../tools/doctor.js";
 import {
   createMockPluginApi,
   registeredToolNames,
@@ -53,11 +54,15 @@ function frontmatter(): { name: string; description: string; body: string } {
   };
 }
 
+// Every register group, so the "named in the bundle" guard below covers the WHOLE
+// surface. A new group omitted here does not fail — it silently narrows the guard,
+// which is worse than a red: the tool ships undocumented and the test still passes.
 function registeredTools(): string[] {
   const api = createMockPluginApi();
   registerIdentityTools(api);
   registerCatalogTools(api);
   registerProfileTools(api);
+  registerDoctorTools(api);
   return [...registeredToolNames(api)];
 }
 
