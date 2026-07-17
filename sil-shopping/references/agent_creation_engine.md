@@ -1,6 +1,6 @@
 ---
 name: agent-creation-engine
-description: Create the single sil-wired shopper end to end — the two-touchpoint onboarding interview (persona + shared user-spec seed, endorsement-gated) then the one-command engine that persists it. Load when the user asks to set up or create their shopper.
+description: Create the single sil-wired shopper end to end — the two-touchpoint onboarding interview (persona + shared user-spec seed, endorsement-gated) then the one-command engine that persists it. Load when the user asks to create or set up their sil shopper.
 ---
 
 # Create the shopper
@@ -172,10 +172,6 @@ to mint/refresh domains; if defaults grant none, the bin reports `created` with 
    mode the pinned `alpine/openclaw:2026.6.9` accepts):
    `agents.list[<idx>].skills` ← `["sil-shopping"]`; `plugins.entries.sil.enabled` ←
    `true`. **No per-agent `tools.deny`** — the shopper inherits the host default toolset.
-   An fs-mutator deny is inert while codex's own shell (surfaced as `bash`) stays open by
-   design: it reads the shopper's skill files and can write regardless. The shell stays
-   open (trusted single-operator posture); persistence is steered through the sil tools by
-   the skill, not enforced by tool policy.
 8. **Admit sil (plugin trust)** — the shipped **`scripts/allowlist-openclaw.mjs`** helper
    (which the script runs itself, by absolute path via `node` — never the bare name)
    additively merges the three trust surfaces (`plugins.allow` + `tools.alsoAllow` +
@@ -203,7 +199,8 @@ carrying the **explore-first** mantra, the loop in three lines, and the one dist
 that matters: the shopper **mints an unlearned niche first** (a `sil_profile_search`
 MISS → `sil_learn create`, then search); **the sil catalog is where you buy, the open
 web is where you learn** (web only researches a niche's buying guide, never sources a
-pick); **persists only through `sil_learn`**, never to host files.
+pick); and its **shopping memory is the sil store** — it records what it learns through
+`sil_learn` / `sil_profile_*`.
 
 ### Status taxonomy
 

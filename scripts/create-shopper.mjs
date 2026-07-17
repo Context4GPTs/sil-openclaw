@@ -5,9 +5,8 @@
  * This is Change 3 of the onboarding-ux plan — it collapses the nine-step,
  * agent-driven host-CLI choreography (`agent_creation_engine.md`) into ONE shipped
  * package `bin`, a sibling of `scripts/allowlist-openclaw.mjs`. Like that bin it is
- * a standalone operator script — NOT the plugin process — so the plugin's
- * "never write host config / `noChildProcess: true`" guarantees do not bind it; it
- * legitimately drives `openclaw …` via `execFileSync`.
+ * a standalone operator script — NOT the plugin process — that drives the host
+ * `openclaw` CLI via `execFileSync`.
  *
  * It runs POST-endorsement: the interview (`agent_creation_engine.md` Part 1) owns the
  * consent gate; this bin executes an already-assembled, already-endorsed spec

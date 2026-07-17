@@ -249,8 +249,20 @@ describe("package.json#bin — the shipped operator bins (exact set, add-only)",
     }
   });
 
-  it("`scripts` is listed in #files so the bins ship in the tarball", () => {
-    expect(pkg.files).toContain("scripts");
+  it("#files ships EXACTLY the two operator bins from scripts/, never the whole scripts/ dir (keeps maintainer-only tooling out of the tarball)", () => {
+    // Shipping the coarse `scripts/` dir dragged maintainer-only tooling
+    // (release.mjs, changelog.mjs, sync-version.mjs) onto every user's machine —
+    // dead weight, extra attack surface, and the source of ClawHub's flagged
+    // `dangerous_exec` in release.mjs. The tarball must carry ONLY the two runtime
+    // bins. Derived from the bin map so the ship-list and the bin-list can't drift.
+    const shipped = pkg.files ?? [];
+    const runtimeEntries = Object.values(EXPECTED_BIN).map((t) => t.replace(/^\.\//, ""));
+    for (const entry of runtimeEntries) expect(shipped).toContain(entry);
+    // No coarse whole-dir entry, and no scripts/* leak beyond the two runtime bins.
+    expect(shipped).not.toContain("scripts");
+    expect(
+      shipped.filter((f) => f.startsWith("scripts/") && !runtimeEntries.includes(f)),
+    ).toEqual([]);
   });
 
   it("scripts/create-shopper.mjs is a node bin (starts with the `#!/usr/bin/env node` shebang, mirroring the sibling bin)", () => {

@@ -10,6 +10,21 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Security
+
+- **Ship only the two runtime operator bins, not the whole `scripts/` dir.**
+  `package.json#files` was dragging maintainer tooling (`release.mjs`,
+  `changelog.mjs`, `sync-version.mjs`) into the tarball. `security.noChildProcess`
+  is now `false` — the runtime spawns nothing, but the two shipped bins drive the
+  host `openclaw` CLI via `execFileSync`.
+
+### Changed
+
+- **Creation-engine doc: dropped a false claim and its defensive prose.** The
+  shopper's memory is the sil store; removed the "never to host files" absolute
+  that contradicted the one-time `SOUL.md` write, and the open-shell justification.
+- **Narrowed the skill bundle's activation `description:` to explicit sil intent.**
+
 ## [0.4.3] - 2026-07-17
 
 ### Added

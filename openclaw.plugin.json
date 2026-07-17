@@ -72,7 +72,7 @@
       "config.json (user identity)"
     ],
     "noNativeModules": true,
-    "noChildProcess": true,
+    "noChildProcess": false,
     "noInstallScripts": true,
     "reportVulnerabilitiesTo": "https://x.com/4gpts"
   }
