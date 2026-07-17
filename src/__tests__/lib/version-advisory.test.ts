@@ -1,9 +1,11 @@
 /**
  * UNIT — `compareSemver()` + `buildVersionBehindFinding()` + `readInstalledVersion()`
- * (tier: unit, pure logic, no network; the installed read touches only the packaged
- * package.json).
+ * + `probeLatestVersion()`'s BOUND (tier: unit; pure logic, no network — the installed
+ * read touches only the packaged package.json, and the probe is driven through its
+ * injected `fetch` seam with no socket ever opened).
  *
- * Card: sil-doctor-tool-data-store-identity-health, **AC9** (+ the local half of AC6).
+ * Card: sil-doctor-tool-data-store-identity-health, **AC9 + AC6c** (+ the local half
+ * of AC6).
  * `src/lib/version-advisory.ts` is created by THIS card and owns the plugin-version
  * datum end-to-end (founder ruling, OQ4/OQ6). The sibling
  * `self-upgrade-detect-host-wiring-advisory` will ADD `buildGatewayCompatFinding()`
@@ -21,6 +23,13 @@
  *    downgrade), and `latest === null` (probe failed/offline). Silence is the honest
  *    degradation; "you are current" and "you are behind" are both lies when the
  *    probe never answered.
+ * 3. **An UNBOUNDED probe.** The doctor is needed most when the network is sick, so
+ *    the probe must be bounded by a deadline the DOCTOR owns — not by the transport's
+ *    goodwill. An `AbortController` alone bounds nothing: aborting a socket that
+ *    blackholes the connection and ignores the signal hangs the diagnosis forever.
+ *    The integration suite's stalling fakes all honour `abort`, so they exercise only
+ *    that half and stay green against a probe with no deadline of its own — this file
+ *    owns the other half (see the `probeLatestVersion` block at the bottom).
  *
  * Contract pinned for the implementation (expert-developer) —
  * src/lib/version-advisory.ts:
@@ -39,9 +48,15 @@
  *     — EXACTLY ONE `version.plugin_behind` Finding (`info` + `advisory`,
  *       `appliedAction: null`) iff installed < latest; otherwise `null`.
  *       Pure: no fs, no network.
+ *   export function probeLatestVersion(
+ *     fetchImpl?: FetchLike, timeoutMs?: number,
+ *   ): Promise<string | null>;
+ *     — resolves the latest published version, or `null` on ANY failure. RESOLVES
+ *       within `timeoutMs` no matter what the transport does — including a transport
+ *       that never settles and ignores the abort signal entirely.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,6 +65,8 @@ import {
   compareSemver,
   readInstalledVersion,
   buildVersionBehindFinding,
+  probeLatestVersion,
+  type FetchLike,
 } from "../../lib/version-advisory.js";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -263,5 +280,96 @@ describe("buildVersionBehindFinding — drift-only: exactly one finding, iff beh
     const a = buildVersionBehindFinding("0.4.2", "0.5.0");
     const b = buildVersionBehindFinding("0.4.2", "0.5.0");
     expect(a).toEqual(b);
+  });
+});
+
+// ===========================================================================
+// AC6c — the probe's BOUND. The doctor owns the deadline; the transport does
+// not get a vote.
+// ===========================================================================
+
+/** A ClawHub package-detail body, per the shipped CLI's own response schema
+ * (`ApiV1PackageResponseSchema`; the CLI resolves `latestVersion ?? tags.latest`). */
+const clawhubBody = (latestVersion: string): unknown => ({
+  package: { name: "@4gpts/sil", latestVersion, tags: { latest: latestVersion } },
+  owner: { handle: "4gpts" },
+});
+
+/** A channel that answers immediately with `latest`. */
+const okChannel =
+  (latest: string): FetchLike =>
+  async () => ({ ok: true, status: 200, json: async () => clawhubBody(latest) });
+
+/**
+ * THE transport this block exists for: it never settles, and it **never listens
+ * for `abort`**. The second half is the entire point. Every stalling fake in
+ * `doctor.integration.test.ts` registers an `abort` listener and rejects from it
+ * — i.e. it VOLUNTEERS to stop, so it passes just as happily against a probe
+ * that only aborts and never bounds itself. A real blackholed host (a dropped
+ * SYN, a load balancer swallowing the connection, a captive portal) does not
+ * volunteer, and `AbortController` cannot make it.
+ */
+const blackhole: FetchLike = () => new Promise<never>(() => {});
+
+describe("probeLatestVersion — bounded by a DEADLINE, not merely by an abort", () => {
+  it("resolves null within the deadline against a channel that never settles AND ignores the signal", async () => {
+    // The exact regression this guards: `return await request` (no
+    // `Promise.race`) hands the bound to the transport, and this transport never
+    // gives it back — the diagnosis hangs forever. `await request` fails this
+    // test by blowing the 10s suite timeout, which is the correct, loud outcome.
+    const started = Date.now();
+
+    await expect(probeLatestVersion(blackhole, 300)).resolves.toBeNull();
+
+    const elapsed = Date.now() - started;
+    // The null came FROM the deadline (timers never fire early), so it is a
+    // bound — not a probe that happens to give up on its own.
+    expect(elapsed).toBeGreaterThanOrEqual(250);
+    expect(elapsed).toBeLessThan(2_000);
+  });
+
+  it("is not vacuous — the same probe returns a REAL version from a channel that answers", async () => {
+    // Without this, a `probeLatestVersion` that simply `return null`ed would pass
+    // every assertion above. `null` must mean "bounded/failed", never "always".
+    await expect(probeLatestVersion(okChannel("9.9.9"), 300)).resolves.toBe("9.9.9");
+  });
+
+  it("still ABORTS the signal, so a well-behaved transport releases its socket", async () => {
+    // The deadline is the bound; the abort is the courtesy. Both halves ship —
+    // resolving the race without aborting would leak a live socket per run.
+    let signal: AbortSignal | undefined;
+    const watched: FetchLike = (_url, init) => {
+      signal = init.signal;
+      return new Promise<never>(() => {});
+    };
+
+    await expect(probeLatestVersion(watched, 300)).resolves.toBeNull();
+
+    expect(signal).toBeDefined();
+    expect(signal!.aborted).toBe(true);
+  });
+
+  it("does NOT wait for the deadline when the channel answers promptly", async () => {
+    // A race won by the deadline on every run would make `sil_doctor` cost its
+    // full timeout each time. With a 30s deadline, an implementation that awaits
+    // it fails by suite timeout rather than passing slowly.
+    const started = Date.now();
+
+    await expect(probeLatestVersion(okChannel("9.9.9"), 30_000)).resolves.toBe("9.9.9");
+
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it("clears the deadline timer once the request wins — no dangling handle", async () => {
+    // A 30s timer left armed after `execute()` returns holds the host's event
+    // loop open — the same class of failure as the register()-opens-nothing
+    // invariant, one layer down.
+    vi.useFakeTimers();
+    try {
+      await expect(probeLatestVersion(okChannel("9.9.9"), 30_000)).resolves.toBe("9.9.9");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

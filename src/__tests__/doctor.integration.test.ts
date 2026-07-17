@@ -245,6 +245,8 @@ function writeTokensFile(tokens: unknown, mode = 0o600): string {
 
 const modeBits = (path: string): number => statSync(path).mode & 0o777;
 
+const oct = (mode: number): string => `0${mode.toString(8).padStart(3, "0")}`;
+
 /** A recursive snapshot of the tree: relpath → mode + content hash. Proves "no
  * writes" (bytes AND modes AND the absence of a leaked tmp file). */
 function snapshot(root: string): Record<string, string> {
@@ -819,6 +821,209 @@ describe("AC3a — a safe dir-mode fix auto-applies", () => {
     // Reached only via lstat on the link itself — the real file keeps its mode
     // and is fixed (if at all) on its own path, once.
     expect(modeBits(method)).toBe(0o600);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC3a — the ROOT's own mode. The PO's fix-posture policy names this one first
+// ("`chmod 0700` a too-open DATA/shopper/domains dir"), and it is the highest-
+// value dir check in the tool: $SIL_DATA_DIR is the container holding
+// tokens.json. Nothing else covers it — the enumerated walk only checks the
+// ENTRIES it reads out of this dir, and `mkdirSync` on an existing dir is a
+// no-op that never chmods. A 0755 data dir behind `healthy: true` is exactly
+// the "a doctor that lies is worse than none" failure this card is built around.
+// ---------------------------------------------------------------------------
+
+/** The data dir's own mode rides a SINGLETON id: one fixed path with a
+ * lifecycle, so it reports a stable `ok` when healthy (the emit rule's second
+ * case) — which is what makes `fixed → re-run → ok` observable at all. */
+const ROOT_MODE = "fs.data_dir_mode";
+
+/** Every finding that could be claiming the ROOT's mode, in either shape it
+ * could take: the singleton, or the enumerated walk's own form for the root
+ * (`rel(dataDir, dataDir)` === "."). TWO owners means a double-report and a
+ * double-chmod, and re-creates the ordering trap the tokens.json exclusion
+ * exists to close (the walk fixing the path before the singleton looks, so the
+ * singleton reports `ok` on the very run that fixed it). ZERO owners is the
+ * false green itself. Exactly one. */
+const rootModeOwners = (r: DoctorReport): Finding[] =>
+  r.findings.filter((f) => f.id === ROOT_MODE || f.id === "fs.mode:.");
+
+describe("AC3a — the $SIL_DATA_DIR ROOT's own mode is checked and tightened", () => {
+  it.skipIf(AS_ROOT)("auto-tightens a too-open 0755 data dir to 0700 and records it", async () => {
+    seedHealthyDomain("coffee");
+    chmodSync(dataDir, 0o755); // an untarred backup / an older install's umask
+    expect(modeBits(dataDir)).toBe(0o755);
+
+    const report = await runDoctor();
+
+    // The fix really ran on the real filesystem — the container holding
+    // tokens.json is owner-only afterwards.
+    expect(modeBits(dataDir)).toBe(0o700);
+    const owner = rootModeOwners(report)[0];
+    expect(owner).toBeDefined();
+    // `fixed` on the run that FIXED it — never `ok`. This is the ordering trap
+    // the dev already hit once on identity.tokens_perms: a check that reports
+    // `ok` on its own fixing run loses the fix from its own appliedAction, and
+    // the consumer can never audit what the doctor changed.
+    expect(owner!.status).toBe("fixed");
+    expect(owner!.severity).toBe("warn");
+    expect(owner!.appliedAction).not.toBeNull();
+    expect(owner!.appliedAction).toContain("0700");
+    expect(owner!.appliedAction).toContain(dataDir);
+  });
+
+  it.skipIf(AS_ROOT)("a re-run yields the SAME id at `ok` — the fix stuck (idempotent)", async () => {
+    chmodSync(dataDir, 0o755);
+    const first = await runDoctor();
+    expect(first.findings.find((f) => f.id === ROOT_MODE)!.status).toBe("fixed");
+
+    const second = await runDoctor();
+
+    expect(modeBits(dataDir)).toBe(0o700);
+    const owner = second.findings.find((f) => f.id === ROOT_MODE);
+    expect(owner).toBeDefined();
+    expect(owner!.status).toBe("ok");
+    expect(owner!.appliedAction).toBeNull();
+    // Nothing anywhere re-applies on the second run.
+    expect(second.findings.filter((f) => f.status === "fixed")).toEqual([]);
+    expect(second.healthy).toBe(true);
+  });
+
+  it("a healthy 0700 data dir reports the same stable id at `ok`, applying nothing", async () => {
+    seedHealthyStore();
+    const report = await runDoctor();
+    const owner = report.findings.find((f) => f.id === ROOT_MODE);
+    // The singleton is present on a HEALTHY run too — without it there is no id
+    // for `fixed → re-run → ok` to transition on, and no way for a consumer to
+    // tell "checked, fine" from "never checked".
+    expect(owner).toBeDefined();
+    expect(owner!.status).toBe("ok");
+    expect(owner!.severity).toBe("info");
+    expect(owner!.appliedAction).toBeNull();
+    expect(modeBits(dataDir)).toBe(0o700);
+    expect(report.healthy).toBe(true);
+  });
+
+  it.skipIf(AS_ROOT)("exactly ONE check owns the root's mode — never two, never none", async () => {
+    // The mirror of the tokens.json ownership guard. Zero owners is the P2-1
+    // false green (a 0755 credential container checked by nobody); two owners is
+    // the double-chmod/ordering trap. Neither is visible to any other assertion.
+    chmodSync(dataDir, 0o755);
+    const report = await runDoctor();
+    expect(rootModeOwners(report)).toHaveLength(1);
+    expect(modeBits(dataDir)).toBe(0o700);
+  });
+
+  it.skipIf(AS_ROOT)("never WIDENS a data dir that is tighter than required (0500 stays 0500)", async () => {
+    // The inverse over-reach: an implementation that "normalizes" the root to
+    // 0700 (`mode !== expected` rather than `mode & ~expected`) would GRANT write
+    // to a deliberately read-only store — a security regression dressed up as a
+    // fix, and one that makes the writability check pass while doing it.
+    chmodSync(dataDir, 0o500);
+    try {
+      const report = await runDoctor();
+      expect(modeBits(dataDir)).toBe(0o500);
+      expect(rootModeOwners(report).filter((f) => f.appliedAction !== null)).toEqual([]);
+    } finally {
+      chmodSync(dataDir, 0o700);
+    }
+  });
+
+  it.skipIf(AS_ROOT)("claims a fix ONLY when the mode really changed on disk", async () => {
+    // The honesty rail, bidirectionally: `appliedAction`/`fixed` iff the on-disk
+    // mode actually moved. Catches both green-washing (claiming a chmod that
+    // never ran) and a silent fix (mutating the container while reporting `ok`,
+    // which leaves the operator unable to audit what the doctor did).
+    for (const mode of [0o755, 0o750, 0o700, 0o500]) {
+      chmodSync(dataDir, mode);
+      const before = modeBits(dataDir);
+      const report = await runDoctor();
+      const after = modeBits(dataDir);
+
+      const owners = rootModeOwners(report);
+      expect(owners).toHaveLength(1);
+      const claimed = owners[0]!.appliedAction !== null || owners[0]!.status === "fixed";
+      expect({ mode: oct(mode), claimed }).toEqual({
+        mode: oct(mode),
+        claimed: before !== after,
+      });
+    }
+    chmodSync(dataDir, 0o700);
+  });
+
+  it.skipIf(AS_ROOT)("converges on a SYMLINKED $SIL_DATA_DIR — tightens the real dir ONCE", async () => {
+    // A symlinked data dir is a legitimate operator setup (sil already writes
+    // every artefact and tokens.json through it), and it is the one place the
+    // walk's `lstat` rule is WRONG: a symlink's own mode is always 0777 on
+    // Linux, and `chmod` follows the link regardless (there is no lchmod). An
+    // lstat-based root check therefore reads 0777, tightens the target anyway,
+    // reads 0777 again next run, and re-reports `fixed` FOREVER — never
+    // converging, while `detected` names a mode no real directory has. The
+    // container the operator pointed at must end up 0700, exactly once.
+    const real = join(parentDir, "real-store");
+    mkdirSync(real, { recursive: true, mode: 0o700 });
+    chmodSync(real, 0o755);
+    const link = join(parentDir, "linked-data");
+    symlinkSync(real, link);
+    process.env["SIL_DATA_DIR"] = link;
+
+    const first = await runDoctor();
+    expect(modeBits(real)).toBe(0o700);
+    expect(rootModeOwners(first)[0]!.status).toBe("fixed");
+
+    const second = await runDoctor();
+
+    expect(rootModeOwners(second)).toHaveLength(1);
+    expect(rootModeOwners(second)[0]!.status).toBe("ok");
+    expect(rootModeOwners(second)[0]!.appliedAction).toBeNull();
+    // The link itself is still a link — the doctor did not replace it.
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+  });
+
+  it.skipIf(AS_ROOT)(
+    "reports the root's mode on an UNWRITABLE dir too — and never widens it to fix that",
+    async () => {
+      // 0555: world-readable AND not writable by its own owner. Both facts must
+      // report — the check may not hide behind the critical writability finding,
+      // since an unwritable data dir is exactly when an operator reads this.
+      chmodSync(dataDir, 0o555);
+      try {
+        const report = await runDoctor();
+
+        expect(report.findings.some((f) => f.id === ROOT_MODE)).toBe(true);
+        expect(report.counts.critical).toBeGreaterThan(0);
+        // Tighten-only, at its sharpest: 0555 & 0700 = 0500. The doctor must NOT
+        // "repair" the unwritability by GRANTING write — that would widen the
+        // container's mode while calling itself a fix. The writability finding is
+        // the operator's to act on; the doctor only ever clears bits.
+        expect(modeBits(dataDir)).toBe(0o500);
+        expect(report.status).toBe("ok");
+      } finally {
+        chmodSync(dataDir, 0o700);
+      }
+    },
+  );
+});
+
+describe("AC5 — an entry that cannot be lstat'd never throws out of execute()", () => {
+  it.skipIf(AS_ROOT)("skips an unreadable entry instead of throwing (invariant 3)", async () => {
+    // A REAL, reachable fault for the same hole the ENOENT walk race opens: a
+    // 0400 directory is readable (readdir succeeds) but not searchable, so
+    // lstat on every entry it lists EACCESes. An lstat outside the try/catch
+    // escapes execute() and the tool throws across the boundary — the one thing
+    // a report-first doctor may never do.
+    const locked = join(dataDir, "locked");
+    mkdirSync(locked, { recursive: true, mode: 0o700 });
+    writeFileSync(join(locked, "artefact.md"), "---\nname: x\n---\n", { mode: 0o600 });
+    chmodSync(locked, 0o400); // r-- : readdir OK, lstat of its entries EACCES
+    try {
+      const report = await runDoctor();
+      expect(report.status).toBe("ok");
+      expect(report.installedVersion).toBe(INSTALLED);
+    } finally {
+      chmodSync(locked, 0o700);
+    }
   });
 });
 
