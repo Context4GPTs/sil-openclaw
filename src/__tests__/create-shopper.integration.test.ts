@@ -79,6 +79,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { deriveAgentId } from "../lib/derive-agent-id.js";
+import { resolveCreationEntrypoint } from "../lib/creation-entrypoint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** Repo root of the checkout under test (…/src/__tests__ → root). */
@@ -449,7 +450,11 @@ function runBin(opts: RunOpts = {}): RunResult {
   };
 
   try {
-    const stdout = execFileSync("node", args, {
+    // `process.execPath`, never the bare "node": the ClawHub-channel tests below
+    // hand this an env whose PATH holds ONLY the `openclaw` shim, and a PATH lookup
+    // for the interpreter itself would fail there for a reason that has nothing to
+    // do with what those tests are proving.
+    const stdout = execFileSync(process.execPath, args, {
       input,
       env,
       encoding: "utf8",
@@ -1468,5 +1473,217 @@ describe("bind-the-channel — a VERIFIED route is reversed by whole-create tear
     expect(readConfig().bindings ?? []).toEqual([]);
     expect(existsSync(shopperDir())).toBe(false);
     expect(existsSync(spec.workspace)).toBe(false);
+  });
+});
+
+// ===========================================================================
+// Card: creation-bin-unreachable-on-clawhub-installs — AC A1/A5 and C1.
+//
+// THE CLAWHUB CHANNEL'S TESTABLE ESSENCE IS "the sil bins are not on PATH".
+// `openclaw plugins install` extracts the tarball and links nothing, so the bare
+// `sil-openclaw-create-shopper` the skill used to document simply did not exist and
+// creation died at its last step. We reproduce exactly that property — PATH holds
+// ONLY the `openclaw` shim — and drive the documented form
+// `node <absolute entrypoint> --spec <file>` through it.
+//
+// This is NOT a claim to have tested a real ClawHub install. This repo has no
+// host-load gate; true channel parity and agent path-following are closed by a
+// companion card in the sil-stage sibling, which boots alpine/openclaw and installs
+// the packed tarball via `openclaw plugins install --link`. What IS proved here is
+// the defining property, which is what the bug turned on.
+//
+// `openclaw` itself STAYS on PATH deliberately: create-shopper.mjs shells it
+// (`execFileSync("openclaw", …)`), and `openclaw` is always on PATH on every
+// channel — which is precisely why the pre-0.3.8 design worked everywhere. An
+// EMPTY PATH would fail for that unrelated reason and would prove nothing.
+// ===========================================================================
+
+/**
+ * The ClawHub channel: `openclaw` and `node` reachable, every sil bin absent.
+ *
+ * The interpreter's own directory is on PATH deliberately — the `openclaw` shim's
+ * `#!/usr/bin/env node` shebang needs it, and on a real host node is obviously
+ * present (OpenClaw runs on it). The ONE property being reproduced is that no sil
+ * bin was linked, which is exactly what `openclaw plugins install` does not do.
+ * The `command -v` test below proves that property really holds here rather than
+ * assuming it — if a global `npm i -g sil-openclaw` ever put the bin in node's bin
+ * dir on this machine, that test fails loudly instead of quietly making this whole
+ * block vacuous.
+ */
+const clawhubChannelEnv = (): Record<string, string> => ({
+  PATH: `${binDir}:${dirname(process.execPath)}`,
+});
+
+describe("AC A1/A5 — the documented entrypoint runs with the sil bins OFF PATH", () => {
+  it("the bare bin name really IS unreachable in this env (the channel is reproduced)", () => {
+    // ANTI-VACUITY, and the most important assertion in this block: if the sil bins
+    // were somehow still resolvable here, every test below would pass without ever
+    // reproducing the bug. Proven by asking a shell to resolve the exact command the
+    // skill used to document. 127 is "command not found".
+    let status = 0;
+    let stderr = "";
+    try {
+      execFileSync("/bin/sh", ["-c", "sil-openclaw-create-shopper --help"], {
+        env: clawhubChannelEnv(),
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (err: unknown) {
+      const e = err as { status?: number; stderr?: Buffer | string };
+      status = e.status ?? 1;
+      stderr = (e.stderr ?? "").toString();
+    }
+    expect(status).toBe(127);
+    expect(stderr.toLowerCase()).toContain("not found");
+
+    // …while `openclaw` — the thing the bin legitimately shells — still resolves.
+    expect(() =>
+      execFileSync("/bin/sh", ["-c", "command -v openclaw"], {
+        env: clawhubChannelEnv(),
+        stdio: ["pipe", "pipe", "pipe"],
+      }),
+    ).not.toThrow();
+  });
+
+  it("AC A1 — `node <entrypoint> --spec <file>` CREATES the shopper on that channel", () => {
+    // The regression test for the whole card: this is the exact form the skill now
+    // documents, run under the exact channel property that broke it.
+    writeConfig(freshConfig());
+    const spec = validSpec();
+    const r = runBin({ spec, viaSpecFile: true, env: clawhubChannelEnv() });
+
+    expect(parseMarker(r.stdout)["status"]).toBe("created");
+    expect(r.status).toBe(0);
+    // Never a shell failure, and never the MODULE_NOT_FOUND the naive `../scripts/…`
+    // fix would have traded it for — the same silent-late failure at the same step.
+    const emitted = r.stdout + r.stderr;
+    expect(emitted).not.toContain("command not found");
+    expect(emitted).not.toContain("MODULE_NOT_FOUND");
+    expect(emitted).not.toContain("Cannot find module");
+  });
+
+  it("AC A5 — the entrypoint the PLUGIN resolves is the one that runs (loadable by node)", () => {
+    // Closes the loop the card is built on: the path `sil_doctor` reports as
+    // `creationEntrypoint` is spawned here for real. Reachability asserted by an
+    // actual `node` load — never `existsSync`, which is the proven trap: `cat
+    // <skilldir>/../scripts/x` exits 0 while `node` throws MODULE_NOT_FOUND on the
+    // IDENTICAL string, because node's path.resolve normalizes `..` lexically, before
+    // the filesystem. A real run also proves the static `../dist/lib/*.js` imports
+    // resolve — the bin is not standalone and must stay in-tree.
+    writeConfig(freshConfig());
+    const resolved = resolveCreationEntrypoint();
+    expect(resolved).toBe(SCRIPT);
+
+    const specPath = join(workdir, "resolved-spec.json");
+    const spec = validSpec();
+    writeFileSync(specPath, JSON.stringify(spec));
+
+    const stdout = execFileSync(process.execPath, [resolved, "--spec", specPath], {
+      env: {
+        ...clawhubChannelEnv(),
+        HOME: emptyHome,
+        OPENCLAW_CONFIG_PATH: configPath,
+        SIL_DATA_DIR: dataDir,
+        OPENCLAW_SHIM_LOG: logPath,
+      },
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    expect(parseMarker(stdout)["status"]).toBe("created");
+    expect(existsSync(userSpecPath())).toBe(true);
+  });
+
+  it("runs identically from a FOREIGN cwd — no PATH, no cwd, no linking (AC A2)", () => {
+    // Production cwd is the agent's workspace, not the plugin root. Static ESM
+    // specifiers resolve against the MODULE file, so an absolute invocation is sound
+    // from anywhere — the property that lets ONE documented command serve both
+    // channels with no conditional branch.
+    writeConfig(freshConfig());
+    const spec = validSpec();
+    const specPath = join(workdir, "cwd-spec.json");
+    writeFileSync(specPath, JSON.stringify(spec));
+
+    const stdout = execFileSync(process.execPath, [SCRIPT, "--spec", specPath], {
+      cwd: emptyHome,
+      env: {
+        ...clawhubChannelEnv(),
+        HOME: emptyHome,
+        OPENCLAW_CONFIG_PATH: configPath,
+        SIL_DATA_DIR: dataDir,
+        OPENCLAW_SHIM_LOG: logPath,
+      },
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    expect(parseMarker(stdout)["status"]).toBe("created");
+  });
+});
+
+// ===========================================================================
+// AC C1 — the spec travels as a FILE, so shell quoting is never in the path.
+// ===========================================================================
+
+describe("AC C1 — shell metacharacters round-trip verbatim via --spec", () => {
+  // Persona and userSpec are free-form, model-authored prose: apostrophes and quotes
+  // are the NORM, not the edge case. The heredoc form mangled them into unparseable
+  // stdin, which surfaced as `invalid_request` — so the flow did not merely fail, it
+  // failed while BLAMING THE USER for a spec that was fine.
+  const NASTY_PERSONA = [
+    `A buyer who says "it's fine" and won't budge.`,
+    "Runs `rm -rf /` jokes; $HOME is not a place; $(whoami) neither.",
+    "Backticks: `` and 'single' and \"double\" quotes.",
+    "Costs $5.00 — 100% sure. 50%的中文. Emoji 🛍️.",
+    "A trailing backslash \\ and a semicolon; then | a pipe && an and.",
+  ].join("\n");
+  const NASTY_USERSPEC = [
+    "Ships to O'Brien's Café, 12 King's Rd.",
+    'Allergic to "tree nuts"; NEVER buy $(cat /etc/passwd).',
+    "Budget: $200-$400. Size `M`. #hash & ampersand.",
+    "Newline-separated\nrules > with > angles < and back\\slashes.",
+  ].join("\n");
+
+  it("creates the shopper and lands the bytes VERBATIM in SOUL.md and user_spec.md", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec({ persona: NASTY_PERSONA, userSpec: NASTY_USERSPEC });
+    const r = runBin({ spec, viaSpecFile: true, env: clawhubChannelEnv() });
+
+    // It succeeds — `invalid_request` here would be the taxonomy lying about whose
+    // fault it is.
+    expect(parseMarker(r.stdout)["status"]).toBe("created");
+
+    const soul = readFileSync(join(spec.workspace, "SOUL.md"), "utf8");
+    expect(soul).toContain(NASTY_PERSONA);
+
+    const userSpec = readFileSync(userSpecPath(), "utf8");
+    expect(userSpec).toContain(NASTY_USERSPEC);
+  });
+
+  it("NOTHING was shell-expanded or executed — the bytes are data, never code", () => {
+    // The failure this catches is not "it crashed" but "it silently ran": a spec that
+    // travels through a shell can have `$(…)` substituted or `$HOME` expanded, and the
+    // user's persona would be quietly rewritten — or worse.
+    writeConfig(freshConfig());
+    const spec = validSpec({ persona: NASTY_PERSONA, userSpec: NASTY_USERSPEC });
+    runBin({ spec, viaSpecFile: true, env: clawhubChannelEnv() });
+
+    const written =
+      readFileSync(join(spec.workspace, "SOUL.md"), "utf8")
+      + readFileSync(userSpecPath(), "utf8");
+    // The literals survive UNEXPANDED …
+    expect(written).toContain("$(whoami)");
+    expect(written).toContain("$HOME");
+    expect(written).toContain("$(cat /etc/passwd)");
+    // … and their expansions are nowhere to be seen.
+    expect(written).not.toContain("root:x:0:0");
+    expect(written).not.toContain(emptyHome);
+  });
+
+  it("a persona that is ONLY quotes still creates (the pathological case)", () => {
+    writeConfig(freshConfig());
+    const spec = validSpec({ persona: `'"'"'`, userSpec: `"'\`$\\` });
+    const r = runBin({ spec, viaSpecFile: true, env: clawhubChannelEnv() });
+    expect(parseMarker(r.stdout)["status"]).toBe("created");
+    expect(readFileSync(join(spec.workspace, "SOUL.md"), "utf8")).toContain(`'"'"'`);
   });
 });

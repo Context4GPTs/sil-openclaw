@@ -32,11 +32,13 @@
  *       Extracts ONLY `exp`.
  *   export interface DoctorReport {
  *     status: "ok"; healthy: boolean; dataDir: string; installedVersion: string;
+ *     creationEntrypoint: string;
  *     counts: { info: number; warn: number; critical: number };
  *     findings: Finding[];
  *   }
  *   export function buildDoctorReport(input: {
- *     dataDir: string; installedVersion: string; findings: Finding[];
+ *     dataDir: string; installedVersion: string; creationEntrypoint: string;
+ *     findings: Finding[];
  *   }): DoctorReport;
  *     — pure assembler: rolls up `healthy` + `counts` from the findings it is
  *       given. Never invents a finding.
@@ -199,8 +201,15 @@ describe("isAccessTokenExpired — leak-free and offline (the top risk)", () => 
 // AC7 — finding/report shape is exactly the founder's six fields + roll-ups.
 // ===========================================================================
 
+// EXACT SET, asserted with `toEqual` — never loosened to a subset/`toContain`,
+// which would silently stop catching drift in BOTH directions. Bumped ADD-ONLY by
+// card `creation-bin-unreachable-on-clawhub-installs`: `creationEntrypoint` joins
+// `dataDir`/`installedVersion` as report CONTEXT (a datum the agent RUNS), because
+// the finding schema is six flat prose fields and a model would otherwise have to
+// regex a path out of one at the creation payoff moment.
 const REPORT_KEYS = [
   "counts",
+  "creationEntrypoint",
   "dataDir",
   "findings",
   "healthy",
@@ -208,15 +217,18 @@ const REPORT_KEYS = [
   "status",
 ];
 
+const CREATION_ENTRYPOINT = "/plugin/scripts/create-shopper.mjs";
+
 const build = (findings: Finding[]) =>
   buildDoctorReport({
     dataDir: "/tmp/sil-data",
     installedVersion: "0.4.2",
+    creationEntrypoint: CREATION_ENTRYPOINT,
     findings,
   });
 
 describe("buildDoctorReport — the envelope payload shape", () => {
-  it("carries exactly the six DoctorReport keys — no extras", () => {
+  it("carries exactly the seven DoctorReport keys — no extras", () => {
     expect(Object.keys(build([])).sort()).toEqual(REPORT_KEYS);
   });
 
@@ -232,6 +244,24 @@ describe("buildDoctorReport — the envelope payload shape", () => {
     expect(report.dataDir).toBe("/tmp/sil-data");
     expect(report.installedVersion).toBe("0.4.2");
     expect(report.installedVersion.length).toBeGreaterThan(0);
+  });
+
+  it("AC B8 — reports the creationEntrypoint it was given, verbatim and unconditionally", () => {
+    // The field the whole fix hangs on: it replaces the plugin root the agent
+    // CANNOT derive (the host hands it a symlink into plugin-skills/, and node
+    // strips a `..` hop lexically). The assembler must pass it through untouched —
+    // no trimming, no relativising, no "helpful" normalisation.
+    expect(build([]).creationEntrypoint).toBe(CREATION_ENTRYPOINT);
+  });
+
+  it("AC B8 — reports the entrypoint even when the install is UNHEALTHY", () => {
+    // A path we cannot reach is still the path we mean. Suppressing the datum on a
+    // failing check would hide the diagnosis exactly when the operator needs it —
+    // and would make the field's presence conditional, which no consumer could rely
+    // on. It rides the report like `dataDir`, not like a finding.
+    const report = build([finding("creation.entrypoint_present", "warn")]);
+    expect(report.healthy).toBe(false);
+    expect(report.creationEntrypoint).toBe(CREATION_ENTRYPOINT);
   });
 
   it("returns the findings it was given — it never invents one (no fabrication)", () => {

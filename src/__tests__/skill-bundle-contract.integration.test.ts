@@ -13,6 +13,8 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CREATION_ENTRYPOINT_RELATIVE } from "../lib/creation-entrypoint.js";
+import { buildDoctorReport } from "../tools/doctor.js";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerProfileTools } from "../tools/profile.js";
@@ -157,5 +159,157 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     expect(src).toContain("mint_domain"); // the mint trigger
     expect(src).toContain("checkout_url"); // picks come from the sil catalog
     expect(src).toMatch(/open[ -]web/i); // never sourced from the open web
+  });
+});
+
+// ===========================================================================
+// Card: creation-bin-unreachable-on-clawhub-installs — the prose is the third
+// surface, and the only one that can actually drift.
+//
+// `sil_doctor` REPORTS the entrypoint and PROBES it from ONE constant, so the
+// reported path and the probed path cannot disagree by construction. The prose is
+// what the agent actually obeys, and nothing binds it to that constant but these
+// tests. This bug's entire lifetime was underwritten by a GREEN guard
+// (`package-manifest.integration.test.ts:238` pinned the bin map while the flow
+// using it was dead), which is the failure mode this block exists to foreclose.
+// ===========================================================================
+
+const ENGINE = "references/agent_creation_engine.md";
+const engineSrc = (): string => read(ENGINE);
+
+/** The fenced code blocks — what the agent COPIES, as opposed to prose about it.
+ * Command-shape assertions belong here: the prose legitimately DISCUSSES the traps
+ * (a `../scripts/…` hop, a heredoc) in order to disavow them by name, so scanning
+ * the whole document for those constructs would fail the very words that document
+ * the fix. */
+const engineCodeBlocks = (): string =>
+  [...engineSrc().matchAll(/```[a-z]*\n([\s\S]*?)```/g)].map((m) => m[1]).join("\n");
+
+const pkgBin = (): Record<string, string> =>
+  (JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+    bin: Record<string, string>;
+  }).bin;
+
+describe("creation entrypoint — the surfaces that can actually drift (AC B7)", () => {
+  it("AC B7 — the doc names the REAL DoctorReport field that carries the path", () => {
+    // THE drift guard, retargeted to the drift this design can actually suffer.
+    //
+    // B7 as written asks the prose to name `scripts/create-shopper.mjs` and pins that
+    // literal equal to the constant + the bin map. The shipped design does not put a
+    // path in the prose at all — it documents `node "<creationEntrypoint>"`, where the
+    // value comes from sil_doctor at runtime. That is STRONGER than B7 hoped for
+    // (E and D are one value, not two strings asserted equal), and pinning the path
+    // into prose would ADD a fourth surface that goes stale on the next rename while
+    // guarding nothing.
+    //
+    // But the binding did not vanish — it MOVED, from the path to the FIELD NAME. If
+    // the report's key is ever renamed, the doc still says `creationEntrypoint`, the
+    // agent reads a field that does not exist, and creation dies at exactly the step
+    // this card is fixing, silently, on both channels. Nothing else guards that.
+    //
+    // Derived by VALUE, never by restating the key: plant a sentinel path in a real
+    // report and ask which top-level key came back carrying it. A rename makes `key`
+    // the NEW name and forces the doc to follow.
+    const SENTINEL = "/sentinel-root/scripts/create-shopper.mjs";
+    const report = buildDoctorReport({
+      dataDir: "/tmp/sil-data",
+      installedVersion: "0.0.0",
+      creationEntrypoint: SENTINEL,
+      findings: [],
+    });
+    const key = Object.entries(report).find(([, v]) => v === SENTINEL)?.[0];
+    expect(key).toBeDefined();
+    expect(engineSrc()).toContain(key!);
+  });
+
+  it("package.json#bin maps the resolver's SAME path (the bin is retained for npm-global users)", () => {
+    // "Out of scope" keeps the bin entry: it costs nothing and still serves the
+    // npm-global channel. It is simply no longer the DOCUMENTED invocation. Asserting
+    // it against the same constant is what stops a future cleanup from "restoring"
+    // the bare bin name in the prose.
+    expect(pkgBin()["sil-openclaw-create-shopper"]?.replace(/^\.\//, "")).toBe(
+      CREATION_ENTRYPOINT_RELATIVE,
+    );
+  });
+
+  it("the constant is a real, non-vacuous scripts/*.mjs path (guard-of-the-guard)", () => {
+    // Three surfaces asserted equal to an empty string would pass forever.
+    expect(CREATION_ENTRYPOINT_RELATIVE).toMatch(/^scripts\/[a-z][a-z0-9-]*\.mjs$/);
+    expect(existsSync(join(REPO_ROOT, CREATION_ENTRYPOINT_RELATIVE))).toBe(true);
+  });
+});
+
+describe("the documented creation command is channel-independent (AC A2/A3/A4)", () => {
+  it("AC A4 — the doc sources the path from sil_doctor's creationEntrypoint", () => {
+    // The POSITIVE pin, and the load-bearing one: the agent has no other sound source.
+    // The host publishes plugin skills as SYMLINKS and hands the agent the symlink
+    // path, so there IS no plugin-root datum in its context.
+    const src = engineSrc();
+    expect(src).toContain("sil_doctor");
+    expect(src).toContain("creationEntrypoint");
+  });
+
+  it("AC A3 — the documented command runs node against that path, by absolute path", () => {
+    expect(engineCodeBlocks()).toMatch(/node\s+"<creationEntrypoint>"/);
+  });
+
+  it("AC A3 — NO bundled prose names a bare sil bin anywhere", () => {
+    // The defect itself. `openclaw plugins install` links no bins, so both names
+    // reach PATH only through a global npm-style install. Bundle-wide, and not even
+    // as a disavowal: a model lifts the shortest thing that looks like a command, and
+    // a name-free disavowal (which the doc now does) carries the warning just as well.
+    const offenders: string[] = [];
+    for (const rel of bundleFiles()) {
+      for (const bin of ["sil-openclaw-create-shopper", "sil-openclaw-allowlist"]) {
+        if (read(rel).includes(bin)) offenders.push(`${rel} → ${bin}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("AC A4 — no documented command derives the path from the skill file's own location", () => {
+    // The falsified fix direction. `node <skilldir>/../scripts/x` throws
+    // MODULE_NOT_FOUND on the exact string `cat` reads happily: node's path.resolve
+    // normalizes `..` LEXICALLY, before the filesystem, so the symlink hop is erased.
+    // Scoped to code blocks BY DESIGN — the prose names this trap to warn about it.
+    expect(engineCodeBlocks()).not.toMatch(/\.\.\//);
+    expect(engineCodeBlocks()).not.toMatch(/readlink|dirname|\$\(dirname/);
+  });
+
+  it("AC A2 — ONE invocation serves both channels: no channel-conditional branch", () => {
+    // "If you installed via X do A, else B" is how a fix becomes a fork that only one
+    // channel ever exercises.
+    const src = engineSrc().toLowerCase();
+    expect(src).not.toContain("clawhub");
+    expect(src).not.toContain("npm install");
+    expect(src).not.toContain("npm i -g");
+  });
+});
+
+describe("the spec is fed by file, never by shell quoting (AC C2/C3)", () => {
+  it("AC C2 — the documented input form is --spec <path>", () => {
+    expect(engineCodeBlocks()).toContain("--spec");
+  });
+
+  it("AC C2 — NO heredoc or stdin form survives as an alternative", () => {
+    // Delete-first: the heredoc is REMOVED, not left beside the new form. Two
+    // documented forms means the model picks the quoting-fragile one half the time —
+    // and a mangled heredoc reaches the bin as unparseable stdin, so it fails as
+    // `invalid_request` and the agent BLAMES THE USER for a spec that was fine.
+    //
+    // The heredoc OPERATOR, not the word: the prose says "as a file, not a heredoc",
+    // which is correct and must not be punished. stdin stays in the bin (founder
+    // ruling 3) — the DOC is the single-form contract.
+    expect(engineCodeBlocks()).not.toMatch(/<<-?\s*['"]?\w+/);
+    expect(engineSrc()).not.toContain("stdin");
+  });
+
+  it("AC C3 — the doc instructs an owner-only spec file that is removed after the run", () => {
+    // `--spec <path>` writes the user's home address, sizes, and allergy/ethics rules
+    // to disk where stdin left nothing at rest. The agent owns that file's lifecycle:
+    // the bin never deletes an input it does not own (founder ruling 3).
+    const src = engineSrc();
+    expect(src).toMatch(/0600|umask 077/);
+    expect(engineCodeBlocks()).toMatch(/rm -f|rm "/);
   });
 });
