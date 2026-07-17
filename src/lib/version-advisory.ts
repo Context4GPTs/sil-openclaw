@@ -160,8 +160,21 @@ export async function probeLatestVersion(
   timeoutMs: number = PROBE_TIMEOUT_MS,
 ): Promise<string | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => { controller.abort(); }, timeoutMs);
-  try {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  // The deadline RESOLVES the race — it does not merely abort the signal.
+  // Aborting alone would leave the bound in the transport's hands: a channel
+  // that blackholes the connection and ignores the signal would hang the whole
+  // diagnosis forever, and the doctor is needed most when the network is sick.
+  // We still abort, so a well-behaved fetch releases its socket promptly.
+  const deadline = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve(null);
+    }, timeoutMs);
+  });
+
+  const request = (async (): Promise<string | null> => {
     const res = await fetchImpl(CLAWHUB_PACKAGE_URL, {
       signal: controller.signal,
       headers: { accept: "application/json" },
@@ -176,8 +189,11 @@ export async function probeLatestVersion(
     return typeof latest === "string" && SEMVER_RE.test(latest.trim())
       ? latest.trim()
       : null;
-  } catch {
-    return null;
+  })().catch(() => null); // Any failure is silence — and never an unhandled
+                          // rejection when the deadline already won the race.
+
+  try {
+    return await Promise.race([request, deadline]);
   } finally {
     clearTimeout(timer);
   }

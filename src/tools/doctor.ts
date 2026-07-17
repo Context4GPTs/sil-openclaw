@@ -262,6 +262,11 @@ function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean }
  */
 function walkDataDir(dataDir: string): Finding[] {
   const findings: Finding[] = [];
+  // tokens.json is a SINGLETON with its own stable `identity.tokens_perms`
+  // check, so the enumerated walk must not also claim it: two findings for one
+  // mode, and — because the walk runs first — the singleton would report `ok`
+  // on the very run that fixed it, hiding the fix from its own `appliedAction`.
+  const tokensPath = getTokensPath();
 
   const visit = (dir: string): void => {
     let entries: string[];
@@ -307,6 +312,7 @@ function walkDataDir(dataDir: string): Finding[] {
       }
 
       if (!stats.isFile()) continue;
+      if (path === tokensPath) continue;
 
       findings.push(...checkMode(dataDir, path, stats.mode, FILE_MODE));
       if (STALE_TMP_RE.test(entry)) {
