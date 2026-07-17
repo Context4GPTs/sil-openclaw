@@ -41,6 +41,27 @@ declare module "openclaw/plugin-sdk" {
      * plugin-specific overrides.
      */
     pluginConfig?: Record<string, unknown>;
+    /**
+     * The host runtime facade. Only `version` is declared — the running
+     * OpenClaw's own version (e.g. `"2026.6.9"`), which is the ONLY
+     * source for it: `config.gateway` does not exist, and
+     * `config.meta.lastTouchedVersion` is the version that last WROTE the
+     * config file, not the one now running. Probed empirically against
+     * `alpine/openclaw:2026.6.9` — the host builds this member at
+     * `api-builder:122`.
+     *
+     * Optional because a host that does not supply it must degrade to an
+     * INCONCLUSIVE compat check (no finding), never a fabricated verdict.
+     *
+     * The rest of the facade (`agent`, `llm`, `system`, `state`,
+     * `subagent`, `config.mutateConfigFile`, …) is deliberately NOT
+     * declared: this plugin detects and surfaces, it never mutates host
+     * state. Add back the exact member a tool needs when it needs it.
+     *
+     * NOTE: `api.version` (not declared) is the PLUGIN's own version, not
+     * the host's — an easy and silent mis-read.
+     */
+    runtime?: { version?: string };
   }
 
   export interface ToolDefinition {

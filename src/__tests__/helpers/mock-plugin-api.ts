@@ -33,6 +33,20 @@ export interface MockPluginAPI extends PluginAPI {
 export interface CreateMockPluginApiOptions {
   pluginConfig?: Record<string, unknown>;
   config?: Record<string, unknown>;
+  /**
+   * The host runtime facade. Only `version` is consumed today (the RUNNING
+   * OpenClaw's own version — `readHostVersion`'s single source). Probed against
+   * a live `alpine/openclaw:2026.6.9`: the host passes this straight through at
+   * `api-builder:122`, and it is the ONLY source for the host version —
+   * `config.gateway` does not exist, and `config.meta.lastTouchedVersion` is the
+   * version that last WROTE the config file, not the one now running.
+   *
+   * OMITTED BY DEFAULT, on purpose: a host that supplies no runtime version must
+   * degrade to an INCONCLUSIVE compat check (no finding), never a fabricated
+   * verdict — and one real load path (`registrationMode: "cli-metadata"`) passes
+   * `runtime: {}`, so absent is a state production genuinely reaches.
+   */
+  runtime?: Record<string, unknown>;
 }
 
 export function createMockPluginApi(
@@ -56,6 +70,9 @@ export function createMockPluginApi(
 
     config: options.config ?? {},
     pluginConfig: options.pluginConfig ?? {},
+    // Absent unless a test asks for it — the double must not hand every caller a
+    // host version production would not have.
+    ...(options.runtime !== undefined ? { runtime: options.runtime } : {}),
   } as unknown as MockPluginAPI;
 }
 

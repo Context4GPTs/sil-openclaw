@@ -62,6 +62,7 @@ import { Type } from "typebox";
 
 import { getApiUrl } from "../lib/config.js";
 import { clearTokens, readTokens } from "../lib/credentials.js";
+import { wiringAdvisories } from "../lib/host-wiring.js";
 import {
   lookupCatalog,
   refreshAndRetryOnce,
@@ -483,7 +484,7 @@ function registerSearch(api: PluginAPI): void {
 function mapSearchOutcome(api: PluginAPI, outcome: SearchOutcome) {
   switch (outcome.kind) {
     case "ok":
-      return searchResult(outcome);
+      return searchResult(api, outcome);
     case "forbidden":
       // A 403 surfaces the SAME forbidden envelope `sil_whoami` emits — never the
       // false-transient `retryable`. On `user_not_provisioned` (and ONLY that exact
@@ -646,7 +647,7 @@ function registerProductGet(api: PluginAPI): void {
 function mapLookupOutcome(api: PluginAPI, outcome: LookupOutcome) {
   switch (outcome.kind) {
     case "ok":
-      return lookupResult(outcome);
+      return lookupResult(api, outcome);
     case "forbidden":
       // Symmetric with sil_search (one vocabulary, AC2/AC7/AC10): a 403 is the shared
       // forbidden envelope, and `user_not_provisioned` — and ONLY that exact reason —
@@ -800,7 +801,7 @@ function registerSpecs(api: PluginAPI): void {
 function mapSpecsOutcome(api: PluginAPI, outcome: SpecsOutcome) {
   switch (outcome.kind) {
     case "ok":
-      return specsResult(outcome);
+      return specsResult(api, outcome);
     case "forbidden":
       // Symmetric with sil_search/sil_product_get (one vocabulary): a 403 is the
       // shared forbidden envelope, and `user_not_provisioned` — and ONLY that exact
@@ -837,9 +838,9 @@ function readIds(params: Record<string, unknown>): string[] {
  * optional `not_found`); spread its payload (minus the `kind` discriminant) onto
  * the agent-facing `{ status: "ok", ... }` envelope. A `not_found` list is
  * partial-success DATA, NOT an error and NOT a recovery hint. */
-function lookupResult(outcome: Extract<LookupOutcome, { kind: "ok" }>) {
+function lookupResult(api: PluginAPI, outcome: Extract<LookupOutcome, { kind: "ok" }>) {
   const { kind: _kind, ...payload } = outcome;
-  return jsonResult({ status: "ok", ...payload });
+  return jsonResult({ status: "ok", ...payload, ...wiringAdvisories(api) });
 }
 
 /** Client-side validation: the request named no usable id. Distinct from a sil-api
@@ -1212,9 +1213,9 @@ function hasUsableInput(params: SearchParams): boolean {
  * An empty `products` list is a valid, successful empty match. The `ok` outcome
  * already carries `products` (+ optional `cursor`); spread its payload (minus the
  * `kind` discriminant) onto the agent-facing `{ status: "ok", ... }` envelope. */
-function searchResult(outcome: Extract<SearchOutcome, { kind: "ok" }>) {
+function searchResult(api: PluginAPI, outcome: Extract<SearchOutcome, { kind: "ok" }>) {
   const { kind: _kind, ...payload } = outcome;
-  return jsonResult({ status: "ok", ...payload });
+  return jsonResult({ status: "ok", ...payload, ...wiringAdvisories(api) });
 }
 
 /** Not registered: a distinct, actionable outcome naming the recovery tool. No
@@ -1281,9 +1282,9 @@ function invalidSpec(field: string) {
 /** Success: the resolved canonicalizations — no token, no Bearer header. The `ok`
  * outcome carries `resolved` directly; spread its payload (minus the `kind`
  * discriminant) onto the agent-facing `{ status: "ok", resolved }` envelope. */
-function specsResult(outcome: Extract<SpecsOutcome, { kind: "ok" }>) {
+function specsResult(api: PluginAPI, outcome: Extract<SpecsOutcome, { kind: "ok" }>) {
   const { kind: _kind, ...payload } = outcome;
-  return jsonResult({ status: "ok", ...payload });
+  return jsonResult({ status: "ok", ...payload, ...wiringAdvisories(api) });
 }
 
 /** Client-side validation: no usable canonicalization input (a blank `query` or an

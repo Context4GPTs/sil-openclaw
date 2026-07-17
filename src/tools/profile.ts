@@ -24,6 +24,7 @@
 import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
+import { wiringAdvisories } from "../lib/host-wiring.js";
 import {
   learnArtefact,
   materializeProfile,
@@ -86,7 +87,12 @@ function registerMaterialize(api: PluginAPI): void {
       });
       if (result.ok) {
         api.logger.info("sil_profile_materialized", {});
-        return jsonResult({ status: "ok", dir: result.dir, userSpecPath: result.userSpecPath });
+        return jsonResult({
+          status: "ok",
+          dir: result.dir,
+          userSpecPath: result.userSpecPath,
+          ...wiringAdvisories(api),
+        });
       }
       return mapFailure(api, "sil_profile_materialize", result);
     },
@@ -168,6 +174,7 @@ function registerLearn(api: PluginAPI): void {
           ...(result.prd !== undefined ? { prd: result.prd } : {}),
           path: result.path,
           ...(result.assetPath !== undefined ? { assetPath: result.assetPath } : {}),
+          ...wiringAdvisories(api),
         });
       }
       return mapFailure(api, "sil_learn", result);
@@ -228,6 +235,7 @@ function registerSearch(api: PluginAPI): void {
                 + " answered from the sil catalog, never from the open web.",
             }
           : {}),
+        ...wiringAdvisories(api),
       });
     },
   });
@@ -265,6 +273,7 @@ function registerGet(api: PluginAPI): void {
           fields: result.fields,
           body: result.body,
           path: result.path,
+          ...wiringAdvisories(api),
         });
       }
       return mapFailure(api, "sil_profile_get", result);
@@ -299,6 +308,7 @@ function registerRemove(api: PluginAPI): void {
           status: "removed",
           domainSlug: result.domainSlug,
           ...(result.prd !== undefined ? { prd: result.prd } : {}),
+          ...wiringAdvisories(api),
         });
       }
       return mapFailure(api, "sil_profile_remove", result);
