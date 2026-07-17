@@ -40,7 +40,7 @@ shipped admission helper repairs it (additively admitting sil at `plugins.allow`
 `wiring.tools_not_admitted` finding names the exact command: a `node "<absolute
 path>"` invocation, never a bare bin name (that name is on PATH only for some
 installs). If no sil tool runs at all, this is an operator fix — run
-`scripts/allowlist-openclaw.mjs` from the sil plugin's install directory. Most flows
+`node scripts/allowlist-openclaw.mjs` from the sil plugin's install directory. Most flows
 need an identity: call a catalog tool first and let an unregistered outcome route
 to `sil_register`, or run `sil_register` up front when intent requires it.
 
