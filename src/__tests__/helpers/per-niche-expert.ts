@@ -1,15 +1,16 @@
 /**
  * The per-niche-expert vocabulary disavowal-token discipline, as a SINGLE source
- * of truth shared by the prose drift guard (`skill-content.test.ts`, integration)
- * and the tool-description vocabulary guard (`tool-schema-contract.unit.test.ts`,
- * unit). Both pin the same rule: the single-shopper pivot RETIRED "expert" as
+ * of truth shared by the prose drift guard (integration —
+ * `skill-bundle-contract.integration.test.ts`) and the tool-description
+ * vocabulary guard (unit — `tool-schema-contract.unit.test.ts`).
+ * Both pin the same rule: the single-shopper pivot RETIRED "expert" as
  * user-facing vocabulary for the current model (the agent is a "shopper", a niche
  * a "domain"), but a corrected doc/description legitimately NAMES the retired
  * model to bury it (a *retro-reference*). So the guard forbids the bare agent-noun
  * "expert"/"experts" — EXCEPT when a legacy/retired/per-niche context sits
  * immediately before it.
  *
- * See docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md (seam 1).
+ * See docs/knowledge/skill-prose-drift-guard-disavowal-discipline.md.
  * Keeping this in one module means the retro-allowance lookback can never drift
  * between the prose guard and the tool-description guard.
  */
