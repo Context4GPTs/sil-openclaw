@@ -124,17 +124,19 @@ export function registerDoctorTools(
       );
       if (behind !== null) findings.push(behind);
 
-      return jsonResult(buildReport(findings, dataDir, installedVersion));
+      return jsonResult(buildDoctorReport({ dataDir, installedVersion, findings }));
     },
   });
 }
 
-/** Roll-ups the consumer would otherwise re-derive, over a deterministic order. */
-export function buildReport(
-  findings: Finding[],
-  dataDir: string,
-  installedVersion: string,
-): DoctorReport {
+/** Roll-ups the consumer would otherwise re-derive, over a deterministic order.
+ * Pure: it never invents a finding, it only rolls up the ones it is handed. */
+export function buildDoctorReport(input: {
+  dataDir: string;
+  installedVersion: string;
+  findings: Finding[];
+}): DoctorReport {
+  const { dataDir, installedVersion, findings } = input;
   const sorted = sortFindings(findings);
   const counts = { info: 0, warn: 0, critical: 0 };
   for (const f of sorted) counts[f.severity] += 1;
@@ -434,7 +436,7 @@ function checkIdentity(): Finding[] {
     suggestedAction: null,
     appliedAction: null,
   });
-  findings.push(expiryFinding(decodeTokenExpiry(stored.access_token)));
+  findings.push(expiryFinding(isAccessTokenExpired(stored.access_token)));
   findings.push(configFinding());
   return findings;
 }
@@ -481,43 +483,37 @@ function checkTokensPerms(tokensPath: string): Finding[] {
   }
 }
 
-/** Whether the stored access token has already expired. `inconclusive` is a real
- * answer, not a failure — an opaque token is never called expired. */
-export type ExpiryVerdict = "valid" | "expired" | "inconclusive";
-
 /**
- * Decode-only JWT `exp`. NO signature verification (this is a health hint, not
- * an auth decision — real verification is server-side on the next authed call)
- * and NO network.
+ * Decode-only JWT `exp`: `true` = expired, `false` = not expired, `null` =
+ * INCONCLUSIVE (not a 3-segment JWT / undecodable payload / no numeric `exp`).
+ *
+ * NO signature verification (this is a health hint, not an auth decision — real
+ * verification is server-side on the next authed call) and NO network.
  *
  * `StoredTokens` carries no `exp` of its own, so "expired" has to come from the
- * token itself. Only `exp` is extracted; no token bytes and no other claim ever
- * leave this function — the return value is a three-state verdict.
+ * token itself. The `boolean | null` return is deliberate: it is structurally
+ * incapable of carrying token bytes or any claim other than the derived answer.
  *
- * Not a 3-segment JWT, undecodable, or no numeric `exp` ⇒ `inconclusive`. We
- * never fabricate expiry.
+ * Never throws, and never fabricates expiry — an opaque token reads `null`.
  */
-export function decodeTokenExpiry(
-  accessToken: string,
-  nowMs: number = Date.now(),
-): ExpiryVerdict {
+export function isAccessTokenExpired(accessToken: string): boolean | null {
   const segments = accessToken.split(".");
-  if (segments.length !== 3) return "inconclusive";
+  if (segments.length !== 3) return null;
   try {
     const payload: unknown = JSON.parse(
       Buffer.from(segments[1], "base64url").toString("utf8"),
     );
     const exp = (payload as { exp?: unknown }).exp;
-    if (typeof exp !== "number" || !Number.isFinite(exp)) return "inconclusive";
-    return exp * 1_000 <= nowMs ? "expired" : "valid";
+    if (typeof exp !== "number" || !Number.isFinite(exp)) return null;
+    return exp * 1_000 <= Date.now();
   } catch {
-    return "inconclusive";
+    return null;
   }
 }
 
-function expiryFinding(verdict: ExpiryVerdict): Finding {
+function expiryFinding(expired: boolean | null): Finding {
   const id = "identity.token_expiry";
-  if (verdict === "expired") {
+  if (expired === true) {
     // `warn`, not `critical`: a stored refresh token means the next authed call
     // self-heals. The offline doctor won't network-refresh to confirm.
     return {
@@ -536,7 +532,7 @@ function expiryFinding(verdict: ExpiryVerdict): Finding {
     severity: "info",
     status: "ok",
     detected:
-      verdict === "valid"
+      expired === false
         ? "The stored access token has not expired."
         : "The stored access token carries no readable expiry; sil cannot tell"
           + " offline whether it is still valid, and will refresh it on demand.",
