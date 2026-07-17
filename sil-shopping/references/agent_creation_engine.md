@@ -57,11 +57,12 @@ authored here**; they mint **lazily on first shop** ([`shop_loop.md`](shop_loop.
 
 ### Assemble + endorse — the gate
 
-- **Identity** — propose an `agentId` (lower-kebab, ≠ `main`) and a `name`; confirm both.
-- **Assemble** — compose **`{ agentId, name, persona, userSpec }`**, present a readable
-  summary, self-check the shape (`agentId` lower-kebab & ≠ `main`; non-blank
-  `name`/`persona`/`userSpec`). Writes nothing — the engine's validate-first step is the
-  authoritative gate.
+- **Identity** — confirm ONE friendly display `name`. There is **no `agentId` to invent**:
+  the engine derives it from `name` (lower-kebab; a `main`/empty slug silently falls back
+  to `sil-shopper`), so identity is just the name.
+- **Assemble** — compose **`{ name, persona, userSpec }`**, present a readable summary,
+  self-check the shape (non-blank `name`/`persona`/`userSpec`). Writes nothing — the
+  engine's validate-first step is the authoritative gate.
 - **Endorse** — ask for an explicit go-ahead. Endorsement is an affirmative act
   ("yes, create it") — **not** inferred from the last answer or from silence. **Only on
   that explicit yes** do you run Part 2.
@@ -101,7 +102,7 @@ holds. Feed the endorsed spec as one JSON object on **`stdin`** (or `--spec <pat
 
 ```
 sil-openclaw-create-shopper <<'JSON'
-{ "agentId": "my-shopper", "name": "My Shopper",
+{ "name": "My Shopper",
   "workspace": "~/.openclaw/workspace-my-shopper",
   "persona": "…endorsed persona…", "userSpec": "…seeded shared user spec…",
   "channel": "telegram" }
@@ -112,12 +113,14 @@ JSON
 
 | Field | Meaning | Goes to | Required? |
 |---|---|---|---|
-| **agentId** | Lower-kebab (`^[a-z0-9][a-z0-9-]*$`), never `main`. | host | yes |
-| **name** | Human-readable name. | sil store | yes |
+| **name** | Human-readable display name; the `agentId` is **derived** from it. | sil store | yes |
 | **persona** | Who the shopper is — a generalist, its voice, standing rules. | host **`SOUL.md`** | yes |
 | **workspace** | The shopper's workspace directory. | host | yes |
 | **userSpec** | Shared **cross-niche** facts + hard constraints (seeded partial). | sil `user_spec.md` | yes |
 | **channel** | Setup conversation's channel, bound to the shopper. | host bindings | optional (fail-open) |
+
+The `agentId` is **not an input** — the bin derives it as `deriveAgentId(name)`
+(lower-kebab `^[a-z0-9][a-z0-9-]*$`; a `main`/empty slug silently folds to `sil-shopper`).
 
 **No per-niche input at create** — no method, no PRD; those mint lazily on first shop
 via `sil_learn create`. The shopper needs web tools (inherited from `agents.defaults`)
@@ -126,9 +129,10 @@ to mint/refresh domains; if defaults grant none, the bin reports `created` with 
 
 ### What the bin does, in order (atomic, fail-closed)
 
-1. **Validate first** — bad/blank `agentId` (lower-kebab, ≠ `main`), `name`, `persona`,
-   `workspace`, or `userSpec` → **`invalid_request`** naming the field; **nothing
-   written**.
+1. **Validate first, then derive the id** — bad/blank `name`, `persona`, `workspace`, or
+   `userSpec` → **`invalid_request`** naming the field; **nothing written**. Then
+   `agentId = deriveAgentId(name)` — the derivation always yields a conforming id (empty
+   or `main` slug → the silent `sil-shopper` fallback), so the id is never a failure mode.
 2. **Config + singleton pre-flight** — no host config → `persistence_failed`. An
    existing shopper `user_spec.md`, or an `agentId` clash → **`collision`** ("a shopper
    already exists"); steer to shop-a-new-niche or refine, **never a second shopper**. An

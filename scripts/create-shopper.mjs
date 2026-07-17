@@ -13,14 +13,18 @@
  * consent gate; this bin executes an already-assembled, already-endorsed spec
  * non-interactively. It never prompts, never re-runs the interview.
  *
- * Input — ONE JSON object `{ agentId, name, workspace, persona, userSpec, channel? }`,
+ * Input — ONE JSON object `{ name, workspace, persona, userSpec, channel? }`,
  * read from stdin (primary) or `--spec <path>` (fallback). Passing multiline
  * persona/userSpec as JSON dodges shell-arg escaping. Unparseable/blank input →
- * `invalid_request`, nothing attempted. `channel` is OPTIONAL — the current-channel
- * override for the step-10 bind; absent/blank is fail-open, never invalid_request.
+ * `invalid_request`, nothing attempted. There is NO `agentId` input — it is derived
+ * from `name` (`deriveAgentId`), so the user never invents an id; a stray `agentId`
+ * key is ignored. `channel` is OPTIONAL — the current-channel override for the
+ * step-10 bind; absent/blank is fail-open, never invalid_request.
  *
  * Choreography (validate-first, then atomic, fail-closed):
- *   1. validate the spec           — bad/blank field ⇒ invalid_request, nothing attempted
+ *   1. validate the spec + derive the id — bad/blank field ⇒ invalid_request, nothing
+ *      attempted; then agentId = deriveAgentId(name) (lower-kebab; empty/`main` slug ⇒
+ *      the silent `sil-shopper` fallback — the postcondition guarantees a conforming id)
  *   2. resolve the host config     — none ⇒ persistence_failed (precondition), nothing written
  *   3. singleton + agentId pre-flight — a shopper OR the agentId already exists ⇒ collision;
  *      an INCONCLUSIVE read (degraded store / CLI error) fails closed — never fabricates
@@ -86,6 +90,7 @@ import {
   getShopperArtefactDir,
 } from "../dist/lib/profile-store.js";
 import { resolveBindChannel } from "../dist/lib/bind-channel.js";
+import { deriveAgentId } from "../dist/lib/derive-agent-id.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The sibling operator bin that performs the additive, self-validating trust merge. */
@@ -93,9 +98,6 @@ const ALLOWLIST_BIN = resolve(ROOT, "scripts", "allowlist-openclaw.mjs");
 /** The shipped plugin manifest — the single source of truth for sil's facts (id,
  * skill name), read the same way `scripts/allowlist-openclaw.mjs` reads it. */
 const MANIFEST_PATH = resolve(ROOT, "openclaw.plugin.json");
-
-/** A shopper id path-segment shape — lower-kebab, never `main` (host-reserved). */
-const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 /** The sil creed appended to every shopper's SOUL.md after its persona — a soul, not a
  * rulebook. It carries the mantra (explore first), the loop in three lines, and the one
@@ -196,29 +198,18 @@ function readSpecRaw() {
   }
 }
 
-/** Validate the endorsed spec — deterministic field order (agentId → name →
- * workspace → persona → userSpec). Returns `{ field, message }` on the FIRST bad
- * field, or null when the whole spec is good. Writes/attempts nothing. `channel`
- * is deliberately NOT validated: it is an optional fail-open convenience, so an
- * absent/blank/malformed channel is never invalid_request — it folds to `null` in
- * `resolveBindChannel` and degrades to a manual-bind hint at step 10. */
+/** Validate the endorsed spec — deterministic field order (name → workspace →
+ * persona → userSpec). Returns `{ field, message }` on the FIRST bad field, or null
+ * when the whole spec is good. Writes/attempts nothing. `agentId` is NOT a spec field
+ * — it is derived from `name` (`deriveAgentId`) after validate; a stray `agentId` key
+ * is ignored. `channel` is deliberately NOT validated: it is an optional fail-open
+ * convenience, so an absent/blank/malformed channel is never invalid_request — it
+ * folds to `null` in `resolveBindChannel` and degrades to a manual-bind hint at step 10. */
 function validateSpec(spec) {
   if (typeof spec !== "object" || spec === null || Array.isArray(spec)) {
     return {
       field: "spec",
-      message: "spec must be a JSON object with { agentId, name, workspace, persona, userSpec, channel? }.",
-    };
-  }
-  if (!nonBlank(spec.agentId)) {
-    return { field: "agentId", message: "agentId is required and must be non-empty." };
-  }
-  if (spec.agentId === "main") {
-    return { field: "agentId", message: '"main" is host-reserved and cannot be an agentId.' };
-  }
-  if (!AGENT_ID_RE.test(spec.agentId)) {
-    return {
-      field: "agentId",
-      message: "agentId must be lower-kebab (a-z, 0-9, hyphen) — got: " + JSON.stringify(spec.agentId),
+      message: "spec must be a JSON object with { name, workspace, persona, userSpec, channel? }.",
     };
   }
   if (!nonBlank(spec.name)) {
@@ -438,7 +429,11 @@ function main() {
   if (bad) {
     emitFailure("invalid_request", { field: bad.field, cause: bad.message });
   }
-  const { agentId, name, workspace, persona, userSpec, channel } = spec;
+  const { name, workspace, persona, userSpec, channel } = spec;
+  // Derive the host id from the ONE friendly name — the user never invents an id.
+  // The lib's postcondition guarantees a conforming lower-kebab id, never `main`
+  // (empty/`main` slug ⇒ silent `sil-shopper`), so no runtime re-validation here.
+  const agentId = deriveAgentId(name);
 
   // --- 2. Resolve the host config (precondition — nothing written yet) ---
   const configPath = resolveConfigPath();
