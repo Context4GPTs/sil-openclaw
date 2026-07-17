@@ -65,14 +65,19 @@ import {
   compareSemver,
   readInstalledVersion,
   buildVersionBehindFinding,
+  buildGatewayCompatFinding,
   probeLatestVersion,
   type FetchLike,
 } from "../../lib/version-advisory.js";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
-const packageVersion = (): string =>
-  JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")).version;
+const packageJson = (): {
+  version: string;
+  openclaw: { compat: { pluginApi: string; minGatewayVersion: string } };
+} => JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8"));
+
+const packageVersion = (): string => packageJson().version;
 
 /** Sign of a comparator result — the contract is the SIGN, not the magnitude, so
  * an implementation returning -1/0/1 and one returning a numeric difference both
@@ -371,5 +376,235 @@ describe("probeLatestVersion — bounded by a DEADLINE, not merely by an abort",
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// ===========================================================================
+// Card: self-upgrade-detect-host-wiring-advisory — **AC10** (+ AC2's local half).
+//
+// `buildGatewayCompatFinding()` is the ONE function that card adds to this file.
+// It answers a genuinely different question from `buildVersionBehindFinding` — not
+// "am I current?" (installed vs published, a ClawHub probe) but "is my HOST new
+// enough for me?" (the running gateway vs our own declared `package.json#openclaw.
+// compat`). It is **100% local**: no probe, no network, no `networkEndpoints` entry.
+// That is why the two share a file and share `compareSemver` — and why nothing here
+// re-derives the comparator, the installed read, or the probe (sil-doctor's AC9
+// owns all three; re-testing them here would fork the contract).
+//
+// The two things this block exists to catch:
+//
+// 1. **A FABRICATED verdict.** An unreadable host version (`readHostVersion` → null)
+//    or a range shape the parser does not fully understand must yield NO finding —
+//    never a guess in either direction. A partial semver-range parser that guesses is
+//    strictly worse than no check: it tells a working install to "update OpenClaw",
+//    which the user cannot un-learn. Fail CLOSED to inconclusive.
+// 2. **A STRING-COMPARE compat check.** The same fail-quiet trap the block above
+//    pins, one datum over: lexicographically "2026.4.9" > "2026.4.15", so a string
+//    compare silently passes a host that is genuinely too old. Calendar versions hit
+//    this every single month, not eventually.
+//
+// Contract pinned for the implementation (expert-developer):
+//
+//   export function buildGatewayCompatFinding(
+//     hostVersion: string | null,
+//     requiredRange?: string,   // defaults to the shipped
+//                               // package.json#openclaw.compat.minGatewayVersion
+//   ): Finding | null;
+//     — EXACTLY ONE `version.gateway_compat` Finding (`warn` + `advisory`,
+//       `appliedAction: null`) iff the host is BELOW the required range; otherwise
+//       `null`. Reuses `compareSemver`. No network, no host, no fabrication.
+// ===========================================================================
+
+/** The plugin's OWN declared floor, read from the shipped manifest — never a
+ * literal. `pnpm version` and a compat bump must not be able to rot this file into
+ * agreeing with a stale check. */
+const requiredRange = (): string => packageJson().openclaw.compat.minGatewayVersion;
+
+/** The bare version inside a `>=X.Y.Z` range. */
+const requiredVersion = (): string => requiredRange().replace(/^>=\s*/, "");
+
+/** Below/above ANY plausible calendar-versioned floor, so neither depends on the
+ * shipped range's actual value. */
+const ANCIENT_HOST = "0.0.1";
+const FUTURE_HOST = "9999.0.0";
+
+describe("buildGatewayCompatFinding — host below our floor → advise, else silence (AC10)", () => {
+  it("host BELOW the required range → exactly one version.gateway_compat finding", () => {
+    const finding = buildGatewayCompatFinding("2026.4.14", ">=2026.4.15");
+    expect(finding).not.toBeNull();
+    expect(finding!.id).toBe("version.gateway_compat");
+  });
+
+  it("is `warn` + `advisory` + `appliedAction: null` (degraded, but we never act)", () => {
+    // `warn`, not `info`: unlike a version-behind, this install may genuinely not
+    // run — that IS a degradation and `healthy: false` is the truth. And not
+    // `critical`: by sil-doctor's ladder that means the core path is broken, and a
+    // plugin broken enough to qualify could not run a tool to say so.
+    const finding = buildGatewayCompatFinding("2026.4.14", ">=2026.4.15")!;
+    expect(finding.severity).toBe("warn");
+    expect(finding.status).toBe("advisory");
+    expect(finding.appliedAction).toBeNull();
+  });
+
+  it("`detected` names BOTH the required and the running version (AC2)", () => {
+    const finding = buildGatewayCompatFinding("2026.4.14", ">=2026.4.15")!;
+    expect(finding.detected).toContain("2026.4.15");
+    expect(finding.detected).toContain("2026.4.14");
+  });
+
+  it("`suggestedAction` directs the user to update OpenClaw — the plugin ships no installer", () => {
+    // The plugin cannot be its own installer (noChildProcess + noInstallScripts +
+    // read-only api.config + it cannot hot-swap its own running code). It points at
+    // OpenClaw's own trusted update path and stops.
+    const finding = buildGatewayCompatFinding("2026.4.14", ">=2026.4.15")!;
+    expect(finding.suggestedAction).not.toBeNull();
+    expect(finding.suggestedAction!.toLowerCase()).toContain("openclaw");
+    expect(finding.suggestedAction!.toLowerCase()).not.toContain("npm install");
+    expect(finding.suggestedAction!.toLowerCase()).not.toContain("curl");
+  });
+
+  it("carries exactly the six flat fields — no extra keys, no `advisory` sub-object", () => {
+    const finding = buildGatewayCompatFinding("2026.4.14", ">=2026.4.15")!;
+    expect(Object.keys(finding).sort()).toEqual([
+      "appliedAction",
+      "detected",
+      "id",
+      "severity",
+      "status",
+      "suggestedAction",
+    ]);
+  });
+
+  it("host EXACTLY AT the required version → NO finding (`>=` includes the floor)", () => {
+    // The off-by-one that would fire a permanent false advisory on the single most
+    // common supported host: the one that is exactly at our declared floor.
+    expect(buildGatewayCompatFinding("2026.4.15", ">=2026.4.15")).toBeNull();
+  });
+
+  it("host ABOVE the required version → NO finding", () => {
+    expect(buildGatewayCompatFinding("2026.6.9", ">=2026.4.15")).toBeNull();
+    expect(buildGatewayCompatFinding("2027.1.0", ">=2026.4.15")).toBeNull();
+  });
+
+  it("uses semver PRECEDENCE, not string compare (2026.4.9 IS below 2026.4.15)", () => {
+    // Lexicographically "2026.4.9" > "2026.4.15", so a string compare decides this
+    // too-old host is fine and stays SILENT — fail-quiet, on a host that may not run
+    // us at all. Calendar versions cross this boundary every month.
+    const finding = buildGatewayCompatFinding("2026.4.9", ">=2026.4.15");
+    expect(finding).not.toBeNull();
+    expect(finding!.detected).toContain("2026.4.9");
+  });
+
+  it("ranks the major component first (2025.x is below 2026.4.15)", () => {
+    expect(buildGatewayCompatFinding("2025.12.31", ">=2026.4.15")).not.toBeNull();
+  });
+});
+
+describe("buildGatewayCompatFinding — fails CLOSED to inconclusive, never a verdict (AC10)", () => {
+  it("an UNREADABLE host version (null) → NO finding", () => {
+    // `readHostVersion(api)` returns null when the running host's version is not
+    // reachable in `api.config` / the SDK shim. Unknown is not a state we invent a
+    // value for: no "your host is too old" (a false alarm), no silent "you're fine"
+    // dressed up as a real check.
+    expect(buildGatewayCompatFinding(null, ">=2026.4.15")).toBeNull();
+    expect(buildGatewayCompatFinding(null)).toBeNull();
+  });
+
+  it("an UNPARSEABLE host version → NO finding", () => {
+    for (const host of ["", "unknown", "2026.4", "v2026.4.15", "latest", "2026.04.15-nightly+x y"]) {
+      expect(buildGatewayCompatFinding(host, ">=2026.4.15"), host).toBeNull();
+    }
+  });
+
+  it("ANY range shape other than a single `>=X.Y.Z` → NO finding (the parser refuses to guess)", () => {
+    // We ship a ~20-line tuple compare rather than a `semver` dependency, because
+    // every range we declare is a single `>=X.Y.Z`. The whole licence for that is
+    // that it fails closed on everything else: a caret/tilde/OR/range-pair parsed
+    // "approximately" is how a working host gets told to update. If we ever declare
+    // one of these for real, the parser grows to meet it FIRST — this test going red
+    // is the signal, and loosening it to `toContain` would hide exactly that.
+    const ancient = "0.0.1";
+    for (const range of [
+      "^2026.4.15",
+      "~2026.4.15",
+      ">2026.4.15",
+      "<=2026.4.15",
+      "=2026.4.15",
+      "2026.4.15",
+      ">=2026.4.15 <2027.0.0",
+      ">=2026.4.15 || >=2025.1.0",
+      ">=2026.x",
+      ">=2026.4",
+      ">=",
+      "",
+      "*",
+      "latest",
+    ]) {
+      expect(buildGatewayCompatFinding(ancient, range), range).toBeNull();
+    }
+  });
+
+  it("a PRERELEASE or non-numeric floor → NO finding (unparsed ⇒ inconclusive)", () => {
+    expect(buildGatewayCompatFinding("0.0.1", ">=2026.4.15-rc.1")).toBeNull();
+    expect(buildGatewayCompatFinding("0.0.1", ">=abc.def.ghi")).toBeNull();
+  });
+
+  it("is NOT VACUOUS — the same call path DOES fire for a real `>=` floor", () => {
+    // Without this, a `buildGatewayCompatFinding` that simply `return null`ed would
+    // pass every assertion in this describe block, and the compat check would be
+    // dead code that never speaks in production while the suite stays green.
+    expect(buildGatewayCompatFinding("0.0.1", ">=2026.4.15")).not.toBeNull();
+  });
+});
+
+describe("buildGatewayCompatFinding — the floor comes from the SHIPPED manifest (AC10)", () => {
+  it("defaults to package.json#openclaw.compat.minGatewayVersion", () => {
+    // Derived, never hardcoded: `pnpm version` / a compat bump must move the check,
+    // not silently drift from it. `package.json` is the source of truth that
+    // `sync-version.mjs` mirrors OUTWARD, and it always ships in an npm tarball.
+    const finding = buildGatewayCompatFinding(ANCIENT_HOST);
+    expect(finding).not.toBeNull();
+    expect(finding!.id).toBe("version.gateway_compat");
+    expect(finding!.detected).toContain(requiredVersion());
+    expect(finding!.detected).toContain(ANCIENT_HOST);
+  });
+
+  it("the shipped floor is a single `>=X.Y.Z` — the exact shape the parser supports", () => {
+    // The gate on the no-`semver`-dependency call: the moment a declared range stops
+    // being a bare `>=`, the parser fails closed and the compat check goes SILENT.
+    // This asserts the premise still holds, so that silence can never be a surprise.
+    expect(requiredRange()).toMatch(/^>=\d+\.\d+\.\d+$/);
+  });
+
+  it("a host at the shipped floor is silent; a far-future host is silent", () => {
+    expect(buildGatewayCompatFinding(requiredVersion())).toBeNull();
+    expect(buildGatewayCompatFinding(FUTURE_HOST)).toBeNull();
+  });
+});
+
+describe("buildGatewayCompatFinding — local, pure, and never a network call (AC2/AC14)", () => {
+  it("issues NO network request — it must still fire with the network down", () => {
+    // AC2's teeth: the compat check must not be coupled to any remote channel. This
+    // card has none at all — its two detections are 100% local, so the plugin-behind
+    // probe going dark must not take compat down with it.
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      buildGatewayCompatFinding("2026.4.14", ">=2026.4.15");
+      buildGatewayCompatFinding(null);
+      buildGatewayCompatFinding(ANCIENT_HOST);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("is synchronous — a compat verdict needs no await", () => {
+    expect(buildGatewayCompatFinding("2026.4.14", ">=2026.4.15")).not.toBeInstanceOf(Promise);
+  });
+
+  it("is deterministic — repeated calls yield an equal finding and no accumulated state", () => {
+    expect(buildGatewayCompatFinding("2026.4.14", ">=2026.4.15")).toEqual(
+      buildGatewayCompatFinding("2026.4.14", ">=2026.4.15"),
+    );
   });
 });
