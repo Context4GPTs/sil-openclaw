@@ -10,6 +10,46 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **`sil_doctor` — a report-first diagnostic over `$SIL_DATA_DIR`.** It reads the
+  data dir, file modes, `tokens.json` / `config.json` metadata, and artefact
+  frontmatter, and returns a machine-readable findings array. Token health is
+  metadata only (present / mode / parses / expired — expiry decoded from the
+  access token's own JWT `exp` claim strictly locally, no signature check, no
+  network, never a token byte emitted). Its only writes are two safe idempotent
+  fixes: tightening a too-open mode (narrows only, never widens) and creating the
+  missing data dir; anything that would mutate an existing artefact is reported
+  as `needs_confirmation`, never run. It also folds in a version advisory via one
+  bounded, unauthenticated, fail-soft-to-silence ClawHub `GET` — the only reason
+  `https://clawhub.ai` is now a declared endpoint.
+- **Host-wiring drift + gateway-compat advisories (detect-only).** Every sil tool
+  result and `sil_doctor` now surface `advisory` findings when the plugin's
+  effective host wiring drifts from the manifest, or when the running OpenClaw is
+  below the gateway version the plugin needs. 100% local and detect-only: nothing
+  writes host config, spawns a process, reloads the gateway, or ships an installer.
+
+### Changed
+
+- **The shopper's `agentId` is now derived from its display name** rather than
+  supplied separately, so the two can't drift.
+
+### Fixed
+
+- **Shopper creation reached its last step on ClawHub installs.** The flow
+  documented a bare bin (`sil-openclaw-create-shopper`) that only reaches `PATH`
+  via a global npm-style install's bin linking; `openclaw plugins install` merely
+  extracts the tarball, so on that channel creation died silently at the end.
+  `sil_doctor` now reports `creationEntrypoint` (resolved from `import.meta.url`,
+  so the reported path and the probed path can't drift) and the skill runs it as
+  `node "<it>"` — no bare bin, no `<plugin-root>` placeholder.
+- **Manifest `security.packagingNote` no longer declares `sil_learn`'s deleted
+  ops.** `0.4.2`'s document-first rewrite replaced `append` / `amend` / `retract`
+  with `create` / `write` / `attach-asset`, but the declared security surface
+  still described the old in-place section-edit model. Restated to the real
+  semantics: `create` mints (fail-closed if one exists), `write` replaces a whole
+  body (fail-closed if absent), no in-place section edit.
+
 ## [0.4.2] - 2026-07-14
 
 ### Changed
