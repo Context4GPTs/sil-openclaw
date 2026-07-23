@@ -48,6 +48,7 @@ import {
   rmSync,
   existsSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
   mkdirSync,
   chmodSync,
@@ -68,6 +69,7 @@ const SIL_ID = "sil";
 // the new doctor group. Drives `tools_added === SIL_TOOLS.length` and the
 // per-tool not-enumerated-into-config scan below.
 const SIL_TOOLS = [
+  "sil_create_shopper",
   "sil_doctor",
   "sil_learn",
   "sil_product_get",
@@ -107,10 +109,29 @@ function runHelper(env: Record<string, string>): RunResult {
   }
 }
 
+/** `runHelper`, with the exit status asserted FIRST.
+ *
+ * WHY THIS EXISTS. A side-effect assertion placed downstream of an unchecked
+ * `runHelper(...)` cannot tell a real regression from the subprocess dying:
+ * every cause — a throw, a bad PATH, a slow external binary — surfaces as
+ * "the `.bak` wasn't written". That ambiguity produced a real full-suite flake.
+ * Under `no-ci-by-design` the local exit code IS the merge gate, so a failure
+ * must name its own cause. Assert the status, then the side effect. */
+function runHelperOk(env: Record<string, string>): RunResult {
+  const r = runHelper(env);
+  expect(
+    r.status,
+    `helper exited ${r.status}\n--- stderr ---\n${r.stderr}\n--- stdout ---\n${r.stdout}`,
+  ).toBe(0);
+  return r;
+}
+
 /** A minimal, hermetic base env: PATH for `node`, and HOME pointed at a
  * guaranteed-empty dir so the ~/.openclaw fallback never resolves a real file
  * on the developer's machine. OPENCLAW_* are deliberately UNSET here — each
  * test sets exactly the precedence knob it exercises. */
+const AS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
+
 let emptyHome: string;
 function baseEnv(): Record<string, string> {
   return {
@@ -189,7 +210,7 @@ function readConfig(): {
 describe("AC1 / AC3 — fresh merge writes sil into all three surfaces (no-warning precondition met)", () => {
   it("writes sil into plugins.allow, tools.alsoAllow, and plugins.entries.sil", () => {
     writeConfig(freshConfig());
-    const r = runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    const r = runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     expect(r.status).toBe(0);
 
     const c = readConfig();
@@ -200,7 +221,7 @@ describe("AC1 / AC3 — fresh merge writes sil into all three surfaces (no-warni
 
   it("AC3 — written plugins.allow is non-empty AND contains sil (host suppresses the warning)", () => {
     writeConfig(freshConfig());
-    runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     const c = readConfig();
     expect(c.plugins.allow.length).toBeGreaterThan(0);
     expect(c.plugins.allow).toContain(SIL_ID);
@@ -208,7 +229,7 @@ describe("AC1 / AC3 — fresh merge writes sil into all three surfaces (no-warni
 
   it("emits the `sil_allowlist_merged` info marker on stdout with the operator fields", () => {
     writeConfig(freshConfig());
-    const r = runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    const r = runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     const m = parseMarker(r.stdout);
     expect(m["event"]).toBe("sil_allowlist_merged");
     expect(m["level"]).toBe("info");
@@ -221,7 +242,7 @@ describe("AC1 / AC3 — fresh merge writes sil into all three surfaces (no-warni
 
   it("does NOT enumerate the 11 tool NAMES into the written config (plugin-id admission only)", () => {
     writeConfig(freshConfig());
-    runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     const raw = readFileSync(configPath, "utf8");
     for (const t of SIL_TOOLS) {
       expect(raw).not.toContain(t);
@@ -232,7 +253,7 @@ describe("AC1 / AC3 — fresh merge writes sil into all three surfaces (no-warni
   it("creates a single `.bak` (single-slot) on the first changed write", () => {
     writeConfig(freshConfig());
     const before = readFileSync(configPath, "utf8");
-    runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     expect(existsSync(configPath + ".bak")).toBe(true);
     // The .bak holds the exact pre-run bytes.
     expect(readFileSync(configPath + ".bak", "utf8")).toBe(before);
@@ -253,7 +274,7 @@ describe("AC1 additive — pre-existing trust survives a real file write", () =>
         entries: { klodi: { enabled: true, config: { apiKey: "operator-set" } } },
       },
     });
-    const r = runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    const r = runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     expect(r.status).toBe(0);
     const c = readConfig();
     expect(c.plugins.allow).toEqual(["klodi", "sil"]);
@@ -273,7 +294,7 @@ describe("AC1 additive — pre-existing trust survives a real file write", () =>
         entries: { codex: { enabled: true }, "memory-core": { enabled: true } },
       },
     });
-    runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     const allow = readConfig().plugins.allow;
     expect(allow).toContain("sil");
     expect(allow).toContain("codex");
@@ -312,9 +333,9 @@ describe("AC6 — idempotent: a second run changes nothing and rewrites nothing"
 
   it("a third run is still a no-op (stable fixpoint)", () => {
     writeConfig(freshConfig());
-    runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     const settled = readFileSync(configPath, "utf8");
-    runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     const r3 = runHelper({ OPENCLAW_CONFIG_PATH: configPath });
     expect(r3.status).toBe(0);
     expect(parseMarker(r3.stdout)["event"]).toBe("sil_allowlist_unchanged");
@@ -323,8 +344,8 @@ describe("AC6 — idempotent: a second run changes nothing and rewrites nothing"
 
   it("never duplicates sil across runs (single sil in each allow surface)", () => {
     writeConfig(freshConfig());
-    runHelper({ OPENCLAW_CONFIG_PATH: configPath });
-    runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
+    runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     const c = readConfig();
     expect(c.plugins.allow.filter((x) => x === SIL_ID)).toHaveLength(1);
     expect(c.tools.alsoAllow.filter((x) => x === SIL_ID)).toHaveLength(1);
@@ -332,67 +353,70 @@ describe("AC6 — idempotent: a second run changes nothing and rewrites nothing"
 });
 
 // ---------------------------------------------------------------------------
-// AC7 — bad result fails closed and reverts from .bak.
+// AC7 — fail closed on a write fault.
 //
-// We put a FAKE `openclaw` binary on PATH (a shim) that reports {valid:false}.
-// This is a test double of the EXTERNAL binary boundary (permitted — it is not
-// stubbing sil's own logic), letting us drive the validate-reject path
-// deterministically without the real gateway image.
+// REBUILT, not patched. This block used to drive a `{valid:false}` verdict from
+// a PATH-shimmed `openclaw` binary, because the helper shelled
+// `openclaw config validate --json` and reverted from `.bak` on a reject. That
+// exec is DELETED by this card (the whole point: zero `child_process` in the
+// shipped tarball), and with it the revert path — the write is now the last
+// thing the helper does, so there is nothing left that can fail after it. A
+// test for the revert would be a test for dead code.
+//
+// The flake went with the exec. `baseEnv()` forwards the real `PATH`, so on any
+// machine that actually has `openclaw` installed, every non-shim test above was
+// silently invoking the REAL gateway binary against a temp config — a
+// non-deterministic external process inside a supposedly hermetic path. That
+// was the structural cause of the `.bak` flake, and it is now unreachable.
+//
+// What survives is the safety net the header still promises: `.bak` + an atomic
+// tmp→rename write, and a fail-closed refusal that leaves the operator's config
+// exactly as it was. Driven here by a REAL filesystem condition — a read-only
+// containing directory — never a shim.
 // ---------------------------------------------------------------------------
-describe("AC7 — validate-reject reverts from .bak and fails closed", () => {
-  /** Create a PATH dir containing an `openclaw` shim with the given behaviour. */
-  function shimDir(script: string): string {
-    const bin = mkdtempSync(join(tmpdir(), "sil-allowlist-bin-"));
-    const exe = join(bin, "openclaw");
-    writeFileSync(exe, script, { mode: 0o755 });
-    return bin;
-  }
-
-  it("reverts to the EXACT pre-run bytes, emits `failed` with the cause, exits non-zero", () => {
-    const original = freshConfig();
-    writeConfig(original);
+describe("AC7 — a write it cannot perform fails closed, structured, with nothing half-done", () => {
+  it.skipIf(AS_ROOT)("read-only config dir: exits non-zero, config byte-identical, no .bak, no tmp litter", () => {
+    writeConfig(freshConfig());
     const preRun = readFileSync(configPath, "utf8");
+    const before = readdirSync(workdir).sort();
 
-    // Shim: always reports the merged config invalid.
-    const bin = shimDir(
-      "#!/usr/bin/env bash\n"
-        + 'echo \'{"valid":false,"error":"shim: config rejected for test"}\'\n'
-        + "exit 0\n",
-    );
+    // The containing DIR, not the file: `copyFileSync` to `<config>.bak` and
+    // the atomic write's tmp→rename both need write permission on it.
+    chmodSync(workdir, 0o500);
+    const r = runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    chmodSync(workdir, 0o700);
 
-    const r = runHelper({
-      OPENCLAW_CONFIG_PATH: configPath,
-      PATH: `${bin}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
-    });
-
-    rmSync(bin, { recursive: true, force: true });
-
-    // Fail closed: non-zero exit.
-    expect(r.status).not.toBe(0);
-    // File reverted to the EXACT pre-run bytes — never left half-merged.
+    expect(r.status, `expected a fail-closed non-zero exit\n${r.stderr}`).not.toBe(0);
+    // Nothing half-done: the operator's file is exactly as they left it.
     expect(readFileSync(configPath, "utf8")).toBe(preRun);
-    // Structured `failed` marker on stderr naming the cause.
+    // No backup, no orphaned atomic-write tmp file.
+    expect(readdirSync(workdir).sort()).toEqual(before);
+    expect(existsSync(configPath + ".bak")).toBe(false);
+  });
+
+  it.skipIf(AS_ROOT)("that refusal is a STRUCTURED marker, not a raw stack trace", () => {
+    // The header promises `sil_allowlist_merge_failed` on every fail-closed
+    // path. An uncaught throw exits non-zero too — and prints an absolute-path
+    // stack an operator has to read Node internals to parse.
+    writeConfig(freshConfig());
+    chmodSync(workdir, 0o500);
+    const r = runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    chmodSync(workdir, 0o700);
+
     const m = parseMarker(r.stderr);
     expect(m["event"]).toBe("sil_allowlist_merge_failed");
     expect(m["level"]).toBe("error");
-    expect(typeof m["cause"]).toBe("string");
     expect(String(m["cause"]).length).toBeGreaterThan(0);
+    expect(r.stderr, "a raw Node stack reached the operator").not.toMatch(
+      /\bat .*\(?\/.*:\d+:\d+\)?/,
+    );
   });
 
-  it("when the openclaw binary VALIDATES the config, the merge is kept (write survives)", () => {
-    writeConfig(freshConfig());
-    const bin = shimDir(
-      "#!/usr/bin/env bash\n" + 'echo \'{"valid":true}\'\n' + "exit 0\n",
-    );
-    const r = runHelper({
-      OPENCLAW_CONFIG_PATH: configPath,
-      PATH: `${bin}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
-    });
-    rmSync(bin, { recursive: true, force: true });
-
-    expect(r.status).toBe(0);
-    expect(parseMarker(r.stdout)["event"]).toBe("sil_allowlist_merged");
-    expect(readConfig().plugins.allow).toContain(SIL_ID);
+  it("the shipped helper invokes NO external binary — the exec that caused this is gone", () => {
+    // Structural, and the reason the two tests above can be deterministic.
+    const src = readFileSync(SCRIPT, "utf8");
+    expect(src).not.toMatch(/child_process/);
+    expect(src).not.toMatch(/(?<![.\w$])(execFileSync|execSync|spawnSync|spawn)\s*\(/);
   });
 });
 
@@ -411,7 +435,7 @@ describe("AC8 — path precedence and missing-config fail-closed", () => {
     const decoy = JSON.stringify({ plugins: { allow: ["DECOY"] } }, null, 2) + "\n";
     writeFileSync(decoyPath, decoy);
 
-    const r = runHelper({ OPENCLAW_CONFIG_PATH: configPath });
+    const r = runHelperOk({ OPENCLAW_CONFIG_PATH: configPath });
     expect(r.status).toBe(0);
 
     // The explicit path got sil; the decoy is byte-unchanged.

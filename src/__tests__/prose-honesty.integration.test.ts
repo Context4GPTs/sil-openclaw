@@ -309,14 +309,28 @@ describe("B4/C5 — admission is an operator act; the skill reports, it does not
 
   it("SKILL.md instructs the agent to REPORT and relay sil_doctor's suggestion TO THE USER", () => {
     // Positive half — without it, deleting the whole session-start section
-    // would satisfy every negative above.
+    // would satisfy every negative above. Scoped to the paragraph that names
+    // the finding: an unrelated "the user" elsewhere in the file must not
+    // satisfy the relay clause.
     const skill = read(SKILL);
     expect(skill, "the sil_doctor wiring finding is no longer referenced").toMatch(
       /tools_not_admitted|suggestedAction/,
     );
+    const relayParas = paragraphs(skill).filter((p) =>
+      /tools_not_admitted|suggestedAction/.test(p),
+    );
+    expect(relayParas.length).toBeGreaterThan(0);
     expect(
-      /(tell|ask|relay|report|hand|surface|give|pass)[^.\n]{0,140}\bthe user\b/i.test(skill),
-      "SKILL.md never routes the fix to the user",
+      relayParas.some((p) =>
+        /(tell|ask|relay|report|hand|surface|give|pass|quote|say)[^.\n]{0,160}\bthe user\b|\bthe user\b[^.\n]{0,160}\brun\b/i.test(
+          p,
+        ),
+      ),
+      "the paragraph naming the wiring finding never routes it to the user",
+    ).toBe(true);
+    expect(
+      relayParas.some((p) => /do not (execute|run) it|never (execute|run) it|quote it/i.test(p)),
+      "nothing tells the agent NOT to run the suggested command itself",
     ).toBe(true);
   });
 
