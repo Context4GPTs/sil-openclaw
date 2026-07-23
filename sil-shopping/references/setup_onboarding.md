@@ -1,6 +1,6 @@
 ---
 name: setup-onboarding
-description: The one-time setup script the router defers to when state shows sil setup is incomplete (no shopper, or a shopper with no domains) — the five-stage onboarding progression, the after-register shopper offer, and the per-search pitch. Sheds once setup is complete.
+description: Loaded by the sil-shopping skill while state shows sil setup is incomplete (no shopper, or a shopper with no domains) — the one-time setup script, its five-stage onboarding progression, the after-register shopper offer, and the per-search pitch. Sheds once setup is complete.
 ---
 
 # Setting up the shopper — the staged onboarding

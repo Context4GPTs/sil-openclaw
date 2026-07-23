@@ -122,14 +122,24 @@ export function registerDoctorTools(
   api.registerTool({
     name: "sil_doctor",
     label: "Diagnose sil",
+    // Every `never` names its object. The old wording ended "never updates
+    // anything itself" while this same tool chmods and mkdirs one clause after
+    // promising automatic permission fixes — a self-contradiction an agent
+    // resolves by treating the tool as read-only and calling it where
+    // filesystem mutation is not approved. The two writes are enumerated
+    // instead, so the description cannot drift from `execute()`.
     description:
       "Diagnose this sil install: check the local data directory, file"
       + " permissions, stored identity/token health, and behaviour artefacts,"
       + " and report whether a newer sil plugin is published. Returns a"
-      + " machine-readable findings array. Safe permission fixes apply"
-      + " automatically; anything that could lose data is only reported, never"
-      + " run. Never reads out or logs token contents, and never updates"
-      + " anything itself.",
+      + " machine-readable findings array. It writes exactly two things, both"
+      + " inside the sil data directory: it creates that data directory when it"
+      + " is missing, and it tightens an over-permissive file or directory mode"
+      + " back to owner-only. Nothing else on disk is touched — anything that"
+      + " could lose data (clearing a corrupt token file, deleting an orphaned"
+      + " temp file) is only reported, never run. It never reads out or logs"
+      + " token contents, and sil never updates itself: this tool installs"
+      + " nothing, spawns no process, and writes no host configuration.",
     parameters: Type.Object({}),
     async execute() {
       const dataDir = getDataDir();

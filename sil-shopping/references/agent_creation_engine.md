@@ -1,6 +1,6 @@
 ---
 name: agent-creation-engine
-description: Create the single sil-wired shopper end to end — the two-touchpoint onboarding interview (persona + shared user-spec seed, endorsement-gated) then the one-command engine that persists it. Load when the user asks to create or set up their sil shopper.
+description: Loaded by the sil-shopping skill when the user asks to create or set up their one sil shopper — the two-touchpoint onboarding interview (persona + shared user-spec seed) and the creation step that persists it. Nothing is created, written, or configured until the user explicitly endorses the draft.
 ---
 
 # Create the shopper

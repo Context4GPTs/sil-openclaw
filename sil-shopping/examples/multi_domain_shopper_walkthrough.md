@@ -1,6 +1,6 @@
 ---
 name: multi-domain-shopper-walkthrough
-description: A worked six-beat run — create one shopper (after endorsement), then shop two unrelated niches in one session (the second minted on the fly), with a shared user_spec fact reused across both and a mid-session correction reconciled by a whole-doc write. Illustrative, not a spec.
+description: Loaded by the sil-shopping skill as a worked six-beat run — create one shopper (after endorsement), then shop two unrelated niches in one session (the second minted on the fly), with a shared user_spec fact reused across both and a mid-session correction reconciled by a whole-doc write. Illustrative, not a spec.
 ---
 
 # Worked run — one shopper, two niches, six beats

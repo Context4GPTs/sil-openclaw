@@ -1,6 +1,6 @@
 ---
 name: shop-loop
-description: The six-beat Spec-Driven Shopping loop — the state machine the shopper runs on every niche. Owns Beat 1 (classify), Beat 4 (search-space) and Beat 5 (reflect); routes Beats 2, 3 and 6 to the references that own them. Load when shopping as the shopper.
+description: Loaded by the sil-shopping skill when shopping as the shopper — the six-beat Spec-Driven Shopping loop, the state machine the shopper runs on every niche. Owns Beat 1 (classify), Beat 4 (search-space) and Beat 5 (reflect); routes Beats 2, 3 and 6 to the references that own them.
 ---
 
 # The six-beat Spec-Driven Shopping loop

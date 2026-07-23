@@ -1,6 +1,6 @@
 ---
 name: fill-and-feedback
-description: Beats 3 and 6 of the sil shopping loop. Beat 3 fills the PRD by precedence (multi-turn, authors the Search specs block, hard-constraint dual-enforce, the persistence split); Beat 6 is the reaction half (capture-gate, confirm-before-write, route-by-scope). Covers sil_learn, the one target+change write verb (create | write | attach-asset). Load within an active sil shopping loop.
+description: Loaded by the sil-shopping skill within an active shopping loop, for Beats 3 and 6 — Beat 3 fills the PRD by precedence (multi-turn, authors the Search specs block, hard-constraint dual-enforce, the persistence split); Beat 6 is the reaction half (capture-gate, confirm-before-write, route-by-scope). Covers sil_learn, the one target+change write verb (create, write, attach-asset).
 ---
 
 # Beat 3 (Fill) and Beat 6 (Feedback) — via `sil_learn`

@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use when the user explicitly asks to shop with sil or manage their sil shopper: register or check their sil account, search the sil catalog or re-check products by id, set up their one shopper (a two-touchpoint, endorsement-gated onboarding), view or forget what it has learned (domains/PRDs), or — running as that shopper — execute the six-beat Spec-Driven Shopping loop and record a fact or taste it surfaced. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_specs, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, sil_learn, sil_doctor.'
+description: 'Shopping with sil. Fires on an actionable request to find, compare, re-check or buy a purchasable product — with no mention of sil required — and on managing the one sil shopper: registering or checking the sil account, setting it up (a two-touchpoint, endorsement-gated onboarding), viewing or forgetting what it has learned, or running its six-beat Spec-Driven Shopping loop. Does NOT fire on talk about a product with no buying intent ("I love my keyboard", "how do tactile switches work?"), on spec or price trivia, or on non-commerce senses of the word shop.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -34,15 +34,19 @@ it knows, view or forget a domain, refine it.
 
 ## Session start
 
-Confirm the `sil_*` tools are exposed. If missing, the host is filtering them — the
-shipped admission helper repairs it (additively admitting sil at `plugins.allow` +
-`tools.alsoAllow`), then reopen the session. If `sil_doctor` still runs, its
-`wiring.tools_not_admitted` finding names the exact command: a `node "<absolute
-path>"` invocation, never a bare bin name (that name is on PATH only for some
-installs). If no sil tool runs at all, this is an operator fix — run
-`node scripts/allowlist-openclaw.mjs` from the sil plugin's install directory. Most flows
-need an identity: call a catalog tool first and let an unregistered outcome route
-to `sil_register`, or run `sil_register` up front when intent requires it.
+Confirm the `sil_*` tools are exposed. If they are missing, the host is filtering
+them, and **that is an operator fix, not yours** — admitting a plugin is a trust
+decision the person running this host makes, never something a shopping skill
+arranges for itself. Your job ends at reporting it.
+
+Say plainly that sil's tools are not admitted on this host and that shopping cannot
+proceed until they are. If `sil_doctor` itself still runs, read its
+`wiring.tools_not_admitted` finding and relay its `suggestedAction` to the user as
+the command for **them** to run — quote it, do not execute it, and never edit host
+configuration yourself.
+
+Most flows need an identity: call a catalog tool first and let an unregistered
+outcome route to `sil_register`, or run `sil_register` up front when intent requires it.
 
 ## Routing — read the stage, then match intent to a tool
 

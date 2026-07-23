@@ -1,6 +1,6 @@
 ---
 name: method-and-prds
-description: Beat 2 of the loop — load, mint or signal-refresh a domain's method — plus the intent-keyed PRD model, the method/PRD templates, the frontmatter-as-truth store, and discovery/manage via sil_profile_search / sil_profile_get / sil_profile_remove. Load when resolving a domain's method or managing what the shopper knows.
+description: Loaded by the sil-shopping skill when resolving a domain's method or managing what the shopper knows — Beat 2 (load, mint or signal-refresh a method), the intent-keyed PRD model, the method/PRD templates, the frontmatter-as-truth store, and discovery via sil_profile_search / sil_profile_get / sil_profile_remove. These verbs touch only the shopper's own artefacts under $SIL_DATA_DIR/shopper/, make no network call, and confirm with the user before removing anything.
 ---
 
 # Beat 2 — the domain method, intent-keyed PRDs, and the store
