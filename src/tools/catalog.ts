@@ -61,8 +61,9 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
 import { getApiUrl } from "../lib/config.js";
-import { clearTokens, readTokens } from "../lib/credentials.js";
+import { clearTokens, readConfig, readTokens } from "../lib/credentials.js";
 import { wiringAdvisories } from "../lib/host-wiring.js";
+import { putSearchResult } from "../lib/search-results-store.js";
 import {
   lookupCatalog,
   refreshAndRetryOnce,
@@ -408,7 +409,7 @@ function registerSearch(api: PluginAPI): void {
         ),
       ),
     }),
-    async execute(_callId, params) {
+    async execute(callId, params) {
       // 1 — not registered: terminal, zero network calls.
       const stored = readTokens();
       if (stored === null) {
@@ -455,6 +456,20 @@ function registerSearch(api: PluginAPI): void {
           // emit the operator marker so a thrashing session is visible in logs —
           // logs-only, no token material, NOT a payload field (the agent never sees it).
           if (recovered.refreshed) api.logger.info("sil_search_refreshed", {});
+          // Buffer the page for a paired client to pull by this exact `callId`
+          // (`sil.search_results`). A PURE SIDE EFFECT: the envelope returned
+          // below is byte-identical to what every channel got before this
+          // existed — no reference, no flag, no listener check. Only `ok` is
+          // stored; the other outcomes steer the agent's recovery and carry no
+          // product data to deliver. `advisories` stay OFF the stored page —
+          // they are operator/agent copy, not products.
+          if (recovered.outcome.kind === "ok") {
+            const { kind: _kind, ...page } = recovered.outcome;
+            const principal = readConfig()?.user?.id;
+            if (principal !== undefined) {
+              putSearchResult(callId, { status: "ok", ...page }, principal);
+            }
+          }
           return mapSearchOutcome(api, recovered.outcome);
         case "must_reregister":
           // A dead refresh token (invalid_grant) is cleared so the agent's

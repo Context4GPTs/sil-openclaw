@@ -10,6 +10,29 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **`sil.search_results` — pull a `sil_search` page over the paired gateway WS.**
+  A plugin-owned gateway method (scope `operator.read`, enforced by the host
+  before the handler runs) that answers `{ callId }` with the exact page that
+  call produced. The `callId` is the host's own — the same string a client
+  already reads off the tool frames — so the two sides join with no translation
+  table. It never reaches the model, starts no run, and re-queries nothing.
+  Unknown, expired, and foreign references all get one identical `not_found`
+  body; the cause is an operator-log marker only.
+- **A bounded in-memory buffer behind it** (32 pages, 15-minute retention, lazy
+  eviction on write, no timer, never on disk) that `sil_search` writes its `ok`
+  page into as a pure side effect.
+
+### Changed
+
+- **`sil_search`'s result is untouched** — no new key, no reference, no flag.
+  Every channel gets byte-identically what it got before.
+- **Host floor raised to `>=2026.7.1`** (`compat.pluginApi`,
+  `compat.minGatewayVersion`, `install.minHostVersion`): the version
+  `registerGatewayMethod` is proven on. An older host is refused outright rather
+  than limped along on a compat shim.
+
 ## [0.4.4] - 2026-07-17
 
 ### Security
