@@ -137,6 +137,10 @@ function evict(): void {
   for (const [callId, entry] of entries) {
     if (entry.expiresAtMs <= now) entries.delete(callId);
   }
+  // `>=` because this runs BEFORE the `set`, so the store never exceeds the
+  // ceiling. Re-writing an existing `callId` can trim one entry it did not need
+  // to; a `callId` is unique per tool call, so that branch is unreachable in
+  // practice and guarding it would cost more than it saves.
   while (entries.size >= MAX_ENTRIES) {
     const oldest = entries.keys().next();
     if (oldest.done === true) return;

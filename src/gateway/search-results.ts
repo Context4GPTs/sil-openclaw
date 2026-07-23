@@ -107,5 +107,8 @@ function resolve(
   }
 
   api.logger.info("sil_search_results_hit", { found: true, count: page.products.length });
+  // Handed over BY REFERENCE, aliasing the array the agent envelope already
+  // serialized. Deliberate: both paths JSON-serialize immediately and neither
+  // mutates, so a defensive clone would copy ~50 KB per resolve for nothing.
   respond(true, page);
 }
