@@ -48,7 +48,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 
 import { jsonResult } from "../../lib/tool-result.js";
 import type { Finding, Severity } from "../../lib/findings.js";
-import { isAccessTokenExpired, buildDoctorReport } from "../../tools/doctor.js";
+import { isAccessTokenExpired, buildDoctorReport, registerDoctorTools } from "../../tools/doctor.js";
+import { createMockPluginApi, getTool } from "../helpers/mock-plugin-api.js";
 
 // ---------------------------------------------------------------------------
 // JWT fixtures — real base64url, built here so no dependency and no live token.
@@ -378,5 +379,83 @@ describe("buildDoctorReport — rides the standard jsonResult envelope (AC7)", (
     // instead of the contracted explicit `null`.
     const report = build([finding("a", "info")]);
     expect(JSON.parse(JSON.stringify(report))).toEqual(report);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B1 — the registered description must not contradict the tool.
+//
+// ClawHub's skillspector rated this High · 98%: the description ends "never
+// updates anything itself" while `execute()` creates the data directory and
+// chmods to tighten permissions — and the SAME paragraph already says "Safe
+// permission fixes apply automatically". It contradicts itself in one breath.
+// An agent picks a tool by its description; a caller reading "never updates
+// anything" may invoke sil_doctor where filesystem mutation is not approved.
+//
+// The ruling is NOT "re-label it read-only" (it is not). It is: enumerate the
+// only two writes, and make every `never` name its object. In-repo precedent
+// for the correct shape already exists — `version-advisory.ts` says "sil never
+// updates itself."
+// ---------------------------------------------------------------------------
+
+describe("B1 — sil_doctor's registered description enumerates its writes honestly", () => {
+  const description = (): string => {
+    const api = createMockPluginApi();
+    registerDoctorTools(api);
+    const d = getTool(api, "sil_doctor").description;
+    expect(typeof d, "sil_doctor registered no description").toBe("string");
+    // Anti-vacuity: every assertion below is a substring/absence check, and an
+    // empty string satisfies all the absences for free.
+    expect((d as string).length).toBeGreaterThan(120);
+    return d as string;
+  };
+
+  it("carries no unqualified 'never updates anything' claim", () => {
+    expect(description()).not.toMatch(/never updates? anything/i);
+  });
+
+  it("every 'never' names its object — no bare 'never <verb>s anything/nothing'", () => {
+    const d = description();
+    const unqualified = [...d.matchAll(/never\s+\w+s?\s+(anything|everything)\b/gi)].map(
+      (m) => m[0],
+    );
+    expect(unqualified, "a 'never' claim still has no object").toEqual([]);
+  });
+
+  it("says what it never updates — itself / the plugin, the meaning that was intended", () => {
+    expect(
+      /never updates? (itself|the plugin|the sil plugin)|updates? (itself|the plugin) never|never self-updates?/i.test(
+        description(),
+      ),
+      "the description no longer states the self-update boundary it meant",
+    ).toBe(true);
+  });
+
+  it("enumerates write #1 — creating the missing data directory", () => {
+    const d = description();
+    expect(
+      /creat\w*[^.]{0,60}(data )?director|creat\w*[^.]{0,60}data dir/i.test(d),
+      "the description never mentions that it creates the data directory",
+    ).toBe(true);
+  });
+
+  it("enumerates write #2 — narrowing an over-permissive mode inside that directory", () => {
+    const d = description();
+    expect(
+      /tighten|narrow|restrict/i.test(d),
+      "the description never mentions that it narrows permissions",
+    ).toBe(true);
+    expect(/permission|mode|0700|0600|owner-only/i.test(d)).toBe(true);
+  });
+
+  it("keeps the two facts a caller most needs — token contents stay in, data-losing fixes stay out", () => {
+    const d = description();
+    expect(d, "the never-log-token-contents promise was dropped").toMatch(/token/i);
+    expect(
+      /only reported|never run|report(ed)?-only|needs_confirmation|never (applied|performed)/i.test(
+        d,
+      ),
+      "the 'destructive fixes are reported, never run' promise was dropped",
+    ).toBe(true);
   });
 });
