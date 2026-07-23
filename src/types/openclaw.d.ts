@@ -22,6 +22,26 @@ declare module "openclaw/plugin-sdk" {
 
   export interface PluginAPI {
     registerTool(tool: ToolDefinition): void;
+    /**
+     * Register a plugin-owned gateway RPC method, dispatched to paired
+     * clients over the already-authenticated `deviceToken` WS. `scope` is
+     * the plugin's WHOLE authorization contribution at the transport
+     * layer: the host authorizes it BEFORE the handler runs, so the
+     * handler implements no scope logic and has no bypass.
+     *
+     * Declared from `vendor/openclaw` @ 2026.7.2
+     * (`src/plugins/plugin-api.types.ts:217`), live-proven on
+     * `openclaw/openclaw:2026.7.1` — which is why the manifest floor is
+     * `>=2026.7.1`. A host below it is refused by the host's own
+     * `checkMinHostVersion`; there is deliberately no
+     * `typeof api.registerGatewayMethod === "function"` soft-guard, which
+     * would ship a silently search-broken plugin instead of a loud refusal.
+     */
+    registerGatewayMethod(
+      method: string,
+      handler: GatewayRequestHandler,
+      opts?: { scope?: OperatorScope },
+    ): void;
     logger: PluginLogger;
     /**
      * The full OpenClawConfig tree (plain object). Top-level keys like
@@ -86,6 +106,39 @@ declare module "openclaw/plugin-sdk" {
       params: Record<string, unknown>,
     ): Promise<ToolResult>;
   }
+
+  /** The host's closed operator-privilege set
+   * (`src/gateway/operator-scopes.ts:4`). `operator.read` is also satisfied by
+   * `operator.write` / `operator.admin`. */
+  export type OperatorScope =
+    | "operator.admin"
+    | "operator.read"
+    | "operator.write"
+    | "operator.approvals"
+    | "operator.pairing"
+    | "operator.talk.secrets";
+
+  /** Emits ONE protocol response frame. `error`/`meta` are declared but unused
+   * here: every sil outcome rides `respond(true, <structured body>)`, because a
+   * client reads a method-level error as a TRANSPORT fault worth retrying, and an
+   * unknown/expired/foreign reference is not retryable. */
+  export type RespondFn = (
+    ok: boolean,
+    payload?: unknown,
+    error?: { code?: string; message?: string },
+    meta?: Record<string, unknown>,
+  ) => void;
+
+  /** The host hands the handler `{req, params, client, isWebchatConnect, respond,
+   * context}`; only the two members sil consumes are declared, per this file's
+   * minimal-subset discipline. `client` / `context` / `req` are deliberately
+   * absent — transport authz is the host's (it runs the scope check before us)
+   * and principal binding is ours (the sil account that stored the page), so
+   * reading the socket would be a third, wrong, source of truth. */
+  export type GatewayRequestHandler = (opts: {
+    params: Record<string, unknown>;
+    respond: RespondFn;
+  }) => Promise<void> | void;
 
   export interface ToolResult {
     content: ToolContent[];

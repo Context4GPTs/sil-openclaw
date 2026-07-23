@@ -33,6 +33,7 @@ import {
   type SilPluginConfig,
 } from "./lib/config.js";
 import { ensureDataDir, getDataDir } from "./lib/credentials.js";
+import { registerSearchResultsMethod } from "./gateway/search-results.js";
 import { detectWiringDrift, readSilWiringFacts } from "./lib/host-wiring.js";
 import { registerCatalogTools } from "./tools/catalog.js";
 import { registerDoctorTools } from "./tools/doctor.js";
@@ -83,6 +84,14 @@ export default definePluginEntry({
     registerCatalogTools(api);
     registerProfileTools(api);
     registerDoctorTools(api);
+
+    // The pull surface a paired client resolves a search page from. Registering
+    // a closure opens nothing — no socket, no timer — so the invariant above
+    // holds; the store behind it is touched only inside the handler and inside
+    // sil_search's execute(). NOT a tool and NOT a `registerXTools` group: it
+    // never reaches the model, and the manifest's `contracts` vocabulary has no
+    // gateway-method key, so this call IS the declaration.
+    registerSearchResultsMethod(api);
 
     // Host-wiring drift, at the ONE surface that survives it.
     //
