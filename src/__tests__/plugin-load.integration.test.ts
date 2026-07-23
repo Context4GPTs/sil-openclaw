@@ -33,6 +33,7 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import {
+  chmodSync,
   existsSync,
   mkdtempSync,
   readFileSync,
@@ -292,6 +293,100 @@ describe("plugin load — an uncreatable data dir is a LOUD, fail-closed termina
     expect(existsSync(unwritableDataDir)).toBe(false);
   });
 });
+
+const AS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
+
+describe.skipIf(AS_ROOT)(
+  "plugin load — an uncreatable data dir registers NOTHING: no tool, and no gateway method (AC10)",
+  () => {
+    // The half 0.4.5 added and nothing pinned. `register()` now hands the host a
+    // SECOND surface (`sil.search_results`), and under the new `onStartup: true`
+    // posture it runs on the gateway's boot path. `ensureDataDir()` throws BEFORE
+    // any `registerXTools`/`registerSearchResultsMethod` call, so the fail-closed
+    // terminal must leave the api COMPLETELY untouched — a half-registered plugin
+    // would hand a paired client a gateway method backed by a store whose home
+    // does not exist.
+    //
+    // The fault is injected with REAL filesystem permissions (a `0o500` containing
+    // dir ⇒ EACCES on the recursive mkdir), never a synthetic production hook: a
+    // hook would test the hook. It is deliberately a DIFFERENT errno from the AC5
+    // block's ENOTDIR blocker-file, which is what makes the log assertion below
+    // non-vacuous — a `cause` hardcoded to "ENOTDIR" passes there and fails here.
+    // Root bypasses permission bits, hence the skip guard.
+    let containingDir: string;
+    let targetDataDir: string;
+    let priorSilDataDir: string | undefined;
+    let priorXdg: string | undefined;
+
+    beforeEach(() => {
+      containingDir = mkdtempSync(join(tmpdir(), "sil-datadir-ro-"));
+      targetDataDir = join(containingDir, "sil-data");
+      chmodSync(containingDir, 0o500);
+      priorSilDataDir = process.env["SIL_DATA_DIR"];
+      priorXdg = process.env["XDG_DATA_HOME"];
+      process.env["SIL_DATA_DIR"] = targetDataDir;
+    });
+
+    afterEach(() => {
+      if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
+      else process.env["SIL_DATA_DIR"] = priorSilDataDir;
+      if (priorXdg === undefined) delete process.env["XDG_DATA_HOME"];
+      else process.env["XDG_DATA_HOME"] = priorXdg;
+      chmodSync(containingDir, 0o700);
+      rmSync(containingDir, { recursive: true, force: true });
+    });
+
+    it("register() throws EACCES and registers NOTHING — not one tool, not the gateway method", () => {
+      // A null captured register would ALSO throw (TypeError) and leave the api
+      // empty, which would make both assertions below vacuous. Pin the premise.
+      expect(capturedRegisterFn).toBeTypeOf("function");
+      expect(getDataDir()).toBe(targetDataDir);
+
+      const api = createMockPluginApi();
+      // The throw is the OS one, not an incidental harness error.
+      expect(() => capturedRegisterFn!(api)).toThrow(/EACCES/);
+
+      expect([...api._tools.keys()]).toEqual([]);
+      expect([...api._gatewayMethods.keys()]).toEqual([]);
+    });
+
+    it("logs `sil_plugin_data_dir_failed` naming the path + the REAL OS cause, with no credential vocabulary", () => {
+      const api = createMockPluginApi();
+      try {
+        capturedRegisterFn!(api);
+      } catch {
+        // Expected — the log is emitted before the rethrow.
+      }
+      const failCalls = vi
+        .mocked(api.logger.error)
+        .mock.calls.filter(([marker]) => marker === "sil_plugin_data_dir_failed");
+      expect(failCalls).toHaveLength(1);
+      const detail = JSON.stringify(failCalls[0]![1]);
+      expect(detail).toContain(targetDataDir);
+      // EACCES, not ENOTDIR: the cause is read off the OS error, never a literal.
+      expect(detail).toContain("EACCES");
+      // Registration-time log: no credential material, on the loudest path.
+      expect(detail).not.toContain("access_token");
+      expect(detail).not.toContain("refresh_token");
+      expect(detail).not.toContain("Bearer");
+    });
+
+    it("is NOT VACUOUS — the SAME register() populates both surfaces once the dir is creatable", () => {
+      // Without this, "registers nothing" is satisfied by any throw at all —
+      // including a broken harness that never reaches the plugin. Same captured
+      // register, same api factory, only the directory mode changes.
+      chmodSync(containingDir, 0o700);
+
+      const api = createMockPluginApi();
+      expect(() => capturedRegisterFn!(api)).not.toThrow();
+      expect(api._tools.size).toBeGreaterThan(0);
+      // Count only — the method NAME is pinned by the single exact-set carrier in
+      // `search-results-method.integration.test.ts`; a second name mirror here
+      // would only add a place to forget to bump.
+      expect(api._gatewayMethods.size).toBe(1);
+    });
+  },
+);
 
 describe("plugin load — the register path is SOURCE-authoritative, immune to a stale on-disk dist (AC3)", () => {
   // The masked-regression instance the card exists to kill. PRE-FIX this file

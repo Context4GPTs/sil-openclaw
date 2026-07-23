@@ -10,6 +10,19 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Fixed
+
+- **`sil.search_results` now exists on a stock gateway.** `activation` gains
+  `onStartup: true` (alongside the existing `onCapabilities: ["tool"]`, the
+  posture bundled extensions already ship). 0.4.5 registered the method into the
+  gateway's request-local *tool-discovery* registry, which the host deliberately
+  never installs as active — so dispatch, which resolves from the active
+  registry, answered `unknown method` for every paired client, and Studio
+  rendered the degraded notice instead of product cards. Loading at gateway
+  startup puts the registration in the registry dispatch actually reads, and the
+  agent tool path then prefers that same registry — one module instance, so the
+  page `sil_search` stores is the page the method hands back.
+
 ## [0.4.5] - 2026-07-23
 
 ### Added
