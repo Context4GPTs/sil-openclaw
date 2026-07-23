@@ -36,7 +36,7 @@ import {
   beforeEach,
   afterEach,
 } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, rmSync as rmFile } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PluginAPI } from "openclaw/plugin-sdk";
@@ -265,7 +265,6 @@ async function expectNothingStored(
 async function runSearch(
   api: MockPluginAPI,
   callId: string,
-  products: unknown[],
   params: Record<string, unknown> = { query: "office chair" },
 ): Promise<{ raw: string; payload: Record<string, unknown> }> {
   const result = await getTool(api, TOOL).execute(callId, params);
@@ -301,103 +300,95 @@ afterEach(() => {
 // ===========================================================================
 
 describe("A1 — the sil_search envelope is byte-identical, with or without this card", () => {
-  it("returns the SAME BYTES whether or not the gateway method is registered", () => {
+  it("returns the SAME BYTES whether or not the gateway method is registered", async () => {
     // The whole promise of the additive re-scope. A plugin whose tool result
     // changes shape when a client happens to be able to pull it is not
     // channel-agnostic — Telegram, WhatsApp and a plain CLI must not be able to
     // tell this card shipped.
-    return (async () => {
-      installRouter((kind) =>
-        kind === "search"
-          ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
-          : { status: 500, body: {} },
-      );
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
+        : { status: 500, body: {} },
+    );
 
-      // WITH — the full real register(): tools + `sil.search_results`.
-      const withMethod = registerPlugin();
-      expect(registeredGatewayMethodNames(withMethod).has(METHOD)).toBe(true);
-      const a = await runSearch(withMethod, "call_with", []);
+    // WITH — the full real register(): tools + `sil.search_results`.
+    const withMethod = registerPlugin();
+    expect(registeredGatewayMethodNames(withMethod).has(METHOD)).toBe(true);
+    const a = await runSearch(withMethod, "call_with");
 
-      // WITHOUT — only the tool group, exactly the surface a host that never
-      // reaches the gateway registration path presents.
-      const withoutMethod = createMockPluginApi();
-      registerCatalogTools(withoutMethod);
-      expect(registeredGatewayMethodNames(withoutMethod).size).toBe(0);
-      const b = await runSearch(withoutMethod, "call_without", []);
+    // WITHOUT — only the tool group, exactly the surface a host that never
+    // reaches the gateway registration path presents.
+    const withoutMethod = createMockPluginApi();
+    registerCatalogTools(withoutMethod);
+    expect(registeredGatewayMethodNames(withoutMethod).size).toBe(0);
+    const b = await runSearch(withoutMethod, "call_without");
 
-      expect(a.raw).toBe(b.raw);
-    })();
+    expect(a.raw).toBe(b.raw);
   });
 
-  it("carries the FULL products body — no result_ref, no reference, no digest", () => {
+  it("carries the FULL products body — no result_ref, no reference, no digest", async () => {
     // The mutation this kills is the ORIGINAL (superseded) premise: replacing the
     // body with a reference. The agent still receives every product, so nothing
     // about what it can truthfully say changes.
-    return (async () => {
-      installRouter((kind) =>
-        kind === "search"
-          ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2), wireProduct(3)]) }
-          : { status: 500, body: {} },
-      );
-      const api = registerPlugin();
-      const { payload, raw } = await runSearch(api, "call_1", []);
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2), wireProduct(3)]) }
+        : { status: 500, body: {} },
+    );
+    const api = registerPlugin();
+    const { payload, raw } = await runSearch(api, "call_1");
 
-      expect(payload["status"]).toBe("ok");
-      const products = payload["products"] as Record<string, unknown>[];
-      expect(products).toHaveLength(3);
-      // Real projected products, not placeholders.
-      expect(products[0]!["id"]).toBe("gid://product/1");
-      expect((products[0]!["variant"] as Record<string, unknown>)["checkout_url"]).toBe(
-        "https://buy.example.com/chair-1",
-      );
-      // Nothing was ADDED to the envelope.
-      expect(payload).not.toHaveProperty("result_ref");
-      expect(payload).not.toHaveProperty("callId");
-      expect(payload).not.toHaveProperty("call_id");
-      expect(payload).not.toHaveProperty("expires_at");
-      expect(raw).not.toContain("result_ref");
-    })();
+    expect(payload["status"]).toBe("ok");
+    const products = payload["products"] as Record<string, unknown>[];
+    expect(products).toHaveLength(3);
+    // Real projected products, not placeholders.
+    expect(products[0]!["id"]).toBe("gid://product/1");
+    expect((products[0]!["variant"] as Record<string, unknown>)["checkout_url"]).toBe(
+      "https://buy.example.com/chair-1",
+    );
+    // Nothing was ADDED to the envelope.
+    expect(payload).not.toHaveProperty("result_ref");
+    expect(payload).not.toHaveProperty("callId");
+    expect(payload).not.toHaveProperty("call_id");
+    expect(payload).not.toHaveProperty("expires_at");
+    expect(raw).not.toContain("result_ref");
   });
 
-  it("the envelope's top-level key set is exactly what the outcome carries — nothing extra", () => {
-    return (async () => {
-      installRouter((kind) =>
-        kind === "search"
-          ? { status: 200, body: searchEnvelope([wireProduct(1)], { has_next_page: false }) }
-          : { status: 500, body: {} },
-      );
-      const api = registerPlugin();
-      const { payload } = await runSearch(api, "call_1", []);
+  it("the envelope's top-level key set is exactly what the outcome carries — nothing extra", async () => {
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([wireProduct(1)], { has_next_page: false }) }
+        : { status: 500, body: {} },
+    );
+    const api = registerPlugin();
+    const { payload } = await runSearch(api, "call_1");
 
-      // `advisories` rides host-wiring drift and is outside this card's control,
-      // so it is tolerated — but no OTHER key may appear.
-      const allowed = new Set(["status", "products", "cursor", "specs_status", "advisories"]);
-      for (const key of Object.keys(payload)) {
-        expect(allowed.has(key)).toBe(true);
-      }
-    })();
+    // `advisories` rides host-wiring drift and is outside this card's control,
+    // so it is tolerated — but no OTHER key may appear.
+    const allowed = new Set(["status", "products", "cursor", "specs_status", "advisories"]);
+    for (const key of Object.keys(payload)) {
+      expect(allowed.has(key)).toBe(true);
+    }
   });
 
-  it("the bytes do not drift as the store fills — the side effect never leaks into the return", () => {
+  it("the bytes do not drift as the store fills — the side effect never leaks into the return", async () => {
     // A store write that mutated the page it was handed (or that returned
     // something the envelope then folded in) would show up as a byte difference
     // between the first search of a session and a later identical one.
-    return (async () => {
-      installRouter((kind) =>
-        kind === "search"
-          ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
-          : { status: 500, body: {} },
-      );
-      const api = registerPlugin();
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
+        : { status: 500, body: {} },
+    );
+    const api = registerPlugin();
 
-      const first = await runSearch(api, "call_first", []);
-      for (let i = 0; i < MAX_ENTRIES + 5; i += 1) {
-        await runSearch(api, `call_fill_${i}`, []);
-      }
-      const later = await runSearch(api, "call_later", []);
+    const first = await runSearch(api, "call_first");
+    for (let i = 0; i < MAX_ENTRIES + 5; i += 1) {
+      await runSearch(api, `call_fill_${i}`);
+    }
+    const later = await runSearch(api, "call_later");
 
-      expect(later.raw).toBe(first.raw);
-    })();
+    expect(later.raw).toBe(first.raw);
   });
 });
 
@@ -422,7 +413,7 @@ describe("what the ok path stores (A2, A4, A5)", () => {
     });
     capturedRegisterFn!(api);
 
-    const { payload } = await runSearch(api, "call_1", []);
+    const { payload } = await runSearch(api, "call_1");
     expect(payload).toHaveProperty("advisories"); // premise of this test
 
     const body = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_1" }));
@@ -442,7 +433,7 @@ describe("what the ok path stores (A2, A4, A5)", () => {
     );
     const api = registerPlugin();
 
-    const { payload } = await runSearch(api, "call_empty", []);
+    const { payload } = await runSearch(api, "call_empty");
     expect(payload["products"]).toEqual([]);
 
     const body = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_empty" }));
@@ -462,18 +453,18 @@ describe("what the ok path stores (A2, A4, A5)", () => {
     installRouter((kind) => (kind === "search" ? (reply as Reply) : { status: 500, body: {} }));
     const api = registerPlugin();
 
-    const { payload } = await runSearch(api, "call_nonok", [], params);
+    const { payload } = await runSearch(api, "call_nonok", params);
     expect(payload["status"]).not.toBe("ok");
 
-    expectNothingStored(api, "call_nonok");
+    await expectNothingStored(api, "call_nonok");
   });
 
   it("stores NOTHING when the tool short-circuits as not_registered (zero network)", async () => {
-    rmFile(getTokensPath(), { force: true });
+    rmSync(getTokensPath(), { force: true });
     const rec = installRouter(() => ({ status: 500, body: {} }));
     const api = registerPlugin();
 
-    const { payload } = await runSearch(api, "call_unreg", []);
+    const { payload } = await runSearch(api, "call_unreg");
     expect(payload["status"]).toBe("not_registered");
     expect(rec.all).toHaveLength(0);
 
@@ -481,7 +472,7 @@ describe("what the ok path stores (A2, A4, A5)", () => {
     // the point is that the page was never stored, not that we cannot look.
     seedTokens();
     seedAccount(ACCOUNT_A);
-    expectNothingStored(api, "call_unreg");
+    await expectNothingStored(api, "call_unreg");
   });
 });
 
@@ -497,7 +488,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    const { payload } = await runSearch(api, "call_1", []);
+    const { payload } = await runSearch(api, "call_1");
     expect(rec.all).toHaveLength(1);
 
     const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
@@ -520,7 +511,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, "call_1", []);
+    await runSearch(api, "call_1");
 
     const one = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_1" }));
     const two = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_1" }));
@@ -534,7 +525,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
       kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, "call_1", []);
+    await runSearch(api, "call_1");
 
     for (let i = 0; i < 4; i += 1) {
       const body = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_1" }));
@@ -553,7 +544,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
       kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, HOST_CALL_ID, []);
+    await runSearch(api, HOST_CALL_ID);
 
     const body = bodyOf(await callGatewayMethod(api, METHOD, { callId: HOST_CALL_ID }));
     expect(body["status"]).toBe("ok");
@@ -570,7 +561,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
       kind === "search" ? { status: 200, body: searchEnvelope(many) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    const { payload } = await runSearch(api, "call_big", []);
+    const { payload } = await runSearch(api, "call_big");
 
     const stored = { ...payload };
     delete stored["advisories"];
@@ -605,7 +596,7 @@ describe("D3 — every intermediate search in a run stays resolvable", () => {
 
     const expected = new Map<string, string>();
     for (let i = 0; i < RUN_SEARCHES; i += 1) {
-      const { payload } = await runSearch(api, `call_${i}`, [], { query: `search ${i}` });
+      const { payload } = await runSearch(api, `call_${i}`, { query: `search ${i}` });
       expected.set(`call_${i}`, JSON.stringify(payload["products"]));
     }
 
@@ -650,7 +641,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
       kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, "call_1", []);
+    await runSearch(api, "call_1");
     // It resolves before the window closes...
     expect(bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_1" }))["status"]).toBe("ok");
 
@@ -668,7 +659,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
       kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, "call_1", []);
+    await runSearch(api, "call_1");
 
     // The shopper re-registers as a different sil account on the same box.
     seedAccount(ACCOUNT_B);
@@ -689,9 +680,9 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
       kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, "call_1", []);
+    await runSearch(api, "call_1");
 
-    rmFile(getTokensPath(), { force: true });
+    rmSync(getTokensPath(), { force: true });
 
     const frames = await callGatewayMethod(api, METHOD, { callId: "call_1" });
     expect(bodyOf(frames)["status"]).toBe("not_found");
@@ -718,7 +709,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
     {
       __resetSearchResultsStore();
       const api = registerPlugin();
-      await runSearch(api, "call_exp", []);
+      await runSearch(api, "call_exp");
       vi.useFakeTimers();
       vi.setSystemTime(Date.now() + RETENTION_MS + 1);
       bodies.add(JSON.stringify(bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_exp" }))));
@@ -729,7 +720,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
       __resetSearchResultsStore();
       seedAccount(ACCOUNT_A);
       const api = registerPlugin();
-      await runSearch(api, "call_foreign", []);
+      await runSearch(api, "call_foreign");
       seedAccount(ACCOUNT_B);
       bodies.add(
         JSON.stringify(bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_foreign" }))),
@@ -741,8 +732,8 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
       seedTokens();
       seedAccount(ACCOUNT_A);
       const api = registerPlugin();
-      await runSearch(api, "call_logout", []);
-      rmFile(getTokensPath(), { force: true });
+      await runSearch(api, "call_logout");
+      rmSync(getTokensPath(), { force: true });
       bodies.add(
         JSON.stringify(bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_logout" }))),
       );
@@ -759,7 +750,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
       kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, "call_1", []);
+    await runSearch(api, "call_1");
     seedAccount(ACCOUNT_B);
     await callGatewayMethod(api, METHOD, { callId: "call_1" });
     await callGatewayMethod(api, METHOD, { callId: "call_never" });
@@ -799,7 +790,7 @@ describe("malformed input is a distinct, structured invalid_request", () => {
       kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, "call_1", []);
+    await runSearch(api, "call_1");
 
     const body = bodyOf(
       await callGatewayMethod(api, METHOD, { callId: "call_1", unexpected: "ignore me" }),
@@ -824,7 +815,7 @@ describe("C7 — behaviour never varies with client presence", () => {
     registerCatalogTools(toolsOnly);
     expect(registeredGatewayMethodNames(toolsOnly).size).toBe(0);
 
-    const { payload } = await runSearch(toolsOnly, "call_1", []);
+    const { payload } = await runSearch(toolsOnly, "call_1");
     expect(payload["status"]).toBe("ok");
 
     // A client pairs afterwards — the page is there, in the same process.
@@ -838,7 +829,7 @@ describe("C7 — behaviour never varies with client presence", () => {
       kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, "call_1", []);
+    await runSearch(api, "call_1");
 
     // No listener probe, no readiness check, no second leg.
     expect(rec.all).toHaveLength(1);
@@ -892,7 +883,7 @@ describe("registration shape (C5) and log privacy", () => {
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    await runSearch(api, "call_1", []);
+    await runSearch(api, "call_1");
     vi.mocked(api.logger.info).mockClear();
 
     await callGatewayMethod(api, METHOD, { callId: "call_1" });

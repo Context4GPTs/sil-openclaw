@@ -25,60 +25,27 @@
  */
 
 import { vi } from "vitest";
-import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk";
-
-/**
- * The gateway-method surface, mirrored from the host EXACTLY as the plugin
- * consumes it. Declared locally rather than imported from
- * `src/types/openclaw.d.ts` on purpose: this double must be usable BEFORE the
- * production declaration lands (it is what turns the register-path mirrors green
- * when `register()` starts calling `registerGatewayMethod`), so it cannot depend
- * on it.
- *
- * Source-verified against the host clone at `vendor/openclaw`:
- *   - `PluginAPI.registerGatewayMethod(method, handler, opts?: {scope?: OperatorScope})`
- *     — `src/plugins/plugin-api.types.ts:217`
- *   - `RespondFn = (ok, payload?, error?, meta?) => void`
- *     — `src/gateway/server-methods/shared-types.ts:86`
- *   - `OperatorScope` is a CLOSED set — `src/gateway/operator-scopes.ts:4`. Typed
- *     closed here too, so a typo'd scope is a compile error, not a silent
- *     runtime-only mismatch against a host that would reject it.
- *
- * The handler options carry `req` / `client` / `isWebchatConnect` / `context` in
- * the host; only `params` + `respond` are modelled, matching the minimal-subset
- * discipline `src/types/openclaw.d.ts` states — the plugin deliberately does not
- * read the transport surfaces (the host owns transport authz; the plugin owns
- * principal binding). A double that handed them over would let a handler quietly
- * grow a dependency the production type forbids.
- */
-export type MockOperatorScope =
-  | "operator.admin"
-  | "operator.read"
-  | "operator.write"
-  | "operator.approvals"
-  | "operator.pairing"
-  | "operator.talk.secrets";
-
-export type MockRespondFn = (
-  ok: boolean,
-  payload?: unknown,
-  error?: { code?: string; message?: string },
-  meta?: Record<string, unknown>,
-) => void;
-
-export type MockGatewayRequestHandler = (opts: {
-  params: Record<string, unknown>;
-  respond: MockRespondFn;
-}) => Promise<void> | void;
+import type {
+  GatewayRequestHandler,
+  OperatorScope,
+  PluginAPI,
+  RespondFn,
+  ToolDefinition,
+} from "openclaw/plugin-sdk";
 
 /** One `registerGatewayMethod` registration, exactly as the plugin passed it —
  * handler AND options. The options are recorded because the declared `scope` IS
  * the plugin's whole authorization contribution at the transport layer (the host
  * enforces it before the handler runs), so a test must be able to read it back
- * without invoking anything. */
+ * without invoking anything.
+ *
+ * The types are the PRODUCTION ones (`src/types/openclaw.d.ts`), not local
+ * look-alikes: a double that re-declares the surface it doubles cannot fail to
+ * compile when that surface drifts — and method-parameter bivariance means a
+ * divergence in the closed `OperatorScope` union would pass `tsc` in silence. */
 export interface RegisteredGatewayMethod {
-  handler: MockGatewayRequestHandler;
-  opts?: { scope?: MockOperatorScope };
+  handler: GatewayRequestHandler;
+  opts?: { scope?: OperatorScope };
 }
 
 export interface MockPluginAPI extends PluginAPI {
@@ -119,12 +86,27 @@ export function createMockPluginApi(
       tools.set(tool.name, tool);
     },
 
+    /**
+     * Source-verified against the host clone at `vendor/openclaw`
+     * (`src/plugins/registry-registrars-network.ts:38-63`,
+     * `plugin-api.types.ts:217`): the key is the TRIMMED name, an empty name
+     * registers nothing, and a collision is FIRST-WINS — the host keeps the
+     * incumbent handler and drops the newcomer. Those three lines decide WHICH
+     * handler answers, so every assertion reading `_gatewayMethods` depends on
+     * them; a last-wins double would report a second registration as success.
+     *
+     * NOT modelled: on collision the host also pushes a load diagnostic. That is
+     * host-owned operator surface, not a plugin contract, and this double has
+     * nowhere faithful to put it.
+     */
     registerGatewayMethod(
       method: string,
-      handler: MockGatewayRequestHandler,
-      opts?: { scope?: MockOperatorScope },
+      handler: GatewayRequestHandler,
+      opts?: { scope?: OperatorScope },
     ): void {
-      gatewayMethods.set(method, { handler, ...(opts !== undefined ? { opts } : {}) });
+      const trimmed = method.trim();
+      if (!trimmed || gatewayMethods.has(trimmed)) return;
+      gatewayMethods.set(trimmed, { handler, ...(opts !== undefined ? { opts } : {}) });
     },
 
     logger: {
@@ -218,7 +200,7 @@ export async function callGatewayMethod(
 ): Promise<GatewayResponseFrame[]> {
   const { handler } = getGatewayMethod(api, name);
   const frames: GatewayResponseFrame[] = [];
-  const respond: MockRespondFn = (ok, payload, error, meta) => {
+  const respond: RespondFn = (ok, payload, error, meta) => {
     frames.push({
       ok,
       ...(payload !== undefined ? { payload } : {}),
