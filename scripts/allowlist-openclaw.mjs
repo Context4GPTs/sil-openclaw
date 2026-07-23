@@ -155,13 +155,26 @@ function main() {
     process.exit(0);
   }
 
-  // Something changed → back up, atomically write, then best-effort validate.
-  const mode = statSync(configPath).mode & 0o777;
+  // Something changed → back up, then atomically write.
+  //
+  // Wrapped, because an unwritable config DIRECTORY is the ordinary case here,
+  // not an exotic one: this script runs pre-gateway-boot, often under an
+  // operator who does not own that tree. An uncaught throw exits non-zero too,
+  // but it hands the operator a Node stack instead of the structured marker
+  // this script's whole contract promises. Both the backup and the atomic write
+  // create a NEW file in that directory, so either can be the one that fails.
   const bakPath = configPath + ".bak";
-  copyFileSync(configPath, bakPath);
-
-  const serialized = JSON.stringify(result.config, null, 2) + "\n";
-  atomicWrite(configPath, serialized, mode);
+  try {
+    const mode = statSync(configPath).mode & 0o777;
+    copyFileSync(configPath, bakPath);
+    atomicWrite(configPath, JSON.stringify(result.config, null, 2) + "\n", mode);
+  } catch (err) {
+    logError("sil_allowlist_merge_failed", {
+      path: configPath,
+      cause: "could not write the merged config: " + (err?.message ?? String(err)),
+    });
+    process.exit(1);
+  }
 
   const allowSize = Array.isArray(result.config.plugins?.allow)
     ? result.config.plugins.allow.length

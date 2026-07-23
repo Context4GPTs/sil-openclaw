@@ -10,6 +10,67 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **`sil_create_shopper` — creating the shopper is now a tool, not a shipped
+  script.** One call does what the old operator bin did in ten steps: the host
+  bootstraps the workspace, sil writes the persona and the shared user spec, and
+  a single hash-checked host-config transaction registers the agent with the
+  `sil-shopping` skill attached. That transaction is the **last** step and the
+  only config write, so any earlier failure leaves `openclaw.json` untouched —
+  nothing partial, ever.
+- **`workspace` is treated as untrusted input.** It is model-authored prose, and
+  a failed create removes what it made there, so it is now confined before
+  anything is attempted: absolute, no `~`, already normalised, under the user's
+  home but not home itself, outside `$SIL_DATA_DIR`, and with no symbolic link
+  anywhere in its path. Each rejection names **the rule it broke**, so a user who
+  wanted an external drive can tell a policy from a bug.
+
+### Changed
+
+- **Nothing sil ships starts a subprocess any more.** Both shipped scripts drove
+  the host `openclaw` CLI; ClawHub's static analysis reads call sites, not
+  manifests, so declaring the behaviour never moved its verdict. The creation bin
+  is deleted outright and the allowlist helper's best-effort
+  `openclaw config validate` guard is gone with it — that guard skipped silently
+  whenever the binary was off `PATH`, which is exactly the pre-boot case the
+  script exists for. `security.noChildProcess` is `true` again, now that it is
+  true. A guard packs both published tarballs and walks every shipped file, so a
+  partial fix cannot pass twice.
+- **Creation never widens sil's own trust.** It writes no `plugins.allow`, no
+  `tools.alsoAllow` and no plugin-enable key. A tool of the sil plugin cannot run
+  unless sil is already admitted, so that write was unreachable when it mattered
+  and a no-op when it was not. Admission stays an operator act, before creation.
+- **A failed create deletes only what that run created.** Previously it keyed on
+  "did this path pre-exist", whose leak the code documented as a `KNOWN GAP`: a
+  `shopper/` directory left by an earlier run made teardown skip the `user_spec.md`
+  it had just written. A reused workspace now has its contents snapshotted before
+  the host touches it, so the user's own files are never candidates.
+- **A shopper's logs carry only what sil authored.** When a host-owned step fails,
+  its error text is dropped rather than forwarded — it can carry a token, an
+  absolute path, or a config fragment, and a denylist over someone else's format
+  is a guess. Diagnosability is preserved by naming an `openclaw` command the
+  operator can re-run to read the host's own message.
+- **The plugin describes itself honestly.** `sil_doctor`'s description said it
+  "never updates anything itself" one clause after promising automatic permission
+  fixes; it now enumerates its only two writes. The README scopes "offline" to
+  what is genuinely offline (creating the shopper, keeping what it learns on disk)
+  and says in the same breath that shopping calls sil-api with the registered
+  identity, and its tool table documents every shipped tool instead of 7 of 11
+  plus four artefacts that no longer exist. The shopping skill's session-start no
+  longer tells the agent to run the admission helper — it reports and relays
+  `sil_doctor`'s suggestion to the user. `security.packagingNote` drops from 6330
+  to under 1500 characters and answers the four questions an installer actually
+  has; every fact it sheds is still carried by a machine-readable field.
+
+### Removed
+
+- `scripts/create-shopper.mjs`, its `sil-openclaw-create-shopper` bin entry, and
+  `sil_doctor`'s `creationEntrypoint` report field and `creation.entrypoint_present`
+  finding. They existed only to hand an agent a runnable path to that script, and
+  they move as one unit — leaving any one behind is how `0.3.8` died silently at
+  its last step.
+
 ## [0.4.5] - 2026-07-23
 
 ### Added
@@ -43,7 +104,7 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   `package.json#files` was dragging maintainer tooling (`release.mjs`,
   `changelog.mjs`, `sync-version.mjs`) into the tarball. `security.noChildProcess`
   is now `false` — the runtime spawns nothing, but the two shipped bins drive the
-  host `openclaw` CLI via `execFileSync`.
+  host `openclaw` CLI as a subprocess.
 
 ### Changed
 

@@ -184,7 +184,8 @@ Everything here is local: no network call, no token read. Artefacts live under `
 
 | Tool | What it does |
 |---|---|
-| `sil_profile_materialize` | **Setup only** — create the one shopper by writing the shared, cross-niche `user_spec.md` (your facts and the rules it must never break; the shopper's name rides in its frontmatter). Mints no domain. Run once; refine later with `sil_learn`. A second shopper is refused. |
+| `sil_create_shopper` | Create your shopper, once you've endorsed the draft — it sets up the shopper's own workspace with its persona, writes your shared facts, and registers it with OpenClaw so it's ready to talk to. It changes nothing else about your setup, and if any step fails it takes back what it made and tells you what it couldn't. |
+| `sil_profile_materialize` | **Setup only** — write the shared, cross-niche `user_spec.md` (your facts and the rules it must never break; the shopper's name rides in its frontmatter). Mints no domain. Refine later with `sil_learn`. A second shopper is refused. |
 | `sil_learn` | Teach the shopper. `target` picks what changes (the shared user spec, a domain's method, or one PRD); `kind` picks how — `create` mints a new document, `write` replaces an existing one with a whole reconciled version you author, `attach-asset` stores an image alongside it. There is no append, so a correction never stacks on top of the line it contradicts. |
 | `sil_profile_search` | Ask what your shopper knows — **coordinates only**, no bodies: the domains it has learned and the PRDs under them, filterable. An empty store is healthy. When nothing matches, the result says the niche still needs minting. |
 | `sil_profile_get` | Read ONE document in full: a domain's `method.md` (its buying guide, your taste, the search vocabulary), or one PRD. Find coordinates with `sil_profile_search` first. |

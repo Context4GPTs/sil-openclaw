@@ -83,53 +83,29 @@ authored here**; they mint **lazily on first shop** ([`shop_loop.md`](shop_loop.
 
 ---
 
-## Part 2 — The creation engine
+## Part 2 — Creation
 
-**Run ONLY after the endorsement gate above clears.** The engine persists **one**
-OpenClaw agent — the **shopper**: a host `agents` entry, sil plugin enabled + skill
-attached, persona in the workspace **`SOUL.md`**, the **shared user spec** in the sil
+**Run ONLY after the endorsement gate above clears.** Creation persists **one**
+OpenClaw agent — the **shopper**: a host `agents` entry with the sil skill attached,
+the persona in the workspace **`SOUL.md`**, and the **shared user spec** in the sil
 data dir. A **singleton** that learns **domains** lazily on first shop — a fresh
-shopper's `domains` map is empty, which is healthy. Creation is **local + offline**: no
-token, no `sil_register`/`sil_whoami`, no network — it registers the user later, on
-first shop.
+shopper has no domains, which is healthy. Creation is **local + offline**: no token,
+no `sil_register`/`sil_whoami`, no network — the user registers later, on first shop.
 
-### The one command
+### One tool call
 
-Run one shipped script — **non-interactive**, **atomic**, **fail-closed**; it emits one
-JSON result. It is a standalone operator script, not the plugin process, so the plugin's
-"never write host config" guarantee holds.
-
-**Get its path from `sil_doctor` — never guess it, and never derive it from this file's
-own location.** Call `sil_doctor` and read the report's top-level **`creationEntrypoint`**:
-an absolute path, reported every run. It is the only sound source. This file is published
-to you as a *symlink*, so a `../scripts/…` hop off this directory does not resolve for
-`node` even though `cat` and `ls` say it does; and the bare bin name is on PATH only for
-some installs. Both dead-end at this exact step.
-
-Feed the endorsed spec as a **file**, not a heredoc — shell quoting must never touch
-model-authored prose (apostrophes, quotes, backticks, `$`, newlines are the norm in a
-persona). Write it **0600 under a private dir**, run, then **remove it**: the spec carries
-the user's `userSpec` (address, sizes, allergy/ethics rules), so it must not linger
-world-readable. The script never deletes an input it does not own — that is yours.
+Call **`sil_create_shopper`** with the endorsed spec. There is no script to locate,
+no path to derive, no file to write and clean up — you already hold the tool, and the
+whole create is one call that returns one JSON result.
 
 ```
-# 1. sil_doctor → creationEntrypoint (absolute path to the creation script)
-# 2. write the endorsed spec, owner-only, in a private dir:
-umask 077 && mkdir -p ~/.sil-tmp && SPEC=~/.sil-tmp/shopper-spec.json
-#    …write the JSON object below to "$SPEC"…
-# 3. run it by absolute path, via node:
-node "<creationEntrypoint>" --spec "$SPEC"
-# 4. remove it, whatever the result:
-rm -f "$SPEC"
-```
-
-The spec file's contents — one JSON object:
-
-```json
-{ "name": "My Shopper",
-  "workspace": "~/.openclaw/workspace-my-shopper",
-  "persona": "…endorsed persona…", "userSpec": "…seeded shared user spec…",
-  "channel": "telegram" }
+sil_create_shopper {
+  "name": "My Shopper",
+  "workspace": "<absolute path under the user's home>",
+  "persona": "…endorsed persona…",
+  "userSpec": "…seeded shared user spec…",
+  "channel": "telegram"
+}
 ```
 
 ### The spec (input)
@@ -138,58 +114,51 @@ The spec file's contents — one JSON object:
 |---|---|---|---|
 | **name** | Human-readable display name; the `agentId` is **derived** from it. | sil store | yes |
 | **persona** | Who the shopper is — a generalist, its voice, standing rules. | host **`SOUL.md`** | yes |
-| **workspace** | The shopper's workspace directory. | host | yes |
+| **workspace** | The shopper's own workspace directory. | host | yes |
 | **userSpec** | Shared **cross-niche** facts + hard constraints (seeded partial). | sil `user_spec.md` | yes |
-| **channel** | Setup conversation's channel, bound to the shopper. | host bindings | optional (fail-open) |
+| **channel** | Setup conversation's channel, routed to the shopper. | host bindings | optional (fail-open) |
 
-The `agentId` is **not an input** — the bin derives it as `deriveAgentId(name)`
-(lower-kebab `^[a-z0-9][a-z0-9-]*$`; a `main`/empty slug silently folds to `sil-shopper`).
+`workspace` must be an **absolute path under the user's home** — a real path, never
+`~/…`, because nothing in this stack expands a tilde and you would create a directory
+literally named `~`. It must not sit inside sil's data directory. A path that breaks
+one of those rules comes back `invalid_request` naming **the rule**, not just the
+field, so relay that sentence to the user rather than silently picking another path.
+A sensible default is `<home>/.openclaw/workspace-<shopper-id>`.
+
+The `agentId` is **not an input** — it is derived from `name` (lower-kebab
+`^[a-z0-9][a-z0-9-]*$`; a `main`/empty slug silently folds to `sil-shopper`).
 
 **No per-niche input at create** — no method, no PRD; those mint lazily on first shop
 via `sil_learn create`. The shopper needs web tools (inherited from `agents.defaults`)
-to mint/refresh domains; if defaults grant none, the bin reports `created` with a
-`warnings` gap (bare `sil_search` still works) — surface it.
+to mint/refresh domains.
 
-### What the bin does, in order (atomic, fail-closed)
+### What it does, in order (validate first, then atomic)
 
-1. **Validate first, then derive the id** — bad/blank `name`, `persona`, `workspace`, or
-   `userSpec` → **`invalid_request`** naming the field; **nothing written**. Then
-   `agentId = deriveAgentId(name)` — the derivation always yields a conforming id (empty
-   or `main` slug → the silent `sil-shopper` fallback), so the id is never a failure mode.
-2. **Config + singleton pre-flight** — no host config → `persistence_failed`. An
-   existing shopper `user_spec.md`, or an `agentId` clash → **`collision`** ("a shopper
-   already exists"); steer to shop-a-new-niche or refine, **never a second shopper**. An
-   inconclusive read fails closed.
-3. **Snapshot `openclaw.json`** — the teardown anchor, before any write.
-4. **`openclaw agents add`** — the real `agents.list[]` entry + workspace bootstrap,
-   inheriting model + tools from `agents.defaults`.
-5. **Write `SOUL.md`** = endorsed **persona + the standing "The sil way" creed block**
-   (below).
-6. **Materialize the shared user spec** — `sil_profile_materialize { name, userSpec }`
-   (singleton, no agentId) writes **`user_spec.md`** atomically, name in its
+1. **Validate** — bad/blank `name`, `persona` or `userSpec`, or a `workspace` that
+   breaks a confinement rule → **`invalid_request`** naming the field and the rule;
+   **nothing is attempted**. Then the id is derived from `name`.
+2. **Singleton + id pre-flight** — an existing shopper `user_spec.md`, or an agent id
+   already in the host's list → **`collision`**; steer to shop-a-new-niche or refine,
+   **never a second shopper**. A store it cannot read is inconclusive and fails closed.
+3. **Workspace** — the host bootstraps the shopper's workspace directory.
+4. **`SOUL.md`** = endorsed **persona + the standing "The sil way" creed block** (below).
+5. **Shared user spec** — `user_spec.md` written atomically, the name in its
    frontmatter. **Setup-only: no domain, no method, no PRD.**
-7. **Attach skill + enable plugin** (value-mode `config set --strict-json`, the only
-   mode the pinned `alpine/openclaw:2026.6.9` accepts):
-   `agents.list[<idx>].skills` ← `["sil-shopping"]`; `plugins.entries.sil.enabled` ←
-   `true`. **No per-agent `tools.deny`** — the shopper inherits the host default toolset.
-8. **Admit sil (plugin trust)** — the shipped **`scripts/allowlist-openclaw.mjs`** helper
-   (which the script runs itself, by absolute path via `node` — never the bare name)
-   additively merges the three trust surfaces (`plugins.allow` + `tools.alsoAllow` +
-   `plugins.entries.sil`) — the only way to un-filter `sil_*` without clobbering a
-   co-installed plugin. A non-zero exit → **`persistence_failed`** (never a green
-   `created` over filtered tools).
-9. **Bind the channel — FAIL-OPEN** — resolve (`spec.channel`, else
-   `OPENCLAW_MCP_MESSAGE_CHANNEL`), bind, **verify** the route stuck. Undetermined /
-   owned / unverifiable → revert + a manual-bind hint in `warnings`. Never fails
-   creation.
-10. **Validate then declare** — `config validate --json` keys off **`.valid`**. Only
-    `valid: true` **and** step 8 ok → **`created`** (with `boundChannel`, or `null`).
-    Any failure **after step 4** tears down (restore the snapshot; remove the workspace
-    + shopper dir only if it created them), so `persistence_failed` means **nothing
-    partial**. If teardown cannot fully revert, a louder **`teardown_failed`** names the
-    residue.
+6. **One host-config transaction, last** — the `agents.list` entry with
+   `skills: ["sil-shopping"]`, plus the channel route when there is one. The host
+   validates it and either takes the whole change or none of it.
 
-Exit 0 **only** on `created`.
+Because that transaction is **last and single**, any earlier failure leaves the host
+config untouched — nothing partial, ever. Creation then removes what **this run**
+created (its workspace tree, or just the files it added to one the user already had,
+and the user spec it wrote) and reports **`persistence_failed`**. If something it
+created could **not** be removed, the louder **`teardown_failed`** names the residue.
+No per-agent `tools.deny` is set — the shopper inherits the host's default toolset.
+
+**Creation never widens sil's own trust.** It writes no `plugins.allow`, no
+`tools.alsoAllow`, no plugin-enable key. If sil's tools were not already admitted you
+could not have called this tool at all — admission is an operator act that happens
+before creation, never something the shopper arranges for itself.
 
 ### The `SOUL.md` "The sil way" creed block
 
@@ -206,18 +175,22 @@ pick); and its **shopping memory is the sil store** — it records what it learn
 
 | `status` | Meaning | Do |
 |---|---|---|
-| `created` | Shopper added, spec materialized, plugin + skill + hardening wired, config valid. Carries `name`/`agentId`/`workspace`/`boundChannel` (or `null`). | Tell the user; if `boundChannel` null, relay the manual-bind hint. |
-| `invalid_request` | Spec failed validation. Nothing attempted. | Name the field, fix, re-run. |
-| `collision` | A shopper (singleton) or `agentId` already exists. Nothing written. | Steer to shop-a-new-niche or refine — never a second shopper. |
-| `persistence_failed` | A write, the allow-list helper, or `config validate` failed; teardown fully reverted. | Fix the path/cause, re-run (safe). |
-| `teardown_failed` | Teardown could NOT fully revert. | Louder — names the residue; the host is not at its pre-run state. |
+| `created` | Shopper added, user spec written, skill attached. Carries `name`/`agentId`/`workspace`/`boundChannel` (or `null`) and any `warnings`. | Tell the user; if `boundChannel` is null, relay the manual-bind hint from `warnings`. |
+| `invalid_request` | The spec failed validation. Nothing attempted. | Relay the field AND the `rule` it broke, fix, call again. |
+| `collision` | A shopper (singleton) or that agent id already exists. Nothing written. | Steer to shop-a-new-niche or refine — never a second shopper. |
+| `persistence_failed` | A step failed; everything this run created was removed. | Relay the `cause` and the `recovery` command, then call again (safe). |
+| `teardown_failed` | Something this run created could NOT be removed. | Louder — read out each `residue` path; the machine is not back at its prior state. |
+
+The `cause` is always sil's own words. When a **host**-owned step fails, sil does not
+forward the host's error text — it may carry a token, an absolute path or a config
+fragment — so the result carries a `recovery` command the user can run themselves to
+read the host's own message. Relay that command; do not run it for them.
 
 ### Runtime
 
 At session start the host has injected the persona via **`SOUL.md`**. Load the shared
 **`user_spec.md`** (cross-niche facts + hard constraints; frontmatter carries the name);
 `sil_profile_search` scans the learned domains (empty is healthy) and each per-domain
-method loads **lazily at shop time**. The `sil_*` tools admitted at create, the shopper
-shops with no further setup, minting each niche on the fly on first shop
-([`shop_loop.md`](shop_loop.md)). To sharpen it, see
-[`fill_and_feedback.md`](fill_and_feedback.md).
+method loads **lazily at shop time**. The shopper shops with no further setup, minting
+each niche on the fly on first shop ([`shop_loop.md`](shop_loop.md)). To sharpen it,
+see [`fill_and_feedback.md`](fill_and_feedback.md).

@@ -1,13 +1,16 @@
 /**
  * `sil_create_shopper` — create the user's ONE sil-wired shopper, in-process.
  *
- * This replaces a shipped operator bin that drove the host `openclaw` CLI
- * through `execFileSync`. That exec was the whole of ClawHub's
+ * This replaces a shipped operator bin that drove the host `openclaw` CLI as a
+ * subprocess. That call site was the whole of ClawHub's
  * `suspicious.dangerous_exec`, and no manifest declaration moves a
  * deterministic scanner — only removing the call site does. Every step it
  * shelled out for is a host call available in-process, so the ten-step
  * choreography collapses into two: the host bootstraps the workspace, and ONE
  * hash-checked `mutateConfigFile` transaction commits the config.
+ *
+ * Nothing in this file may name a subprocess API even in a comment: the scanner
+ * reads the SHIPPED artefact, and `dist/` carries these comments verbatim.
  *
  * ORDER IS THE SAFETY ARGUMENT. The config transaction is LAST and is the only
  * config write. Everything that can fail happens before it, so on every failure

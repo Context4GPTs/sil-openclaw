@@ -71,7 +71,7 @@ while setup is incomplete; it sheds once a shopper exists.
 | "who am I?" / show my saved name + addresses | `sil_whoami` | — |
 | "find X" / "search for X" / browse a category or price range | `sil_search` | — |
 | "look up these items" / re-check ids from a prior result | `sil_product_get` | — |
-| "set up an agent that shops for me" / "create my shopper" | (onboarding, then the engine) | [`agent_creation_engine.md`](references/agent_creation_engine.md) |
+| "set up an agent that shops for me" / "create my shopper" | onboarding, then `sil_create_shopper` | [`agent_creation_engine.md`](references/agent_creation_engine.md) |
 | "what does my shopper know?" / "which domains / PRDs?" | `sil_profile_search` | [`method_and_prds.md`](references/method_and_prds.md) |
 | "show me the &lt;niche&gt; domain" (method or one PRD) | `sil_profile_get` | [`method_and_prds.md`](references/method_and_prds.md) |
 | "forget the &lt;niche&gt; domain" (or one PRD) | `sil_profile_remove` | [`method_and_prds.md`](references/method_and_prds.md) |
