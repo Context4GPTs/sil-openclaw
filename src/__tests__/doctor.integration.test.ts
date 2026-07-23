@@ -1832,12 +1832,20 @@ describe("B1 — sil_doctor's ONLY writes are the two its description enumerates
     // radius a path-confinement bug would reach first.
     const outsider = join(parentDir, "not-ours.txt");
     writeFileSync(outsider, "untouched", { mode: 0o644 });
+    const siblingDir = join(parentDir, "not-ours-dir");
+    mkdirSync(siblingDir, { mode: 0o755 });
     seedHealthyStore();
     chmodSync(dataDir, 0o777);
 
+    // `snapshot()` records a tree's ENTRIES, never the root's own mode — so the
+    // store's PARENT is invisible to it. A tighten that walked one hop out
+    // (`chmod(join(dataDir, ".."))`) would be completely unobserved. Capture it
+    // explicitly. (Found by mutation: the guard passed against exactly that.)
+    const parentModeBefore = modeBits(parentDir);
     const before = snapshot(parentDir);
     await runDoctor();
     const after = snapshot(parentDir);
+    expect(modeBits(parentDir), "the store's PARENT directory was chmod'd").toBe(parentModeBefore);
 
     for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
       // `dataDir` itself is the store root — inside scope. Everything whose
