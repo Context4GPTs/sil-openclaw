@@ -1029,15 +1029,13 @@ describe("AC11 — six flat fields, folded into the doctor's existing determinis
     // the field through. Both are `toEqual`, never a subset: an exact set is what
     // catches drift in BOTH directions.
     //
-    // Bumped ADD-ONLY by card `creation-bin-unreachable-on-clawhub-installs`, which
-    // adds `creationEntrypoint`. This test's previous title claimed "this card adds
-    // no report key" — true of #67, which wrote it, and false now. A key change
-    // bites HERE as well as in `tools/doctor.test.ts` and (silently, since a
-    // structural cast tolerates extras) `doctor.integration.test.ts`'s local mirror.
+    // A key change bites HERE as well as in `tools/doctor.test.ts` and (silently,
+    // since a structural cast tolerates extras) `doctor.integration.test.ts`'s
+    // local mirror. `creationEntrypoint` was REMOVED by the de-exec card: creation
+    // is a registered tool now, so there is no path for the report to hand out.
     const report = await runDoctor(allDriftConfig(), HOST_TOO_OLD);
     expect(Object.keys(report).sort()).toEqual([
       "counts",
-      "creationEntrypoint",
       "dataDir",
       "findings",
       "healthy",

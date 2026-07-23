@@ -61,6 +61,7 @@ const SIL: SilAllowlistFacts = {
   // because the loop below only asserts each name is ABSENT from a fresh config
   // — so it is bumped for hygiene in lockstep with the mirrors that bite.)
   tools: [
+    "sil_create_shopper",
     "sil_doctor",
     "sil_learn",
     "sil_product_get",

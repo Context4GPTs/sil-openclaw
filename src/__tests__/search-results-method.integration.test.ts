@@ -860,6 +860,7 @@ describe("registration shape (C5) and log privacy", () => {
   it("registering the gateway method does not change the tool set (still 11)", () => {
     const api = registerPlugin();
     expect([...api._tools.keys()].sort()).toEqual([
+      "sil_create_shopper",
       "sil_doctor",
       "sil_learn",
       "sil_product_get",

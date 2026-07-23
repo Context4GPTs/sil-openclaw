@@ -111,7 +111,12 @@ function seedConfig(): void {
           defaults: { model: "x" },
           list: [{ id: "pre-existing-agent", skills: ["unrelated"] }],
         },
-        bindings: [{ agent: "pre-existing-agent", bind: "cli" }],
+        // The REAL host shape (`vendor/openclaw/src/config/types.agents.ts:54-64`
+        // AgentRouteBinding) — a fabricated `{agent,bind}` fixture would make the
+        // no-steal guard below pass against an implementation that never checks.
+        bindings: [
+          { type: "route", agentId: "pre-existing-agent", match: { channel: "cli" } },
+        ],
         meta: { lastTouchedVersion: "2026.7.1" },
       },
       null,
@@ -506,5 +511,176 @@ describe("A — a successful create writes exactly one agent, and no trust key",
       expect(statSync(workspace).mode & 0o777).toBe(0o700);
       expect(existsSync(userSpecPath()), "the shopper artefact was not written").toBe(true);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// REHOMED from the deleted bin's suite (`create-shopper.integration.test.ts`).
+//
+// That file drove `scripts/create-shopper.mjs` as a child process with a
+// PATH-shimmed `openclaw`. The bin is gone, so the file is gone — but three
+// classes of behaviour it guarded are NOT creation-mechanism details, they are
+// the product contract, and they moved into the tool unchanged. Losing them
+// would have quietly shrunk the merge gate:
+//
+//   - the SINGLETON refusal and the agent-id clash (`collision`),
+//   - channel binding: spec > env precedence, no route stolen, fail-open,
+//   - `invalid_request` naming the FIRST bad field, deterministically.
+//
+// One class did NOT survive and is deliberately not rehomed: `AC C1`'s
+// "shell metacharacters round-trip verbatim / nothing was shell-expanded".
+// There is no shell any more — the persona arrives as a typed tool parameter.
+// A test asserting that a value which never touches a shell is not
+// shell-expanded is a tautology, and `delete-first` forbids keeping it.
+// ---------------------------------------------------------------------------
+
+describe("collision — the shopper is a singleton, and an agent is never overwritten", () => {
+  it("a shopper already exists ⇒ collision, and the host is never touched", async () => {
+    const before = readConfigRaw();
+    const first = await create();
+    expect(first.status).toBe("created");
+
+    const afterFirst = readConfigRaw();
+    const second = await create({ name: "Another Shopper" });
+
+    expect(second.status).toBe("collision");
+    expect(String(second["cause"])).toMatch(/one shopper|already exists/i);
+    expect(readConfigRaw(), "the refused run still wrote to the host").toBe(afterFirst);
+    expect(afterFirst).not.toBe(before); // the FIRST run really did write
+  });
+
+  it("the derived agent id already sits in agents.list ⇒ collision, that agent untouched", async () => {
+    // `agentId` is derived from `name`, never supplied — seed the id the name
+    // derives to, not a fed-in one.
+    const cfg = readConfig();
+    const taken = { id: "my-shopper", skills: ["someone-elses"], workspace: "/somewhere/else" };
+    cfg["agents"]["list"].push(taken);
+    writeFileSync(configPath, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+    const before = readConfigRaw();
+
+    const result = await create();
+
+    expect(result.status).toBe("collision");
+    expect(String(result["cause"])).toContain("my-shopper");
+    expect(readConfigRaw()).toBe(before);
+    expect(calls.mutate).toBe(0);
+    // The pre-existing agent is byte-identical — never merged into, never renamed.
+    expect(readConfig()["agents"]["list"].find((a: any) => a.id === "my-shopper")).toEqual(taken);
+  });
+
+  it("a collision writes NO shopper artefact — the refusal is total", async () => {
+    await create();
+    rmSync(workspace, { recursive: true, force: true });
+    const second = await create({ name: "Another Shopper" });
+    expect(second.status).toBe("collision");
+    expect(existsSync(workspace), "a refused run still bootstrapped a workspace").toBe(false);
+  });
+});
+
+describe("bind-the-channel — routed when resolvable, never stolen, fail-open when not", () => {
+  it("spec.channel is bound, and the result names it", async () => {
+    const result = await create({ channel: "telegram" });
+    expect(result.status).toBe("created");
+    expect(result["boundChannel"]).toBe("telegram");
+    const bindings = readConfig()["bindings"] as Array<Record<string, any>>;
+    expect(bindings.some((b) => b?.match?.channel === "telegram")).toBe(true);
+    expect(result["warnings"]).toEqual([]);
+  });
+
+  it("spec.channel WINS over the env channel (precedence: spec > env)", async () => {
+    process.env["OPENCLAW_MCP_MESSAGE_CHANNEL"] = "whatsapp";
+    try {
+      const result = await create({ channel: "telegram" });
+      expect(result["boundChannel"]).toBe("telegram");
+      const bindings = readConfig()["bindings"] as Array<Record<string, any>>;
+      expect(bindings.some((b) => b?.match?.channel === "whatsapp")).toBe(false);
+    } finally {
+      delete process.env["OPENCLAW_MCP_MESSAGE_CHANNEL"];
+    }
+  });
+
+  it("the env channel supplies it when the spec omits it", async () => {
+    process.env["OPENCLAW_MCP_MESSAGE_CHANNEL"] = "whatsapp";
+    try {
+      const result = await create();
+      expect(result["boundChannel"]).toBe("whatsapp");
+    } finally {
+      delete process.env["OPENCLAW_MCP_MESSAGE_CHANNEL"];
+    }
+  });
+
+  it("a channel another agent already owns is NOT stolen — created + a manual-bind warning", async () => {
+    // The pre-run config already routes `cli` to `pre-existing-agent`.
+    const before = readConfig()["bindings"];
+    const result = await create({ channel: "cli" });
+
+    expect(result.status).toBe("created");
+    expect(result["boundChannel"]).toBeNull();
+    // Every pre-existing binding survives, and no SECOND route to `cli` was
+    // minted — the prior owner keeps it, and the new shopper gets no route.
+    for (const b of before as unknown[]) expect(readConfig()["bindings"]).toContainEqual(b);
+    const cliRoutes = (readConfig()["bindings"] as Array<Record<string, any>>).filter(
+      (b) => b?.match?.channel === "cli",
+    );
+    expect(cliRoutes).toHaveLength(1);
+    expect(cliRoutes[0]?.["agentId"]).toBe("pre-existing-agent");
+    expect((result["warnings"] as string[]).join(" ")).toMatch(/bind/i);
+  });
+
+  it("fail-open: no channel anywhere ⇒ created with a warning, and NO bindings entry", async () => {
+    const before = readConfig()["bindings"];
+    const result = await create();
+    expect(result.status).toBe("created");
+    expect(result["boundChannel"]).toBeNull();
+    expect(readConfig()["bindings"]).toEqual(before);
+    const warnings = result["warnings"] as string[];
+    expect(warnings.length).toBeGreaterThan(0);
+    // The warning must be actionable, and must name a host command, not a sil bin.
+    expect(warnings.join(" ")).toMatch(/openclaw agents bind|\/agent /);
+    expect(warnings.join(" ")).not.toMatch(/sil-openclaw-/);
+  });
+
+  it("a blank channel is treated as undetermined, never bound as an empty string", async () => {
+    const result = await create({ channel: "   " });
+    expect(result.status).toBe("created");
+    expect(result["boundChannel"]).toBeNull();
+    const bindings = readConfig()["bindings"] as Array<Record<string, any>>;
+    expect(bindings.some((b) => b?.match?.channel === "" || b?.match?.channel === "   ")).toBe(
+      false,
+    );
+  });
+});
+
+describe("invalid_request — every required field is validated, deterministically, first", () => {
+  const REQUIRED = ["name", "persona", "userSpec"] as const;
+
+  for (const field of REQUIRED) {
+    it(`a blank ${field} ⇒ invalid_request naming ${field}, nothing attempted`, async () => {
+      const before = readConfigRaw();
+      const result = await create({ [field]: "   " });
+      expect(result.status).toBe("invalid_request");
+      expect(result["field"]).toBe(field);
+      expect(String(result["cause"]).length).toBeGreaterThan(10);
+      expect(readConfigRaw()).toBe(before);
+      expect(calls.ensureWorkspace).toBe(0);
+      expect(calls.mutate).toBe(0);
+    });
+  }
+
+  it("names the FIRST bad field in a fixed order — the message never depends on object key order", async () => {
+    // Two fields bad at once. A validator that iterated `Object.keys(params)`
+    // would name whichever the caller happened to serialise first.
+    const a = await create({ name: "", persona: "", userSpec: "", workspace: "relative" });
+    const b = await create({ userSpec: "", persona: "", name: "", workspace: "relative" });
+    expect(a["field"]).toBe(b["field"]);
+    expect(a["field"]).toBe("name");
+  });
+
+  it("a bad workspace is reported with the RULE it broke, not just the field", async () => {
+    const result = await create({ workspace: "~/.openclaw/ws" });
+    expect(result.status).toBe("invalid_request");
+    expect(result["field"]).toBe("workspace");
+    const text = `${String(result["rule"] ?? "")} ${String(result["cause"] ?? "")}`;
+    expect(text, "the refusal never says WHY the path was rejected").toMatch(/~|tilde/i);
   });
 });

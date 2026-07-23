@@ -164,6 +164,7 @@ describe("plugin load — data dir is created by the FULL real register() (card 
     // sil_doctor (report-first data-store/identity/version health) in the new
     // doctor group.
     expect([...api._tools.keys()].sort()).toEqual([
+      "sil_create_shopper",
       "sil_doctor",
       "sil_learn",
       "sil_product_get",

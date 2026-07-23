@@ -295,7 +295,6 @@ interface DoctorReport {
    * omission here never fails; it is bumped for accuracy, and the exact-set drift
    * guards live in `tools/doctor.test.ts` (`REPORT_KEYS`, the assembler) and
    * `advisory.integration.test.ts` (the real `execute()`). */
-  creationEntrypoint: string;
   counts: { info: number; warn: number; critical: number };
   findings: Finding[];
 }
@@ -1614,154 +1613,35 @@ describe("the ClawHub probe — one declared host, no credentials, nothing else"
 });
 
 // ===========================================================================
-// Card: creation-bin-unreachable-on-clawhub-installs — AC B1/B2/B3/B5/B6/B8.
+// The creation entrypoint is GONE from the report — and the wiring advisory,
+// which is the surface that actually still needs a path, is not.
 //
-// The creation entrypoint through the REAL execute(): the real resolver, the real
-// filesystem probe, the real finding builder, the real roll-up.
-//
-// THE ONE INJECTED SEAM is `resolveCreationEntrypoint` — and it injects a REAL
-// TEMP PATH, never a fake verdict. Everything downstream stays real: the probe
-// really stats that path, the builder really reads the real verdict, and `healthy`
-// really rolls it up. What is faked is WHERE the plugin looks, which is precisely
-// what an incomplete install changes. The alternative — moving the repo's own
-// scripts/create-shopper.mjs — would vandalise a worktree the pair is live-editing.
+// DELETED with the bin: six describes pinning `creationEntrypoint` and the
+// `creation.entrypoint_present` finding through the real `execute()`. Creation
+// is a registered tool now (`sil_create_shopper`), so there is no path to
+// report and nothing to probe for reachability. Their replacement is the pair
+// below: the key is absent, and `resolveAllowlistScript` — the ONE consumer
+// left, and the only thing standing between a tools-filtered user and a dead
+// session — still resolves.
 // ===========================================================================
 
-const CREATION_ID = "creation.entrypoint_present";
-const creationFinding = (r: DoctorReport): Finding | undefined =>
-  r.findings.find((f) => f.id === CREATION_ID);
-
-/** Point the doctor at `path` as its creation entrypoint. Redirects the LOCATION;
- * the verdict is still whatever the filesystem really says about it. */
-const lookForEntrypointAt = (path: string): void => {
-  vi.spyOn(creationEntrypoint, "resolveCreationEntrypoint").mockReturnValue(path);
-};
-
-describe("AC B1/B8 — a reachable entrypoint on a real tree", () => {
-  it("reports the REAL absolute entrypoint as a top-level report field", async () => {
-    // The datum the whole fix hangs on: it replaces the plugin root the agent cannot
-    // derive. Not prose inside a finding — a field it can hand straight to `node`.
+describe("the report no longer carries a creation entrypoint", () => {
+  it("has no creationEntrypoint key and no creation.entrypoint_present finding", async () => {
+    seedHealthyStore();
     const report = await runDoctor();
-    expect(report.creationEntrypoint).toBe(creationEntrypoint.resolveCreationEntrypoint());
-    expect(report.creationEntrypoint.startsWith("/")).toBe(true);
-    expect(existsSync(report.creationEntrypoint)).toBe(true);
+    expect("creationEntrypoint" in report).toBe(false);
+    expect(report.findings.filter((f) => f.id.startsWith("creation."))).toEqual([]);
   });
 
-  it("emits the finding EVERY run at info / ok, and healthy stays true", async () => {
-    // A singleton subsystem check, not a problem-only one: `fixed → re-run → ok`
-    // needs the id to still be there after the fix.
-    const report = await runDoctor();
-    const finding = creationFinding(report);
-    expect(finding).toBeDefined();
-    expect(finding!.severity).toBe("info");
-    expect(finding!.status).toBe("ok");
-    expect(finding!.suggestedAction).toBeNull();
-    expect(report.healthy).toBe(true);
+  it("the allowlist resolver — the surviving path oracle — is still reachable", () => {
+    // Positive half. The deletion above is satisfied by a doctor that reports
+    // nothing at all; this is what keeps `wiring.tools_not_admitted` honest.
+    const resolved = creationEntrypoint.resolveAllowlistScript();
+    expect(resolved.startsWith("/")).toBe(true);
+    expect(existsSync(resolved)).toBe(true);
   });
 
-  it("the reported field and the probed path are the SAME path (AC B7 by construction)", async () => {
-    // A doctor that certifies a path it never probed is the same class of lie this
-    // card kills. One resolver, called once: the finding's `detected` must name the
-    // very path the report hands the agent.
-    const report = await runDoctor();
-    expect(creationFinding(report)!.detected).toContain(report.creationEntrypoint);
-  });
-});
-
-describe("AC B2/B3 — an unreachable entrypoint (the incomplete tree)", () => {
-  it("reports warn + healthy:false, naming THAT path and the concrete verdict", async () => {
-    const absent = join(parentDir, "incomplete", "scripts", "create-shopper.mjs");
-    lookForEntrypointAt(absent);
-
-    const report = await runDoctor();
-    const finding = creationFinding(report)!;
-    expect(finding.severity).toBe("warn");
-    expect(finding.status).toBe("advisory");
-    expect(finding.detected).toContain(absent);
-    expect(finding.detected.toLowerCase()).toContain("missing");
-    // `healthy` is the load-bearing half — doctor.ts derives it from the warn count.
-    expect(report.healthy).toBe(false);
-    // The datum is reported even when it cannot be reached: a path we cannot reach
-    // is still the path we mean, and hiding it would hide the diagnosis.
-    expect(report.creationEntrypoint).toBe(absent);
-  });
-
-  it("distinguishes `unresolvable` from `missing` — a non-file at the path", async () => {
-    const occupied = join(parentDir, "occupied-entrypoint");
-    mkdirSync(occupied, { recursive: true });
-    lookForEntrypointAt(occupied);
-
-    const report = await runDoctor();
-    const finding = creationFinding(report)!;
-    expect(finding.severity).toBe("warn");
-    expect(finding.detected).toContain(occupied);
-    expect(finding.detected.toLowerCase()).not.toContain("missing");
-  });
-
-  it("the suggested recovery is runnable on the channel being diagnosed (AC B4)", async () => {
-    // The whole point: advice the operator cannot run teaches them the doctor cannot
-    // be trusted. No sil bin is on PATH on a plugin-install channel; `openclaw` is.
-    lookForEntrypointAt(join(parentDir, "incomplete", "scripts", "create-shopper.mjs"));
-    const fix = creationFinding(await runDoctor())!.suggestedAction!;
-    expect(fix).toContain("openclaw plugins install");
-    expect(fix).not.toContain("sil-openclaw-create-shopper");
-    expect(fix).not.toMatch(/\bPATH\b/);
-  });
-
-  it("still returns the standard envelope and never throws", async () => {
-    lookForEntrypointAt(join(parentDir, "incomplete", "scripts", "create-shopper.mjs"));
-    await expect(runDoctor()).resolves.toBeDefined();
-  });
-});
-
-describe("AC B5 — fixed → re-run → ok, on one stable id", () => {
-  it("flips to ok and healthy:true once the operator repairs the tree", async () => {
-    const scripts = join(parentDir, "repairable", "scripts");
-    const entrypoint = join(scripts, "create-shopper.mjs");
-    lookForEntrypointAt(entrypoint);
-
-    const before = await runDoctor();
-    expect(creationFinding(before)!.severity).toBe("warn");
-    expect(before.healthy).toBe(false);
-
-    // The operator reinstalls: the file really appears on the real filesystem.
-    mkdirSync(scripts, { recursive: true });
-    writeFileSync(entrypoint, "export {};\n");
-
-    const after = await runDoctor();
-    // SAME id — a problem-only finding would simply vanish here, and the consumer
-    // could not tell a repaired install from one that was never checked.
-    expect(creationFinding(after)).toBeDefined();
-    expect(creationFinding(after)!.id).toBe(creationFinding(before)!.id);
-    expect(creationFinding(after)!.severity).toBe("info");
-    expect(creationFinding(after)!.status).toBe("ok");
-    expect(creationFinding(after)!.suggestedAction).toBeNull();
-    expect(after.healthy).toBe(true);
-  });
-});
-
-describe("AC B6 — determinate with the network down", () => {
-  it("still reports the entrypoint and a verdict when the probe is unreachable", async () => {
-    // The ClawHub GET is the doctor's ONE outbound call and this is not it: the
-    // entrypoint check is a local stat. A doctor is needed MOST when things are
-    // broken, and "broken" often includes the network.
-    installFetch(async () => {
-      throw new Error("ENETDOWN — the channel is unreachable");
-    });
-
-    const report = await runDoctor();
-    const finding = creationFinding(report);
-    expect(finding).toBeDefined();
-    expect(finding!.status).toBe("ok");
-    expect(report.creationEntrypoint).toBe(creationEntrypoint.resolveCreationEntrypoint());
-
-    // Anti-vacuity: prove the network really WAS down for this run — the version
-    // advisory fails soft to silence, so its absence is the receipt.
-    expect(versionFindings(report)).toEqual([]);
-  });
-
-  it("makes NO extra outbound request for the entrypoint check", async () => {
-    // A reachability check that phoned home would be a second declared endpoint.
+  it("still makes exactly ONE outbound request — nothing was added in its place", async () => {
     await runDoctor();
     expect(requests).toHaveLength(1);
   });

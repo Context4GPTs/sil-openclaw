@@ -235,10 +235,9 @@ describe("package.json#bin — the shipped operator bins (exact set, add-only)",
   // (add-only); this is the contract, not a lower bound.
   const EXPECTED_BIN: Record<string, string> = {
     "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs",
-    "sil-openclaw-create-shopper": "./scripts/create-shopper.mjs",
   };
 
-  it("declares EXACTLY the two operator bins — never a subset, never a stray extra", () => {
+  it("declares EXACTLY the operator bin set — never a subset, never a stray extra", () => {
     expect(pkg.bin).toEqual(EXPECTED_BIN);
   });
 
@@ -265,8 +264,20 @@ describe("package.json#bin — the shipped operator bins (exact set, add-only)",
     ).toEqual([]);
   });
 
-  it("scripts/create-shopper.mjs is a node bin (starts with the `#!/usr/bin/env node` shebang, mirroring the sibling bin)", () => {
-    const src = readText("scripts/create-shopper.mjs");
-    expect(src.startsWith("#!/usr/bin/env node")).toBe(true);
+  it("every declared bin is a node bin (starts with the `#!/usr/bin/env node` shebang)", () => {
+    // Derived from the map, so a bin added later is covered without a second edit.
+    for (const target of Object.values(EXPECTED_BIN)) {
+      expect(readText(target.replace(/^\.\//, "")).startsWith("#!/usr/bin/env node")).toBe(true);
+    }
+  });
+
+  it("the deleted creation bin is gone from EVERY surface — bin map, #files, and disk", () => {
+    // Slice M relocated creation into the plugin process as `sil_create_shopper`.
+    // The bin, its `#files` entry and the script itself move as ONE unit: leaving
+    // any one behind reproduces the 0.3.8 silent death, where the documented flow
+    // pointed at something the shipped channel could not run.
+    expect(Object.keys(pkg.bin ?? {})).not.toContain("sil-openclaw-create-shopper");
+    expect(pkg.files ?? []).not.toContain("scripts/create-shopper.mjs");
+    expect(existsSync(join(REPO_ROOT, "scripts/create-shopper.mjs"))).toBe(false);
   });
 });

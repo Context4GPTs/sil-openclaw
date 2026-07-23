@@ -44,6 +44,7 @@ import { fileURLToPath } from "node:url";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerProfileTools } from "../tools/profile.js";
+import { registerCreateShopperTools } from "../tools/create-shopper.js";
 import { registerDoctorTools } from "../tools/doctor.js";
 import {
   createMockPluginApi,
@@ -88,6 +89,7 @@ function codeRegisteredNames(): Set<string> {
   registerCatalogTools(api);
   registerProfileTools(api);
   registerDoctorTools(api);
+  registerCreateShopperTools(api);
   return registeredToolNames(api);
 }
 
@@ -135,6 +137,7 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // report-first data-store/identity/version health tool) in a NEW group
     // (registerDoctorTools, wired above): 10 → 11, add-only.
     const expected = [
+      "sil_create_shopper",
       "sil_doctor",
       "sil_learn",
       "sil_product_get",

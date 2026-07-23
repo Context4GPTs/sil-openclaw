@@ -134,6 +134,7 @@ describe("plugin entry — registration contract", () => {
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
+      "sil_create_shopper",
       "sil_doctor",
       "sil_learn",
       "sil_product_get",
