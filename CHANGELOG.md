@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-07-23
+
 ### Added
 
 - **`sil.search_results` — pull a `sil_search` page over the paired gateway WS.**
