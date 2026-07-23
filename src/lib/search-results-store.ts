@@ -51,13 +51,6 @@ export interface SearchResultPage {
  * from "never existed" from "expired". */
 export type SearchResultMiss = "unknown" | "expired" | "principal_mismatch";
 
-/** One shape rather than a discriminated union: `page !== null` ⇔ `miss ===
- * null`, and callers (including tests) read both fields without narrowing. */
-export interface SearchResultLookup {
-  page: SearchResultPage | null;
-  miss: SearchResultMiss | null;
-}
-
 /**
  * Fifteen minutes. A search result is point-in-time — price, availability, and
  * `checkout_url` are exactly the fields a shopper must re-fetch before buying —
@@ -88,28 +81,51 @@ interface StoredEntry {
 const entries = new Map<string, StoredEntry>();
 
 /** Store one `ok` page under the host's `callId`, bound to the sil account that
- * produced it. Overwrites are impossible in practice (a `callId` is unique per
- * tool call) but harmless. */
+ * produced it. An empty principal is refused: a page has an owner or it is
+ * unreachable, and an ownerless entry would only burn capacity. */
 export function putSearchResult(
   callId: string,
   page: SearchResultPage,
   principal: string,
 ): void {
+  if (principal.length === 0) return;
   evict();
   entries.set(callId, { principal, page, expiresAtMs: Date.now() + RETENTION_MS });
 }
 
-export function getSearchResult(callId: string, principal: string): SearchResultLookup {
-  const entry = entries.get(callId);
-  if (entry === undefined) return { page: null, miss: "unknown" };
-  if (entry.expiresAtMs <= Date.now()) return { page: null, miss: "expired" };
-  if (entry.principal !== principal) return { page: null, miss: "principal_mismatch" };
-  return { page: entry.page, miss: null };
+/** The stored page, or `null` for every miss — unknown, expired, and foreign are
+ * ONE outcome to the caller. Pure: no eviction, no reordering, no consumption,
+ * so a client remount re-resolves the same page and a foreign probe cannot deny
+ * the owner theirs. */
+export function getSearchResult(callId: string, principal: string): SearchResultPage | null {
+  return lookup(callId, principal).page;
+}
+
+/** The miss cause, for the OPERATOR LOG only (criterion C3) — never the wire.
+ * A separate query rather than a richer return, because the wire path must not
+ * be able to reach the cause by accident: reading it is a deliberate call. */
+export function searchResultMiss(callId: string, principal: string): SearchResultMiss | null {
+  return lookup(callId, principal).miss;
 }
 
 /** Reset for tests. Production never calls this — the process IS the lifetime. */
-export function resetSearchResultsStore(): void {
+export function __resetSearchResultsStore(): void {
   entries.clear();
+}
+
+function lookup(
+  callId: string,
+  principal: string,
+): { page: SearchResultPage | null; miss: SearchResultMiss | null } {
+  const entry = entries.get(callId);
+  if (entry === undefined) return { page: null, miss: "unknown" };
+  if (entry.expiresAtMs <= Date.now()) return { page: null, miss: "expired" };
+  // An empty principal is the anonymous bucket, and there is no legitimate
+  // anonymous owner — it must not match, not even an entry stored under one.
+  if (principal.length === 0 || entry.principal !== principal) {
+    return { page: null, miss: "principal_mismatch" };
+  }
+  return { page: entry.page, miss: null };
 }
 
 /** Lazy eviction, run on every write: drop what has expired, then trim to

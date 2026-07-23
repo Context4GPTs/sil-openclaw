@@ -31,7 +31,7 @@
 import type { PluginAPI, RespondFn } from "openclaw/plugin-sdk";
 
 import { hasTokens, readConfig } from "../lib/credentials.js";
-import { getSearchResult } from "../lib/search-results-store.js";
+import { getSearchResult, searchResultMiss } from "../lib/search-results-store.js";
 
 export const SEARCH_RESULTS_METHOD = "sil.search_results";
 
@@ -96,16 +96,16 @@ function resolve(
     return;
   }
 
-  const lookup = getSearchResult(callId, principal);
-  if (lookup.page === null) {
-    api.logger.info("sil_search_results_miss", { found: false, reason: lookup.miss });
+  const page = getSearchResult(callId, principal);
+  if (page === null) {
+    api.logger.info("sil_search_results_miss", {
+      found: false,
+      reason: searchResultMiss(callId, principal),
+    });
     respond(true, NOT_FOUND);
     return;
   }
 
-  api.logger.info("sil_search_results_hit", {
-    found: true,
-    count: lookup.page.products.length,
-  });
-  respond(true, lookup.page);
+  api.logger.info("sil_search_results_hit", { found: true, count: page.products.length });
+  respond(true, page);
 }
