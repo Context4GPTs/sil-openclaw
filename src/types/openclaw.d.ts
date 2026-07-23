@@ -73,15 +73,94 @@ declare module "openclaw/plugin-sdk" {
      * Optional because a host that does not supply it must degrade to an
      * INCONCLUSIVE compat check (no finding), never a fabricated verdict.
      *
-     * The rest of the facade (`agent`, `llm`, `system`, `state`,
-     * `subagent`, `config.mutateConfigFile`, …) is deliberately NOT
-     * declared: this plugin detects and surfaces, it never mutates host
-     * state. Add back the exact member a tool needs when it needs it.
+     * The rest of the facade (`llm`, `system`, `state`, `subagent`, …) is
+     * deliberately NOT declared. Add back the exact member a tool needs
+     * when it needs it — and only after a probe proves the running host
+     * hands it over.
+     *
+     * `config` and `agent` are declared because `sil_create_shopper`
+     * consumes them, and both were live-probed on
+     * `openclaw/openclaw:2026.7.1` from a plugin loaded the way we ship
+     * (`origin: "config"`, NOT bundled, NOT `trustedOfficialInstall`).
+     * They are OPTIONAL because one real load path
+     * (`registrationMode: "cli-metadata"`) passes `runtime: {}` — a tool
+     * that finds them missing must refuse LOUDLY, never degrade.
      *
      * NOTE: `api.version` (not declared) is the PLUGIN's own version, not
      * the host's — an easy and silent mis-read.
      */
-    runtime?: { version?: string };
+    runtime?: {
+      version?: string;
+      config?: RuntimeConfigAPI;
+      agent?: RuntimeAgentAPI;
+    };
+  }
+
+  /**
+   * The subset of the host config tree sil writes. Everything else stays
+   * `unknown` behind the index signature: the draft handed to `mutate` is
+   * the user's WHOLE config, and a plugin that models keys it does not own
+   * invites itself to rewrite them.
+   */
+  export interface OpenClawConfigDraft {
+    agents?: {
+      list?: Array<{
+        id?: string;
+        name?: string;
+        workspace?: string;
+        skills?: string[];
+      }>;
+      [key: string]: unknown;
+    };
+    bindings?: Array<{
+      type?: string;
+      agentId?: string;
+      match?: { channel?: string };
+      [key: string]: unknown;
+    }>;
+    [key: string]: unknown;
+  }
+
+  /**
+   * How the gateway reacts to the write. The caller MUST choose — the host
+   * deliberately has no default, so restart behaviour stays explicit.
+   * `{ mode: "auto" }` let the host decide, and it reported
+   * `requiresRestart: false` for an `agents.list` + `bindings` write.
+   */
+  export type ConfigWriteAfterWrite =
+    | { mode: "auto" }
+    | { mode: "restart"; reason: string }
+    | { mode: "none"; reason: string };
+
+  export interface RuntimeConfigAPI {
+    /** The running config snapshot, defaulted. */
+    current(): Record<string, unknown>;
+    /**
+     * A hash-checked, single-transaction config write. `mutate` receives a
+     * draft; whatever it returns comes back as `result`. Probed behaviour
+     * that this plugin depends on: the host VALIDATES the mutated config
+     * inside the transaction and refuses the whole write on a schema
+     * violation, and a `mutate` that THROWS writes nothing at all — which
+     * is what lets creation treat this as its single atomic commit.
+     */
+    mutateConfigFile<T>(params: {
+      base?: "runtime" | "source";
+      baseHash?: string;
+      afterWrite: ConfigWriteAfterWrite;
+      mutate: (draft: OpenClawConfigDraft) => T | Promise<T>;
+    }): Promise<{ result: T | undefined }>;
+  }
+
+  export interface RuntimeAgentAPI {
+    /**
+     * Create an agent's workspace and (optionally) its bootstrap files.
+     * The host owns the whole shape of a workspace, so sil asks for one
+     * rather than laying out the host's files itself.
+     */
+    ensureAgentWorkspace(params?: {
+      dir?: string;
+      ensureBootstrapFiles?: boolean;
+    }): Promise<{ dir: string }>;
   }
 
   export interface ToolDefinition {

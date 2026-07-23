@@ -13,10 +13,16 @@
  * shipped manifest (single source of truth), call the pure `mergeSilAllowlist`
  * core, and — only when something changed — write a `.bak` then atomically
  * (tmp → rename) write the merged config back, preserving the file's existing
- * mode (host config is operator-readable, NOT a 0600 credential). When the
- * `openclaw` binary is on PATH it runs `openclaw config validate --json` as a
- * best-effort post-write guard and reverts from `.bak` if the merged config is
- * rejected — so a bad result fails closed and never leaves the host half-merged.
+ * mode (host config is operator-readable, NOT a 0600 credential).
+ *
+ * It runs NOTHING. It used to shell out to `openclaw config validate --json` as
+ * a post-write guard; that call is gone, because a shipped file that starts a
+ * subprocess is what ClawHub's scanner reads, and no manifest declaration
+ * changes its verdict. The guard was best-effort anyway — it skipped silently
+ * whenever the binary was off PATH, which is precisely the pre-gateway-boot
+ * case this script exists for. The `.bak` plus the atomic tmp→rename write are
+ * the real safety net: the merge is additive and idempotent, and the operator
+ * can restore the backup this script names in its own success line.
  *
  * Config-path precedence (first existing wins):
  *   1. $OPENCLAW_CONFIG_PATH
@@ -37,7 +43,6 @@
  * compiled to `dist/lib/openclaw-allowlist.js`). This shell is thin I/O only.
  */
 
-import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -107,46 +112,6 @@ function atomicWrite(path, contents, mode) {
   renameSync(tmp, path);
 }
 
-/** Best-effort `openclaw config validate --json` guard. Returns:
- *   { ran: false }                 — binary absent / not invokable (skip, keep write)
- *   { ran: true, valid: boolean, cause?: string }
- * Never throws across the boundary — a non-zero exit from the binary is read
- * from its stdout `.valid`, and an un-parseable response is treated as invalid. */
-function validateConfig(path) {
-  let raw;
-  try {
-    raw = execFileSync("openclaw", ["config", "validate", "--json"], {
-      env: { ...process.env, OPENCLAW_CONFIG_PATH: path },
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  } catch (err) {
-    // ENOENT → binary not on PATH: skip validation (the script must run
-    // pre-gateway-boot). Any other spawn failure also means we can't validate;
-    // the atomic write + .bak revert remains the real safety net, so we treat a
-    // failed *spawn* as "not run" (keep the write) rather than "invalid".
-    if (err && err.code === "ENOENT") return { ran: false };
-    // The binary ran but exited non-zero — capture its stdout if any so we can
-    // read a structured verdict; otherwise treat as invalid (fail closed).
-    const stdout = typeof err?.stdout === "string" ? err.stdout : "";
-    if (stdout) {
-      raw = stdout;
-    } else {
-      return { ran: true, valid: false, cause: "openclaw config validate exited non-zero" };
-    }
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.valid === true) return { ran: true, valid: true };
-    const cause =
-      (parsed && (parsed.error || parsed.message))
-      || "openclaw config validate reported valid !== true";
-    return { ran: true, valid: false, cause: String(cause) };
-  } catch {
-    return { ran: true, valid: false, cause: "openclaw config validate returned non-JSON" };
-  }
-}
-
 function main() {
   const configPath = resolveConfigPath();
   if (configPath === null) {
@@ -198,17 +163,6 @@ function main() {
   const serialized = JSON.stringify(result.config, null, 2) + "\n";
   atomicWrite(configPath, serialized, mode);
 
-  const validation = validateConfig(configPath);
-  if (validation.ran && !validation.valid) {
-    // Revert to the exact pre-run bytes; leave the host in its pre-run state.
-    copyFileSync(bakPath, configPath);
-    logError("sil_allowlist_merge_failed", {
-      path: configPath,
-      cause: validation.cause ?? "openclaw config validate rejected the merged config",
-    });
-    process.exit(1);
-  }
-
   const allowSize = Array.isArray(result.config.plugins?.allow)
     ? result.config.plugins.allow.length
     : 0;
@@ -217,8 +171,8 @@ function main() {
     tools_added: sil.tools.length,
     skill_added: sil.skill.length > 0,
     plugins_allow_size: allowSize,
-    validated: validation.ran,
     path: configPath,
+    backup: bakPath,
   });
   process.exit(0);
 }

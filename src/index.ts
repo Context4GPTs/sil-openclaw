@@ -36,6 +36,7 @@ import { ensureDataDir, getDataDir } from "./lib/credentials.js";
 import { registerSearchResultsMethod } from "./gateway/search-results.js";
 import { detectWiringDrift, readSilWiringFacts } from "./lib/host-wiring.js";
 import { registerCatalogTools } from "./tools/catalog.js";
+import { registerCreateShopperTools } from "./tools/create-shopper.js";
 import { registerDoctorTools } from "./tools/doctor.js";
 import { registerIdentityTools } from "./tools/identity.js";
 import { registerProfileTools } from "./tools/profile.js";
@@ -83,6 +84,7 @@ export default definePluginEntry({
     registerIdentityTools(api);
     registerCatalogTools(api);
     registerProfileTools(api);
+    registerCreateShopperTools(api);
     registerDoctorTools(api);
 
     // The pull surface a paired client resolves a search page from. Registering
