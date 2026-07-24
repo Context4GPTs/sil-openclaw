@@ -6,15 +6,18 @@
  * place the plugin's TypeScript sees the SDK surface.
  * See: https://docs.openclaw.ai/plugins/sdk-overview
  *
- * This is the *minimal* subset the skeleton's stub tools touch, lifted
- * from the reference adapter (`klodi-plugin/adapters/openclaw/src/types/
- * openclaw.d.ts`). The SDK surface the skeleton does not use —
- * `registerService` / `ServiceDefinition`, `registerHttpRoute` /
- * `HttpRouteDescriptor`, `runtime` / `RuntimeAPI` / `SystemAPI`, and the
- * wake-event plumbing — is intentionally dropped: a skeleton declares no
+ * This declares only the *minimal* subset the plugin's tools actually
+ * consume. That now includes the `runtime` facade, but only down to the
+ * members a tool uses — `runtime.config` and `runtime.agent`, the
+ * host-mediated config + workspace writes `sil_create_shopper` performs,
+ * each declared only after a live probe proved the running host hands it
+ * over (the member's own note carries the detail). Still absent,
+ * deliberately: `registerService` / `ServiceDefinition`,
+ * `registerHttpRoute` / `HttpRouteDescriptor`, `runtime.system` /
+ * `SystemAPI`, and the wake-event plumbing — the plugin declares no
  * service, owns no HTTP route, and pushes no system events. Add back the
- * exact member a tool needs the moment a tool needs it, so the type
- * surface always tracks what the code actually consumes.
+ * exact member a tool needs the moment it needs it, so the type surface
+ * always tracks what the code actually consumes.
  */
 
 declare module "openclaw/plugin-sdk" {
