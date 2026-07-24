@@ -173,6 +173,36 @@ function packClawhubTarball(npmTarball) {
   return resolve(stage, filename);
 }
 
+/**
+ * Read the ClawHub promotion state back AFTER publishing.
+ *
+ * The upload exit code says the bytes were accepted; it does NOT say the version
+ * reached installers. A scan verdict decides that, so "published" and
+ * "delivered" are two different facts and only this read establishes the second
+ * — a `pnpm release` that exits 0 on the upload alone is a false green in our
+ * own hands, and the operator is the one person it misleads.
+ *
+ * Keyed on `blocked`, NOT on the scan verdict. A `suspicious` scan does not by
+ * itself hold distribution — probed 2026-07-24, `blocked: no`, and @4gpts/sil is
+ * listed publicly on both channels at a suspicious version — so the verdict is
+ * REPORTED, never gated on. Only a `blocked` hold (a moderator action) makes a
+ * channel undelivered. An unreadable status is treated as undelivered: we cannot
+ * claim a delivery we could not confirm.
+ */
+function readClawhubDelivery() {
+  const raw = tryCapture("clawhub", ["package", "moderation-status", CLAWHUB_NAME, "--json"]);
+  if (raw === null) return { delivered: false, scan: "unknown", unreadable: true };
+  let status;
+  try {
+    status = JSON.parse(raw);
+  } catch {
+    return { delivered: false, scan: "unknown", unreadable: true };
+  }
+  const scan = typeof status.releaseScan === "string" ? status.releaseScan : "unknown";
+  const blocked = status.blocked === true;
+  return { delivered: !blocked, scan, unreadable: false };
+}
+
 function publishClawhub(npmTarball) {
   const sha = capture("git", ["rev-parse", "HEAD"]);
   // The release notes for this version, straight from CHANGELOG.md (empty if the
@@ -212,17 +242,39 @@ function publishClawhub(npmTarball) {
 log(`${DRY_RUN ? "DRY-RUN " : ""}release ${pkg.name}@${version} (npm) + ${CLAWHUB_NAME}@${version} (ClawHub)`);
 preflight();
 const tarball = buildAndPack();
+let clawhub = null;
 try {
   publishNpm(tarball);
   publishClawhub(tarball);
+  // Read the promotion state back only after a REAL upload — a dry run uploads
+  // nothing, so there is no delivery state to observe.
+  if (!DRY_RUN) clawhub = readClawhubDelivery();
 } finally {
   rmSync(tarball, { force: true });
 }
-log(
-  DRY_RUN
-    ? "dry-run complete — nothing was uploaded."
-    : `published ${pkg.name}@${version} (npm) + ${CLAWHUB_NAME}@${version} (ClawHub).`,
-);
-if (!DRY_RUN) {
+
+if (DRY_RUN) {
+  log("dry-run complete — nothing was uploaded.");
+} else {
+  // Two facts, reported per channel. npm has no scan gate: a publish that
+  // returned is delivered. ClawHub's delivery is the promotion state read above.
+  log(`npm: DELIVERED — ${pkg.name}@${version} is live on npm.`);
+  if (clawhub.unreadable) {
+    log(
+      `ClawHub: NOT CONFIRMED — ${CLAWHUB_NAME}@${version} was uploaded, but its promotion ` +
+        "state could not be read back. Treat as undelivered until confirmed.",
+    );
+  } else if (clawhub.delivered) {
+    log(`ClawHub: DELIVERED — ${CLAWHUB_NAME}@${version} promoted (scan: ${clawhub.scan}).`);
+  } else {
+    log(
+      `ClawHub: HELD — ${CLAWHUB_NAME}@${version} was uploaded but NOT promoted ` +
+        `(scan: ${clawhub.scan}, blocked). npm shipped; ClawHub-channel installers will not ` +
+        "receive this version until it clears.",
+    );
+  }
   log(`next: \`clawhub package readiness ${CLAWHUB_NAME}\` to check ClawHub readiness blockers.`);
+  // A held or unconfirmed channel is a distinct, LOUDER outcome — the operator
+  // rail, never green-washed. A clean scan that is not blocked still exits 0.
+  if (clawhub.unreadable || !clawhub.delivered) process.exit(1);
 }
