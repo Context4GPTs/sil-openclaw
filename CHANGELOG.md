@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-07-24
+
 ### Fixed
 
 - **`sil.search_results` now exists on a stock gateway.** `activation` gains
