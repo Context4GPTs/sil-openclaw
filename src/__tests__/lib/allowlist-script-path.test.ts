@@ -1,5 +1,5 @@
 /**
- * UNIT — the surviving half of `src/lib/creation-entrypoint.ts`: the ALLOWLIST
+ * UNIT — `src/lib/allowlist-script-path.ts`: the ALLOWLIST
  * script's path oracle.
  *
  * REBUILT, NOT PATCHED. This file used to pin five creation-side exports —
@@ -21,7 +21,7 @@
  * unchanged, and is the reason the module exists at all: the root comes from
  * `import.meta.url`, never `process.cwd()`.
  *
- * Contract pinned for the implementation (src/lib/creation-entrypoint.ts):
+ * Contract pinned for the implementation (src/lib/allowlist-script-path.ts):
  *
  *   export const ALLOWLIST_SCRIPT_RELATIVE = "scripts/allowlist-openclaw.mjs";
  *   export function resolveAllowlistScript(): string;   // absolute
@@ -38,11 +38,11 @@ import { fileURLToPath } from "node:url";
 import {
   ALLOWLIST_SCRIPT_RELATIVE,
   resolveAllowlistScript,
-} from "../../lib/creation-entrypoint.js";
+} from "../../lib/allowlist-script-path.js";
 
 /** …/src/__tests__/lib → three levels up is the repo (plugin) root. */
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-const MODULE_SRC = join(REPO_ROOT, "src", "lib", "creation-entrypoint.ts");
+const MODULE_SRC = join(REPO_ROOT, "src", "lib", "allowlist-script-path.ts");
 
 const tempDirs: string[] = [];
 function tempDir(): string {
@@ -86,7 +86,7 @@ describe("resolveAllowlistScript — the plugin root is derived from import.meta
     try {
       process.chdir(elsewhere);
       vi.resetModules();
-      const fresh = await import("../../lib/creation-entrypoint.js");
+      const fresh = await import("../../lib/allowlist-script-path.js");
       expect(fresh.resolveAllowlistScript()).toBe(join(REPO_ROOT, ALLOWLIST_SCRIPT_RELATIVE));
       expect(fresh.resolveAllowlistScript()).not.toContain(elsewhere);
     } finally {
@@ -138,7 +138,7 @@ describe("the ONE literal — the constant every surface is asserted against", (
 
 describe("the creation half is DELETED — no shim, no v1/v2 side by side", () => {
   it("exports nothing creation-shaped any more", async () => {
-    const mod = (await import("../../lib/creation-entrypoint.js")) as Record<string, unknown>;
+    const mod = (await import("../../lib/allowlist-script-path.js")) as Record<string, unknown>;
     for (const dead of [
       "CREATION_ENTRYPOINT_RELATIVE",
       "resolveCreationEntrypoint",

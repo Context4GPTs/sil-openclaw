@@ -69,7 +69,7 @@ import {
   readHostVersion,
   type SilWiringFacts,
 } from "../../lib/host-wiring.js";
-import { resolveAllowlistScript } from "../../lib/creation-entrypoint.js";
+import { resolveAllowlistScript } from "../../lib/allowlist-script-path.js";
 import { createMockPluginApi } from "../helpers/mock-plugin-api.js";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");

@@ -69,7 +69,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { registerDoctorTools } from "../tools/doctor.js";
-import * as creationEntrypoint from "../lib/creation-entrypoint.js";
+import * as allowlistScriptPath from "../lib/allowlist-script-path.js";
 import { getDataDir, getTokensPath } from "../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -1636,7 +1636,7 @@ describe("the report no longer carries a creation entrypoint", () => {
   it("the allowlist resolver — the surviving path oracle — is still reachable", () => {
     // Positive half. The deletion above is satisfied by a doctor that reports
     // nothing at all; this is what keeps `wiring.tools_not_admitted` honest.
-    const resolved = creationEntrypoint.resolveAllowlistScript();
+    const resolved = allowlistScriptPath.resolveAllowlistScript();
     expect(resolved.startsWith("/")).toBe(true);
     expect(existsSync(resolved)).toBe(true);
   });

@@ -898,14 +898,14 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     // ⚠️ THIS LIST IS A WHITELIST, NOT A SWEEP. A module absent from it is invisible
     // to this guard — SILENTLY, with a green suite. That is worse than a red: the
     // module ships unguarded on the posture the manifest declares. ADD EVERY NEW
-    // audit-scope module here (add-only). `creation-entrypoint.ts` was added by card
-    // `creation-bin-unreachable-on-clawhub-installs` (AC D2): it resolves and probes
-    // the creation script's path, and the ONE thing it must never do is RUN it —
-    // naming a path is not spawning it, which is what keeps `noChildProcess` true.
+    // audit-scope module here (add-only). `allowlist-script-path.ts` resolves the
+    // allowlist operator script's path from `import.meta.url`, and the ONE thing it
+    // must never do is RUN it — naming a path is not spawning it, which is what keeps
+    // `noChildProcess` true.
     for (const file of [
       "src/lib/host-wiring.ts",
       "src/lib/version-advisory.ts",
-      "src/lib/creation-entrypoint.ts",
+      "src/lib/allowlist-script-path.ts",
     ]) {
       const source = readFileSync(join(REPO_ROOT, file), "utf8");
       for (const forbidden of [
@@ -955,7 +955,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
 
     // Anti-vacuity: a walk that found nothing would pass this test forever.
     expect(sources.length).toBeGreaterThan(10);
-    expect(sources.some((p) => p.endsWith("creation-entrypoint.ts"))).toBe(true);
+    expect(sources.some((p) => p.endsWith("allowlist-script-path.ts"))).toBe(true);
 
     const offenders = sources.filter((path) =>
       /child_process|\bexecSync\b|\bspawnSync\b|\bexecFileSync\b|\bspawn\(/.test(

@@ -30,7 +30,7 @@ import { fileURLToPath } from "node:url";
 
 import type { PluginAPI } from "openclaw/plugin-sdk";
 
-import { resolveAllowlistScript } from "./creation-entrypoint.js";
+import { resolveAllowlistScript } from "./allowlist-script-path.js";
 import type { Finding } from "./findings.js";
 
 /** The shipped manifest, resolved relative to this module — two levels up from
