@@ -857,7 +857,7 @@ describe("registration shape (C5) and log privacy", () => {
     expect(getGatewayMethod(api, METHOD).opts?.scope).toBe("operator.read");
   });
 
-  it("registering the gateway method does not change the tool set (still 11)", () => {
+  it("registering the gateway method does not change the tool set (still 12)", () => {
     const api = registerPlugin();
     expect([...api._tools.keys()].sort()).toEqual([
       "sil_create_shopper",

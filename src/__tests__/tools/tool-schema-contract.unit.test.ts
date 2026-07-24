@@ -36,6 +36,7 @@ import { registerIdentityTools } from "../../tools/identity.js";
 import { registerCatalogTools } from "../../tools/catalog.js";
 import { registerProfileTools } from "../../tools/profile.js";
 import { registerDoctorTools } from "../../tools/doctor.js";
+import { registerCreateShopperTools } from "../../tools/create-shopper.js";
 import {
   createMockPluginApi,
   getTool,
@@ -194,10 +195,11 @@ describe("registered tool descriptions carry NO per-niche-expert vocabulary (who
     registerCatalogTools(api);
     registerProfileTools(api);
     registerDoctorTools(api);
+    registerCreateShopperTools(api);
     return api;
   }
 
-  it("every registered tool description scans clean — incl. the four pivot-untouched tools and the five profile verbs", () => {
+  it("every registered tool description scans clean — incl. the four pivot-untouched tools, the five profile verbs, and sil_create_shopper", () => {
     const tools = [...allRegisteredTools()._tools.entries()];
     // Guard against a vacuous green: descriptions must actually exist AND be
     // non-blank to be scanned. (NOT a tool count/set pin — passes for any tool set.)
