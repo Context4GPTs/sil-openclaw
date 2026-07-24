@@ -57,7 +57,7 @@ interface Manifest {
   description?: string;
   version?: string;
   skills?: string[];
-  activation?: { onCapabilities?: string[] };
+  activation?: { onCapabilities?: string[]; onStartup?: boolean };
   contracts?: { tools?: string[] };
   configSchema?: { type?: string; properties?: Record<string, unknown> };
   security?: { packagingNote?: string; filesystemScope?: string[] };
@@ -150,6 +150,52 @@ describe("openclaw.plugin.json — manifest shape", () => {
     for (const name of manifest.contracts!.tools!) {
       expect(name.startsWith("klodi_")).toBe(false);
     }
+  });
+});
+
+describe("openclaw.plugin.json — activation posture: the key that decides whether the gateway surface EXISTS (AC3)", () => {
+  // 0.4.5 shipped `sil.search_results` under ~30 green handler assertions and the
+  // method did not exist on a single stock gateway. A gateway RPC method is
+  // dispatchable only from the registry the host INSTALLS as active, and the host
+  // admits a plugin to that (gateway-startup) load plan only when
+  // `activation.onStartup === true` — `shouldConsiderForGatewayStartup`,
+  // `vendor/openclaw/src/plugins/gateway-startup-plugin-ids.ts`. Every other load
+  // path builds a request-local snapshot nothing dispatches from, so the method
+  // was "registered where nobody looks".
+  //
+  // Nothing caught it because THIS file's `Manifest.activation` was typed
+  // `{ onCapabilities?: string[] }` — the load-bearing key was invisible to the
+  // repo's only manifest guard. Widening that type is half the fix; these
+  // assertions are the other half.
+  const manifest = readJson<Manifest>("openclaw.plugin.json");
+
+  it("declares activation.onStartup === true — the plugin loads in the GATEWAY process", () => {
+    const activation = manifest.activation;
+    expect(activation).toBeTypeOf("object");
+    // `toBe(true)` on a NON-optional read. A truthiness matcher or an
+    // `activation?.onStartup` optional chain passes for free on an ABSENT key —
+    // i.e. it passes on exactly the manifest that shipped the bug.
+    expect(activation!.onStartup).toBe(true);
+  });
+
+  it('keeps activation.onCapabilities containing "tool" — the agent-runtime posture is ADDED to, never replaced', () => {
+    // The gateway-startup load must not come at the cost of the capability
+    // declaration: bundled `google-meet` ships both keys together, and dropping
+    // one to add the other would be a silent posture swap rather than an addition.
+    const activation = manifest.activation;
+    expect(Array.isArray(activation!.onCapabilities)).toBe(true);
+    expect(activation!.onCapabilities).toContain("tool");
+  });
+
+  it("activation declares EXACTLY these two triggers (exact set, add-only)", () => {
+    // Set-equality, never a subset check: a renamed key (`onStart`, `startup`)
+    // parses fine, satisfies no host trigger, and would leave the surface inert
+    // again — the failure mode this card exists to kill. Adding a real third
+    // trigger means bumping this list deliberately.
+    expect(Object.keys(manifest.activation!).sort()).toEqual([
+      "onCapabilities",
+      "onStartup",
+    ]);
   });
 });
 

@@ -12,12 +12,15 @@
  * this map and answers over the paired `deviceToken` WS.
  *
  * The key is the HOST's `callId`, verbatim — never prefixed, hashed, or
- * re-minted. It is the one identifier that is reliably streamed (the client
- * already reads it off the tool identity frames as `data.itemId`), and
- * `execute()` receives it BEFORE any I/O, so a page can never be orphaned by a
- * failing search. Because that id is visible to anyone who can see the frames,
- * knowledge of a `callId` is NOT evidence of entitlement: the principal check
- * below is the only gate that matters.
+ * re-minted. `execute()` receives it BEFORE any I/O, so a page can never be
+ * orphaned by a failing search. A client joins on
+ * `data.toolCallId ?? data.itemId`, in that order: the id is the same string on
+ * every frame, but the FIELD NAME differs per family (`session.tool` carries
+ * only `toolCallId`, the `agent`/`stream:"item"` frames only `itemId`) and on
+ * the non-codex path `itemId` is `tool:`-prefixed — see
+ * `docs/decisions/search-results-pull-surface.md`. Because that id is visible to
+ * anyone who can see the frames, knowledge of a `callId` is NOT evidence of
+ * entitlement: the principal check below is the only gate that matters.
  *
  * In-memory, by choice. Process death is the strongest retention ceiling
  * available and costs nothing; an on-disk buffer would put prices, seller
