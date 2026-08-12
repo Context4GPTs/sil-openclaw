@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use when the user explicitly asks to shop with sil or manage their sil shopper: register or check their sil account, search the sil catalog or re-check products by id, set up their one shopper (a two-touchpoint, endorsement-gated onboarding), view or forget what it has learned (domains/PRDs), or — running as that shopper — execute the six-beat Spec-Driven Shopping loop and record a fact or taste it surfaced. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_specs, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, sil_learn, sil_doctor.'
+description: 'Use when the user explicitly asks to shop with sil or manage their sil shopper: register or check their sil account, search the sil catalog or re-check products by id, set up their one shopper (a two-touchpoint, endorsement-gated onboarding), view or forget what it has learned (domains/PRDs), or — running as that shopper — execute the six-beat Spec-Driven Shopping loop and record a fact or taste it surfaced. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, sil_learn, sil_doctor.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
