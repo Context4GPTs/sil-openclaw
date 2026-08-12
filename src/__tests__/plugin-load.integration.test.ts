@@ -161,9 +161,9 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       .mock.calls.filter(([marker]) => marker === "sil_plugin_loaded");
     expect(markerCalls).toHaveLength(1);
     // The full real tool set — the data-dir creation does not add/drop a tool.
-    // 11 tools after the sil-doctor-tool-data-store-identity-health card added
-    // sil_doctor (report-first data-store/identity/version health) in the new
-    // doctor group.
+    // 10 tools after the retire-the-dead-sil-specs-tool card removed sil_specs
+    // from the catalog group (POST /catalog/specs no longer exists in
+    // sil-services and nothing replaces it).
     expect([...api._tools.keys()].sort()).toEqual([
       "sil_doctor",
       "sil_learn",
@@ -174,7 +174,6 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       "sil_profile_search",
       "sil_register",
       "sil_search",
-      "sil_specs",
       "sil_whoami",
     ]);
   });

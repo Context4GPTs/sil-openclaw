@@ -63,10 +63,10 @@ const SCRIPT = join(REPO_ROOT, "scripts", "allowlist-openclaw.mjs");
 
 // sil's real facts (asserted against, sourced from the manifest the script reads).
 const SIL_ID = "sil";
-// The real 11-tool floor after the sil-doctor-tool-data-store-identity-health
-// card added sil_doctor (report-first data-store/identity/version health) in
-// the new doctor group. Drives `tools_added === SIL_TOOLS.length` and the
-// per-tool not-enumerated-into-config scan below.
+// The real 10-tool set after the retire-the-dead-sil-specs-tool card removed
+// sil_specs (POST /catalog/specs is gone from sil-services; nothing replaces
+// it). Drives `tools_added === SIL_TOOLS.length` and the per-tool
+// not-enumerated-into-config scan below.
 const SIL_TOOLS = [
   "sil_doctor",
   "sil_learn",
@@ -77,7 +77,6 @@ const SIL_TOOLS = [
   "sil_profile_search",
   "sil_register",
   "sil_search",
-  "sil_specs",
   "sil_whoami",
 ] as const;
 
@@ -219,7 +218,7 @@ describe("AC1 / AC3 — fresh merge writes sil into all three surfaces (no-warni
     expect(m["plugins_allow_size"] as number).toBeGreaterThan(0);
   });
 
-  it("does NOT enumerate the 11 tool NAMES into the written config (plugin-id admission only)", () => {
+  it("does NOT enumerate the 10 tool NAMES into the written config (plugin-id admission only)", () => {
     writeConfig(freshConfig());
     runHelper({ OPENCLAW_CONFIG_PATH: configPath });
     const raw = readFileSync(configPath, "utf8");

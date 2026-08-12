@@ -2,19 +2,22 @@
  * INTEGRATION — cross-tool 401 parity (tier: integration).
  *
  * THE structural guard against FLAG-10 re-entry. The card's deliverable is that
- * `sil_search`, `sil_product_get`, `sil_whoami`, AND `sil_specs` present the IDENTICAL
+ * `sil_search`, `sil_product_get`, and `sil_whoami` present the IDENTICAL
  * 401 choreography — one transparent refresh via `refreshStoredTokens()`, one retry of
  * the original read, and the same terminal/transient/ok envelope CLASS for each of
  * the four refresh sub-outcomes (retry-ok, second-401, invalid_grant, refresh-5xx).
  * The divergence the goal forbids re-enters the moment a NEW tool copies catalog's OLD
  * terminal branch instead of the shared path — so parity is enforced here by a real
  * shared-behaviour assertion that FAILS if any one tool drifts, not left to reviewer
- * vigilance. `sil_specs` (card sds-specs-client-tool) is the 4th sil-api tool folded
- * into this guard so the shared seam cannot drift for the new tool.
+ * vigilance.
+ *
+ * THREE tools, not four: the retire-the-dead-sil-specs-tool card removed `sil_specs`
+ * and with it the fourth sil-api read endpoint (`POST /catalog/specs`, deleted from
+ * sil-services). That is a real surface shrink — the slot is GONE, not skipped.
  *
  * This is deliberately NOT three independent per-tool suites (those live in
  * whoami / catalog-search / catalog-lookup integration). Here we drive the SAME
- * scenario through all four tools in one test and assert their observable 401
+ * scenario through all three tools in one test and assert their observable 401
  * behaviour is the same — the equality IS the assertion. A tool whose 401 stayed
  * terminal (no refresh) shows refresh.length 0 where the others show 1, or maps a
  * recovered 401 to a re-register where the others map to ok — and the parity check
@@ -22,15 +25,11 @@
  *
  * The ONLY thing mocked is `fetch`. Real `sil-client` + `credentials` +
  * `refreshStoredTokens`, real `SIL_DATA_DIR` token seeding — stub-free, exactly as
- * the per-tool suites. The fetch double routes the FOUR sil-api read endpoints
- * (`/identity` GET, `/catalog/search`, `/catalog/lookup`, `/catalog/specs`) plus the
- * sil-web `/auth/refresh` leg, and exposes per-tool read + refresh call counts.
- *
- * EXPECT RED until every tool routes 401 through the shared `refreshAndRetryOnce`
- * helper. For the sds-specs-client-tool card specifically: `sil_specs` is not
- * registered yet, so `setupTool("specs")` throws "Tool not registered" — every parity
- * `it` observes all FOUR tools, so the specs slot fails until the tool exists and
- * adopts the shared path. GREEN only once sil_specs' 401 matches the other three.
+ * the per-tool suites. The fetch double routes the THREE sil-api read endpoints
+ * (`/identity` GET, `/catalog/search`, `/catalog/lookup`) plus the sil-web
+ * `/auth/refresh` leg, and exposes per-tool read + refresh call counts. Any request
+ * to a fourth endpoint (a resurrected `/catalog/specs` included) routes to `other`
+ * and the double rejects it loudly.
  */
 
 import {
@@ -56,7 +55,7 @@ import {
 } from "./helpers/mock-plugin-api.js";
 
 const SIL_WEB = "https://sil-web.test.example.com"; // refresh origin
-const SIL_API = "https://sil-api.test.example.com"; // read origin (all four reads)
+const SIL_API = "https://sil-api.test.example.com"; // read origin (all three reads)
 
 /** A real identity envelope (sil_whoami's ok shape). */
 function identityEnvelope(): unknown {
@@ -93,29 +92,6 @@ function searchEnvelope(): unknown {
       },
     ],
     pagination: { has_next_page: false },
-  };
-}
-
-/** A real specs body with one resolution (sil_specs's ok shape). BARE shape
- * (`{ resolved }` — top level, no `ucp`/`result` wrapper), the only shape sil-api
- * emits for `/catalog/specs`. The `matched` entry carries a usable canonical ref so
- * `extractSpecsResult` accepts it (anti-false-green). */
-function specsEnvelope(): unknown {
-  return {
-    resolved: [
-      {
-        namespace: "product",
-        key: "waterproof_rating",
-        display_name: "Waterproof Rating",
-        data_type: "number",
-        unit: "mm",
-        is_filterable: true,
-        is_comparable: true,
-        submitted: { namespace: "product", key: "waterproofing" },
-        canonical: { namespace: "product", key: "waterproof_rating" },
-        status: "matched",
-      },
-    ],
   };
 }
 
@@ -157,18 +133,18 @@ interface Recorded {
 }
 
 type Reply = { status: number; body: unknown } | "network-error";
-type ReadKind = "identity" | "search" | "lookup" | "specs";
+type ReadKind = "identity" | "search" | "lookup";
 type Kind = ReadKind | "refresh" | "other";
 
 /** What a recording double returns to the caller. */
 interface Buckets {
   all: Recorded[];
-  read: Recorded[]; // the tool's sil-api read endpoint (identity|search|lookup|specs)
+  read: Recorded[]; // the tool's sil-api read endpoint (identity|search|lookup)
   refresh: Recorded[]; // the sil-web /auth/refresh leg
 }
 
 /**
- * A URL-routing fetch double covering all four sil-api read endpoints + the
+ * A URL-routing fetch double covering all three sil-api read endpoints + the
  * sil-web refresh leg. `readKind` selects which read endpoint THIS tool uses, so
  * the `read` bucket counts only that tool's reads (the parity assertion compares
  * read + refresh counts across tools). `replyRead(nthRead)` and
@@ -204,7 +180,6 @@ function installRouter(
       if (url.includes("/auth/refresh")) kind = "refresh";
       else if (url.includes("/catalog/search")) kind = "search";
       else if (url.includes("/catalog/lookup")) kind = "lookup";
-      else if (url.includes("/catalog/specs")) kind = "specs";
       else if (url.includes("/identity")) kind = "identity";
       else kind = "other";
 
@@ -260,7 +235,6 @@ function seedTokens(access: string, refresh: string): void {
 function okEnvelopeFor(readKind: ReadKind): unknown {
   if (readKind === "identity") return identityEnvelope();
   if (readKind === "search") return searchEnvelope();
-  if (readKind === "specs") return specsEnvelope();
   return lookupEnvelope();
 }
 
@@ -273,7 +247,6 @@ function setupTool(readKind: ReadKind): { api: MockPluginAPI; tool: string } {
   }
   registerCatalogTools(api);
   if (readKind === "search") return { api, tool: "sil_search" };
-  if (readKind === "specs") return { api, tool: "sil_specs" };
   return { api, tool: "sil_product_get" };
 }
 
@@ -281,14 +254,6 @@ function setupTool(readKind: ReadKind): { api: MockPluginAPI; tool: string } {
 function callArgs(readKind: ReadKind): Record<string, unknown> {
   if (readKind === "search") return { query: "chair" };
   if (readKind === "lookup") return { ids: ["gid://product/a"] };
-  if (readKind === "specs") {
-    return {
-      query: "hiking gloves",
-      specs: [
-        { namespace: "product", key: "waterproofing", display_name: "Waterproofing", data_type: "number" },
-      ],
-    };
-  }
   return {}; // whoami takes no params
 }
 
@@ -299,7 +264,6 @@ function callArgs(readKind: ReadKind): Record<string, unknown> {
 function refreshedMarkerFor(readKind: ReadKind): string {
   if (readKind === "search") return "sil_search_refreshed";
   if (readKind === "lookup") return "sil_product_get_refreshed";
-  if (readKind === "specs") return "sil_specs_refreshed";
   return "sil_whoami_refreshed";
 }
 
@@ -325,7 +289,7 @@ interface Observation {
 }
 
 /**
- * Drive a SINGLE refresh-leg scenario through ALL FOUR tools and return one
+ * Drive a SINGLE refresh-leg scenario through ALL THREE tools and return one
  * Observation per tool. `replyRead(readKind, nthRead)` makes the first read 401
  * and lets the caller return each tool's OWN ok envelope on the retry; `replyRefresh`
  * decides the refresh-leg outcome. Each tool runs in its own fresh token seed +
@@ -335,7 +299,7 @@ async function observeAllTools(
   replyRead: (readKind: ReadKind, nthRead: number) => Reply,
   replyRefresh: (nthRefresh: number) => Reply,
 ): Promise<Observation[]> {
-  const kinds: ReadKind[] = ["identity", "search", "lookup", "specs"];
+  const kinds: ReadKind[] = ["identity", "search", "lookup"];
   const out: Observation[] = [];
   for (const readKind of kinds) {
     // Fresh seed per tool (the prior tool's run may have cleared tokens).
@@ -377,10 +341,10 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe("cross-tool 401 parity — all four tools share ONE refresh-and-retry-once choreography", () => {
+describe("cross-tool 401 parity — all three tools share ONE refresh-and-retry-once choreography", () => {
   it("sub-outcome retry-ok: every tool refreshes once, retries once, and returns a NORMAL ok result (no tool dead-ends)", async () => {
     // AC[integration]: identical scenario (expired token → 401 → good refresh →
-    // retry ok) through search / product_get / whoami / specs. All four must look the
+    // retry ok) through search / product_get / whoami. All three must look the
     // same: exactly 1 refresh, exactly 2 reads, status ok, NO recovery hint. The
     // retry returns each tool's OWN ok envelope (via okEnvelopeFor).
     const observed = await observeAllTools(
@@ -399,10 +363,10 @@ describe("cross-tool 401 parity — all four tools share ONE refresh-and-retry-o
       expect(o.readCount).toBe(2); // failed read + one retry
       // OBSERVABILITY-SEAM PARITY (review-round-1 fix; card line 161): every tool
       // emits its own `<tool>_refreshed` operator marker EXACTLY ONCE on this
-      // silent-recovery path — the seam restored uniformly across all four. Folded
+      // silent-recovery path — the seam restored uniformly across all three. Folded
       // into THIS anti-divergence guard so the marker cannot drift/disappear
       // per-tool again (the same FLAG-10 failure mode, applied to logging). RED
-      // until all four tools emit the marker via the helper's `refreshed:true`.
+      // until all three tools emit the marker via the helper's `refreshed:true`.
       expect(o.refreshedMarkerCount).toBe(1);
     }
     // The equality across tools IS the guard: collapse each dimension to a set.
@@ -416,7 +380,7 @@ describe("cross-tool 401 parity — all four tools share ONE refresh-and-retry-o
   });
 
   it("sub-outcome second-401: every tool refreshes EXACTLY once, retries once, then terminates re-register (no tool storms)", async () => {
-    // AC[integration]: a freshly-rotated token still 401 is terminal for ALL four
+    // AC[integration]: a freshly-rotated token still 401 is terminal for ALL three
     // — exactly 1 refresh, exactly 2 reads, status must_reregister with the hint.
     const observed = await observeAllTools(
       () => ({ status: 401, body: { error: "unauthorized" } }), // read ALWAYS 401
@@ -435,7 +399,7 @@ describe("cross-tool 401 parity — all four tools share ONE refresh-and-retry-o
   });
 
   it("sub-outcome invalid_grant: every tool refreshes once, does NOT retry, terminates re-register, and clears tokens", async () => {
-    // AC[integration]: a dead refresh token. ALL four: 1 refresh, NO retry (1
+    // AC[integration]: a dead refresh token. ALL three: 1 refresh, NO retry (1
     // read), status must_reregister + hint, tokens.json cleared.
     const observed = await observeAllTools(
       () => ({ status: 401, body: { error: "unauthorized" } }),
@@ -456,7 +420,7 @@ describe("cross-tool 401 parity — all four tools share ONE refresh-and-retry-o
 
   it("sub-outcome refresh-5xx: every tool surfaces TRANSIENT retryable with NO re-register hint, does NOT retry, keeps tokens", async () => {
     // AC[integration]: a refresh-leg 5xx is a blip, not a dead session, for ALL
-    // four — status retryable, NO hint, 1 refresh, NO retry (1 read), tokens kept.
+    // three — status retryable, NO hint, 1 refresh, NO retry (1 read), tokens kept.
     const observed = await observeAllTools(
       () => ({ status: 401, body: { error: "unauthorized" } }),
       () => ({ status: 503, body: { error: "unavailable" } }),
@@ -478,7 +442,7 @@ describe("cross-tool 401 parity — all four tools share ONE refresh-and-retry-o
     // This is the explicit anti-divergence assertion the card requires: if any one
     // tool does NOT refresh on a 401 (the old terminal catalog branch), its
     // refreshCount is 0 while the refreshing tools' is 1 — so the cross-tool set
-    // has size 2 and this fails. With all four on the shared helper, the set
+    // has size 2 and this fails. With all three on the shared helper, the set
     // collapses to {1}. (Against current code, the two catalog tools are terminal
     // and whoami refreshes — so this is RED until catalog adopts the shared path.)
     const observed = await observeAllTools(

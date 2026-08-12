@@ -857,7 +857,7 @@ describe("registration shape (C5) and log privacy", () => {
     expect(getGatewayMethod(api, METHOD).opts?.scope).toBe("operator.read");
   });
 
-  it("registering the gateway method does not change the tool set (still 11)", () => {
+  it("registering the gateway method does not change the tool set (still 10)", () => {
     const api = registerPlugin();
     expect([...api._tools.keys()].sort()).toEqual([
       "sil_doctor",
@@ -869,7 +869,6 @@ describe("registration shape (C5) and log privacy", () => {
       "sil_profile_search",
       "sil_register",
       "sil_search",
-      "sil_specs",
       "sil_whoami",
     ]);
     // The method is NOT a tool and must never leak into the tool surface.

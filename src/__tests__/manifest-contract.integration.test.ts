@@ -29,12 +29,12 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals { sil_learn, sil_product_get, sil_profile_get,
- *     sil_profile_materialize, sil_profile_remove, sil_profile_search,
- *     sil_register, sil_search, sil_specs, sil_whoami } (the 10-tool floor
- *     after the sds-specs-client-tool card ADDED the sil_specs catalog tool —
- *     the coin/dedupe/register canonicalization primitive — to the 9-tool set
- *     the spec-driven-shopping-redesign card left behind).
+ *     both sides equals { sil_doctor, sil_learn, sil_product_get,
+ *     sil_profile_get, sil_profile_materialize, sil_profile_remove,
+ *     sil_profile_search, sil_register, sil_search, sil_whoami } (10 tools,
+ *     after the retire-the-dead-sil-specs-tool card REMOVED sil_specs — the
+ *     route it called, POST /catalog/specs, no longer exists in sil-services
+ *     and nothing replaces it).
  */
 
 import { describe, it, expect } from "vitest";
@@ -130,10 +130,10 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // The card's spine: after removing the skeleton examples, the manifest
     // AND the code both name exactly the real tools. Pinned by literal
     // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
-    // not just the symmetric drift check above. Now 11 tools — the
-    // sil-doctor-tool-data-store-identity-health card ADDS sil_doctor (the
-    // report-first data-store/identity/version health tool) in a NEW group
-    // (registerDoctorTools, wired above): 10 → 11, add-only.
+    // not just the symmetric drift check above. Now 10 tools — the
+    // retire-the-dead-sil-specs-tool card REMOVES sil_specs from the existing
+    // catalog group (its route is gone from sil-services, nothing replaces
+    // it): 11 → 10, remove-only.
     const expected = [
       "sil_doctor",
       "sil_learn",
@@ -144,7 +144,6 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
       "sil_profile_search",
       "sil_register",
       "sil_search",
-      "sil_specs",
       "sil_whoami",
     ];
     expect(sorted(codeRegisteredNames())).toEqual(expected);
@@ -162,9 +161,9 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
 
   it("sil_doctor is BOTH registered by register() and declared in contracts.tools", () => {
     // The doctor's self-enforcing-registration criterion, pinned by name. Unlike
-    // sil_specs (which joined the existing catalog group), sil_doctor arrives in
-    // a NEW group — so it reaches this guard only once registerDoctorTools is
-    // wired into register() in src/index.ts AND into codeRegisteredNames above.
+    // a tool joining an existing group, sil_doctor arrives in a NEW group — so it
+    // reaches this guard only once registerDoctorTools is wired into register()
+    // in src/index.ts AND into codeRegisteredNames above.
     // Both sides must name it: registered by registerDoctorTools AND listed in
     // openclaw.plugin.json#contracts.tools.
     expect(codeRegisteredNames().has("sil_doctor")).toBe(true);
@@ -258,16 +257,16 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(manifestToolNames().has("sil_profile_search")).toBe(true);
   });
 
-  it("sil_specs is BOTH registered by register() and declared in contracts.tools", () => {
-    // The sds-specs-client-tool card's NEW catalog tool — the coin/dedupe/register
-    // canonicalization primitive (Beat-2 born-canonical-before-persist). Added to the
-    // existing registerCatalogTools group beside sil_search / sil_product_get (no new
-    // group, no src/index.ts change), so it is auto-picked-up by codeRegisteredNames.
-    // The load-bearing 3rd "add a tool" step: it MUST also be listed in
-    // openclaw.plugin.json#contracts.tools — a forgotten manifest entry flips the
-    // set-equality RED here, before merge.
-    expect(codeRegisteredNames().has("sil_specs")).toBe(true);
-    expect(manifestToolNames().has("sil_specs")).toBe(true);
+  it("sil_specs is NOT registered and NOT declared (DELETED — POST /catalog/specs is gone)", () => {
+    // The retire-the-dead-sil-specs-tool card DELETES sil_specs: sil-services
+    // removed the route it called when the v0 store landed, and NOTHING replaces
+    // it (v0's catalog surface mints at /catalog/domains, a different contract).
+    // No compat alias, no deprecation stub, no no-op tool that explains it is
+    // gone — it must be absent on BOTH sides of the equal set. A re-introduction
+    // (in code or manifest) flips the set-equality RED, exactly as the
+    // sil_profile_list and sil_remember removals are guarded above.
+    expect(codeRegisteredNames().has("sil_specs")).toBe(false);
+    expect(manifestToolNames().has("sil_specs")).toBe(false);
   });
 });
 
