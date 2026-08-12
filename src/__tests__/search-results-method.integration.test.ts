@@ -857,6 +857,10 @@ describe("registration shape (C5) and log privacy", () => {
     expect(getGatewayMethod(api, METHOD).opts?.scope).toBe("operator.read");
   });
 
+  // Despite living in a gateway-method file, this is a full tool-set MIRROR — any
+  // sil_* add or removal must bump it, count in the title included. It went
+  // undocumented for a release because nobody greps a "…-method…" file for tool
+  // tests; see docs/knowledge/adding-a-sil-tool-fans-out-to-exact-set-mirrors.md.
   it("registering the gateway method does not change the tool set (still 10)", () => {
     const api = registerPlugin();
     expect([...api._tools.keys()].sort()).toEqual([
