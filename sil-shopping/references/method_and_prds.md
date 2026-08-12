@@ -45,11 +45,10 @@ carries these sections, and only these:
   `user_spec` (omit until something durable is known).
 - **`## Volatility`** — the volatile axis + a rough refresh cadence.
 
-The vocabulary is **canonicalized before persist**. `sil_specs` is
-**precision-first** — two specs converge only when **every field** agrees within the
-same `namespace` and `data_type`, so the name decides whether a concept converges or
-forks: a synonym (`speed_mbps` vs `transfer_speed_mbps`) splits one concept into two
-specs that never match. So coin for the match:
+The vocabulary is **coined for the match** — with no registry standing behind the
+names, the spelling *is* the convergence: a synonym (`speed_mbps` vs
+`transfer_speed_mbps`) splits one concept into two predicates that never meet, and
+`filters.specs` stops filtering across methods. So coin for the match:
 
 - **One concept, one spelling.** Reuse the exact `ns.key`, `display_name`,
   `data_type`, and `unit` you already coined for that concept — verbatim, across
@@ -59,22 +58,9 @@ specs that never match. So coin for the match:
   **not** coined before (screen size, weight, RAM, waterproof rating, material…),
   take its **conventional** name — a Schelling point, there being no registry to
   read. Coin fresh only for a genuinely niche attribute.
-- **Corroborate the name.** Carry a concept-naming **`description`** — the
-  **corroborator** the dedupe leans on to merge synonyms and keep distinct concepts
-  apart — and get **`data_type`** and **`namespace`** right, the hard floors a wrong
-  value forks the concept past.
 
-Submit the definitions to **`sil_specs`** (dedupe-or-create) and adopt the returned
-**canonical** `ns.key`: **`matched`** → an equivalent exists, **drop your synonym for
-the canonical**; **`created`** → yours is novel and canonical going forward (keep it).
-Rewrite the `## Search vocabulary` and any PRD `## Search specs` predicates to those
-names before persisting — the method is **born canonical**, never write-then-fix. This
-is what makes `filters.specs` filter across methods; naming is never a gate — a
-fragmenting name costs precision, never blocks a search. If `sil_specs` is **not
-`ok`** (a registry blip), **do not block the mint**: persist the **raw coined names**
-(every predicate reads `applied:false`) and shop on — convergence retries next
-mint/refresh. Canonicalization is **silent to the buyer**: never surface `ns.key`
-plumbing.
+Naming is never a gate — a fragmenting name costs precision, never blocks a search —
+and it is **silent to the buyer**: never surface `ns.key` plumbing.
 
 ## REFRESH — signal-driven (HIT, stale)
 
@@ -89,10 +75,7 @@ stale volatile material, **carry every buyer-authored line forward verbatim**, a
 The rewrite supersedes stale *research* claims and **never clobbers** a buyer line. The
 method stays fully buyer-mutable — every edit is a `write` of the reconciled whole.
 
-Canonicalize any **newly-coined** specs via `sil_specs` before persisting — same
-convergence discipline (reuse a name already coined for the concept; take the
-conventional name for a common attribute), resubmitting **only** specs not yet
-carrying a canonical name (already-canonical names are stable).
+Coin any new dimension under the same naming discipline as the mint.
 
 ## Intent-keyed PRDs
 

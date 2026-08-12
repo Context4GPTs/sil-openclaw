@@ -128,9 +128,9 @@ describe("plugin entry — registration contract", () => {
     // register() runs the real tool groups (no mock), so it populates the
     // api with exactly the real tools and NO example stub. This pins the
     // wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
-    // The sil-doctor-tool-data-store-identity-health card ADDS sil_doctor in a
-    // NEW group (registerDoctorTools — so it also needs the src/index.ts wiring
-    // line, unlike a tool joining an existing group) → 10 → 11, add-only.
+    // The retire-the-dead-sil-specs-tool card REMOVES sil_specs from the existing
+    // catalog group (its sil-services route is gone; nothing replaces it, so no
+    // src/index.ts wiring changes) → 11 → 10, remove-only.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
@@ -143,7 +143,6 @@ describe("plugin entry — registration contract", () => {
       "sil_profile_search",
       "sil_register",
       "sil_search",
-      "sil_specs",
       "sil_whoami",
     ]);
   });

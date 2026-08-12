@@ -10,6 +10,22 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Removed
+
+- **`sil_specs` — deleted, with no replacement.** The tool called
+  `POST /catalog/specs`, a route sil-services removed when the v0 store landed;
+  every call had been failing since. Gone with it: the spec-registry client arm
+  (`specsCatalog`, `classifySpecsResponse`, and the resolution types), the
+  manifest's `contracts.tools` entry, and the bundled skill's
+  canonicalize-before-persist beat. The tool surface is now 10 tools.
+  No alias and no deprecation stub — a shopper that called it was getting an
+  error, and now gets a tool that simply is not there.
+- **The method's spec vocabulary is coined, not canonicalized.** With no registry
+  to converge against, consistent spelling *is* the convergence, so the naming
+  discipline survives intact: one concept keeps one spelling, and a common
+  attribute takes its conventional name. `sil_search`'s `filters.specs` predicate
+  path is untouched.
+
 ## [0.4.6] - 2026-07-24
 
 ### Fixed

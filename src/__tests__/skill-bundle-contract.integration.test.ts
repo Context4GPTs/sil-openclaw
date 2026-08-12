@@ -37,6 +37,16 @@ const CORE_TOOLS = ["sil_register", "sil_whoami", "sil_search", "sil_product_get
 //   vocabulary "intent"/"domain" must never trip this guard.
 //   `profile.json` is gone FOREVER — the store is frontmatter-as-truth and the
 //   versioned-store-migrations card was abandoned, so nothing will resurrect it.
+//   `sil_specs`/`canonical` join on the retire-the-dead-sil-specs-tool card, and
+//   they are THE enforcement for its skill-prose criteria: the "every registered
+//   tool is named in the bundle" scan above is ONE-DIRECTIONAL, so once the tool
+//   is unregistered every stale `sil_specs` passage passes GREEN and the shopper
+//   keeps being driven at a deleted tool under a fully green suite. `canonical`
+//   is a generic adjective and so carries a real false-RED cost on future prose —
+//   taken deliberately: the v0 shopper vocabulary has no canonical anything, a
+//   false RED is loud and names its file, and a silent miss is the defect being
+//   retired. (`dedup` is NOT here — shop_loop.md uses it legitimately for the
+//   Beat-4 merge.)
 // Matched CASE-INSENSITIVELY (each body is lowered, not the needle), so a
 // Title-cased prose reintroduction (`Rubric`) fails too. Entries MUST therefore
 // be lower-case — pinned by a guard-of-the-guard below, because an upper-case
@@ -44,7 +54,7 @@ const CORE_TOOLS = ["sil_register", "sil_whoami", "sil_search", "sil_product_get
 const RETIRED_TOKENS = [
   "profile.json", "domain_spec", "intent_spec", "playbook", "sil_remember",
   "sil_profile_list", "sil_ping", "sil_echo", "rubric", "manage_domains",
-  "refine_shopper",
+  "refine_shopper", "sil_specs", "canonical",
 ];
 
 const read = (rel: string): string => readFileSync(join(BUNDLE, rel), "utf8");
@@ -159,6 +169,19 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     expect(src).toContain("mint_domain"); // the mint trigger
     expect(src).toContain("checkout_url"); // picks come from the sil catalog
     expect(src).toMatch(/open[ -]web/i); // never sourced from the open web
+  });
+
+  it("the Beat-2 naming discipline survives the sil_specs excision", () => {
+    // The removal's collateral-damage guard (retire-the-dead-sil-specs-tool). What
+    // died is the registry ROUND TRIP, not the vocabulary hygiene: Beat 4 still
+    // sends these coined names verbatim as sil_search.filters.specs, so a synonym
+    // splits one concept into two predicates that never meet. Over-excising the two
+    // surviving rules turns nothing RED — the shopper just quietly gets worse.
+    // TWO tokens, deliberately not a re-pinning of the wording (the 1 341-line
+    // prose test was deleted for a reason).
+    const src = read("references/method_and_prds.md");
+    expect(src).toContain("one spelling"); // reuse the exact ns.key you coined
+    expect(src).toContain("conventional name"); // take the Schelling-point name
   });
 });
 
