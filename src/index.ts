@@ -3,7 +3,8 @@
  *
  * A UCP commerce plugin for sil. It registers its real tool groups —
  * identity (`sil_register`, `sil_whoami`) and catalog (`sil_search`,
- * `sil_product_get`) — so they load in an OpenClaw host. There is no
+ * `sil_product_get`, `sil_stores`, `sil_domain_create` — 1:1 with the four
+ * v0 routes) — so they load in an OpenClaw host. There is no
  * transport, no persistent service, and no background work at register
  * time — `register()` is strictly synchronous and opens nothing.
  *
