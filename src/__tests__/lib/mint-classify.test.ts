@@ -73,6 +73,43 @@ describe("the 200 — the provisional signal survives, explicitly", () => {
   });
 });
 
+/**
+ * The same reserved-key refusal `result-classify.test.ts` documents in full:
+ * `mapMintOutcome` spreads this body into `{ status: "ok", ...outcome.domain,
+ * ...wiringAdvisories(api) }`, so a body declaring `status` would replace the
+ * plugin's dispatch key and one declaring `advisories` would drop the plugin's.
+ * It matters most here of the three: this is the ONE permanent registry write,
+ * and an agent that misreads the envelope's status has no undo.
+ */
+describe("the reserved ENVELOPE keys — a body declaring one is refused, never merged", () => {
+  it.each([
+    ["status", "partial"],
+    ["advisories", [{ id: "route.side_channel", severity: "warn" }]],
+  ])("a 200 declaring a top-level `%s` is `retryable`, never `ok`", (key, value) => {
+    expect(classifyMintResponse(200, { ...mintGolden(), [key]: value }, PATH)).toEqual({
+      kind: "retryable",
+    });
+  });
+
+  it.each(["status", "advisories"])("PRESENCE bites — a falsy `%s` is refused too", (key) => {
+    for (const value of [null, ""]) {
+      expect(classifyMintResponse(200, { ...mintGolden(), [key]: value }, PATH)).toEqual({
+        kind: "retryable",
+      });
+    }
+  });
+
+  it("guard-of-the-guard: the SAME body WITHOUT the reserved key is `ok`", () => {
+    expect(classifyMintResponse(200, { ...mintGolden() }, PATH).kind).toBe("ok");
+  });
+
+  it("an unrelated additive top-level key is STILL `ok` — two reserved names, not a whitelist", () => {
+    expect(
+      classifyMintResponse(200, { ...mintGolden(), notice: "an additive member" }, PATH).kind,
+    ).toBe("ok");
+  });
+});
+
 describe("A5 — `already_exists` is a NEW status, and it is NOT a failure", () => {
   it("a 409 classifies `already_exists`, carrying the SUBMITTED path", () => {
     const outcome = classifyMintResponse(409, MINT_409, PATH);

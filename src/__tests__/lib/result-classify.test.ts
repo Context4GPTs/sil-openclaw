@@ -94,6 +94,74 @@ describe("A1 — the structural gate is ALL FOUR keys, never just `results`", ()
   });
 });
 
+/**
+ * The gate's ONE non-structural refusal, and it protects the layer above it.
+ *
+ * `mapResultOutcome` builds the agent's envelope as
+ * `jsonResult({ status: "ok", ...outcome.result, ...wiringAdvisories(api) })`,
+ * and in a spread the LATER key wins. So a route body that itself declares one
+ * of the plugin's own two envelope keys corrupts the result silently, in
+ * opposite directions:
+ *
+ *  - `status` REPLACES the plugin's dispatch key — `{status:"ok"}` + a body's
+ *    `{status:"partial"}` is `{"status":"partial"}`. Every agent switching on
+ *    the tool's status taxonomy then reads a sil-services value with no matching
+ *    recovery arm, and the ToolResult still looks healthy.
+ *  - `advisories` has the PLUGIN's own silently dropped — the single place in
+ *    this design where the verbatim pass-through loses a field it exists to
+ *    carry, which is the invariant inverted.
+ *
+ * Neither is hypothetical: the design plans for additive server fields (RK7) and
+ * `report.blocked` already carries a degraded-answer signal, so a top-level
+ * `status`-ish member is inside the designed-for future. The body is therefore
+ * refused WHOLE, down the same fail-closed `retryable` arm every other gate
+ * failure takes — no new status, no projection, nothing stripped.
+ *
+ * Re-ordering the spread is NOT the fix and these bars reject it too: putting
+ * the payload first drops the server's field instead, the same silent loss
+ * pointing the other way. A gate that STRIPPED the key would also fail here —
+ * `retryable` carries no result at all, so nothing can arrive half-edited.
+ */
+describe("the reserved ENVELOPE keys — a body declaring one is refused, never merged", () => {
+  it.each([
+    ["status", "partial"],
+    ["advisories", [{ id: "route.side_channel", severity: "warn" }]],
+  ])("a 200 declaring a top-level `%s` is `retryable`, never `ok`", (key, value) => {
+    expect(classifyResultResponse(200, { ...resultGolden(), [key]: value })).toEqual({
+      kind: "retryable",
+    });
+  });
+
+  it.each(["status", "advisories"])(
+    "PRESENCE is what bites — a falsy `%s` clobbers the envelope just as hard",
+    (key) => {
+      // A spread copies the key, not its truthiness: `{status:"ok"}` + `{status:null}`
+      // is `{status:null}`. A gate testing the VALUE would let the dispatch key be
+      // nulled out and hand the agent an envelope with no status at all.
+      for (const value of [null, ""]) {
+        expect(classifyResultResponse(200, { ...resultGolden(), [key]: value })).toEqual({
+          kind: "retryable",
+        });
+      }
+    },
+  );
+
+  it("guard-of-the-guard: the SAME body WITHOUT the reserved key is `ok`", () => {
+    // Every case above is the golden plus exactly one key, so the refusal cannot
+    // be coming from anything else in the body.
+    expect(classifyResultResponse(200, { ...resultGolden() }).kind).toBe("ok");
+  });
+
+  it("a body carrying an unrelated additive top-level key is STILL `ok` — only the two are reserved", () => {
+    // The reserved list is two names, not a whitelist of known fields. Widening it
+    // into "reject what we do not declare" would break the first time sil-services
+    // adds anything, which is the projector this card exists to delete.
+    expect(
+      classifyResultResponse(200, { ...resultGolden(), notice: "an additive member" }).kind,
+    ).toBe("ok");
+  });
+});
+
 describe("A2 — a genuine EMPTY answer is a success, distinct from A1's guard", () => {
   it("`results: []` with a well-formed envelope is `ok` with an empty list", () => {
     const outcome = classifyResultResponse(200, resultEmpty());

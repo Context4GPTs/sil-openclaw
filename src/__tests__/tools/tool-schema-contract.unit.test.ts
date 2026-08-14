@@ -350,10 +350,6 @@ describe("v0 — the retired parameter vocabulary is STRUCTURALLY gone", () => {
     const api = allRegisteredTools();
     for (const name of V0_TOOLS) {
       const schema = getTool(api, name).parameters as unknown as Record<string, unknown>;
-      expect({
-        tool: name,
-        count: Object.keys((schema["properties"] ?? {}) as object).length,
-      }).toEqual({ tool: name, count: expect.any(Number) });
       expect(Object.keys((schema["properties"] ?? {}) as object).length).toBeGreaterThan(0);
     }
   });

@@ -315,6 +315,39 @@ describe("the outcome taxonomy, at the tool boundary", () => {
     expect(payload).not.toHaveProperty("results");
   });
 
+  it("a route body declaring its own `status` never becomes the tool's dispatch key", async () => {
+    // The envelope is `{ status: "ok", ...routeBody, ...wiringAdvisories(api) }`
+    // and the later spread wins, so an unguarded body hands the agent
+    // `status: "partial"` — a sil-services value sitting inside the TOOL's status
+    // taxonomy, with no recovery arm to match it, on a ToolResult that looks
+    // perfectly healthy. The unit gate refuses it; this is the consequence the
+    // gate exists for, asserted where the agent actually reads it.
+    installRouter((kind) =>
+      kind === "search" ? ok({ ...resultGolden(), status: "partial" }) : ok({}),
+    );
+    const payload = await run();
+    expect(payload["status"]).toBe("retryable");
+    expect(payload["status"]).not.toBe("partial");
+    expect(payload).not.toHaveProperty("results");
+  });
+
+  it("a route body declaring its own `advisories` cannot displace the plugin's", async () => {
+    // The mirror-image loss: ours is the LAST spread, so an unguarded body would
+    // have its `advisories` silently overwritten by the plugin's — the one place
+    // a verbatim pass-through drops a server field. Refused whole instead, so the
+    // route's array never surfaces under the key the agent reads as sil's own
+    // wiring findings.
+    installRouter((kind) =>
+      kind === "search"
+        ? ok({ ...resultGolden(), advisories: [{ id: "route.side_channel", severity: "warn" }] })
+        : ok({}),
+    );
+    const payload = await run();
+    expect(payload["status"]).toBe("retryable");
+    expect(payload).not.toHaveProperty("advisories");
+    expect(payload).not.toHaveProperty("results");
+  });
+
   it("the unknown-domain 400 surfaces the route's message VERBATIM, with no added copy", async () => {
     installRouter((kind) =>
       kind === "search" ? { status: 400, body: SEARCH_400.unknownDomain } : ok({}),

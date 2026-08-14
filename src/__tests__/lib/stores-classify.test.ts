@@ -89,6 +89,44 @@ describe("the structural gate — all three top-level keys, fail-closed", () => 
   });
 });
 
+/**
+ * The same reserved-key refusal `result-classify.test.ts` documents in full:
+ * `mapStoresOutcome` spreads this body into `{ status: "ok", ...outcome.stores,
+ * ...wiringAdvisories(api) }`, so a body declaring `status` would replace the
+ * plugin's dispatch key and one declaring `advisories` would drop the plugin's.
+ * Both silent. The gate refuses the body whole, down the existing `retryable`
+ * arm — the three gates behave identically here on purpose, because a rule that
+ * held on one route and not the next is a rule nobody can rely on.
+ */
+describe("the reserved ENVELOPE keys — a body declaring one is refused, never merged", () => {
+  it.each([
+    ["status", "partial"],
+    ["advisories", [{ id: "route.side_channel", severity: "warn" }]],
+  ])("a 200 declaring a top-level `%s` is `retryable`, never `ok`", (key, value) => {
+    expect(classifyStoresResponse(200, { ...storesGolden(), [key]: value })).toEqual({
+      kind: "retryable",
+    });
+  });
+
+  it.each(["status", "advisories"])("PRESENCE bites — a falsy `%s` is refused too", (key) => {
+    for (const value of [null, ""]) {
+      expect(classifyStoresResponse(200, { ...storesGolden(), [key]: value })).toEqual({
+        kind: "retryable",
+      });
+    }
+  });
+
+  it("guard-of-the-guard: the SAME body WITHOUT the reserved key is `ok`", () => {
+    expect(classifyStoresResponse(200, { ...storesGolden() }).kind).toBe("ok");
+  });
+
+  it("an unrelated additive top-level key is STILL `ok` — two reserved names, not a whitelist", () => {
+    expect(
+      classifyStoresResponse(200, { ...storesGolden(), notice: "an additive member" }).kind,
+    ).toBe("ok");
+  });
+});
+
 describe("every seller crosses VERBATIM — the `unknown` rule, at the classifier", () => {
   it("the whole golden survives deep-equal, all three states included", () => {
     const wire = storesGolden();
