@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use when the user explicitly asks to shop with sil or manage their sil shopper: register or check their sil account, search the sil catalog or re-check products by id, set up their one shopper (a two-touchpoint, endorsement-gated onboarding), view or forget what it has learned (domains/PRDs), or — running as that shopper — execute the six-beat Spec-Driven Shopping loop and record a fact or taste it surfaced. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, sil_learn, sil_doctor.'
+description: 'Use when the user explicitly asks to shop with sil or manage their sil shopper: register or check their sil account, search sil in one registry domain, re-read results by ref, list a pick''s sellers and where to buy, add a new category to the registry, set up their one shopper (a two-touchpoint, endorsement-gated onboarding), view or forget what it has learned (domains/PRDs), or — running as that shopper — execute the six-beat Spec-Driven Shopping loop and record a fact or taste it surfaced. Drives sil_register, sil_whoami, sil_search, sil_product_get, sil_stores, sil_domain_create, sil_profile_materialize, sil_profile_search, sil_profile_get, sil_profile_remove, sil_learn, sil_doctor.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -20,14 +20,23 @@ it knows, view or forget a domain, refine it.
 - **Follow the tool's own `recovery`.** Every tool returns a `status`; on a
   non-`ok` one, say what happened and follow that tool's own `recovery` hint —
   never improvise.
-- **Prices are point-in-time.** Re-fetch with `sil_product_get` before the user
-  buys — never trust an earlier `sil_search` snapshot.
-- **Buy-intent in an unlearned niche ⇒ mint first.** A request whose niche you
-  have not learned is a MISS — `sil_profile_search` returns it with `next_step:
-  mint_domain`. Research the buying guide and `sil_learn create` the domain method
-  **before** searching; never skip the mint. The picks you return are always sil
-  catalog products (`sil_search` → `checkout_url`), **never** open-web results —
-  the web only researches the method, it never sources a pick.
+- **Prices are point-in-time, and only `observed` says which.** Re-read with
+  `sil_product_get` before the user buys. Every offer says `observed: live` (read
+  just now) or `stored` — quote a `stored` price with the date it was read, never
+  as the current one.
+- **Sil holds no value ⇒ say so.** `unset`, `applied: false`, `maturity: web` and
+  `serviceability: unknown` are ordinary answers that KEEP their subject. Present
+  the result and name the gap; never drop a result or a seller for carrying one,
+  and never read an `unset` cost as zero or free.
+- **A category sil's registry does not hold ⇒ research, then coin it.** `sil_search`
+  takes one registry `domain` and refuses a path that is not there. That refusal is
+  a routing signal, not a failure and not an empty shelf: read up on the web on how
+  that category is bought, `sil_domain_create` at the path you actually meant, then
+  re-issue the search. Never coin a shallower or re-spelled path to dodge a refusal.
+- **Every pick comes out of a sil tool.** A product, price, seller or buy URL that
+  did not come back from `sil_search` / `sil_product_get` / `sil_stores` never
+  enters the shortlist — even when sil returns nothing, and even when the buyer
+  asks. Zero results is an answer; the web only researches a category.
 - **Your memory is the sil store, never a `MEMORY.md`.** Persist and recall every
   shopping fact, taste, and domain method through `sil_learn` / `sil_profile_*` — a
   workspace `MEMORY.md` is not the shopper's memory; do not read or write it.
@@ -51,8 +60,9 @@ to `sil_register`, or run `sil_register` up front when intent requires it.
 shopper set up — any `domains`?).
 
 - **No identity** ⇒ guide the user to register.
-- **No shopper / no domains** ⇒ bare shopping is a first-class quick lookup, with
-  the setup path offered alongside.
+- **No shopper / no domains** ⇒ a one-off search still works, but it is never bare:
+  `sil_search` needs a registry `domain`, so settle the category first (and coin it
+  with `sil_domain_create` when sil refuses it). Offer the setup path alongside.
 - **Shopper present** ⇒ shop through what you know about the person via the loop.
 
 [`references/setup_onboarding.md`](references/setup_onboarding.md) owns the setup
@@ -65,8 +75,10 @@ while setup is incomplete; it sheds once a shopper exists.
 |---|---|---|
 | "sign me up" / "log me in" / "register" | `sil_register` | — |
 | "who am I?" / show my saved name + addresses | `sil_whoami` | — |
-| "find X" / "search for X" / browse a category or price range | `sil_search` | — |
-| "look up these items" / re-check ids from a prior result | `sil_product_get` | — |
+| "find X" / "search for X" in one settled category | `sil_search` | — |
+| re-read the shortlist before deciding (≤5 refs from a prior result) | `sil_product_get` | — |
+| "where can I buy this?" / does the pick ship to me | `sil_stores` | — |
+| `sil_search` refused the domain as unregistered, after research | `sil_domain_create` | — |
 | "set up an agent that shops for me" / "create my shopper" | (onboarding, then the engine) | [`agent_creation_engine.md`](references/agent_creation_engine.md) |
 | "what does my shopper know?" / "which domains / PRDs?" | `sil_profile_search` | [`method_and_prds.md`](references/method_and_prds.md) |
 | "show me the &lt;niche&gt; domain" (method or one PRD) | `sil_profile_get` | [`method_and_prds.md`](references/method_and_prds.md) |
