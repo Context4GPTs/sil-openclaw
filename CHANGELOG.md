@@ -39,7 +39,12 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   offers refreshed. The payload passes through **verbatim**: the plugin gates the
   envelope structurally and projects nothing, because the agent's three-state veto
   is computed from `values[].state`, `predicates[].applied` and `maturity` — the
-  exact fields a projector drops.
+  exact fields a projector drops. **One exception, and sil-services needs to know
+  it:** a response body declaring `status` or `advisories` at its *top level* is
+  refused whole as `retryable`. Those are the plugin's own envelope keys, so
+  spreading such a payload would overwrite the key the agent dispatches on or
+  swallow the server's field. Adding either to a catalog route is a breaking
+  change on this side, and the only symptom is a tool that stops answering.
 - **`sil.search_results` now buffers the v0 result object.** The gateway method,
   its two-layer authz and its one not-found body are untouched; the page it
   carries is the new shape. A client decoding the pre-v0 `{products, cursor}` page

@@ -972,6 +972,15 @@ function extractIdentity(body: unknown): Identity | null {
  * the agent's control flow with a sil-services value that has no recovery arm, or
  * lose its own field to ours. Neither is actionable — refuse it like any other
  * gate failure (→ `retryable`), never `ok`.
+ *
+ * WHY IT LIVES HERE and not at the spread: there are FOUR spread sites, not the
+ * three a reader finds by grepping `jsonResult` — `catalog.ts:204` also buffers
+ * `{status:"ok", ...result}` for the `sil.search_results` pull. Reserving at the
+ * gate covers that one, and the next one anybody adds, for free. The asymmetry:
+ * a new SPREAD SITE inherits this silently; a new ENVELOPE KEY does not — add it
+ * below by hand. `Object.hasOwn`, not truthiness: a spread copies `status: null`
+ * as hard as `"partial"`. Two names, never a whitelist — widening this to reject
+ * undeclared keys reinstates the projector this contract deletes.
  */
 function declaresEnvelopeKey(envelope: Record<string, unknown>): boolean {
   return Object.hasOwn(envelope, "status") || Object.hasOwn(envelope, "advisories");
