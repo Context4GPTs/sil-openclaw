@@ -1,5 +1,6 @@
 /**
- * Typed HTTP wrappers for the two sil-web endpoints the plugin calls, each
+ * Typed HTTP wrappers for every endpoint the plugin calls — the two sil-web auth
+ * endpoints, the sil-api identity read and the four v0 catalog routes — each
  * returning a DISCRIMINATED UNION over the documented outcomes so the status
  * taxonomy lives in exactly one place and the caller switches on `kind` rather
  * than re-deriving meaning from `res.status` at every site.
@@ -79,7 +80,10 @@
  * and `results[].maturity`, and a per-field projector drops exactly those. It also
  * means an additive server field reaches the agent unreviewed, which is the trade
  * this wire is designed around (an omitted key and a stated `unset` are DIFFERENT
- * answers here, and only a stated one may be repeated to a buyer).
+ * answers here, and only a stated one may be repeated to a buyer). The ONE refusal
+ * is a body declaring `status` or `advisories` at its top level — those are the
+ * tool envelope's own keys, so spreading such a payload would overwrite the agent's
+ * dispatch key or swallow the server's field; the gate takes `retryable` instead.
  *
  * Wire types are MIRRORED from `@sil/schemas` (`packages/schemas/src/{search,stores}.ts`),
  * never imported — no cross-repo dependency, and `@ucp-js/sdk` carries zero catalog
@@ -825,9 +829,9 @@ export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
 /**
  * The discriminant {@link refreshAndRetryOnce} returns for the caller to map to
  * its own agent-facing envelope. Generic over the caller's outcome union `O`
- * (`SearchOutcome` / `LookupOutcome` / `IdentityOutcome`) — the helper only ever
- * surfaces an `O` produced by the first call or the retry, never one it
- * fabricates, so `O` stays parametric (no `any`, no cast).
+ * (`CatalogResultOutcome` / `StoresOutcome` / `MintOutcome` / `IdentityOutcome`) —
+ * the helper only ever surfaces an `O` produced by the first call or the retry,
+ * never one it fabricates, so `O` stays parametric (no `any`, no cast).
  *
  *   result             — pass `outcome` through the caller's normal mapping (the
  *                        first non-401 outcome, OR the retry's non-401 outcome).
@@ -962,6 +966,18 @@ function extractIdentity(body: unknown): Identity | null {
 }
 
 /**
+ * The two keys the plugin's OWN tool envelope owns: `status` is the taxonomy the
+ * agent dispatches on, `advisories` is the wiring channel. The tool spreads the
+ * payload over that envelope verbatim, so a body declaring either would decide
+ * the agent's control flow with a sil-services value that has no recovery arm, or
+ * lose its own field to ours. Neither is actionable — refuse it like any other
+ * gate failure (→ `retryable`), never `ok`.
+ */
+function declaresEnvelopeKey(envelope: Record<string, unknown>): boolean {
+  return Object.hasOwn(envelope, "status") || Object.hasOwn(envelope, "advisories");
+}
+
+/**
  * The 200 gate for `/catalog/search` and `/catalog/lookup`, and the ONLY place
  * the result body is inspected.
  *
@@ -978,6 +994,7 @@ function extractIdentity(body: unknown): Identity | null {
 function gateResultResponse(body: unknown): SearchResponse | null {
   const envelope = asRecord(body);
   if (envelope === null) return null;
+  if (declaresEnvelopeKey(envelope)) return null;
   if (!Array.isArray(envelope["results"])) return null;
   if (asRecord(envelope["sources"]) === null) return null;
   if (!Array.isArray(envelope["predicates"])) return null;
@@ -1000,6 +1017,7 @@ function gateResultResponse(body: unknown): SearchResponse | null {
 function gateStoresResponse(body: unknown): StoresResponse | null {
   const envelope = asRecord(body);
   if (envelope === null) return null;
+  if (declaresEnvelopeKey(envelope)) return null;
   if (typeof envelope["destination"] !== "string") return null;
   if (!Array.isArray(envelope["stores"])) return null;
   if (asRecord(envelope["sources"]) === null) return null;
@@ -1023,6 +1041,7 @@ function gateStoresResponse(body: unknown): StoresResponse | null {
 function gateMintResult(body: unknown): DomainMintResult | null {
   const envelope = asRecord(body);
   if (envelope === null) return null;
+  if (declaresEnvelopeKey(envelope)) return null;
   if (typeof envelope["path"] !== "string") return null;
   if (envelope["validated_at"] !== null) return null;
   const specs = envelope["specs"];
@@ -1047,7 +1066,8 @@ function extractForbiddenReason(body: unknown): string {
  *
  * This is the seam where outcome (a) (sil/network down → bare retryable, generic
  * copy) and outcome (b) (a named source down → source-named retryable) become
- * distinguishable — see {@link SearchOutcome}. The gate is the PRESENCE of a real
+ * distinguishable — see {@link CatalogResultOutcome} (and its `StoresOutcome` /
+ * `MintOutcome` twins, which carry the same arm). The gate is the PRESENCE of a real
  * non-empty-string `source` field on the body, NEVER the `message` prose: a
  * sil-internal 5xx (no `source`), a bodyless/garbage non-200, or a `source` that is
  * null/number/empty/object/array all fall back to the bare sourceless retryable.

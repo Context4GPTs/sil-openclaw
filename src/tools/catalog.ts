@@ -553,9 +553,11 @@ function mapMintOutcome(api: PluginAPI, outcome: MintOutcome) {
 /**
  * The SDK types `params` as `Record<string, unknown>` and the host has already
  * validated it against the schema above, so these readers narrow TYPES — they do
- * not re-validate semantics. `predicates` and `specs` are forwarded as read: this
- * layer never interprets an op, a value or a spec, and a second opinion on them
- * would be a contract to drift.
+ * not re-validate semantics. `refs`, `predicates` and `specs` are forwarded as
+ * read: this layer never interprets a ref, an op, a value or a spec, and a second
+ * opinion on them would be a contract to drift. Nothing is filtered out either — a
+ * drifted element must reach the route and be refused BY NAME, not disappear into
+ * a shorter list that succeeds.
  */
 function readSearchParams(params: Record<string, unknown>): SearchParams {
   const predicates = params["predicates"];
@@ -571,7 +573,7 @@ function readSearchParams(params: Record<string, unknown>): SearchParams {
 
 function readRefs(params: Record<string, unknown>): string[] {
   const raw = params["refs"];
-  return Array.isArray(raw) ? raw.filter((ref): ref is string => typeof ref === "string") : [];
+  return Array.isArray(raw) ? (raw as string[]) : [];
 }
 
 function readStoresParams(params: Record<string, unknown>): StoresParams {
