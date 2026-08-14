@@ -30,7 +30,7 @@ it knows, view or forget a domain, refine it.
   and never read an `unset` cost as zero or free.
 - **Buy-intent in an unlearned niche ⇒ mint first — and there are TWO mints, for
   two different stores.** *Your* method is local: a niche you have not learned is a
-  MISS, `sil_profile_search` returns it with `next_step: mint_domain`, and you
+  MISS, `sil_profile_search` returns it with `next_step: sil_learn`, and you
   research the buying guide and `sil_learn create` the method before shopping.
   *sil's* category is global: `sil_search` takes one registry `domain` and refuses a
   path the registry does not hold, which is a routing signal — not a failure and not

@@ -193,8 +193,9 @@ function registerSearch(api: PluginAPI): void {
       + " optional — none = full overview; narrow by domain/product/intent/query. A"
       + " filesystem scan: malformed frontmatter is surfaced in `unreadable`, never"
       + " dropped; healthy siblings still list. Empty store → ok with empty lists. When"
-      + " NO domain matches, the result carries `next_step: mint_domain` — the cue to"
-      + " mint the niche (sil_learn create) BEFORE shopping. Local-only, no network.",
+      + " NO domain matches, the result carries `next_step: sil_learn` — the cue to"
+      + " write the niche's method (sil_learn create) BEFORE shopping. Local-only, no"
+      + " network.",
     parameters: Type.Object({
       domain: Type.Optional(Type.String({ description: "Filter to one domain slug." })),
       product: Type.Optional(Type.String({ description: "Filter PRDs by product type." })),
@@ -227,12 +228,18 @@ function registerSearch(api: PluginAPI): void {
         unreadable: result.unreadable,
         ...(noMatch
           ? {
-              next_step: "mint_domain",
+              // Names the TOOL, like every other pointer this plugin returns. The
+              // older `mint_domain` label became a hazard the moment
+              // `sil_domain_create` existed: there are now two mints, and reading
+              // this one as the registry mint triggers a global write nothing can
+              // undo. A pointer that names its tool cannot be misread.
+              next_step: "sil_learn",
               guidance:
-                "No learned domain matches this request. To shop this niche, mint"
-                + " its domain FIRST: research the buying guide, then sil_learn create"
-                + " (target: method). Then shop with sil_search — a buy-intent is"
-                + " answered from the sil catalog, never from the open web.",
+                "No learned domain matches this request. Write its method FIRST:"
+                + " research the buying guide, then sil_learn create (target:"
+                + " method) — a LOCAL write, not sil's shared category registry."
+                + " Then shop with sil_search — a buy-intent is answered from the"
+                + " sil catalog, never from the open web.",
             }
           : {}),
         ...wiringAdvisories(api),
