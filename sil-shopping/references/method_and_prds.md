@@ -50,8 +50,9 @@ a predicate can be evaluated against; a synonym (`speed_mbps` vs
 `transfer_speed_mbps`) is simply outside the resolved vocabulary and comes back
 `applied: false` — a named gap, never a filter. So:
 
-- **Take the key sil already holds.** A domain in the registry resolves its own
-  vocabulary; write those keys down here verbatim rather than coining beside them.
+- **One concept, one spelling — take the key sil already holds.** A domain in the
+  registry resolves its own vocabulary; write those keys down here verbatim rather
+  than coining beside them.
 - **Coining is `sil_domain_create`'s job, once, for a NEW category** — its `specs` are
   the first keys of a path sil did not have. An existing path is refused and nothing is
   written; never coin a near-path variant to route around that refusal.

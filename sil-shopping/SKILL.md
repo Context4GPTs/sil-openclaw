@@ -28,15 +28,20 @@ it knows, view or forget a domain, refine it.
   `serviceability: unknown` are ordinary answers that KEEP their subject. Present
   the result and name the gap; never drop a result or a seller for carrying one,
   and never read an `unset` cost as zero or free.
-- **A category sil's registry does not hold ⇒ research, then coin it.** `sil_search`
-  takes one registry `domain` and refuses a path that is not there. That refusal is
-  a routing signal, not a failure and not an empty shelf: read up on the web on how
-  that category is bought, `sil_domain_create` at the path you actually meant, then
-  re-issue the search. Never coin a shallower or re-spelled path to dodge a refusal.
+- **Buy-intent in an unlearned niche ⇒ mint first — and there are TWO mints, for
+  two different stores.** *Your* method is local: a niche you have not learned is a
+  MISS, `sil_profile_search` returns it with `next_step: mint_domain`, and you
+  research the buying guide and `sil_learn create` the method before shopping.
+  *sil's* category is global: `sil_search` takes one registry `domain` and refuses a
+  path the registry does not hold, which is a routing signal — not a failure and not
+  an empty shelf. Answer it with `sil_domain_create` at the path you actually meant,
+  then re-issue the search. Never coin a shallower or re-spelled path to dodge a
+  refusal: the registry is shared by every shopper and nothing can undo a mint.
 - **Every pick comes out of a sil tool.** A product, price, seller or buy URL that
   did not come back from `sil_search` / `sil_product_get` / `sil_stores` never
-  enters the shortlist — even when sil returns nothing, and even when the buyer
-  asks. Zero results is an answer; the web only researches a category.
+  enters the shortlist — never from the open web, even when sil returns nothing and
+  even when the buyer asks. Zero results is an answer; the web researches a
+  category, it never sources a pick.
 - **Your memory is the sil store, never a `MEMORY.md`.** Persist and recall every
   shopping fact, taste, and domain method through `sil_learn` / `sil_profile_*` — a
   workspace `MEMORY.md` is not the shopper's memory; do not read or write it.
