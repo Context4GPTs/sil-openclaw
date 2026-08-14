@@ -63,12 +63,13 @@ const SCRIPT = join(REPO_ROOT, "scripts", "allowlist-openclaw.mjs");
 
 // sil's real facts (asserted against, sourced from the manifest the script reads).
 const SIL_ID = "sil";
-// The real 10-tool set after the retire-the-dead-sil-specs-tool card removed
-// sil_specs (POST /catalog/specs is gone from sil-services; nothing replaces
-// it). Drives `tools_added === SIL_TOOLS.length` and the per-tool
-// not-enumerated-into-config scan below.
+// The real 12-tool set: the four-v0-tools card added sil_stores +
+// sil_domain_create to the catalog group (10 → 12, add-only). Drives
+// `tools_added === SIL_TOOLS.length` and the per-tool not-enumerated-into-config
+// scan below.
 const SIL_TOOLS = [
   "sil_doctor",
+  "sil_domain_create",
   "sil_learn",
   "sil_product_get",
   "sil_profile_get",
@@ -77,6 +78,7 @@ const SIL_TOOLS = [
   "sil_profile_search",
   "sil_register",
   "sil_search",
+  "sil_stores",
   "sil_whoami",
 ] as const;
 

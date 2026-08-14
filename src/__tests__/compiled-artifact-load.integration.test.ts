@@ -266,29 +266,48 @@ const METHOD = "sil.search_results";
 const SIL_API = "https://sil-api.compiled.test.example.com";
 const ACCOUNT = "user-compiled";
 
-/** One real `SilCatalogProduct` off the sil-api wire — a required `source`, and a
- * variant carrying a non-empty `checkout_url`. Anti-false-green: a `{stub:true}`
- * echo carries none of these, so nothing below can pass against a placeholder. */
-function wireProduct(n: number): Record<string, unknown> {
+/** A valid v0 `sil_search` call — the route is domain-gated and `n` is required. */
+const V0_SEARCH_PARAMS = {
+  domain: "product.furniture.seating.task_chairs",
+  query: "office chair",
+  n: 10,
+} as const;
+
+/**
+ * One real v0 `SearchResult` off the sil-api wire, carrying the veto's inputs —
+ * a `maturity`, a `set` value beside an `unset` one, and an offer whose
+ * `observed`/`observed_at` state the price's age. Anti-false-green: a
+ * `{stub:true}` echo carries none of these, and neither does a body the
+ * compiled client's four-key gate would refuse.
+ */
+function wireResult(n: number): Record<string, unknown> {
   return {
-    id: `gid://product/${n}`,
-    title: `Ergonomic Task Chair ${n}`,
-    description: { plain: `A height-adjustable task chair, model ${n}.` },
-    price_range: {
-      min: { amount: 100_000 + n, currency: "USD" },
-      max: { amount: 200_000 + n, currency: "USD" },
+    ref: `variant:compiled-${n}`,
+    maturity: "catalog",
+    product: { title: `Ergonomic Task Chair ${n}` },
+    option_set: {},
+    media: [],
+    values: {
+      brand: {
+        state: "set",
+        value: `Maker ${n}`,
+        origin: "observed",
+        source_ref: `url:https://shop.example/chair-${n}`,
+        observed_at: "2026-01-15T10:00:00.000Z",
+      },
+      seat_height_mm: { state: "unset" },
     },
-    variants: [
+    pairs: [],
+    offers: [
       {
-        id: `gid://variant/${n}-1`,
-        title: `Ergonomic Task Chair ${n} — Graphite`,
-        description: { plain: `A height-adjustable task chair, model ${n}.` },
-        price: { amount: 100_000 + n, currency: "USD" },
-        availability: { available: true, status: "in_stock" },
-        checkout_url: `https://buy.example.com/chair-${n}`,
+        seller: { host: `merchant-${n}.example` },
+        price: `${1000 + n}.990000`,
+        currency: "USD",
+        observed: "stored",
+        observed_at: "2026-01-15T10:00:00.000Z",
+        url: `https://shop.example/chair-${n}`,
       },
     ],
-    source: `merchant-${n}`,
   };
 }
 
@@ -309,8 +328,13 @@ function seedSession(): void {
 }
 
 /** The catalog-search boundary — the ONLY thing doubled. Records every outbound
- * URL so "the compiled client, at the configured origin" is assertable by count. */
-function installSearchRouter(products: unknown[]): { urls: string[] } {
+ * URL so "the compiled client, at the configured origin" is assertable by count.
+ *
+ * The body is the v0 result object. A `{products: []}` body now FAILS the
+ * compiled client's four-key gate and classifies `retryable`, so the resolve
+ * would have nothing to serve and every assertion here would pass vacuously
+ * against an error envelope. */
+function installSearchRouter(results: unknown[]): { urls: string[] } {
   const urls: string[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation((input: unknown) => {
     const url = typeof input === "string" ? input : String(input);
@@ -319,7 +343,14 @@ function installSearchRouter(products: unknown[]): { urls: string[] } {
     return Promise.resolve(
       new Response(
         JSON.stringify(
-          isSearch ? { products, pagination: { has_next_page: false } } : {},
+          isSearch
+            ? {
+                results,
+                sources: {},
+                predicates: [{ key: "seat_height_mm", applied: false }],
+                report: { searches: 1, fetched: results.length, blocked: 0 },
+              }
+            : {},
         ),
         {
           status: isSearch ? 200 : 500,
@@ -355,7 +386,7 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
   });
 
   it("resolves the page the COMPILED sil_search just wrote, under the same host callId", async () => {
-    const rec = installSearchRouter([wireProduct(1), wireProduct(2)]);
+    const rec = installSearchRouter([wireResult(1), wireResult(2)]);
     seedSession();
 
     // ONE register() — the shipped posture. Both surfaces are captured off the
@@ -366,14 +397,14 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
 
     const CALL_ID = "call_compiled_hit";
     const payload = payloadOf(
-      await getTool(api, "sil_search").execute(CALL_ID, { query: "office chair" }),
+      await getTool(api, "sil_search").execute(CALL_ID, V0_SEARCH_PARAMS),
     );
     // Premise of the whole test: the search really succeeded and carries real
-    // projected products, not an error envelope the resolve could never store.
+    // real v0 results, not an error envelope the resolve could never store.
     expect(payload["status"]).toBe("ok");
-    const products = payload["products"] as Record<string, unknown>[];
-    expect(products).toHaveLength(2);
-    expect(products[0]!["id"]).toBe("gid://product/1");
+    const results = payload["results"] as Record<string, unknown>[];
+    expect(results).toHaveLength(2);
+    expect(results[0]!["ref"]).toBe("variant:compiled-1");
     // The COMPILED config module resolved the pluginConfig override — the request
     // went to the test origin, so this is the compiled client's own leg.
     expect(rec.urls.filter((u) => u.startsWith(SIL_API))).toHaveLength(1);
@@ -385,7 +416,7 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     expect(frames[0]!.ok).toBe(true);
     const body = frames[0]!.payload as Record<string, unknown>;
     expect(body["status"]).toBe("ok");
-    expect(body["products"]).toEqual(payload["products"]);
+    expect(body["results"]).toEqual(payload["results"]);
   });
 
   it("serves it from the COMPILED module's OWN store — the source store never saw the page", async () => {
@@ -394,7 +425,7 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     // the "one register(), one store" claim would be about the harness rather
     // than the artefact. The compiled entry has its own module instance, so the
     // source store must be EMPTY for a callId the compiled tool just stored.
-    installSearchRouter([wireProduct(7)]);
+    installSearchRouter([wireResult(7)]);
     seedSession();
 
     const api = createMockPluginApi({ pluginConfig: { sil_api_url: SIL_API } });
@@ -402,7 +433,7 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
 
     const CALL_ID = "call_compiled_instance";
     const payload = payloadOf(
-      await getTool(api, "sil_search").execute(CALL_ID, { query: "office chair" }),
+      await getTool(api, "sil_search").execute(CALL_ID, V0_SEARCH_PARAMS),
     );
     expect(payload["status"]).toBe("ok");
 
@@ -411,14 +442,14 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     const body = (await callGatewayMethod(api, METHOD, { callId: CALL_ID }))[0]!
       .payload as Record<string, unknown>;
     expect(body["status"]).toBe("ok");
-    expect((body["products"] as unknown[])).toHaveLength(1);
+    expect((body["results"] as unknown[])).toHaveLength(1);
   });
 
   it("is NOT VACUOUS — the same compiled handler answers not_found for a callId it never stored", async () => {
     // Without this, every `status:"ok"` above is equally satisfied by a handler
     // that answers ok unconditionally — the assertion would be measuring the
     // fixture, not the store.
-    installSearchRouter([wireProduct(1)]);
+    installSearchRouter([wireResult(1)]);
     seedSession();
 
     const api = createMockPluginApi({ pluginConfig: { sil_api_url: SIL_API } });
@@ -431,6 +462,6 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     expect(frames[0]!.ok).toBe(true);
     const body = frames[0]!.payload as Record<string, unknown>;
     expect(body["status"]).toBe("not_found");
-    expect(body).not.toHaveProperty("products");
+    expect(body).not.toHaveProperty("results");
   });
 });

@@ -161,11 +161,13 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       .mock.calls.filter(([marker]) => marker === "sil_plugin_loaded");
     expect(markerCalls).toHaveLength(1);
     // The full real tool set — the data-dir creation does not add/drop a tool.
-    // 10 tools after the retire-the-dead-sil-specs-tool card removed sil_specs
-    // from the catalog group (POST /catalog/specs no longer exists in
-    // sil-services and nothing replaces it).
+    // 12 tools: the four-v0-tools card ADDS sil_stores + sil_domain_create to
+    // the existing catalog group (10 → 12, add-only). The set is exact in BOTH
+    // directions on purpose — loosening it to `toContain` stops it catching a
+    // silent removal, which is how a shipped tool disappears under a green suite.
     expect([...api._tools.keys()].sort()).toEqual([
       "sil_doctor",
+      "sil_domain_create",
       "sil_learn",
       "sil_product_get",
       "sil_profile_get",
@@ -174,6 +176,7 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       "sil_profile_search",
       "sil_register",
       "sil_search",
+      "sil_stores",
       "sil_whoami",
     ]);
   });

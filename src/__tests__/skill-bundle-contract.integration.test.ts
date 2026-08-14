@@ -24,10 +24,28 @@ import {
   registeredToolNames,
 } from "./helpers/mock-plugin-api.js";
 import { perNicheExpertOffenders } from "./helpers/per-niche-expert.js";
+import {
+  honestyExclusionOffenders,
+  overPromiseOffenders,
+  overTriggerOffenders,
+  retiredV0Offenders,
+  RETIRED_V0_TOKENS,
+} from "./helpers/honesty-vocabulary.js";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BUNDLE = join(REPO_ROOT, "sil-shopping");
-const CORE_TOOLS = ["sil_register", "sil_whoami", "sil_search", "sil_product_get"];
+// The always-loaded router must name the whole v0 journey, not half of it: the
+// agent picks a tool by name at the moment of use, and a beat whose tool is
+// unnamed in SKILL.md is a beat it will improvise around. Add-only (4 → 6) with
+// the four-v0-tools card.
+const CORE_TOOLS = [
+  "sil_register",
+  "sil_whoami",
+  "sil_search",
+  "sil_product_get",
+  "sil_stores",
+  "sil_domain_create",
+];
 // Tokens retired by the single-shopper + SDS-redesign pivots — no path, no doc,
 // no compat alias may resurrect them anywhere in the bundle. Each names a thing
 // that is GONE, so a blanket forbid is right: nothing legitimately disavows them
@@ -149,6 +167,29 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     // Guard-of-the-guard: an upper-case needle can never match the lowered body,
     // so it would sit in the list looking protective while matching nothing.
     expect(RETIRED_TOKENS.filter((t) => t !== t.toLowerCase())).toEqual([]);
+    expect(RETIRED_V0_TOKENS.filter((t) => t !== t.toLowerCase())).toEqual([]);
+  });
+
+  it("the bundle prose obeys the SAME honesty rules the tool descriptions do", () => {
+    // One scanner module, two surfaces. The skill is what the agent reads before
+    // it ever sees a tool description, so a bundle that says "drop the unknown
+    // sellers" defeats a perfectly worded `sil_stores` description. Sharing
+    // `helpers/honesty-vocabulary.ts` with `tools/tool-schema-contract.unit.test.ts`
+    // is what stops the two rules drifting apart.
+    const offenders: string[] = [];
+    for (const rel of bundleFiles()) {
+      const body = read(rel);
+      for (const s of honestyExclusionOffenders(body)) offenders.push(`${rel}: ${s}`);
+      for (const s of overPromiseOffenders(body)) offenders.push(`${rel}: ${s}`);
+      for (const s of overTriggerOffenders(body)) offenders.push(`${rel}: ${s}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("guard-of-the-guard: the scanned corpus is non-trivial", () => {
+    // Every scan above returns [] over an empty corpus. This is the floor that
+    // keeps them honest if the bundle is ever gutted.
+    expect(bundleCorpus().length).toBeGreaterThan(5000);
   });
 
   it("no retired vocabulary token survives anywhere in the bundle", () => {
@@ -159,15 +200,30 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
       const body = read(rel);
       const lower = body.toLowerCase();
       for (const t of RETIRED_TOKENS) if (lower.includes(t)) offenders.push(`${rel} → ${t}`);
+      // The pre-v0 CATALOG vocabulary joins on the four-v0-tools card. This scan
+      // is ONE-DIRECTIONAL — deleting the tools does not turn stale prose red;
+      // only listing the token does. Without these entries the bundle ships
+      // driving the shopper at `checkout_url`, a field the v0 wire does not
+      // have, under a fully green suite. That is the exact failure the
+      // sil_specs retirement documented.
+      for (const t of retiredV0Offenders(body)) offenders.push(`${rel} → ${t}`);
       for (const ctx of perNicheExpertOffenders(body)) offenders.push(`${rel}: …${ctx}…`);
     }
     expect(offenders).toEqual([]);
   });
 
-  it("SKILL.md pins the mint-first, catalog-of-record forcing function", () => {
+  it("SKILL.md pins the mint-first, catalog-of-record forcing function (v0 vocabulary)", () => {
+    // RE-DERIVED, not deleted. The forcing function is unchanged — mint a cold
+    // category rather than guessing, and take picks from the sil catalog rather
+    // than the open web — but BOTH of its old anchors are retired by the v0
+    // contract: `mint_domain` names a tool that never existed (the tool is
+    // `sil_domain_create`), and `checkout_url` is a FIELD the v0 wire does not
+    // have (the handoff is `sil_stores`' `handoff.url`). Left as they were, this
+    // assertion and the retired-token scan below would be mutually
+    // unsatisfiable, and the "fix" would have been to weaken one of them.
     const src = skillSrc();
-    expect(src).toContain("mint_domain"); // the mint trigger
-    expect(src).toContain("checkout_url"); // picks come from the sil catalog
+    expect(src).toContain("sil_domain_create"); // the mint trigger
+    expect(src).toContain("sil_stores"); // where a handoff URL legitimately comes from
     expect(src).toMatch(/open[ -]web/i); // never sourced from the open web
   });
 

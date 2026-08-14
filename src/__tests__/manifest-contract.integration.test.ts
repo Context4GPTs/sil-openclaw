@@ -29,12 +29,12 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals { sil_doctor, sil_learn, sil_product_get,
- *     sil_profile_get, sil_profile_materialize, sil_profile_remove,
- *     sil_profile_search, sil_register, sil_search, sil_whoami } (10 tools,
- *     after the retire-the-dead-sil-specs-tool card REMOVED sil_specs — the
- *     route it called, POST /catalog/specs, no longer exists in sil-services
- *     and nothing replaces it).
+ *     both sides equals { sil_doctor, sil_domain_create, sil_learn,
+ *     sil_product_get, sil_profile_get, sil_profile_materialize,
+ *     sil_profile_remove, sil_profile_search, sil_register, sil_search,
+ *     sil_stores, sil_whoami } (12 tools, after the four-v0-tools card ADDED
+ *     sil_stores + sil_domain_create to the existing catalog group so the four
+ *     v0 tools sit 1:1 with the four sil-services catalog routes).
  */
 
 import { describe, it, expect } from "vitest";
@@ -130,12 +130,14 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // The card's spine: after removing the skeleton examples, the manifest
     // AND the code both name exactly the real tools. Pinned by literal
     // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
-    // not just the symmetric drift check above. Now 10 tools — the
-    // retire-the-dead-sil-specs-tool card REMOVES sil_specs from the existing
-    // catalog group (its route is gone from sil-services, nothing replaces
-    // it): 11 → 10, remove-only.
+    // not just the symmetric drift check above. Now 12 tools — the
+    // four-v0-tools card ADDS sil_stores + sil_domain_create to the existing
+    // catalog group (10 → 12, add-only). Both new tools live in
+    // `registerCatalogTools`, which `codeRegisteredNames()` already calls, so
+    // this guard picks them up for free — a NEW group would not have been.
     const expected = [
       "sil_doctor",
+      "sil_domain_create",
       "sil_learn",
       "sil_product_get",
       "sil_profile_get",
@@ -144,6 +146,7 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
       "sil_profile_search",
       "sil_register",
       "sil_search",
+      "sil_stores",
       "sil_whoami",
     ];
     expect(sorted(codeRegisteredNames())).toEqual(expected);

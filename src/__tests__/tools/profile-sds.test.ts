@@ -689,15 +689,26 @@ describe("sil_profile_search — the frontmatter-as-truth discovery primitive (c
   // ---------------------------------------------------------------------------
   // The MINT TRIGGER — an empty `domains` result (an empty store OR a filtered
   // miss on a populated one) IS the reuse-before-mint MISS, the exact point a
-  // first shop silently stalls onto the open web. The MISS must carry
-  // `next_step: mint_domain` + a `guidance` cue so the model mints before it
-  // shops. A MATCH carries NEITHER field. These pin that forcing function.
+  // first shop silently stalls onto the open web. The MISS must carry a
+  // `next_step` + a `guidance` cue so the model mints before it shops. A MATCH
+  // carries NEITHER field. These pin that forcing function.
+  //
+  // THE CUE VALUE IS `sil_learn`, NOT `mint_domain` — changed by the four-v0-tools
+  // card, and the reason is that card, not taste. There are TWO mints for two
+  // different stores: the LOCAL method mint (`sil_learn create`) and sil's GLOBAL
+  // registry mint (`sil_domain_create`, which did not exist before that card). A
+  // cue reading `mint_domain` now reads as the global one and points the agent at
+  // the wrong store — at the exact moment it is deciding which mint to perform,
+  // and the global mint is the write the product cannot undo. Naming the TOOL the
+  // agent must actually call also matches the convention the same card sets for
+  // every other pointer on the surface (`recovery: "sil_register"`,
+  // `recovery: "sil_search"`): the value IS a registered tool name.
   // ---------------------------------------------------------------------------
-  it("an EMPTY store → the mint trigger: next_step === mint_domain + a non-empty guidance string (a first shop never silently stalls)", async () => {
+  it("an EMPTY store → the mint trigger: next_step === sil_learn + a non-empty guidance string (a first shop never silently stalls)", async () => {
     const payload = payloadOf(await getTool(api, SEARCH).execute("mt0", {}));
     expect(payload["status"]).toBe("ok");
     expect(payload["domains"]).toEqual([]);
-    expect(payload["next_step"]).toBe("mint_domain");
+    expect(payload["next_step"]).toBe("sil_learn");
     expect(typeof payload["guidance"]).toBe("string");
     expect((payload["guidance"] as string).length).toBeGreaterThan(0);
   });
@@ -709,7 +720,7 @@ describe("sil_profile_search — the frontmatter-as-truth discovery primitive (c
     const payload = payloadOf(await getTool(api, SEARCH).execute("mt1", { domain: "espresso" }));
     expect(payload["status"]).toBe("ok");
     expect(payload["domains"]).toEqual([]);
-    expect(payload["next_step"]).toBe("mint_domain");
+    expect(payload["next_step"]).toBe("sil_learn");
   });
 
   it("a MATCH carries NO mint trigger — neither next_step nor guidance is present when a domain came back", async () => {
@@ -739,7 +750,7 @@ describe("sil_profile_search — the frontmatter-as-truth discovery primitive (c
       body: `# Buying guide\n${BODY_TOKEN}\n`,
     });
     const payload = payloadOf(await getTool(api, SEARCH).execute("mt5", { domain: "espresso" }));
-    expect(payload["next_step"]).toBe("mint_domain");
+    expect(payload["next_step"]).toBe("sil_learn");
     const guidance = payload["guidance"] as string;
     // Names the mint path…
     expect(guidance).toContain("sil_learn");
