@@ -10,21 +10,64 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **`sil_stores` — every seller of one pick, and where the buyer goes.** Calls
+  `POST /catalog/stores` with a single `ref`. Each seller carries
+  `serviceability` — `serviceable`, `not_serviceable`, or `unknown` — plus its
+  observed fulfillment routes, cost and free-threshold ranges per currency, and a
+  `handoff` that names its own promise (`buy_url` = a checkout path, `url` = the
+  listing page). The three states are **not symmetric**: `not_serviceable` is a
+  positive claim requiring policy evidence sil actually read, so everything else
+  is `unknown` — an ordinary answer that KEEPS the seller. A well-formed ref sil
+  does not hold is a distinct `not_found`, never an empty seller list.
+- **`sil_domain_create` — the one registry write path.** Calls
+  `POST /catalog/domains` with a `path`, a researched buying `guide` and the
+  category's first `specs`. NEW nodes only: an existing path comes back as
+  `already_exists`, which is **not a failure** — it means the vocabulary is there,
+  so the recovery is to search that same path. A minted node is born fenced
+  (`validated_at: null`).
+
+### Changed
+
+- **The catalog contract is v0's, and the pre-v0 one is deleted.** `sil_search`
+  now takes `domain` · `query` · `n` · `predicates` · `destination` and answers
+  with the route's own result object — `results` (each with `ref`, `maturity`,
+  `values` including stated `unset` ones, `pairs`, `offers` whose prices say
+  `observed: live | stored`), `sources`, `predicates[].applied` and `report`.
+  `sil_product_get` takes up to five `refs` and answers with the **same** object,
+  offers refreshed. The payload passes through **verbatim**: the plugin gates the
+  envelope structurally and projects nothing, because the agent's three-state veto
+  is computed from `values[].state`, `predicates[].applied` and `maturity` — the
+  exact fields a projector drops. **One exception, and sil-services needs to know
+  it:** a response body declaring `status` or `advisories` at its *top level* is
+  refused whole as `retryable`. Those are the plugin's own envelope keys, so
+  spreading such a payload would overwrite the key the agent dispatches on or
+  swallow the server's field. Adding either to a catalog route is a breaking
+  change on this side, and the only symptom is a tool that stops answering.
+- **`sil.search_results` now buffers the v0 result object.** The gateway method,
+  its two-layer authz and its one not-found body are untouched; the page it
+  carries is the new shape. A client decoding the pre-v0 `{products, cursor}` page
+  must move — no back-compat, by rule.
+
 ### Removed
+
+- **The pre-v0 catalog surface, outright.** Gone: `filters` (`category`,
+  `price_min`/`price_max`, `condition`, `available`), `local_merchants`, `ship_to`,
+  the `cursor` pagination, `checkout_url`, `specs_status`, the `{ns, key}` spec
+  predicate path, and every client-side pre-flight validator behind them. Every v0
+  route refuses before it spends and names the offender in its own message, so a
+  second validator here could only drift. The 422 `source_rejected` arm is gone
+  with them — no v0 route emits one.
 
 - **`sil_specs` — deleted, with no replacement.** The tool called
   `POST /catalog/specs`, a route sil-services removed when the v0 store landed;
   every call had been failing since. Gone with it: the spec-registry client arm
   (`specsCatalog`, `classifySpecsResponse`, and the resolution types), the
   manifest's `contracts.tools` entry, and the bundled skill's
-  canonicalize-before-persist beat. The tool surface is now 10 tools.
+  canonicalize-before-persist beat.
   No alias and no deprecation stub — a shopper that called it was getting an
   error, and now gets a tool that simply is not there.
-- **The method's spec vocabulary is coined, not canonicalized.** With no registry
-  to converge against, consistent spelling *is* the convergence, so the naming
-  discipline survives intact: one concept keeps one spelling, and a common
-  attribute takes its conventional name. `sil_search`'s `filters.specs` predicate
-  path is untouched.
 
 ## [0.4.6] - 2026-07-24
 

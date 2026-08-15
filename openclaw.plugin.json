@@ -11,6 +11,7 @@
   "contracts": {
     "tools": [
       "sil_doctor",
+      "sil_domain_create",
       "sil_learn",
       "sil_product_get",
       "sil_profile_get",
@@ -19,6 +20,7 @@
       "sil_profile_search",
       "sil_register",
       "sil_search",
+      "sil_stores",
       "sil_whoami"
     ]
   },

@@ -59,9 +59,11 @@ silent**. A reuse passes through unannounced.
 ## Beat 4 — Search-space: a bounded, priority-ordered fan-out (not a re-rank)
 
 The PRD's **`## Search specs`** block is the resolved predicate set — Beat 4 **projects
-it, never re-derives it**. Send those `{ns, key, op, value, unit?, hard?}` predicates
-**verbatim** as `sil_search`'s `filters.specs`; the only per-call work is choosing the
-fan-out and lifting any attribute a **dedicated param** serves better.
+it, never re-derives it**. Send those entries as `sil_search`'s `predicates`, each
+`{ key, op, value, currency? }` — `key` drawn from the domain's own vocabulary,
+`currency` **required** on a money predicate (sil holds no exchange rate anywhere).
+`hard` is **yours**, not the wire's: it stays in the PRD and drives Beat 5's verdict.
+The only per-call work is choosing the fan-out.
 
 Project the filled PRD onto **`sil_search`** as a **bounded ≤ 4 priority-ordered**
 fan-out — not one search, not unbounded (the bound is a production budget: each call is
@@ -75,27 +77,38 @@ a round-trip + tokens):
   per-call backend-ranked lists in issue order and **drop** any product already
   **seen** earlier. Because issue order *is* priority order, this **never re-ranks** —
   the engine owns order *within* a call, the fan-out *across* calls.
-- **Prefer a dedicated param over a predicate** for the SAME attribute — a `price_max`
-  param OR a price spec, never both; likewise `category`, `condition`, `available`,
-  `local_merchants`. A purely descriptive residue (a colour, a phrasing) folds into the
+- **One request shape, no side doors.** `sil_search` takes `domain` · `query` · `n` ·
+  `predicates` · `destination` and nothing else — there is no param that duplicates a
+  predicate. A purely descriptive residue (a colour, a phrasing) folds into the
   free-text `query`, which **you author** — the plugin is **pure transport** and never
-  folds a predicate into `query`. Leave **`ship_to`** empty (the server resolves the
-  registered default); **never invent** a param or predicate that isn't real. Then read
-  the per-predicate **`specs_status`** the response returns (each `{ns, key, applied}`) —
-  it feeds Beat 5's honesty pass, which rejects at pick any `hard` predicate the backend
-  left `applied:false`.
+  folds a predicate into `query`. Leave **`destination`** empty (the server resolves
+  the buyer's registered country); **never invent** a param or predicate that isn't
+  real. `n` is a **spend** knob — the web leg fetches candidates to fill it — so choose
+  it for the actual need rather than always asking for the ceiling.
+- **Then read `predicates[]`, per requirement.** Each entry says `applied: true` /
+  `"partial"` / `false`. `false` means sil had nothing to evaluate it against — a named
+  gap, **never** a reason to drop a result — and it is what Beat 5's honesty pass reads.
 
 ## Beat 5 — Reflect: honesty pass first, judgment not threshold, propose-and-wait
 
-Take Beat 4's merged issue-order list and its per-call `specs_status`. Run
+Take Beat 4's merged issue-order list and its per-call `predicates[]`. Run
 **honesty pass → judge → branch**, and **never re-rank**: the engine owns order,
 you own the verdict.
 
-**1 — Honesty pass, first.** Before judging fitness, walk the survivors and
-**reject-at-pick** any candidate that violates a *hard* constraint the backend
-could not enforce — exactly the predicates the response marked **`applied:false`**,
-plus the `user_spec` `[hard]` markers. A violator leaves contention, never becomes
-the pick; if rejection empties the set, take the empty path.
+**1 — Honesty pass, first.** Sort every survivor against each *hard* requirement into
+exactly one of three buckets, from three inputs sil hands you — `predicates[].applied`,
+that result's `values[key].state`, and its `maturity`:
+
+- **VIOLATED** — `applied: true` **and** `state: "set"` **and** the held value fails the
+  hard row. Out; it never becomes the pick.
+- **NOT VERIFIED** — `applied` is `false` or `"partial"`, **or** `state: "unset"`. It
+  stays in, **flagged**, with the missing key named. Never silently passed and never
+  silently dropped — and when not-verified dominates the set, **ask** before presenting.
+- **VERIFIED** — `applied: true`, `state: "set"`, value passes.
+
+`maturity` never vetoes on its own: a `web` result is a real listing whose values are
+honestly `unset`, so it lands in NOT VERIFIED, never in VIOLATED. If rejection empties
+the set, take the empty path.
 
 **2 — Judge, then branch.** Weigh the best surviving candidate against the PRD +
 method. Satisfies-or-falls-short is a **judgment**, **not a threshold** and not a

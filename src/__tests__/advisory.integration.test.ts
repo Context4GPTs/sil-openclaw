@@ -227,7 +227,18 @@ function probeUnreachable(): void {
 function catalogEmptyOk(): void {
   fetchSpy.mockImplementation(async (input: unknown) => {
     const url = typeof input === "string" ? input : String(input);
-    if (url.includes("/catalog/search")) return jsonResponse({ products: [] });
+    // A well-formed v0 EMPTY answer: the four top-level keys present, zero
+    // results. Presence, never length, is what the gate keys on — a `{products:
+    // []}` body is now a partial 200 and classifies `retryable`, which would
+    // make every advisory assertion below run against an error envelope.
+    if (url.includes("/catalog/search")) {
+      return jsonResponse({
+        results: [],
+        sources: {},
+        predicates: [],
+        report: { searches: 1, fetched: 0, blocked: 0 },
+      });
+    }
     return jsonResponse({ package: { name: "@4gpts/sil", latestVersion: null, tags: {} } });
   });
 }
@@ -365,7 +376,16 @@ const SUCCESS_PATHS: Array<{
   // identity — `already_registered` short-circuits on stored tokens, zero network.
   { tool: "sil_register", params: {}, setup: writeTokensFile },
   // catalog — an empty match IS a success (`status: ok, products: []`).
-  { tool: "sil_search", params: { query: "chair" }, setup: () => { writeTokensFile(); catalogEmptyOk(); } },
+  {
+    tool: "sil_search",
+    // `domain` and `n` are REQUIRED at v0 — a bare query is structurally
+    // impossible now that the route is domain-gated.
+    params: { domain: "product.furniture.seating.task_chairs", query: "chair", n: 5 },
+    setup: () => {
+      writeTokensFile();
+      catalogEmptyOk();
+    },
+  },
 ];
 
 const advisoryIds = (payload: Payload): string[] => (payload.advisories ?? []).map((a) => a.id).sort();

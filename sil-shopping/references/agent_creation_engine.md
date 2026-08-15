@@ -148,7 +148,7 @@ The `agentId` is **not an input** — the bin derives it as `deriveAgentId(name)
 **No per-niche input at create** — no method, no PRD; those mint lazily on first shop
 via `sil_learn create`. The shopper needs web tools (inherited from `agents.defaults`)
 to mint/refresh domains; if defaults grant none, the bin reports `created` with a
-`warnings` gap (bare `sil_search` still works) — surface it.
+`warnings` gap (`sil_search` itself still works) — surface it.
 
 ### What the bin does, in order (atomic, fail-closed)
 

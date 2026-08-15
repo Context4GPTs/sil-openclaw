@@ -20,7 +20,8 @@ single next step**.
    live under `$SIL_DATA_DIR`, never leaving the device via the plugin; **search** hits sil's
    catalog. Next: `sil_register`.
 2. **Registered, no shopper** — identity exists, `sil_profile_search` returns no domains, no
-   shopper created. Bare `sil_search` works but isn't the finished state; guide the user to
+   shopper created. A profile-less `sil_search` works — it still needs a registry `domain` —
+   but isn't the finished state; guide the user to
    **set up their shopper**, naming up front it takes a **couple of minutes and a few
    questions**. The after-register offer owns the gate.
 3. **Shopper, no domain** — the shopper was created (engine `created`) but `sil_profile_search`
@@ -41,12 +42,12 @@ registration. Run a no-arg **`sil_profile_search`**, then branch:
   the value (shops each niche in depth; reuses the sizes + hard limits it knows so nothing is
   re-asked; explains why each pick fits). Load
   [`agent_creation_engine.md`](agent_creation_engine.md) **only if the user accepts** — its
-  Part 1 onboarding runs first, the engine only after endorsement. Take no for an answer; bare
-  `sil_search` stays first-class.
+  Part 1 onboarding runs first, the engine only after endorsement. Take no for an answer;
+  a profile-less `sil_search` stays first-class.
 - **A shopper exists:** **skip this beat.** The shopper is a **singleton** — never offer a
   second.
 
-## After a bare search — the per-search pitch (post-result)
+## After a profile-less search — the per-search pitch (post-result)
 
 When a plain `sil_search` **completes `ok`** in a **profile-less** session, present the results
 best-first **exactly as returned**, then append **one short trailing line** naming what a

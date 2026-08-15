@@ -13,8 +13,8 @@ fill. Three paths.
 
 A plain revisit **LOADS**: `sil_profile_get(domain)` reads the durable method body
 — **no research**. This is the default on every revisit; the method is
-**recovered, never rebuilt**. Loading its `## Search vocabulary` brings the coined
-`ns.key` dimensions into context for Beat 4.
+**recovered, never rebuilt**. Loading its `## Search vocabulary` brings that domain's
+spec keys into context for Beat 4.
 
 ## MINT — cold (MISS)
 
@@ -39,28 +39,29 @@ carries these sections, and only these:
 
 - **`## How it's bought`** — the buying guide: load-bearing attributes, failure modes,
   what separates a good buy from a bad one — general to the category, not this buyer.
-- **`## Search vocabulary`** — the spec **dimensions** you coin (`ns.key` + `data_type`
-  + unit + `allowed_values` + why-it-matters) — names only, **no values**.
+- **`## Search vocabulary`** — the spec **dimensions** that decide a buy (`key` +
+  `data_type` + unit + `allowed_values` + why-it-matters) — names only, **no values**.
 - **`## Durable taste`** — the buyer's cross-intent per-domain taste, seeded from
   `user_spec` (omit until something durable is known).
 - **`## Volatility`** — the volatile axis + a rough refresh cadence.
 
-The vocabulary is **coined for the match** — with no registry standing behind the
-names, the spelling *is* the convergence: a synonym (`speed_mbps` vs
-`transfer_speed_mbps`) splits one concept into two predicates that never meet, and
-`filters.specs` stops filtering across methods. So coin for the match:
+**The registry owns the spelling — this block records it.** A `key` sil holds is what
+a predicate can be evaluated against; a synonym (`speed_mbps` vs
+`transfer_speed_mbps`) is simply outside the resolved vocabulary and comes back
+`applied: false` — a named gap, never a filter. So:
 
-- **One concept, one spelling.** Reuse the exact `ns.key`, `display_name`,
-  `data_type`, and `unit` you already coined for that concept — verbatim, across
-  every domain (consult a sibling method with `sil_profile_get` only when the
-  concept plausibly recurs, never an exhaustive scan).
-- **Common attribute → conventional name.** For a widely-shared attribute you have
-  **not** coined before (screen size, weight, RAM, waterproof rating, material…),
-  take its **conventional** name — a Schelling point, there being no registry to
-  read. Coin fresh only for a genuinely niche attribute.
+- **One concept, one spelling — take the key sil already holds.** A domain in the
+  registry resolves its own vocabulary; write those keys down here verbatim rather
+  than coining beside them.
+- **Coining is `sil_domain_create`'s job, once, for a NEW category** — its `specs` are
+  the first keys of a path sil did not have. An existing path is refused and nothing is
+  written; never coin a near-path variant to route around that refusal.
+- **Common attribute → conventional name.** When you are coining a new category's first
+  keys, a widely-shared attribute (screen size, weight, RAM, waterproof rating,
+  material…) takes its **conventional** name. Coin fresh only for a genuinely niche one.
 
-Naming is never a gate — a fragmenting name costs precision, never blocks a search —
-and it is **silent to the buyer**: never surface `ns.key` plumbing.
+Naming is never a gate — an unresolved key costs precision, never blocks a search — and
+it is **silent to the buyer**: never surface key plumbing.
 
 ## REFRESH — signal-driven (HIT, stale)
 
@@ -88,9 +89,11 @@ resuming an unfinished session, **recovers** the PRD, never rebuilds it. The PRD
 carries these sections:
 
 - **`## Search specs`** — the load-bearing block: the **resolved predicate set**, a
-  list of `{ ns, key, op, value, unit?, hard? }` entries **projected verbatim** into
-  `sil_search`'s `filters.specs` at Beat 4 (one entry per decided dimension, keys drawn
-  from the method's `## Search vocabulary`). A *"prefer X, Y/Z acceptable"* requirement
+  list of `{ key, op, value, currency?, hard? }` entries **projected** into
+  `sil_search`'s `predicates` at Beat 4 (one entry per decided dimension, keys drawn
+  from the method's `## Search vocabulary`). `currency` is **required** on a money
+  predicate; `hard` is the shopper's own marker and stays here — the wire has no such
+  field, and Beat 5 is where it is enforced. A *"prefer X, Y/Z acceptable"* requirement
   is **one `op:in` set** over `{X, Y, Z}` — mark it `hard` only when a miss must
   reject-at-pick — with the X-preference applied as **Beat-5 ranking**, **never** a hard
   `eq` on X alone (that rejects the acceptable alternatives and empties the set).

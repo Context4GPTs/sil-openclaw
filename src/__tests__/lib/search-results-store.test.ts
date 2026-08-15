@@ -26,6 +26,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import type { SearchResultPage } from "../../lib/search-results-store.js";
+import { resultGolden } from "../helpers/v0-wire.js";
 import {
   RETENTION_MS,
   MAX_ENTRIES,
@@ -35,35 +36,29 @@ import {
   __resetSearchResultsStore,
 } from "../../lib/search-results-store.js";
 
-/** A real projected search page — the exact shape a client's decoder accepts
- * (`{status:"ok", products:[...], cursor?, specs_status?}`) with a genuine
- * `SearchProduct`: product identity + provenance plus the nested featured variant
- * carrying a non-empty `checkout_url`. Anti-false-green: a store that hands back a
- * placeholder rather than what it was given cannot satisfy the deep-equality
- * assertions below. */
-function page(
-  label: string,
-  extra: { cursor?: string; specs_status?: { ns: string; key: string; applied: boolean }[] } = {},
-): SearchResultPage {
+/**
+ * A real v0 search page — `{ status: "ok" }` over the route's result object, the
+ * exact shape a client's decoder accepts. Built from the CHECKED-IN GOLDEN so
+ * the store is exercised against a body sil-services actually emits, carrying
+ * the veto's three inputs (`predicates`, `values` incl. `unset`, `maturity`) and
+ * a `report`. Anti-false-green: a store that hands back a placeholder rather
+ * than what it was given cannot satisfy the deep-equality assertions below, and
+ * one that keeps only `results` strips the honesty rails.
+ */
+function page(label: string, extra: { blocked?: number } = {}): SearchResultPage {
+  const golden = resultGolden();
+  const results = (golden["results"] as Record<string, unknown>[]).map((result) => ({
+    ...result,
+    ref: `${result["ref"] as string}#${label}`,
+  }));
   return {
     status: "ok",
-    products: [
-      {
-        id: `gid://product/${label}`,
-        title: `Product ${label}`,
-        source: "shop",
-        variant: {
-          id: `gid://variant/${label}-1`,
-          title: `Product ${label} — Default`,
-          price: { amount: 4999, currency: "USD" },
-          availability: { available: true, status: "in_stock" },
-          checkout_url: `https://buy.example.com/${label}`,
-        },
-      },
-    ],
-    ...(extra.cursor !== undefined ? { cursor: extra.cursor } : {}),
-    ...(extra.specs_status !== undefined ? { specs_status: extra.specs_status } : {}),
-  };
+    ...golden,
+    results,
+    ...(extra.blocked === undefined
+      ? {}
+      : { report: { ...(golden["report"] as object), blocked: extra.blocked } }),
+  } as SearchResultPage;
 }
 
 const PRINCIPAL = "user-42";
@@ -131,16 +126,24 @@ describe("the key is the host callId, verbatim (A3, B3)", () => {
     expect(getSearchResult("call_AbC", PRINCIPAL)).not.toBeNull();
   });
 
-  it("returns the page BY VALUE-EQUALITY, preserving cursor and specs_status siblings", () => {
-    // `cursor` and `specs_status` are siblings of `products` on the page the
-    // client decodes; a store that keeps only `products` silently strips the
-    // pagination handle and the honesty rail.
-    const stored = page("a", {
-      cursor: "opaque-cursor-token",
-      specs_status: [{ ns: "product", key: "capacity_gb", applied: false }],
-    });
+  it("returns the page BY VALUE-EQUALITY, preserving every honesty rail", () => {
+    // `predicates`, `sources` and `report` are siblings of `results` on the page
+    // the client decodes; a store that keeps only `results` silently strips the
+    // veto's inputs, and the renderer would show a shortlist it cannot qualify.
+    const stored = page("a", { blocked: 4 });
     putSearchResult("call_1", stored, PRINCIPAL);
-    expect(getSearchResult("call_1", PRINCIPAL)).toEqual(stored);
+    const read = getSearchResult("call_1", PRINCIPAL);
+    expect(read).toEqual(stored);
+    expect(read).toHaveProperty("predicates");
+    expect(read).toHaveProperty("sources");
+    expect(read).toHaveProperty("report");
+    // `unset` entries survive the round trip — the NOT-VERIFIED bucket depends
+    // on them being stated rather than absent.
+    const values = (read!.results as unknown as Record<string, unknown>[])[0]["values"] as Record<
+      string,
+      unknown
+    >;
+    expect(values["flex_index"]).toEqual({ state: "unset" });
   });
 
   it("an unknown callId is a MISS, never another entry's page", () => {

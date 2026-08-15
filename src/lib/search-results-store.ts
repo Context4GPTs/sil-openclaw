@@ -24,7 +24,7 @@
  *
  * In-memory, by choice. Process death is the strongest retention ceiling
  * available and costs nothing; an on-disk buffer would put prices, seller
- * identity, and `checkout_url` at rest, widen the plugin's declared filesystem
+ * identity, and buy URLs at rest, widen the plugin's declared filesystem
  * scope, and — with no timers allowed — leave the last pages there forever once
  * the user stops searching.
  *
@@ -35,19 +35,15 @@
  * screen on the first refresh.
  */
 
-import type { SearchProduct, SpecStatus } from "./sil-client.js";
+import type { SearchResponse } from "./sil-client.js";
 
 /**
  * The stored page — EXACTLY the shape a client's decoder accepts, and a strict
- * subset of the agent-facing envelope. No `advisories`: host-misconfiguration
- * guidance is operator/agent copy, not product data.
+ * subset of the agent-facing envelope: the route's own result object, verbatim,
+ * under the same `status: "ok"` the agent sees. No `advisories`:
+ * host-misconfiguration guidance is operator/agent copy, not product data.
  */
-export interface SearchResultPage {
-  status: "ok";
-  products: SearchProduct[];
-  cursor?: string;
-  specs_status?: SpecStatus[];
-}
+export type SearchResultPage = { status: "ok" } & SearchResponse;
 
 /** Why a lookup missed. OPERATOR-LOG ONLY — all three answer the client with
  * one byte-identical not-found body, so a caller cannot tell "not yours" apart
@@ -55,8 +51,8 @@ export interface SearchResultPage {
 export type SearchResultMiss = "unknown" | "expired" | "principal_mismatch";
 
 /**
- * Fifteen minutes. A search result is point-in-time — price, availability, and
- * `checkout_url` are exactly the fields a shopper must re-fetch before buying —
+ * Fifteen minutes. A search result is point-in-time — the price, its `observed`
+ * age and the seller's URL are exactly what a shopper must re-read before buying —
  * so this is long enough for the settle edge, a client reload, a reconnect, and
  * a short step-away, and short enough that nothing renders as stale truth. It
  * is a delivery buffer, not scrollback and not history.
