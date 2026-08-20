@@ -286,8 +286,12 @@ export const FIND_400_UNSUPPORTED = {
 
 /**
  * The auth plugin's shared bodies, verbatim from `middleware/auth.ts` — the SAME
- * four across all four routes. `error` is the machine-readable code (there is no
- * `reason` field on the wire; the plugin's `reason` is lifted FROM `error`).
+ * four across every v0 route, the registry read included: it registers inside the
+ * auth plugin's guarded scope, so an unauthenticated read is refused before the
+ * registry is reached (the resolved registry is sil's accumulating asset, and an
+ * unauthenticated read of it is a free scrape). `error` is the machine-readable
+ * code (there is no `reason` field on the wire; the plugin's `reason` is lifted
+ * FROM `error`).
  */
 export const AUTH = {
   unauthorized: { error: "unauthorized", message: "Authentication required" },

@@ -244,7 +244,7 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     expect(src).toMatch(/open[ -]web/i); // never sourced from the open web
   });
 
-  it("the Beat-2 naming discipline survives the sil_specs excision", () => {
+  it("the Beat-2 naming discipline survives the sil_domain_find arrival", () => {
     // The removal's collateral-damage guard (retire-the-dead-sil-specs-tool). What
     // died is the registry ROUND TRIP, not the vocabulary hygiene: Beat 4 still
     // sends these coined names verbatim as sil_search.filters.specs, so a synonym
@@ -253,8 +253,147 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     // TWO tokens, deliberately not a re-pinning of the wording (the 1 341-line
     // prose test was deleted for a reason).
     const src = read("references/method_and_prds.md");
-    expect(src).toContain("one spelling"); // reuse the exact ns.key you coined
+    expect(src).toContain("one spelling"); // reuse the exact key you coined
     expect(src).toContain("conventional name"); // take the Schelling-point name
+  });
+});
+
+// ===========================================================================
+// Card: sil-domain-find — READ BEFORE MINT, as the bundle states it.
+//
+// The tool alone does not close this card. `sil_domain_create` performs v0's ONE
+// permanent, un-undoable global registry write, and nothing in the plugin can
+// stop an agent reaching it — the discipline lives entirely in prose, so prose is
+// what has to be guarded. Each bar below holds a DECISION that changes the
+// shopper's behaviour if it is lost, never a sentence: the 1341-line prose test
+// this suite deleted stayed green through a live behavioural bug precisely
+// because it pinned wording instead.
+// ===========================================================================
+
+/** The router's table rows — what the agent matches an intent against. */
+const routingRows = (): string[] =>
+  frontmatter()
+    .body.split("\n")
+    .filter((line) => line.trimStart().startsWith("|"));
+
+describe("read before mint — the bundle's half of the card", () => {
+  it("S2 — NO file reaches the global write without also naming the read", () => {
+    // The card's spine, asserted structurally rather than by wording: a file that
+    // teaches the mint and never mentions the read is a door to a permanent write
+    // with the discipline missing. Derived from the corpus on disk, so a new
+    // reference file inherits the rule for free.
+    const offenders = bundleFiles().filter(
+      (rel) => read(rel).includes("sil_domain_create") && !read(rel).includes("sil_domain_find"),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("S2 — guard-of-the-guard: some file DOES name the mint (an empty scan passes)", () => {
+    expect(bundleFiles().filter((rel) => read(rel).includes("sil_domain_create")).length)
+      .toBeGreaterThan(0);
+  });
+
+  it("S2 — the router's read row sits ABOVE its mint row, and the mint row names the read", () => {
+    // Reading order, mechanised. The agent matches top-down; a mint row above the
+    // read row is a mint row it reaches first.
+    const rows = routingRows();
+    const readRow = rows.findIndex((r) => r.includes("sil_domain_find"));
+    const mintRow = rows.findIndex((r) => r.includes("sil_domain_create"));
+    expect(readRow).toBeGreaterThanOrEqual(0);
+    expect(mintRow).toBeGreaterThanOrEqual(0);
+    expect(readRow).toBeLessThan(mintRow);
+    // The mint row states what must have happened first — otherwise the trigger
+    // reads as "a cold category" and the read becomes optional.
+    expect(rows[mintRow]).toMatch(/sil_domain_find|\bread\b/);
+  });
+
+  it("S2 — a read that did NOT return is not a read that returned nothing", () => {
+    // BR-2. Without this the natural repair for a transient failure is to mint and
+    // move on — a permanent global write entered off a network blip.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/invalid_request/);
+    expect(corpus).toMatch(
+      /did not return|not a read that returned nothing|never coin around|leaves the mint (out of reach|unreachable)/i,
+    );
+  });
+
+  it("S2/BR-8 — an ambiguous `sil_search` refusal is settled by a PROBE, never by a mint", () => {
+    // The two refusals carry the same `invalid_request` on the wire and the plugin
+    // matches on no prose, so the refusal text alone cannot tell them apart. The
+    // stated `exists` decides — a global write is never entered off refusal prose.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/read alike|cannot tell|indistinguishable|same .*invalid_request/i);
+    expect(corpus).toMatch(/probe/i);
+    expect(corpus).toMatch(/exists/);
+  });
+
+  it("S3 — the read's input is the buyer's PROSE, and the bundle says why a guess is wrong", () => {
+    // `q` is matched against a domain's guide as well as its path text, so a
+    // path-shaped guess misses exactly the domains the read exists to surface.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/own words/i);
+    expect(corpus).toMatch(/path[- ]shaped guess|not a path guess|rather than a path guess/i);
+    expect(corpus).toMatch(/guide/i);
+  });
+
+  it("S4 — all four branch verdicts are present, and `capped` is one of them", () => {
+    // Dropping the `capped` branch ALONE re-creates the exact defect the route
+    // exists to prevent: minting while the standing path sat just past the bound.
+    const corpus = bundleCorpus();
+    const verdicts: [string, RegExp][] = [
+      ["adopt", /\badopt/i],
+      ["descend", /\bdescend/i],
+      ["mint licensed", /licens/i],
+      ["narrow on capped", /\bcapped\b/],
+    ];
+    expect(verdicts.filter(([, re]) => !re.test(corpus)).map(([name]) => name)).toEqual([]);
+    // The descend rule's whole content: a sibling or re-rooted path for a category
+    // that already stands is never coined, because the mint would ACCEPT it.
+    expect(corpus).toMatch(/never a sibling|not a sibling|sibling.*re-?rooted/i);
+  });
+
+  it("S4 — `capped: true` withholds the licence rather than shrinking the answer", () => {
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/capped:?\s*`?true/i);
+    expect(corpus).toMatch(/narrow|sharpen|read (once more|again)/i);
+  });
+
+  it("S5 — the adoption discipline names its mechanism and says the keys travel VERBATIM", () => {
+    // "take the key sil already holds" was unreachable advice until this tool
+    // existed: nothing in the surface could read a standing domain's vocabulary.
+    const src = read("references/method_and_prds.md");
+    expect(src).toContain("sil_domain_find");
+    expect(src).toContain("## Search vocabulary");
+    expect(src).toMatch(/verbatim/i);
+  });
+
+  it("S5 — the read budget is stated as a NUMBER, and the probe is outside it", () => {
+    // Open question 9. An agent left to infer whether the probe counts against the
+    // bound either forfeits it — forking the vocabulary — or takes a third
+    // discovery read. Write the arithmetic; do not imply it.
+    const src = read("references/method_and_prds.md");
+    expect(src).toMatch(/\b2\b|\btwo\b/);
+    expect(src).toMatch(/probe/i);
+    expect(src).toMatch(/does\s*\*{0,2}not\*{0,2}\s*count|≤\s*2\s*\+\s*1|2 \+ 1/i);
+  });
+
+  it("S6 — a fenced match is ADOPTED, and the fence explains the result rather than removing one", () => {
+    // `validated_at: null` means minted but not yet validated by the pass. The
+    // sentence carrying this is exactly the shape `honestyExclusionOffenders`
+    // scans (an exclusion verb beside a maturity claim), and that scan runs over
+    // the whole bundle above — so this bar only has to pin the DECISION.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/validated_at/);
+    expect(corpus).toMatch(/adopted like any other|like any other match|a real (category|domain)/i);
+    expect(corpus).toMatch(/stays on the table|every result and seller/i);
+  });
+
+  it("S7 — a held path is the cold path's memory, not a per-search toll", () => {
+    // Without this the card ships a latency and spend regression on every warm
+    // search, which no other bar here would catch.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/no `?sil_domain_find`? call|without a read|no registry read|not re-?read/i);
+    expect(corpus).toMatch(/cold path'?s first move|never a per-search toll|already records/i);
   });
 });
 
