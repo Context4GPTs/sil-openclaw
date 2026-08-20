@@ -29,12 +29,14 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals { sil_doctor, sil_domain_create, sil_learn,
- *     sil_product_get, sil_profile_get, sil_profile_materialize,
+ *     both sides equals { sil_doctor, sil_domain_create, sil_domain_find,
+ *     sil_learn, sil_product_get, sil_profile_get, sil_profile_materialize,
  *     sil_profile_remove, sil_profile_search, sil_register, sil_search,
- *     sil_stores, sil_whoami } (12 tools, after the four-v0-tools card ADDED
- *     sil_stores + sil_domain_create to the existing catalog group so the four
- *     v0 tools sit 1:1 with the four sil-services catalog routes).
+ *     sil_stores, sil_whoami } (13 tools: the four-v0-tools card ADDED
+ *     sil_stores + sil_domain_create to the existing catalog group, and the
+ *     read-before-mint card ADDS sil_domain_find, so the v0 catalog tools sit
+ *     1:1 with the sil-services catalog routes — `/catalog/domains` being the
+ *     first served by two verbs, one tool per verb).
  */
 
 import { describe, it, expect } from "vitest";
@@ -130,14 +132,16 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // The card's spine: after removing the skeleton examples, the manifest
     // AND the code both name exactly the real tools. Pinned by literal
     // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
-    // not just the symmetric drift check above. Now 12 tools — the
-    // four-v0-tools card ADDS sil_stores + sil_domain_create to the existing
-    // catalog group (10 → 12, add-only). Both new tools live in
-    // `registerCatalogTools`, which `codeRegisteredNames()` already calls, so
-    // this guard picks them up for free — a NEW group would not have been.
+    // not just the symmetric drift check above. Now 13 tools — the
+    // four-v0-tools card ADDED sil_stores + sil_domain_create (10 → 12) and the
+    // read-before-mint card ADDS sil_domain_find (12 → 13, add-only). All three
+    // live in `registerCatalogTools`, which `codeRegisteredNames()` already
+    // calls, so this guard picks them up for free — a NEW group would not have
+    // been.
     const expected = [
       "sil_doctor",
       "sil_domain_create",
+      "sil_domain_find",
       "sil_learn",
       "sil_product_get",
       "sil_profile_get",
@@ -191,6 +195,17 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // openclaw.plugin.json#contracts.tools.
     expect(codeRegisteredNames().has("sil_product_get")).toBe(true);
     expect(manifestToolNames().has("sil_product_get")).toBe(true);
+  });
+
+  it("sil_domain_find is BOTH registered by register() and declared in contracts.tools", () => {
+    // The read-before-mint card's fifth catalog tool — `GET /catalog/domains`,
+    // the verb twin of the mint's POST. It joins the EXISTING
+    // `registerCatalogTools` group, which `codeRegisteredNames()` already calls,
+    // so the code side is picked up dynamically; step 3 (the manifest entry) is
+    // the half that is not, and forgetting it flips the set-equality RED here
+    // before merge. That asymmetry is the whole point of this guard.
+    expect(codeRegisteredNames().has("sil_domain_find")).toBe(true);
+    expect(manifestToolNames().has("sil_domain_find")).toBe(true);
   });
 
   it("sil_profile_materialize is BOTH registered by register() and declared in contracts.tools", () => {
@@ -294,5 +309,21 @@ describe("the drift guard actually bites (failure-direction proof)", () => {
     const manifestPlusGhost = new Set(manifestToolNames());
     manifestPlusGhost.add("sil_tool_declared_but_unwired");
     expect(sorted(manifestPlusGhost)).not.toEqual(sorted(code));
+  });
+
+  // The same proof aimed at THE tool this card adds, in both directions. These
+  // are non-vacuous by construction: if `sil_domain_find` were missing from both
+  // sides, each `delete` would be a no-op, the two sets would still be equal, and
+  // the `not.toEqual` below would FAIL. So they cannot pass by the tool's absence.
+  it("FAILS if `sil_domain_find` is dropped from the manifest side", () => {
+    const manifestMinus = new Set(manifestToolNames());
+    manifestMinus.delete("sil_domain_find");
+    expect(sorted(manifestMinus)).not.toEqual(sorted(codeRegisteredNames()));
+  });
+
+  it("FAILS if `sil_domain_find` is dropped from the code side", () => {
+    const codeMinus = new Set(codeRegisteredNames());
+    codeMinus.delete("sil_domain_find");
+    expect(sorted(codeMinus)).not.toEqual(sorted(manifestToolNames()));
   });
 });

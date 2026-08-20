@@ -2,7 +2,7 @@
  * INTEGRATION — A9: the 401 choreography is UNIFORM across every sil-api-calling
  * tool, and it is one shared helper, never a per-tool handler.
  *
- * Six tools reach sil-api with a Bearer: the four v0 catalog tools plus
+ * Six tools reach sil-api with a Bearer: the FIVE v0 catalog tools plus
  * `sil_whoami`. Each drives `refreshAndRetryOnce` — at most one refresh, at most
  * one retry, no loop. The failure this file forecloses is DRIFT: a tool that
  * refreshes twice, retries a dead token, clears credentials on a transient blip,
@@ -37,7 +37,13 @@ import {
   type RouteKind,
   type Router,
 } from "./helpers/v0-harness.js";
-import { AUTH, mintGolden, resultGolden, storesGolden } from "./helpers/v0-wire.js";
+import {
+  AUTH,
+  domainFindGolden,
+  mintGolden,
+  resultGolden,
+  storesGolden,
+} from "./helpers/v0-wire.js";
 
 const ACCESS = "at-live-token";
 const REFRESH = "rt-live-token";
@@ -67,6 +73,15 @@ const BEARER_TOOLS = [
     route: "domains" as const,
     params: { path: "product.sports.winter.ski.boots", guide: "how they are bought", specs: [] },
     success: (): unknown => mintGolden(),
+  },
+  {
+    // The read, on the mint's own path with the opposite verb — so `route` here
+    // is `domainFind`, NOT `domains`. Pointing it at the mint bucket would make
+    // this matrix drive the permanent write while claiming to test the read.
+    tool: "sil_domain_find",
+    route: "domainFind" as const,
+    params: { q: "ski boots" },
+    success: (): unknown => domainFindGolden(),
   },
   {
     tool: "sil_whoami",
@@ -274,12 +289,19 @@ describe("guard-of-the-guard: the matrix actually covers the surface", () => {
     // Deriving the expected set from the registered one closes that.
     const registered = [...api._tools.keys()];
     const silApiTools = registered.filter((name) =>
-      ["sil_search", "sil_product_get", "sil_stores", "sil_domain_create", "sil_whoami"].includes(name),
+      [
+        "sil_search",
+        "sil_product_get",
+        "sil_stores",
+        "sil_domain_create",
+        "sil_domain_find",
+        "sil_whoami",
+      ].includes(name),
     );
     expect(silApiTools.sort()).toEqual(BEARER_TOOLS.map((s) => s.tool).sort());
   });
 
-  it("each scenario really drove all five tools", () => {
-    expect(BEARER_TOOLS).toHaveLength(5);
+  it("each scenario really drove all six tools", () => {
+    expect(BEARER_TOOLS).toHaveLength(6);
   });
 });

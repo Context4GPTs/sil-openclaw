@@ -36,8 +36,15 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BUNDLE = join(REPO_ROOT, "sil-shopping");
 // The always-loaded router must name the whole v0 journey, not half of it: the
 // agent picks a tool by name at the moment of use, and a beat whose tool is
-// unnamed in SKILL.md is a beat it will improvise around. Add-only (4 → 6) with
-// the four-v0-tools card.
+// unnamed in SKILL.md is a beat it will improvise around. Add-only (4 → 6 with
+// the four-v0-tools card, 6 → 7 with the read-before-mint card).
+//
+// This list is HAND-MAINTAINED and separate from the dynamic "every registered
+// tool appears somewhere in the corpus" scan below: it is what forces a name into
+// `SKILL.md` ITSELF rather than into some `references/` file the agent may never
+// load. `sil_domain_find` has to be here, not merely in the corpus — the read is
+// the first move of the cold path, and a router that names only the mint sends an
+// empty shelf straight at the one write the product cannot undo.
 const CORE_TOOLS = [
   "sil_register",
   "sil_whoami",
@@ -45,6 +52,7 @@ const CORE_TOOLS = [
   "sil_product_get",
   "sil_stores",
   "sil_domain_create",
+  "sil_domain_find",
 ];
 // Tokens retired by the single-shopper + SDS-redesign pivots — no path, no doc,
 // no compat alias may resurrect them anywhere in the bundle. Each names a thing
@@ -138,9 +146,18 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     expect(registeredTools().filter((n) => !corpus.includes(n))).toEqual([]);
   });
 
-  it("the four core tools are named in SKILL.md itself (the always-loaded router)", () => {
+  it("every core tool is named in SKILL.md itself (the always-loaded router)", () => {
     const src = skillSrc();
     expect(CORE_TOOLS.filter((t) => !src.includes(t))).toEqual([]);
+  });
+
+  it("the frontmatter description enumerates the read, not just the mint", () => {
+    // The description is what the host shows BEFORE the body is loaded, so it is
+    // the only text that decides whether the skill is reached at all. A trigger
+    // list that names the mint but not the read advertises the write half of a
+    // read-then-write discipline.
+    const { description } = frontmatter();
+    expect(description).toContain("sil_domain_find");
   });
 
   it("every references/ and examples/ link in the bundle resolves to a real file", () => {

@@ -913,11 +913,12 @@ describe("registration shape (C5) and log privacy", () => {
   // sil_* add or removal must bump it, count in the title included. It went
   // undocumented for a release because nobody greps a "…-method…" file for tool
   // tests; see docs/knowledge/adding-a-sil-tool-fans-out-to-exact-set-mirrors.md.
-  it("registering the gateway method does not change the tool set (still 12)", () => {
+  it("registering the gateway method does not change the tool set (still 13)", () => {
     const api = registerPlugin();
     expect([...api._tools.keys()].sort()).toEqual([
       "sil_doctor",
       "sil_domain_create",
+      "sil_domain_find",
       "sil_learn",
       "sil_product_get",
       "sil_profile_get",

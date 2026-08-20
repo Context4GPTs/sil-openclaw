@@ -35,6 +35,14 @@ export function storesGolden(): Record<string, unknown> {
   return read("catalog-stores-response.golden.json") as Record<string, unknown>;
 }
 
+/**
+ * `GET /catalog/domains`'s 200 — a DISCOVERY read (`?q=`) that named two domains.
+ * Fresh clone per call.
+ */
+export function domainFindGolden(): Record<string, unknown> {
+  return read("catalog-domain-find-response.golden.json") as Record<string, unknown>;
+}
+
 /** The mint's 200, which the route builds by hand — three fields, no more. */
 export function mintGolden(): Record<string, unknown> {
   return {
@@ -110,6 +118,82 @@ export function resultFor(
   return (body["results"] as Record<string, unknown>[]).find((r) => r["ref"] === ref);
 }
 
+/** The find golden with one top-level key deleted — the two-key envelope gate. */
+export function domainFindMissing(key: string): Record<string, unknown> {
+  const body = domainFindGolden();
+  delete body[key];
+  return body;
+}
+
+/** The find golden with `mutate` applied to `matches[0]` — the per-match gate. */
+export function domainFindWithMatch0(
+  mutate: (match: Record<string, unknown>) => void,
+): Record<string, unknown> {
+  const body = domainFindGolden();
+  mutate((body["matches"] as Record<string, unknown>[])[0]);
+  return body;
+}
+
+/**
+ * The MINT SIGNAL: the registry genuinely holds nothing for this ask, stated
+ * completely. `matches: []` beside `capped: false` is a SUCCESS — the one answer
+ * that licenses a permanent, un-undoable global write, which is why it has to be
+ * distinguishable from every failure by presence, never by length.
+ */
+export function domainFindEmpty(): Record<string, unknown> {
+  return { matches: [], capped: false };
+}
+
+/**
+ * The BOUNDED answer: K matches and more past the bound. `capped: true` is not a
+ * smaller success — an agent that reads a bounded list, sees nothing fit and
+ * mints while the standing path sat just past the bound has done exactly what
+ * this route exists to prevent, and only this field tells it.
+ */
+export function domainFindCapped(): Record<string, unknown> {
+  return { ...domainFindGolden(), capped: true };
+}
+
+/**
+ * A `?path=` PROBE of a path with no row — the shape BR-4 is computed from, and
+ * the one no text search can produce. Two facts that are never conflated:
+ * `exists: false` (there is no domain here) beside a non-empty `specs` (the
+ * vocabulary this path WOULD INHERIT if it were minted). `guide` is `null`
+ * because there is no row to carry one.
+ */
+export function domainFindProbeMiss(path = "product.sports.winter.ski.boots.freeride"): Record<
+  string,
+  unknown
+> {
+  const inherited = (
+    (domainFindGolden()["matches"] as Record<string, unknown>[])[0]["specs"] as Record<
+      string,
+      unknown
+    >[]
+  ).filter((spec) => spec["inherited"] === true);
+  return {
+    matches: [{ path, exists: false, validated_at: null, guide: null, specs: inherited }],
+    capped: false,
+  };
+}
+
+/** The match for `path`, or a legible throw naming what IS present. */
+export function matchFor(body: Record<string, unknown>, path: string): Record<string, unknown> {
+  const matches = body["matches"] as Record<string, unknown>[];
+  const found = matches.find((m) => m["path"] === path);
+  if (found === undefined) {
+    const paths = matches.map((m) => String(m["path"])).join(", ");
+    throw new Error(`no match for "${path}". Present: ${paths || "(none)"}`);
+  }
+  return found;
+}
+
+/** The two paths the find golden carries — one validated, one fenced. */
+export const GOLDEN_DOMAINS = {
+  validated: "product.sports.winter.ski.boots",
+  fenced: "product.sports.winter.ski.boots.race",
+} as const;
+
 /** The two refs the result golden carries — one catalog, one web. */
 export const GOLDEN_REFS = {
   catalog: "variant:0198f2a1-4c3d-7000-8000-0000000000a1",
@@ -157,6 +241,47 @@ export const STORES_404 = {
 export const MINT_409 = {
   error: "domain_exists",
   message: 'domain "product.sports.winter.ski.boots" already exists',
+} as const;
+
+/**
+ * The read's refusals, verbatim from `handlers/domains.ts` — its `QUERY_CONTRACT`
+ * constant, its handler branch (`— you sent ${neither|both}.`) and its
+ * `queryError` formatter, composed exactly as `server.ts`'s error handler emits
+ * them (`{ error: err.code, message: err.message }` — there is no `statusCode`
+ * or `error: "Bad Request"` member on this wire).
+ *
+ * PINNED AS LITERALS, never derived from the sibling's source. The plugin
+ * surfaces the message VERBATIM and matches on none of it, so what these fixtures
+ * prove is exactly that: the agent's whole recourse to a refusal reaches it
+ * unrewritten.
+ *
+ * `neither` and `both` are each other's control: one constant sentence cannot
+ * satisfy both, which is what makes "the message crossed intact" a real bar
+ * rather than an echo of the boilerplate every refusal shares.
+ */
+const FIND_QUERY_CONTRACT =
+  "GET /catalog/domains takes exactly one of `q` (a buyer ask) or `path` (an exact ltree path)";
+
+export const FIND_400_NEITHER = {
+  error: "invalid_request",
+  message: `${FIND_QUERY_CONTRACT} — you sent neither.`,
+} as const;
+
+export const FIND_400_BOTH = {
+  error: "invalid_request",
+  message: `${FIND_QUERY_CONTRACT} — you sent both.`,
+} as const;
+
+/**
+ * The VALIDATOR's arm of the same 400, through the route's own
+ * `schemaErrorFormatter`: an unsupported knob is refused BY NAME rather than
+ * silently ignored. The plugin can never send one (its schema declares `q` and
+ * `path` and nothing else) — which is the point: if this body ever reaches the
+ * tool, the message naming the offender is what makes that legible.
+ */
+export const FIND_400_UNSUPPORTED = {
+  error: "invalid_request",
+  message: `unsupported query parameter \`limit\` — ${FIND_QUERY_CONTRACT}.`,
 } as const;
 
 /**

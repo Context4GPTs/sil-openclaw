@@ -54,14 +54,20 @@ import {
 // unit core takes them as an argument so the test pins behaviour, not wiring).
 const SIL: SilAllowlistFacts = {
   id: "sil",
-  // The real 10-tool set after the retire-the-dead-sil-specs-tool card removed
-  // sil_specs (POST /catalog/specs is gone from sil-services; nothing replaces
-  // it), beside the five profile verbs and the four other core tools. (This
-  // carrier is the SILENT one — a stale entry stays GREEN here, because the loop
-  // below only asserts each name is ABSENT from a fresh config — so it is bumped
-  // for hygiene in lockstep with the mirrors that bite.)
+  // The real 13-tool set — the five v0 catalog tools, the five profile verbs,
+  // the two identity tools and the doctor.
+  //
+  // THIS CARRIER IS THE SILENT ONE, and it had already gone stale: it claimed
+  // "the real 10-tool set" while the four-v0-tools card had taken the surface to
+  // 12 (sil_stores + sil_domain_create were missing). Nothing here goes RED on a
+  // stale entry — the loop below only asserts each name is ABSENT from a fresh
+  // config, which a shorter list satisfies just as well — so a fixture that lies
+  // about the canonical set can sit here indefinitely. Repaired to the true set
+  // and bumped in lockstep with the mirrors that do bite.
   tools: [
     "sil_doctor",
+    "sil_domain_create",
+    "sil_domain_find",
     "sil_learn",
     "sil_product_get",
     "sil_profile_get",
@@ -70,6 +76,7 @@ const SIL: SilAllowlistFacts = {
     "sil_profile_search",
     "sil_register",
     "sil_search",
+    "sil_stores",
     "sil_whoami",
   ],
   skill: "./sil-shopping",
