@@ -12,9 +12,11 @@ fill. Three paths.
 ## LOAD — the hot path (HIT, fresh)
 
 A plain revisit **LOADS**: `sil_profile_get(domain)` reads the durable method body
-— **no research**. This is the default on every revisit; the method is
-**recovered, never rebuilt**. Loading its `## Search vocabulary` brings that domain's
-spec keys into context for Beat 4.
+— **no research, and no registry read**. This is the default on every revisit; the
+method is **recovered, never rebuilt**. Loading its `## Search vocabulary` brings that
+domain's spec keys into context for Beat 4. A method that already records a settled
+registry path is searched with **no `sil_domain_find` call at all** — the registry read
+is the cold path's first move, never a per-search toll.
 
 ## MINT — cold (MISS)
 
@@ -31,6 +33,12 @@ guide generalises**: `earbuds` serves gym, commute, and office; the gym specific
 in the gym PRD, not a `wireless-gym-earbuds` method. Folding the use-context into the
 domain forks a near-duplicate method per intent and kills reuse.
 
+**sil's registry is the first place you explore — before the web.** It is the cheapest
+read you have, and what it returns is what every other shopper already agreed to call
+things. `sil_domain_find` runs *while* `## Search vocabulary` is being composed, so an
+adopted path and its keys are recorded at creation rather than retrofitted afterwards;
+the block below owns the detail.
+
 Persist with **`sil_learn create`** (`target: "method"`, domain + name + body) — the
 file **is** the registration (it errors if the method already exists: a revisit LOADs,
 a stale one REFRESHes with `write`). Never the setup-only `sil_profile_materialize`.
@@ -45,23 +53,54 @@ carries these sections, and only these:
   `user_spec` (omit until something durable is known).
 - **`## Volatility`** — the volatile axis + a rough refresh cadence.
 
-**The registry owns the spelling — this block records it.** A `key` sil holds is what
-a predicate can be evaluated against; a synonym (`speed_mbps` vs
+**The registry owns the spelling, and `sil_domain_find` is how you read it.** A `key`
+sil holds is what a predicate can be evaluated against; a synonym (`speed_mbps` vs
 `transfer_speed_mbps`) is simply outside the resolved vocabulary and comes back
 `applied: false` — a named gap, never a filter. So:
 
+- **Read in the buyer's own words, not a path guess.** `sil_domain_find`'s `q` is
+  matched against each standing category's path text *and* its buying guide, so prose
+  reaches a settled path that a path-shaped guess walks straight past. Budget: **at
+  most 2 discovery reads** — the buyer's ask verbatim, then the plain category name
+  only if the first returned nothing — **plus 1 `path` probe**. The probe asks a
+  different question and does **not** count against the two: **≤2 + 1**.
+- **Judge fit on the returned `guide`, never on how a path reads.** Four verdicts:
+  - **adopt** — a guide describing *this* category ⇒ take that path verbatim, copy its
+    `specs` keys into `## Search vocabulary`, coin nothing.
+  - **descend** — a guide describing a *broader* category ⇒ the only mint permitted is
+    a **descendant** of that path, never a sibling and never a re-rooted one.
+  - **mint licensed** — no returned match states `exists: true` **and** `capped` is
+    `false` ⇒ research, probe, coin.
+  - **narrow** — `capped: true` ⇒ the answer was bounded and the standing path may sit
+    just past it. Sharpen the ask, read once more; the mint is **not** licensed.
 - **One concept, one spelling — take the key sil already holds.** A domain in the
   registry resolves its own vocabulary; write those keys down here verbatim rather
   than coining beside them.
 - **Coining is `sil_domain_create`'s job, once, for a NEW category** — its `specs` are
-  the first keys of a path sil did not have. An existing path is refused and nothing is
-  written; never coin a near-path variant to route around that refusal.
+  the first keys of a path sil did not have. `path`-probe the exact path you are about
+  to coin and write **only the keys it does not already inherit**: on `exists: false`
+  the probe still returns the vocabulary that path would inherit, and the mint answers
+  with the keys you handed it, so a skipped probe re-coins `brand` or `weight` off the
+  root and forks the vocabulary on your first predicate. An existing path is refused
+  and nothing is written; never coin a near-path variant to route around that refusal.
 - **Common attribute → conventional name.** When you are coining a new category's first
   keys, a widely-shared attribute (screen size, weight, RAM, waterproof rating,
   material…) takes its **conventional** name. Coin fresh only for a genuinely niche one.
+- **A read that did not return is not a read that returned nothing.** Any non-`ok`
+  status — `invalid_request`, a transient, `not_registered` — leaves the mint out of
+  reach: settle the read, never coin around it. And when `sil_search` refuses, its two
+  refusals read alike, so `path`-probe the domain you submitted and let the stated
+  `exists` decide — `true` means fix the predicate and re-issue, `false` means the
+  domain was the problem. A permanent global write is never entered off refusal prose.
+- **A provisional match (`validated_at: null`) is adopted like any other.** It keeps its
+  place in the answer, and re-minting it earns a refusal. Its first answers come from
+  the web while sil catches up — say that to the buyer; every result and seller it
+  named stays on the table.
 
 Naming is never a gate — an unresolved key costs precision, never blocks a search — and
-it is **silent to the buyer**: never surface key plumbing.
+it is **silent to the buyer**: never surface key plumbing. Only the **keys** are
+adopted: the registry's `guide` is the evidence you judge fit on, while
+`## How it's bought` stays your own research.
 
 ## REFRESH — signal-driven (HIT, stale)
 

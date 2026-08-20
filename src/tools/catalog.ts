@@ -1,26 +1,31 @@
 /**
- * The four v0 catalog tools, 1:1 with the four sil-api routes: `sil_search`
- * (`/catalog/search`), `sil_product_get` (`/catalog/lookup`), `sil_stores`
- * (`/catalog/stores`) and `sil_domain_create` (`/catalog/domains`).
+ * The five v0 catalog tools, 1:1 with the five sil-api routes: `sil_search`
+ * (`POST /catalog/search`), `sil_product_get` (`POST /catalog/lookup`),
+ * `sil_stores` (`POST /catalog/stores`), `sil_domain_find` (`GET
+ * /catalog/domains`) and `sil_domain_create` (`POST /catalog/domains`).
  *
- * FOUR INTENTIONS, FOUR TOOLS, NEVER FLAGS ON ONE ANOTHER. No `mode`, no
+ * FIVE INTENTIONS, FIVE TOOLS, NEVER FLAGS ON ONE ANOTHER. No `mode`, no
  * `action`, no `include_stores`, no `refresh`, no `create_domain_if_missing`. A
  * model picks a tool by name at the moment of use; a flag hides the intention
- * inside a parameter it will not read — and one of these four performs a GLOBAL
- * registry write that nothing in the product can undo.
+ * inside a parameter it will not read — and one of these five performs a GLOBAL
+ * registry write that nothing in the product can undo. The read and that write
+ * share a PATH and are told apart by the VERB alone, which is precisely why they
+ * are two tools and not one: a `mode` on the mint would leave the undoable write
+ * one mistyped enum value away from a discovery call.
  *
  * THE TOOLS COMPUTE NO VERDICT. The agent's three-state veto (verified satisfies
  * · verified violates · not verified) is computed from `values[].state`,
- * `predicates[].applied` and `results[].maturity`. This layer's whole job is that
- * those three cross the boundary intact: the payload is gated structurally at its
- * top level and handed over VERBATIM. There is no projection here, deliberately —
- * a per-field projector drops exactly the fields the veto reads, and it would do
- * so while looking perfectly healthy.
+ * `predicates[].applied` and `results[].maturity`; the registry read's four-way
+ * verdict (adopt · descend · mint · narrow) is computed from `exists`, `guide`
+ * and `capped`. This layer's whole job is that they cross the boundary intact:
+ * the payload is gated structurally at its top level and handed over VERBATIM.
+ * There is no projection here, deliberately — a per-field projector drops exactly
+ * the fields a verdict reads, and it would do so while looking perfectly healthy.
  *
- * ONE GROUP, ONE FILE. All four share one origin, one Bearer, one 401
+ * ONE GROUP, ONE FILE. All five share one origin, one Bearer, one 401
  * choreography and one error envelope, and a new `registerXTools` group has to be
  * hand-wired into three guards or it silently NARROWS them (CLAUDE.md). The
- * envelope helpers at the bottom are tool-parameterised and shared by all four.
+ * envelope helpers at the bottom are tool-parameterised and shared by all five.
  *
  * `execute()` is the same shape in every tool:
  *   1. no stored tokens → terminal `not_registered`, ZERO network calls;
@@ -45,12 +50,15 @@ import { clearTokens, readConfig, readTokens } from "../lib/credentials.js";
 import { wiringAdvisories } from "../lib/host-wiring.js";
 import { putSearchResult } from "../lib/search-results-store.js";
 import {
+  findDomains,
   lookupCatalog,
   mintDomain,
   readStores,
   refreshAndRetryOnce,
   searchCatalog,
   type CatalogResultOutcome,
+  type DomainFindOutcome,
+  type DomainFindParams,
   type DomainMintParams,
   type MintOutcome,
   type SearchParams,
@@ -73,6 +81,9 @@ export function registerCatalogTools(api: PluginAPI): void {
   registerSearch(api);
   registerProductGet(api);
   registerStores(api);
+  // The read is registered before the write it licenses — the same order the
+  // agent is told to call them in.
+  registerDomainFind(api);
   registerDomainCreate(api);
 }
 
@@ -92,9 +103,11 @@ function registerSearch(api: PluginAPI): void {
       + " requirement reported `applied: false`, or a result whose value is"
       + " `unset`, is NOT VERIFIED — neither a match nor a miss: keep the result"
       + " and name the missing value. Discipline: at most 4 calls per item; widen"
-      + " soft requirements only; a hard requirement is never relaxed. If the"
-      + " domain is not in sil's registry the call is refused — research how the"
-      + " category is bought, then sil_domain_create at that same path.",
+      + " soft requirements only; a hard requirement is never relaxed. A refusal"
+      + " naming the domain and a refusal naming a predicate read alike on the"
+      + " wire, so settle which one it was with sil_domain_find — a `path` probe"
+      + " states whether the domain stands — and reach for sil_domain_create only"
+      + " once that read has named nothing to adopt.",
     parameters: Type.Object({
       domain: Type.String({
         pattern: DOMAIN_PATH_PATTERN,
@@ -102,8 +115,9 @@ function registerSearch(api: PluginAPI): void {
         description:
           "The registry path to search, dot-separated and lowercase (e.g."
           + " product.sports.winter.ski.boots). Exactly one domain per call. A path"
-          + " sil does not hold is refused — mint it with sil_domain_create rather"
-          + " than retrying or guessing a shallower path.",
+          + " sil does not hold is refused — read the registry with sil_domain_find"
+          + " for the path that already stands, and coin one with sil_domain_create"
+          + " only if none does. Never retry, and never guess a shallower path.",
       }),
       query: Type.String({
         minLength: 1,
@@ -353,15 +367,101 @@ function registerStores(api: PluginAPI): void {
   });
 }
 
+function registerDomainFind(api: PluginAPI): void {
+  api.registerTool({
+    name: "sil_domain_find",
+    label: "Read sil's registry before coining a category",
+    description:
+      "Read sil's shared registry before coining anything into it: send `q` (the"
+      + " buyer's own words) or `path` (one exact registry path) — exactly one of"
+      + " the two per call, never both. `q` is discovery: your words are matched"
+      + " against each standing"
+      + " category's path text AND its buying guide, so prose reaches a settled"
+      + " path that a path-shaped guess cannot. `path` probes that one path:"
+      + " `exists` is stated on every match, and where it is false the `specs`"
+      + " returned are the vocabulary that path WOULD inherit if coined. Then act"
+      + " on what came back. A match whose `guide` describes this category is"
+      + " ADOPTED: take its path verbatim and its spec keys as your search"
+      + " vocabulary, and coin nothing. A guide describing a BROADER category"
+      + " permits only a descendant of that path, never a sibling. `matches: []`"
+      + " with `capped: false` is a real answer and the one signal that licenses"
+      + " sil_domain_create. `capped: true` means the list was bounded and more may"
+      + " stand past it — narrow the ask and read again rather than coining. A"
+      + " provisional match (`validated_at: null`) is a real category, adopted like"
+      + " any other. Discipline: at most 2 discovery reads per category, plus one"
+      + " `path` probe of the exact path you are about to coin.",
+    parameters: Type.Object({
+      q: Type.Optional(
+        Type.String({
+          minLength: 1,
+          maxLength: 200,
+          description:
+            "The buyer's ask, in their own words — the discovery door. It is"
+            + " matched against each standing category's path text AND its buying"
+            + " guide, which is why prose reaches a settled path a path-shaped"
+            + " guess cannot. Send this or `path`, never both: the route refuses a"
+            + " call carrying both or neither and says which one you sent.",
+        }),
+      ),
+      path: Type.Optional(
+        Type.String({
+          pattern: DOMAIN_PATH_PATTERN,
+          maxLength: 255,
+          description:
+            "One exact registry path, dot-separated and lowercase (e.g."
+            + " product.sports.winter.ski.boots) — the probe door. It answers about"
+            + " that path alone: `exists` says whether it already stands, and when"
+            + " it does not, `specs` is the vocabulary it would inherit, so you coin"
+            + " only the keys it lacks. A probe SHAPES a mint; only a `q` read"
+            + " licenses one. Send this or `q`, never both.",
+        }),
+      ),
+    }),
+    async execute(_callId, params) {
+      const stored = readTokens();
+      if (stored === null) return notRegistered("sil_domain_find");
+
+      const query = readFindParams(params);
+      const first = await findDomains(getApiUrl(), stored.access_token, query);
+      const recovered = await refreshAndRetryOnce(
+        first,
+        (o): boolean => o.kind === "unauthorized",
+        (accessToken) => findDomains(getApiUrl(), accessToken, query),
+      );
+      switch (recovered.kind) {
+        case "result":
+          if (recovered.refreshed) api.logger.info("sil_domain_find_refreshed", {});
+          return mapFindOutcome(api, recovered.outcome);
+        case "must_reregister":
+          if (recovered.reason === "invalid_grant") clearTokens();
+          api.logger.info("sil_domain_find_must_reregister", { cause: recovered.reason });
+          return mustReregister("sil_domain_find");
+        case "second_unauthorized":
+          clearTokens();
+          api.logger.info("sil_domain_find_must_reregister", { cause: "retry_unauthorized" });
+          return mustReregister("sil_domain_find");
+        case "retryable":
+          api.logger.info("sil_domain_find_refresh_retryable", {});
+          return transient("sil_domain_find");
+      }
+    },
+  });
+}
+
 function registerDomainCreate(api: PluginAPI): void {
   api.registerTool({
     name: "sil_domain_create",
     label: "Add a new category to sil's shared registry",
     description:
       "Add a NEW category to sil's shared registry: its path, a buying guide"
-      + " written from research, and its first spec keys. Call it only after"
-      + " reading up on the web on how that category is actually bought (never on"
-      + " products), and only when sil's search refused the domain as unregistered."
+      + " written from research, and its first spec keys. Two things must both hold"
+      + " before you call it: sil_domain_find returned no adoptable match for this"
+      + " category and stated the answer was complete (`capped: false`), and you"
+      + " have read up on the web on how the category is actually bought (never on"
+      + " products). Probe the exact path with sil_domain_find as well, and coin"
+      + " only the keys that path does not already inherit — the response here"
+      + " echoes the keys you sent, so a skipped probe forks the vocabulary on your"
+      + " very first predicate."
       + " NEW nodes only — an existing path is refused and nothing is written; that"
       + " refusal means the category is already there, so re-issue the search on"
       + " the same path. Never mint a near-path variant to route around a refusal,"
@@ -524,6 +624,34 @@ function mapStoresOutcome(api: PluginAPI, ref: string, outcome: StoresOutcome) {
   }
 }
 
+/** Map a registry-read outcome to the agent-facing envelope. The `ok` arm logs
+ * the two numbers an operator needs to tell a licensed mint from an unlicensed
+ * one — how many domains the read named, and whether the list was bounded. The
+ * ask itself is never logged: it is the buyer's own words. */
+function mapFindOutcome(api: PluginAPI, outcome: DomainFindOutcome) {
+  switch (outcome.kind) {
+    case "ok":
+      api.logger.info("sil_domain_find_read", {
+        match_count: outcome.found.matches.length,
+        capped: outcome.found.capped,
+      });
+      return jsonResult({ status: "ok", ...outcome.found, ...wiringAdvisories(api) });
+    case "forbidden":
+      return forbiddenResult(api, "sil_domain_find", outcome.reason);
+    case "invalid_request":
+      api.logger.info("sil_domain_find_invalid_request", { error: outcome.error });
+      return invalidRequest(outcome.error, outcome.message);
+    case "retryable":
+      api.logger.info(
+        "sil_domain_find_retryable",
+        outcome.source ? { source: outcome.source } : {},
+      );
+      return transient("sil_domain_find", outcome.source, outcome.detail);
+    case "unauthorized":
+      return mustReregister("sil_domain_find");
+  }
+}
+
 function mapMintOutcome(api: PluginAPI, outcome: MintOutcome) {
   switch (outcome.kind) {
     case "ok":
@@ -581,6 +709,19 @@ function readStoresParams(params: Record<string, unknown>): StoresParams {
   return {
     ref: asString(params["ref"]),
     ...(typeof destination === "string" ? { destination } : {}),
+  };
+}
+
+/** Exactly what the agent sent, and only that. Both keys absent, one present or
+ * BOTH present all travel as read: the route owns the exactly-one-of rule and
+ * names the parameter at fault, and a local refusal would have to invent a second
+ * message that then drifts from the one the agent actually acts on. */
+function readFindParams(params: Record<string, unknown>): DomainFindParams {
+  const q = params["q"];
+  const path = params["path"];
+  return {
+    ...(typeof q === "string" ? { q } : {}),
+    ...(typeof path === "string" ? { path } : {}),
   };
 }
 
