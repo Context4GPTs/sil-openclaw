@@ -186,6 +186,22 @@ describe("the description carries what only it can carry", () => {
     expect(d).toMatch(/registr(y|ies)|registered|unregistered/i);
   });
 
+  it("routes the refusal at the READ first, and reaches the mint only through it", () => {
+    // The route out of a cold category now has TWO steps, and the order is the
+    // whole safety property: the refusal is ambiguous (an unregistered domain and
+    // a rejected predicate are the same code on the wire), so the read is what
+    // settles which one it was. Naming only the mint — which the assertion above
+    // is satisfied by on its own — would send an ambiguous refusal straight at a
+    // permanent, un-undoable global write.
+    //
+    // ORDER, not mere presence: this is the assertion the mint-name check cannot
+    // make, and without it a future edit could delete `sil_domain_find` from this
+    // description under a fully green suite.
+    const d = description();
+    expect(d).toContain("sil_domain_find");
+    expect(d.indexOf("sil_domain_find")).toBeLessThan(d.indexOf("sil_domain_create"));
+  });
+
   it("the `domain` PARAMETER's own description names the remedy too", () => {
     // A parameter description is read in isolation, at the moment the agent is
     // choosing what to put in that field — which is exactly where a refused path
@@ -193,6 +209,13 @@ describe("the description carries what only it can carry", () => {
     // registry tool" leaves the tool description technically compliant while
     // deleting the pointer at the point of use.
     expect(props()["domain"]["description"]).toContain("sil_domain_create");
+    // …and the read that must precede it, in that order — a parameter description
+    // that names only the write teaches the write at the point of use.
+    const domainDescription = props()["domain"]["description"] as string;
+    expect(domainDescription).toContain("sil_domain_find");
+    expect(domainDescription.indexOf("sil_domain_find")).toBeLessThan(
+      domainDescription.indexOf("sil_domain_create"),
+    );
   });
 
   it("the `domain` description forbids guessing a shallower path around the refusal", () => {
