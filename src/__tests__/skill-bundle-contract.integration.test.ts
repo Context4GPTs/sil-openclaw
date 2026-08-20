@@ -276,6 +276,36 @@ const routingRows = (): string[] =>
     .body.split("\n")
     .filter((line) => line.trimStart().startsWith("|"));
 
+/** The corpus cut into STATEMENTS — one bullet, one table row, one sentence. The
+ * bundle is hard-wrapped, so a line is not a statement; a bullet or a row is.
+ * Scoping matters more than the regexes it feeds: a corpus-wide `probe` + `not
+ * licensed` pair passes on the very wording this block rejects, because both
+ * strings already sit three lines apart in `method_and_prds.md` and the second is
+ * about the CAPPED branch. */
+const statements = (): string[] =>
+  bundleFiles().flatMap((rel) =>
+    // Per FILE, never over the joined corpus: a unit that straddles a file boundary
+    // could pair one file's `probe` with the next file's denial.
+    read(rel)
+      .split(/\n\s*(?:[-*+]\s|\|)|(?<=[.!?])\s+/)
+      .map((s) => s.replace(/\s+/g, " ").trim())
+      .filter(Boolean),
+  );
+
+/** Withholds the licence: "never licenses", "does not license", or the exclusivity
+ * form the tool itself uses ("only a `q` read licenses one"). Direction is
+ * load-bearing — the denial must PRECEDE the licence word, or "**mint licensed** —
+ * no returned match states…" satisfies it and the bar is born vacuous. */
+const DENIES_LICENCE = /\b(?:never|not|cannot|can'?t|no|only)\b[\s\S]*?licen/i;
+/** An EMPTY match list — the one thing a probe cannot produce. */
+const EMPTY_MATCH_LIST =
+  /matches:?\s*\[\s*\]|\bmatches\b[^.]{0,40}\bempty\b|\bempty\b[^.]{0,40}\bmatches\b/i;
+
+/** `[]` when some candidate satisfies the rule, else the candidates themselves — so
+ * a red PRINTS the statements the writer has to fix, not "0 is not greater than 0". */
+const unsatisfied = (candidates: string[], rule: (s: string) => boolean): string[] =>
+  candidates.some(rule) ? [] : candidates;
+
 describe("read before mint — the bundle's half of the card", () => {
   it("S2 — NO file reaches the global write without also naming the read", () => {
     // The card's spine, asserted structurally rather than by wording: a file that
@@ -356,6 +386,29 @@ describe("read before mint — the bundle's half of the card", () => {
     const corpus = bundleCorpus();
     expect(corpus).toMatch(/capped:?\s*`?true/i);
     expect(corpus).toMatch(/narrow|sharpen|read (once more|again)/i);
+  });
+
+  it("S4/BR-1b — the licence is an EMPTY `q` read, and a `path` probe never grants it", () => {
+    // The clause the plugin cannot enforce, and the one the bundle stated more
+    // weakly than the tool did. A probe MISS is not an empty answer: it returns a
+    // match carrying `exists: false` (`helpers/v0-wire.ts#domainFindProbeMiss`), so
+    // an `exists`-only licence test is SATISFIED by the single read that must never
+    // license a mint — and the agent coins a sibling of a path already standing
+    // under a different parent. That write is permanent, global and un-undoable, and
+    // `exists: false` at a guessed path is silent about it. Two halves, because
+    // either alone leaves the door: what the probe does NOT buy, and what the
+    // licence actually costs.
+    const units = statements();
+
+    const probeUnits = units.filter((s) => /probe/i.test(s));
+    expect(probeUnits.length).toBeGreaterThan(0); // guard-of-the-guard: an empty scan passes
+    expect(unsatisfied(probeUnits, (s) => DENIES_LICENCE.test(s))).toEqual([]);
+
+    const licenceUnits = units.filter((s) => /licen/i.test(s));
+    expect(licenceUnits.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(licenceUnits, (s) => EMPTY_MATCH_LIST.test(s) && /capped/i.test(s)),
+    ).toEqual([]);
   });
 
   it("S5 — the adoption discipline names its mechanism and says the keys travel VERBATIM", () => {
