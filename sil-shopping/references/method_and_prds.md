@@ -69,8 +69,11 @@ sil holds is what a predicate can be evaluated against; a synonym (`speed_mbps` 
     `specs` keys into `## Search vocabulary`, coin nothing.
   - **descend** — a guide describing a *broader* category ⇒ the only mint permitted is
     a **descendant** of that path, never a sibling and never a re-rooted one.
-  - **mint licensed** — no returned match states `exists: true` **and** `capped` is
-    `false` ⇒ research, probe, coin.
+  - **mint licensed** — a **`q` discovery read** came back `matches: []` beside
+    `capped: false` ⇒ research, probe, coin. Only that read licenses a mint: a `path`
+    probe never licenses one — it answers about the path you already guessed, and its
+    `exists: false` is silent about the standing path under a different parent, the
+    fork this route exists to prevent.
   - **narrow** — `capped: true` ⇒ the answer was bounded and the standing path may sit
     just past it. Sharpen the ask, read once more; the mint is **not** licensed.
 - **One concept, one spelling — take the key sil already holds.** A domain in the
@@ -91,7 +94,10 @@ sil holds is what a predicate can be evaluated against; a synonym (`speed_mbps` 
   reach: settle the read, never coin around it. And when `sil_search` refuses, its two
   refusals read alike, so `path`-probe the domain you submitted and let the stated
   `exists` decide — `true` means fix the predicate and re-issue, `false` means the
-  domain was the problem. A permanent global write is never entered off refusal prose.
+  domain was the problem. `false` ends the probe's job, not the discipline: read again
+  in the buyer's own words (`q`), and coin only if that discovery read returns
+  `matches: []` with `capped: false`. A permanent global write is never entered off
+  refusal prose, and never off a probe.
 - **A provisional match (`validated_at: null`) is adopted like any other.** It keeps its
   place in the answer, and re-minting it earns a refusal. Its first answers come from
   the web while sil catches up — say that to the buyer; every result and seller it

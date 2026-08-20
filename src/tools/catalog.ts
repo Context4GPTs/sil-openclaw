@@ -106,8 +106,9 @@ function registerSearch(api: PluginAPI): void {
       + " soft requirements only; a hard requirement is never relaxed. A refusal"
       + " naming the domain and a refusal naming a predicate read alike on the"
       + " wire, so settle which one it was with sil_domain_find — a `path` probe"
-      + " states whether the domain stands — and reach for sil_domain_create only"
-      + " once that read has named nothing to adopt.",
+      + " states whether the domain stands. If it does not, read again with `q`,"
+      + " and reach for sil_domain_create only once that discovery read comes back"
+      + " `matches: []` with `capped: false`. A probe never licenses a mint.",
     parameters: Type.Object({
       domain: Type.String({
         pattern: DOMAIN_PATH_PATTERN,
@@ -455,13 +456,14 @@ function registerDomainCreate(api: PluginAPI): void {
     description:
       "Add a NEW category to sil's shared registry: its path, a buying guide"
       + " written from research, and its first spec keys. Two things must both hold"
-      + " before you call it: sil_domain_find returned no adoptable match for this"
-      + " category and stated the answer was complete (`capped: false`), and you"
-      + " have read up on the web on how the category is actually bought (never on"
-      + " products). Probe the exact path with sil_domain_find as well, and coin"
-      + " only the keys that path does not already inherit — the response here"
-      + " echoes the keys you sent, so a skipped probe forks the vocabulary on your"
-      + " very first predicate."
+      + " before you call it: a sil_domain_find DISCOVERY read — `q`, the buyer's own"
+      + " words — came back `matches: []` with `capped: false`, and you have read up"
+      + " on the web on how the category is actually bought (never on products). Then"
+      + " `path`-probe the exact path with sil_domain_find and coin only the keys that"
+      + " path does not already inherit — the response here echoes the keys you sent,"
+      + " so a skipped probe forks the vocabulary on your very first predicate. That"
+      + " probe SHAPES the mint and never licenses it: it answers only about the path"
+      + " you already guessed."
       + " NEW nodes only — an existing path is refused and nothing is written; that"
       + " refusal means the category is already there, so re-issue the search on"
       + " the same path. Never mint a near-path variant to route around a refusal,"

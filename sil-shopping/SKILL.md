@@ -87,7 +87,7 @@ while setup is incomplete; it sheds once a shopper exists.
 | re-read the shortlist before deciding (≤5 refs from a prior result) | `sil_product_get` | — |
 | "where can I buy this?" / does the pick ship to me | `sil_stores` | — |
 | a buy intent whose category has no settled registry path — or `sil_search` refused the domain, or refused a predicate and you cannot tell which | `sil_domain_find` | [`method_and_prds.md`](references/method_and_prds.md) |
-| `sil_domain_find` returned no adoptable match and `capped: false`, after research | `sil_domain_create` | [`method_and_prds.md`](references/method_and_prds.md) |
+| a `sil_domain_find` **discovery** read (`q`) came back `matches: []` with `capped: false`, after research — a `path` probe never licenses a mint | `sil_domain_create` | [`method_and_prds.md`](references/method_and_prds.md) |
 | "set up an agent that shops for me" / "create my shopper" | (onboarding, then the engine) | [`agent_creation_engine.md`](references/agent_creation_engine.md) |
 | "what does my shopper know?" / "which domains / PRDs?" | `sil_profile_search` | [`method_and_prds.md`](references/method_and_prds.md) |
 | "show me the &lt;niche&gt; domain" (method or one PRD) | `sil_profile_get` | [`method_and_prds.md`](references/method_and_prds.md) |
