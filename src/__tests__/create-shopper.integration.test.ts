@@ -573,11 +573,15 @@ describe("created — one valid run wires every surface and returns the identity
     expect(soulText).toContain(PERSONA_SECRET);
     // The sil creed is baked into SOUL.md at IDENTITY level (a philosophy, not a rulebook —
     // the mechanics live in the attached skill). Tolerant markers, not whole sentences:
-    // its heading, the `explore first` mantra, memory via sil_learn, and the one
-    // distinction that matters — the catalog is where you buy, the web is where you learn.
+    // its heading, the `explore first` mantra, memory via the shopper's own documents,
+    // and the one distinction that matters — the catalog is where you buy, the web is
+    // where you learn. The memory marker moved `sil_learn` → `sil_doc_read`: a creed
+    // that names a deleted tool teaches the shopper an unreachable move at identity
+    // level, which is the loudest possible place to be wrong.
     expect(soulText).toContain("## The sil way");
     expect(soulText).toMatch(/explore first/i);
-    expect(soulText).toContain("sil_learn");
+    expect(soulText).toContain("sil_doc_read");
+    expect(soulText).not.toContain("sil_learn");
     expect(soulText).toMatch(/catalog is where you buy/i);
     // The persona + creed live in exactly one place — never a sil persona.md.
     expect(existsSync(join(shopperDir(), "persona.md"))).toBe(false);
@@ -1591,6 +1595,36 @@ describe("AC A1/A5 — the documented entrypoint runs with the sil bins OFF PATH
     expect(emitted).not.toContain("command not found");
     expect(emitted).not.toContain("MODULE_NOT_FOUND");
     expect(emitted).not.toContain("Cannot find module");
+  });
+
+  it("G9 — on that same channel the shopper lands in the FLAT store, and no marker names a domain pack or PRD", () => {
+    // G9's third clause ("still loads under `node` with the sil bins off PATH") is
+    // the block above; this is its first two, asserted on the SAME channel so the
+    // criterion is closed in one place rather than split across two harnesses.
+    //
+    // The bin now writes through `writeDocument({ ref: "shopper", mode: "create" })`.
+    // Two things could regress silently: a shopper written into the layout the
+    // migration exists to leave behind, and a marker that still calls the write
+    // `sil_profile_materialize` — an operator grepping for that name finds a tool
+    // that no longer exists, on the channel where diagnosis is hardest.
+    writeConfig(freshConfig());
+    const spec = validSpec();
+    const r = runBin({ spec, viaSpecFile: true, env: clawhubChannelEnv() });
+    expect(r.status).toBe(0);
+
+    expect(existsSync(userSpecPath())).toBe(true);
+    expect(existsSync(join(shopperDir(), "domains"))).toBe(false);
+    expect(existsSync(join(shopperDir(), "profile.json"))).toBe(false);
+
+    const emitted = (r.stdout + r.stderr).toLowerCase();
+    expect(
+      ["method.md", "prds", "domain pack", "sil_learn", "sil_profile"].filter((t) =>
+        emitted.includes(t),
+      ),
+    ).toEqual([]);
+    // Guard-of-the-guard: the run really did emit its marker, so the scan above ran
+    // over something. An empty stdout passes every `includes` check ever written.
+    expect(parseMarker(r.stdout)["status"]).toBe("created");
   });
 
   it("AC A5 — the entrypoint the PLUGIN resolves is the one that runs (loadable by node)", () => {

@@ -46,7 +46,7 @@ const EXTRA_EMIT = "tools/catalog.js";
 let distDir: string;
 /** Every argv the injected compiler was handed, in call order. */
 let compileCalls: string[][];
-/** `dist/lib/profile-store.js` as the compiler saw it, per call. */
+/** `dist/lib/doc-store.js` as the compiler saw it, per call. */
 let distDuringCompile: (string | null)[];
 /** Inode of each file the compiler emitted, keyed by path relative to the outDir. */
 let emittedInodes: Map<string, number>;
@@ -59,7 +59,7 @@ function fakeCompile(argv: string[]): void {
   compileCalls.push(argv);
   const outDir = argv[argv.indexOf("--outDir") + 1]!;
   outDirs.push(outDir);
-  const seen = join(distDir, "lib", "profile-store.js");
+  const seen = join(distDir, "lib", "doc-store.js");
   distDuringCompile.push(existsSync(seen) ? readFileSync(seen, "utf8") : null);
 
   for (const rel of [...distEntriesTheBinsImport(), EXTRA_EMIT]) {
@@ -91,7 +91,7 @@ afterEach(() => {
  * observable rather than vacuous against an empty directory. */
 function seedPreviousBuild(): void {
   mkdirSync(join(distDir, "lib"), { recursive: true });
-  writeFileSync(join(distDir, "lib", "profile-store.js"), "// STALE\n");
+  writeFileSync(join(distDir, "lib", "doc-store.js"), "// STALE\n");
 }
 
 describe("buildDist — compiles to a temp outDir and installs by rename only", () => {
@@ -144,7 +144,7 @@ describe("buildDist — compiles to a temp outDir and installs by rename only", 
 
     expect(() => buildDist({ compile: partialCompile, distDir })).toThrow(missing);
 
-    expect(readFileSync(join(distDir, "lib", "profile-store.js"), "utf8")).toBe("// STALE\n");
+    expect(readFileSync(join(distDir, "lib", "doc-store.js"), "utf8")).toBe("// STALE\n");
     expect(existsSync(join(distDir, EXTRA_EMIT))).toBe(false);
     expect(existsSync(outDirs[0]!)).toBe(false);
   });
@@ -164,17 +164,17 @@ describe("distEntriesTheBinsImport — derived from the bins, never a hand-list"
     expect(entries).toEqual([...fromSource].sort());
     // Anti-vacuity: an empty or single-entry derivation would satisfy the equality
     // above while checking nothing, and these two are the imports that actually broke.
-    expect(entries).toContain("lib/profile-store.js");
+    expect(entries).toContain("lib/doc-store.js");
     expect(entries).toContain("lib/openclaw-allowlist.js");
   });
 });
 
 describe("the default install target is the directory the bins actually import", () => {
-  it("DIST_DIR is where `../dist/lib/profile-store.js` resolves from scripts/", () => {
+  it("DIST_DIR is where `../dist/lib/doc-store.js` resolves from scripts/", () => {
     // Anti-vacuity for the seam: every assertion above runs against an INJECTED
     // distDir, so a default pointing somewhere else would go unnoticed. Derived from
     // the bin's own import specifier, never restated from the helper.
-    const asTheBinResolvesIt = resolve(REPO_ROOT, "scripts", "../dist/lib/profile-store.js");
-    expect(join(DIST_DIR, "lib", "profile-store.js")).toBe(asTheBinResolvesIt);
+    const asTheBinResolvesIt = resolve(REPO_ROOT, "scripts", "../dist/lib/doc-store.js");
+    expect(join(DIST_DIR, "lib", "doc-store.js")).toBe(asTheBinResolvesIt);
   });
 });
