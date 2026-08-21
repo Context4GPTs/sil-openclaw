@@ -21,10 +21,10 @@
  *   AC8 — config-path precedence (OPENCLAW_CONFIG_PATH wins) + missing-config
  *         fail-closed (no write, no parent dir created, structured error, exit 1).
  *
- * The script imports the COMPILED lib (`dist/lib/openclaw-allowlist.js`), so the
- * suite builds the lib once in beforeAll FROM THE CURRENT SOURCE — never relying
- * on a possibly-stale dist (a stale dist would silently test old logic). The
- * build is the same `tsc -p tsconfig.build.json` the script's `dist` import needs.
+ * The script imports the COMPILED lib (`dist/lib/openclaw-allowlist.js`), built FROM
+ * THE CURRENT SOURCE by `globalSetup` (`helpers/build-dist.ts`) — once per run and
+ * installed by rename, so a stale dist cannot silently test old logic and a
+ * half-emitted one cannot kill a spawned script at ESM load.
  *
  * The two invariants this suite defends (product-owner): AC6 (idempotent) and the
  * additive half of AC1 (klodi survives). Every other case guards those two.
@@ -38,7 +38,6 @@ import {
   describe,
   it,
   expect,
-  beforeAll,
   beforeEach,
   afterEach,
 } from "vitest";
@@ -140,21 +139,6 @@ function freshConfig(): unknown {
 
 let workdir: string;
 let configPath: string;
-
-beforeAll(() => {
-  // The script imports dist/lib/openclaw-allowlist.js — build the lib from the
-  // CURRENT source so the integration tier exercises what the dev actually
-  // wrote, never a stale dist. Fails loud if the build breaks. We invoke the
-  // TypeScript compiler's real JS entry (node_modules/.bin/tsc is a shell
-  // wrapper that `node` cannot run directly).
-  execFileSync("node", ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"], {
-    cwd: REPO_ROOT,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  if (!existsSync(join(REPO_ROOT, "dist", "lib", "openclaw-allowlist.js"))) {
-    throw new Error("build did not emit dist/lib/openclaw-allowlist.js — script import would 404");
-  }
-}, 60_000);
 
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "sil-allowlist-it-"));

@@ -121,21 +121,24 @@ const SOUL_SIL_RULES =
 const CREATED_EVENT = "sil_shopper_created";
 const FAILED_EVENT = "sil_shopper_create_failed";
 
-/** Emit one structured NDJSON line in sil's marker style: `{event, level, ...}`. */
-function logMarker(stream, level, event, fields) {
-  stream.write(JSON.stringify({ event, level, ...fields }) + "\n");
+/** Emit one structured NDJSON line in sil's marker style: `{event, level, ...}`,
+ * straight to the fd: `process.stdout.write` is async on a pipe, so the line that
+ * overflows the buffer is exactly the one the following `process.exit()` discards
+ * — and `created` echoes an unbounded `name`. */
+function logMarker(fd, level, event, fields) {
+  writeFileSync(fd, JSON.stringify({ event, level, ...fields }) + "\n");
 }
 
 /** Terminal success emit — one `created` object on stdout, exit 0. */
 function emitCreated(fields) {
-  logMarker(process.stdout, "info", CREATED_EVENT, { status: "created", ...fields });
+  logMarker(1, "info", CREATED_EVENT, { status: "created", ...fields });
   process.exit(0);
 }
 
 /** Terminal failure emit — one object on stderr carrying the taxonomy `status`,
  * exit 1. Never carries persona/userSpec text. */
 function emitFailure(status, fields) {
-  logMarker(process.stderr, "error", FAILED_EVENT, { status, ...fields });
+  logMarker(2, "error", FAILED_EVENT, { status, ...fields });
   process.exit(1);
 }
 

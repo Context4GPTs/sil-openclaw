@@ -40,6 +40,9 @@ coverage/
 # Build outputs
 dist/
 build/
+# Suite build scratch (.tmp-dist-{build,target,load}-*) — a killed run would leave an
+# untracked tree, and `pnpm release` fails closed on its clean-tree check.
+.tmp-dist-*/
 *.egg-info/
 target/
 out/
