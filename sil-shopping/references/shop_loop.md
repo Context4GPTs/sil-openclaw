@@ -1,131 +1,135 @@
 ---
 name: shop-loop
-description: The six-beat Spec-Driven Shopping loop — the state machine the shopper runs on every niche. Owns Beat 1 (classify), Beat 4 (search-space) and Beat 5 (reflect); routes Beats 2, 3 and 6 to the references that own them. Load when shopping as the shopper.
+description: The eight-beat shopping loop — the state machine the shopper runs on every job. Owns Beat 1 (BRIEF), Beat 5 (SEARCH) and Beat 6 (REFLECT); routes Beats 2, 3, 4, 7 and 8 to the references that own them. Load when shopping as the shopper.
 ---
 
-# The six-beat Spec-Driven Shopping loop
+# The eight-beat shopping loop
 
-As the shopper you run one loop on every request — a **six-beat** state machine.
-Most of it is reasoning over what you already know; you ask the buyer only about
-the genuine residue. The beats, **in order**:
+One job is one **Brief** — one thing or several, one domain or several, no structural
+difference. The loop has **eight beats**, and they do not all run at the same rate:
 
-1. **Classify** — resolve `{domain, product, intent}`, reuse a learned domain/PRD
-   before minting (owned here).
-2. **Method load / mint / refresh** — recover or research the domain's method +
-   its intent-keyed PRDs — [`method_and_prds.md`](method_and_prds.md).
-3. **Fill** — resolve the PRD by precedence, eliciting only the residue —
-   [`fill_and_feedback.md`](fill_and_feedback.md).
-4. **Search-space** — project the filled PRD into a bounded fan-out (owned here).
-5. **Reflect** — judge best-available against the PRD + method (owned here).
-6. **Feedback** — capture what the reaction surfaced —
-   [`fill_and_feedback.md`](fill_and_feedback.md).
+| # | Beat | Cadence | Owned by |
+|---|---|---|---|
+| 1 | **BRIEF** — scope the job in the buyer's words | **once per job** | here |
+| 2 | **DOMAIN** — resolve the item's category, adopt its guide | **per item** | [`domain_and_brief.md`](domain_and_brief.md) |
+| 3 | **FILL** — resolve the predicates from what you already hold | **per item** | [`fill_and_feedback.md`](fill_and_feedback.md) |
+| 4 | **ASK** — the one gate for what is still open and load-bearing | **per item** | [`fill_and_feedback.md`](fill_and_feedback.md) |
+| 5 | **SEARCH** — the bounded fan-out | **per item** | here |
+| 6 | **REFLECT** — veto on three states, then judge | **per item** | here |
+| 7 | **FEEDBACK** — capture what the reaction surfaced | **per item** | [`fill_and_feedback.md`](fill_and_feedback.md) |
+| 8 | **VERDICT** — did the thing actually work? | **out of band, once per bought item** | [`fill_and_feedback.md`](fill_and_feedback.md) |
 
-This file owns Beats 1, 4 and 5.
+**The cadence is the shape.** BRIEF decides scope once; running it again per item
+silently re-scopes the job. Beats 2–7 run **once per item**, independently — two items
+get two domain resolutions, two fills, two fan-outs. VERDICT is not in this run at all:
+it fires days or weeks later, and Beat 2's recall is what raises it.
 
-## Beat 1 — Classify: `{domain, product, intent}`, reuse before mint
+This file owns Beats 1, 5 and 6.
 
-Resolve the request through **three coordinates, top-down**:
+## Beat 1 — BRIEF: scope the job, in the buyer's words, before any domain
 
-- **domain** — the **broad product category** that owns the reusable buying guide.
-  Pick the **widest** slug whose method generalises across use-contexts: `earbuds`,
-  not `wireless-gym-earbuds`; `ski`, not `ski-touring`.
-- **product** — the product type within the domain (`earbuds`, `boots`).
-- **intent** — the **use-context** that reshapes the requirements (`gym`, `slope`).
+**Recall first.** `sil_doc_find { kind: "brief", query: <the buyer's own words> }` — a
+**text** recall. When an open Brief already covers this job, **reuse it**; do not open a
+second Brief for one job. This is the first of two recalls and it does not replace the
+second: Beat 2 runs an **exact-by-domain** recall over a different question, and neither
+subsumes the other.
 
-**Never fold the use-context into the domain.** "Earbuds for the gym" is
-`domain: earbuds, product: earbuds, intent: gym` — the gym-ness is the **intent**, so
-next week's "earbuds for the office" reuses the same method and only mints a new PRD. A
-`wireless-gym-earbuds` domain forks a near-duplicate buying guide per use and kills that
-reuse. **Intent is always present**: a **context-free** request keys the `general`
-intent (`ski/boots-general`), so every job carries all three coordinates and stays
-uniformly queryable.
+**Then decide scope, and only scope.** The Brief gets an `## Items` table with **one row
+per thing being bought**, and one **prose subsection per row** carrying that thing in the
+buyer's own words. **No domains yet** — classification is Beat 2's job, per item.
 
-**Reuse-before-mint.** Query existing coordinates with **`sil_profile_search`**
-(the frontmatter-as-truth discovery tool — never a filesystem guess) and
-**semantic-match** the request: **prefer existing** when a learned domain/PRD
-covers the job, mint only when nothing does. The one guard against over-merging is
-the requirements-divergence test — two requests share a PRD only if they resolve
-to the same requirements.
+- **An unclassified item is a legal, writable state.** When the category is not settled,
+  write the row with an **empty domain cell** and carry on. It is never an error, never a
+  question that has to be answered first, and never a reason to hold up the job.
+- **The `item` label is the key, not the domain** — it is what the buyer calls the thing.
+- **`## Context` is job-level background** — the trip, the occasion, the total budget.
+  It is reasoned over; it is never sent as a search query.
 
-**Never over-ask just to key.** A silent request keys `general` and moves on —
-keying forces no extra question. When intent is genuinely requirement-defining but
-the request is silent, that surfaces as the first Beat-3 question, not a keying
-interrogation.
+Write it with `sil_doc_write { ref: "brief:<slug>", mode: "create", title, status:
+"active" }`, body = the whole markdown. The document model, section by section, is in
+[`domain_and_brief.md`](domain_and_brief.md).
 
-**Announce a mint.** A new-domain or new-PRD mint is **announced** — state the
-inferred `domain / product / intent` so the buyer can **correct** it, **never
-silent**. A reuse passes through unannounced.
+**Completion is arithmetic, not judgment.** *Am I done?* is the count of `## Items` rows
+still `open`. **A pick ends an item, never the job** — on a two-item job with one picked
+and one open, the job is open, and saying otherwise abandons the second thing the buyer
+asked for.
 
-## Beat 4 — Search-space: a bounded, priority-ordered fan-out (not a re-rank)
+## Beat 5 — SEARCH: a bounded, priority-ordered fan-out, PER ITEM
 
-The PRD's **`## Search specs`** block is the resolved predicate set — Beat 4 **projects
-it, never re-derives it**. Send those entries as `sil_search`'s `predicates`, each
-`{ key, op, value, currency? }` — `key` drawn from the domain's own vocabulary,
-`currency` **required** on a money predicate (sil holds no exchange rate anywhere).
-`hard` is **yours**, not the wire's: it stays in the PRD and drives Beat 5's verdict.
-The only per-call work is choosing the fan-out.
+Beat 5 **projects** what Beats 3–4 resolved; it never re-derives it. For **each item**:
 
-Project the filled PRD onto **`sil_search`** as a **bounded ≤ 4 priority-ordered**
-fan-out — not one search, not unbounded (the bound is a production budget: each call is
-a round-trip + tokens):
+- **`predicates`** — every `## Hard constraints` and `## Preferences` row whose `domain`
+  is **ancestor-or-self** of that item's domain, sent as `{ key, op, value, currency? }`.
+  `product.fibre_wool_pct = 0` reaches every item; a boots-scoped row reaches the boots
+  only. `currency` is **required** on a money predicate (sil holds no exchange rate).
+  Hardness is the row's **section**, not a wire field — it is Beat 6 that enforces it.
+- **`query`** — that item's own subsection prose, which **you author**. The plugin is pure
+  transport and never folds a predicate into `query`.
+- **`destination`** — leave empty; the server resolves the buyer's registered country.
+- **`n`** is a spend knob (the web leg fetches candidates to fill it) — choose it for the
+  actual need rather than always asking for the ceiling.
 
-- **Call 1 is the tightest projection** — the full `## Search specs` set. **Calls 2–4
-  are deliberate widenings**: relax the least load-bearing **soft** predicate, an
-  adjacent phrasing that lifts recall, or an explicit either/or branch. **Never relax a
-  `hard` predicate.** Core first, widenings after — the **priority order**.
-- **Merge = dedup + concatenate in issue order — NOT a re-rank.** Concatenate the
-  per-call backend-ranked lists in issue order and **drop** any product already
-  **seen** earlier. Because issue order *is* priority order, this **never re-ranks** —
-  the engine owns order *within* a call, the fan-out *across* calls.
-- **One request shape, no side doors.** `sil_search` takes `domain` · `query` · `n` ·
-  `predicates` · `destination` and nothing else — there is no param that duplicates a
-  predicate. A purely descriptive residue (a colour, a phrasing) folds into the
-  free-text `query`, which **you author** — the plugin is **pure transport** and never
-  folds a predicate into `query`. Leave **`destination`** empty (the server resolves
-  the buyer's registered country); **never invent** a param or predicate that isn't
-  real. `n` is a **spend** knob — the web leg fetches candidates to fill it — so choose
-  it for the actual need rather than always asking for the ceiling.
-- **Then read `predicates[]`, per requirement.** Each entry says `applied: true` /
-  `"partial"` / `false`. `false` means sil had nothing to evaluate it against — a named
-  gap, **never** a reason to drop a result — and it is what Beat 5's honesty pass reads.
+**The bound is ≤ 4 priority-ordered `sil_search` calls PER ITEM — not per job.** A
+two-item job gets its own fan-out for each item; halving one item's budget because
+another item spent it is not the bound, it is a bug.
 
-## Beat 5 — Reflect: honesty pass first, judgment not threshold, propose-and-wait
+- **Call 1 is the tightest projection.** **Calls 2–4 are deliberate widenings**: relax the
+  least load-bearing **soft** row, an adjacent phrasing that lifts recall, or an explicit
+  either/or branch. **A hard row is never relaxed.**
+- **Merge = dedup + concatenate in issue order — never a re-rank.** Issue order *is*
+  priority order: the engine owns order within a call, the fan-out across calls.
+- **Items are searched concurrently** — they are independent, and the server's own
+  per-host and per-principal ceilings bound the blast radius.
+- **Then read `predicates[]`, per row.** Each says `applied: true` / `"partial"` /
+  `false`. `false` means sil had nothing to evaluate it against — a named gap, and never
+  a reason to drop a result. It is what Beat 6 reads.
 
-Take Beat 4's merged issue-order list and its per-call `predicates[]`. Run
-**honesty pass → judge → branch**, and **never re-rank**: the engine owns order,
-you own the verdict.
+**Beat 5's reads are three, and only three:** `sil_search`, `sil_product_get` (the
+shortlist re-read, live prices) and `sil_stores` (the pick's serviceability, capability,
+fulfillment and returns check). There is no review read in this version and none is
+named; do not invent one, and do not substitute the open web.
 
-**1 — Honesty pass, first.** Sort every survivor against each *hard* requirement into
-exactly one of three buckets, from three inputs sil hands you — `predicates[].applied`,
-that result's `values[key].state`, and its `maturity`:
+## Beat 6 — REFLECT: veto first, on three states, then judge
+
+Take Beat 5's merged issue-order list and its per-call `predicates[]`. Run
+**veto → ask-or-judge → branch**, and **never re-rank**: the engine owns order, you own
+the verdict.
+
+**1 — The veto, first.** Sort every survivor against each *hard* row into exactly one of
+three buckets, from three inputs sil hands you — `predicates[].applied`, that result's
+`values[key].state`, and its `maturity`:
 
 - **VIOLATED** — `applied: true` **and** `state: "set"` **and** the held value fails the
   hard row. Out; it never becomes the pick.
 - **NOT VERIFIED** — `applied` is `false` or `"partial"`, **or** `state: "unset"`. It
   stays in, **flagged**, with the missing key named. Never silently passed and never
-  silently dropped — and when not-verified dominates the set, **ask** before presenting.
+  silently dropped.
 - **VERIFIED** — `applied: true`, `state: "set"`, value passes.
 
 `maturity` never vetoes on its own: a `web` result is a real listing whose values are
-honestly `unset`, so it lands in NOT VERIFIED, never in VIOLATED. If rejection empties
-the set, take the empty path.
+honestly `unset`, so it lands in NOT VERIFIED, never in VIOLATED.
 
-**2 — Judge, then branch.** Weigh the best surviving candidate against the PRD +
-method. Satisfies-or-falls-short is a **judgment**, **not a threshold** and not a
-mechanical any-unmet-requirement rule — read the whole set.
+**Job arithmetic runs here too** — a total budget stated in `## Context` is summed across
+the job's picks at pick time, never turned into a predicate row.
 
-- **Satisfies → a hero + 1–2 justified alternatives.** Lead with **one**
-  recommendation carrying the SDS-bar *why* (a met requirement, a researched method
-  mechanic, a stored preference reused without re-asking), then **one or two**
-  considered **alternatives**, each with a one-line reason. Best-first **as
-  returned** — **never re-rank**, never a bare list.
-- **Shortfall or empty → propose a specific relaxation and wait.** Name the gap,
-  show the closest survivors, **propose** the specific change that would widen it,
-  then **wait** for the buyer's nod. **No silent re-search**, no silent auto-widen;
-  the buyer can redirect instead.
+**2 — Re-enter ASK when the set cannot answer.** When **not-verified dominates** the
+surviving set, or the guide marks the risk **unrecoverable after purchase**, go back to
+**Beat 4 ASK** before presenting anything. That is ASK's second entry point.
 
-A **non-`ok`** status is not an empty match — do not relax params; follow that
-tool's own **`recovery`** exactly.
+**3 — Judge, then branch.** Weigh the best surviving candidate against the Brief and the
+guide. Satisfies-or-falls-short is a **judgment**, not a threshold and not a mechanical
+any-unmet-row rule — read the whole set.
 
-**Then Beat 6.** The buyer's reaction is what Beat 6 captures —
+- **Satisfies → a hero + 1–2 justified alternatives.** Lead with **one** recommendation
+  carrying the *why* (a met row, a guide mechanic, a stored fact reused without
+  re-asking), then one or two considered **alternatives**, each with a one-line reason.
+  Best-first **as returned** — never a re-rank, never a bare list.
+- **Shortfall or empty → propose a specific relaxation and wait.** Name the gap, show the
+  closest survivors, **propose** the specific change that would widen it, then **wait**.
+  No silent re-search, no silent auto-widen; the buyer can redirect instead.
+
+A **non-`ok`** status is not an empty match — do not relax params; follow that tool's own
+**`recovery`** exactly.
+
+**Then Beat 7.** The buyer's reaction is what Beat 7 captures —
 [`fill_and_feedback.md`](fill_and_feedback.md).
