@@ -2,11 +2,12 @@
  * sil OpenClaw plugin — entry point.
  *
  * A UCP commerce plugin for sil. It registers its real tool groups —
- * identity (`sil_register`, `sil_whoami`) and catalog (`sil_search`,
- * `sil_product_get`, `sil_stores`, `sil_domain_create` — 1:1 with the four
- * v0 routes) — so they load in an OpenClaw host. There is no
- * transport, no persistent service, and no background work at register
- * time — `register()` is strictly synchronous and opens nothing.
+ * identity (`sil_register`, `sil_whoami`), catalog (`sil_search`,
+ * `sil_product_get`, `sil_stores`, `sil_domain_create`, `sil_domain_find`)
+ * and the shopper's own documents (`sil_doc_find`, `sil_doc_read`,
+ * `sil_doc_write`, `sil_doc_remove`) — so they load in an OpenClaw host.
+ * There is no transport, no persistent service, and no background work at
+ * register time — `register()` is strictly synchronous and opens nothing.
  *
  * `register()` MUST stay synchronous and side-effect-free beyond
  * registering tools, ensuring the data dir, and logging. The reference
@@ -37,9 +38,9 @@ import { ensureDataDir, getDataDir } from "./lib/credentials.js";
 import { registerSearchResultsMethod } from "./gateway/search-results.js";
 import { detectWiringDrift, readSilWiringFacts } from "./lib/host-wiring.js";
 import { registerCatalogTools } from "./tools/catalog.js";
+import { registerDocTools } from "./tools/doc.js";
 import { registerDoctorTools } from "./tools/doctor.js";
 import { registerIdentityTools } from "./tools/identity.js";
-import { registerProfileTools } from "./tools/profile.js";
 
 export default definePluginEntry({
   id: "sil",
@@ -53,7 +54,7 @@ export default definePluginEntry({
     );
 
     // Guarantee the data home exists from the instant register() returns — not
-    // lazily on first write — so tokens, config, and SDS profile artefacts have
+    // lazily on first write — so tokens, config, and the shopper's documents have
     // one consistent home from load. One-shot synchronous mkdir (recursive,
     // 0700): it returns immediately and holds no resource open, so the
     // register()-stays-synchronous / opens-nothing invariant is preserved.
@@ -72,7 +73,7 @@ export default definePluginEntry({
       api.logger.error("sil_plugin_data_dir_failed", {
         message:
           "sil could NOT create its data directory at registration, so tokens,"
-          + " config, and profiles have no home. Fix the data directory (it must"
+          + " config, and documents have no home. Fix the data directory (it must"
           + " be writable — check permissions / free space / that $SIL_DATA_DIR"
           + " is a directory), then reload the plugin.",
         data_dir: getDataDir(),
@@ -83,7 +84,7 @@ export default definePluginEntry({
 
     registerIdentityTools(api);
     registerCatalogTools(api);
-    registerProfileTools(api);
+    registerDocTools(api);
     registerDoctorTools(api);
 
     // The pull surface a paired client resolves a search page from. Registering

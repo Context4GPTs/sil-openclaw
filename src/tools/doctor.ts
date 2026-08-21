@@ -60,10 +60,7 @@ import {
   readHostVersion,
   readSilWiringFacts,
 } from "../lib/host-wiring.js";
-import {
-  readShopperIdentity,
-  searchProfileFrontmatter,
-} from "../lib/profile-store.js";
+import { findDocuments, readShopperIdentity } from "../lib/doc-store.js";
 import { jsonResult } from "../lib/tool-result.js";
 import {
   buildGatewayCompatFinding,
@@ -700,26 +697,28 @@ function configFinding(): Finding {
 }
 
 // ===========================================================================
-// Behaviour-artefact store
+// The shopper's document store
 // ===========================================================================
 
 /** Consume the store's OWN fail-closed `unreadable[]` surfacing — never re-parse
- * the artefacts, never aggregate entries away, and never overwrite one. Each
- * entry becomes exactly one finding. */
+ * the documents, never aggregate entries away, and never overwrite one. Each
+ * entry becomes exactly one finding. A read-only pass: doctor reports on the store
+ * it finds, so it never triggers the store's migration. */
 function checkStore(): Finding[] {
+  const found = findDocuments();
   return [
     ...readShopperIdentity().unreadable,
-    ...searchProfileFrontmatter().unreadable,
+    ...(found.ok ? found.unreadable : []),
   ].map(({ id, error }) => ({
     id: `store.unreadable:${id}`,
     severity: "warn" as Severity,
     status: "advisory" as const,
-    // Name the artefact AND the corruption — this is what a human reads to go
+    // Name the document AND the corruption — this is what a human reads to go
     // repair the file. The store's own error text describes only the corruption.
     detected: `${id}: ${error}`,
     suggestedAction:
-      "Inspect and repair the artefact by hand — sil never overwrites a corrupt"
-      + " artefact, because it may still be recoverable.",
+      "Inspect and repair the document by hand — sil never overwrites a corrupt"
+      + " document, because it may still be recoverable.",
     appliedAction: null,
   }));
 }

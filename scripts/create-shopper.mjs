@@ -31,9 +31,9 @@
  *   4. snapshot openclaw.json      — the whole-file teardown anchor, taken BEFORE step 5
  *   5. openclaw agents add         — create the real agents.list entry + workspace bootstrap
  *   6. write <workspace>/SOUL.md   — the persona (atomic tmp→rename); never a sil artefact
- *   7. materializeProfile          — REUSED; SETUP-ONLY { name, userSpec } ⇒ shared
- *                                    user_spec.md (its frontmatter carries the name);
- *                                    NO manifest, no domain minted at create
+ *   7. writeDocument               — REUSED; { ref: shopper, mode: create } ⇒ the shopper
+ *                                    document user_spec.md (frontmatter carries the name);
+ *                                    no manifest, no Brief written at create
  *   8. attach the sil skill + enable the sil plugin (config set)
  *   9. sil-openclaw-allowlist      — REUSED whole; additive/idempotent/atomic three-surface
  *                                    trust merge (plugins.allow + tools.alsoAllow + plugins.entries.sil)
@@ -71,8 +71,8 @@
  *                                          reverted; nothing partial; names path + cause
  *   - teardown_failed    (error, stderr) — teardown could NOT fully revert; names the residue
  *
- * All real write/merge logic lives in the typed libs (`materializeProfile` from
- * `dist/lib/profile-store.js`, the `sil-openclaw-allowlist` bin). This shell is
+ * All real write/merge logic lives in the typed libs (`writeDocument` from
+ * `dist/lib/doc-store.js`, the `sil-openclaw-allowlist` bin). This shell is
  * thin choreography + teardown only — it re-implements none of it.
  */
 
@@ -84,10 +84,10 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import {
-  materializeProfile,
+  writeDocument,
   readShopperIdentity,
   getShopperArtefactDir,
-} from "../dist/lib/profile-store.js";
+} from "../dist/lib/doc-store.js";
 import { resolveBindChannel } from "../dist/lib/bind-channel.js";
 import { deriveAgentId } from "../dist/lib/derive-agent-id.js";
 
@@ -107,12 +107,15 @@ const SOUL_SIL_RULES =
   "\n## The sil way\n\n"
   + "You are a spec-driven shopper, and your mantra is **explore first**: before you buy"
   + " in a niche, you learn how it is really bought.\n\n"
-  + "The loop, in three lines:\n"
-  + "1. **Learn the domain** — the first time you shop a niche, explore it on the web,"
-  + " research how it is bought, and remember what you find (`sil_learn`).\n"
-  + "2. **Know the person** — reuse the sizes, tastes, and limits you already hold; ask"
-  + " only what you genuinely cannot infer.\n"
-  + "3. **Find the thing** — search the sil catalog, weigh what comes back against what"
+  + "The loop, in four lines:\n"
+  + "1. **Scope the job** — write down what is being bought, in the buyer's own words,"
+  + " before any domain is decided.\n"
+  + "2. **Learn the domain** — take the buying guide sil already holds"
+  + " (`sil_domain_find`); when nothing stands, explore the category on the web and"
+  + " write the node yourself.\n"
+  + "3. **Know the person** — reuse the sizes, tastes, and limits you already hold"
+  + " (`sil_doc_read`); ask only what genuinely decides the buy.\n"
+  + "4. **Find the thing** — search the sil catalog, weigh what comes back against what"
   + " you learned, and say why your pick fits.\n\n"
   + "The **sil catalog is where you buy; the open web is where you learn.** Research a"
   + " niche freely and often, but the products you recommend always come from the"
@@ -396,7 +399,7 @@ function teardown({ configPath, snapshot, mode, bakPreexisted, workspace, worksp
   // KNOWN GAP (narrow): this keys on WHOLE-DIR pre-existence, not on the leaf we
   //    wrote. If `shopper/` pre-existed but held no readable user_spec.md, the
   //    singleton read passes ("no shopper") yet `shopperDirPreexisted` is true, so a
-  //    post-materialize failure leaves THIS run's user_spec.md un-removed and does NOT
+  //    post-write failure leaves THIS run's user_spec.md un-removed and does NOT
   //    surface as residue → `teardown_failed`. Extremely narrow (normal operation
   //    never leaves an empty `shopper/`). To close it, key this removal on "we wrote
   //    user_spec.md this run".
@@ -550,11 +553,12 @@ function main() {
     failAndTeardown(soulPath, "could not write SOUL.md: " + errCause(err));
   }
 
-  // --- 7. Materialize the shared user spec — REUSED lib; NO domain at create ---
-  const mat = materializeProfile({ name, userSpec });
+  // --- 7. Write the shopper document — REUSED lib; mode:create, so a second run
+  // over a live store fails here rather than overwriting the person ---
+  const mat = writeDocument({ ref: "shopper", mode: "create", name, body: userSpec });
   if (!mat.ok) {
     const path = mat.kind === "persistence_failed" ? (mat.error?.split(":")[0] ?? getShopperArtefactDir()) : getShopperArtefactDir();
-    failAndTeardown(path, "sil_profile_materialize " + mat.kind + ": " + (mat.message ?? mat.error ?? "failed"));
+    failAndTeardown(path, "sil_doc_write " + mat.kind + ": " + (mat.message ?? mat.error ?? "failed"));
   }
 
   // --- 8. Attach the sil skill + enable the sil plugin (value-mode, --strict-json) ---
