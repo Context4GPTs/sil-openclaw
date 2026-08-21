@@ -16,7 +16,7 @@ import {
   rmdirSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { randomBytes } from "node:crypto";
 
 import { DIR_MODE, ensureDataDir, getDataDir } from "./credentials.js";
@@ -344,7 +344,12 @@ export function findDocuments(query: FindQuery = {}): FindResult | InvalidReques
     return invalid("status", "status must be one of " + BRIEF_STATUSES.join(" | ") + ".");
   }
   const q = nonBlank(query.query) ? query.query.toLowerCase() : undefined;
-  const unreadableDocs: Array<{ id: string; error: string }> = [];
+  // A legacy file the migration could not parse is surfaced here, unfiltered: only the
+  // doc TOOLS migrate, so without this the one file the transform cannot fix is
+  // invisible to the read-only surfaces that exist to report it (`sil_doctor`).
+  const unreadableDocs: Array<{ id: string; error: string }> = scanLegacyTree().corrupt.map(
+    (path) => ({ id: relative(getShopperArtefactDir(), path), error: LEGACY_UNREADABLE_ERROR }),
+  );
   const result: FindResult = { ok: true, briefs: [], unreadable: unreadableDocs };
 
   // The shopper carries no domain and no status, so either filter excludes it rather
@@ -620,44 +625,56 @@ interface LegacyPrd {
   body: string;
 }
 
-/** Migrate a legacy store in one hop, or return `null` when there is nothing to do —
- * the fast path every healthy store takes, at the cost of one `existsSync`. */
-export function migrateLegacyStore(): MigrationSummary | null {
-  const legacyRoot = join(getShopperArtefactDir(), LEGACY_DOMAINS_SUBDIR);
-  if (!existsSync(legacyRoot)) return null;
+interface LegacyScan {
+  root: string;
+  methods: LegacyMethod[];
+  prds: LegacyPrd[];
+  /** Files that will not parse. Never guessed at, never deleted — reported instead. */
+  corrupt: string[];
+}
 
-  const methods: LegacyMethod[] = [];
-  const prds: LegacyPrd[] = [];
-  // A legacy file that will not parse is never guessed at and never deleted — it is
-  // reported every run instead, because a store nobody can read is a real problem and
-  // silence is how it stays one.
-  const corrupt: string[] = [];
-  for (const slug of legacyDirs(legacyRoot)) {
-    const methodPath = join(legacyRoot, slug, LEGACY_METHOD_FILE);
+/** Walk the legacy tree read-only. Empty on every store already in the flat layout,
+ * at the cost of one `existsSync`. */
+function scanLegacyTree(): LegacyScan {
+  const root = join(getShopperArtefactDir(), LEGACY_DOMAINS_SUBDIR);
+  const scan: LegacyScan = { root, methods: [], prds: [], corrupt: [] };
+  if (!existsSync(root)) return scan;
+  for (const slug of legacyDirs(root)) {
+    const methodPath = join(root, slug, LEGACY_METHOD_FILE);
     const method = readArtefactFile(methodPath);
-    if (method !== null) methods.push({ slug, path: methodPath, body: method.body });
-    else if (existsSync(methodPath)) corrupt.push(methodPath);
-    const prdsDir = join(legacyRoot, slug, LEGACY_PRDS_SUBDIR);
+    if (method !== null) scan.methods.push({ slug, path: methodPath, body: method.body });
+    else if (existsSync(methodPath)) scan.corrupt.push(methodPath);
+    const prdsDir = join(root, slug, LEGACY_PRDS_SUBDIR);
     if (!existsSync(prdsDir)) continue;
     for (const file of readdirSync(prdsDir).filter((f) => f.endsWith(".md")).sort()) {
       const path = join(prdsDir, file);
       const prd = readArtefactFile(path);
       if (prd === null) {
-        corrupt.push(path);
+        scan.corrupt.push(path);
         continue;
       }
-      prds.push({ domainSlug: slug, key: file.replace(/\.md$/, ""), path, fields: prd.fields, body: prd.body });
+      scan.prds.push({ domainSlug: slug, key: file.replace(/\.md$/, ""), path, fields: prd.fields, body: prd.body });
     }
   }
+  return scan;
+}
+
+const LEGACY_UNREADABLE_ERROR =
+  "a pre-0.5 file with malformed or absent frontmatter — the migration left it in place"
+  + " for repair rather than guess at it";
+
+/** Migrate a legacy store in one hop, or return `null` when there is nothing to do. */
+export function migrateLegacyStore(): MigrationSummary | null {
+  const { root, methods, prds, corrupt } = scanLegacyTree();
   if (methods.length === 0 && prds.length === 0 && corrupt.length === 0) return null;
 
   const failed: Array<{ path: string; error: string }> = corrupt.map((path) => ({
     path,
-    error: "malformed or absent frontmatter — left in place for repair, never migrated",
+    error: LEGACY_UNREADABLE_ERROR,
   }));
   const shoppingSections = migrateMethods(methods, failed);
   const briefs = migratePrds(prds, failed);
-  pruneLegacyTree(legacyRoot);
+  pruneLegacyTree(root);
   return { shoppingSections, briefs, failed };
 }
 
