@@ -359,6 +359,29 @@ describe("probeLatestVersion — bounded by a DEADLINE, not merely by an abort",
     }
   });
 
+  it("fires the DEFAULT 3s budget when the caller names none — nothing at 2999ms, null at 3000ms", async () => {
+    // `doctor.ts:167` is the only production caller and passes no `timeoutMs`,
+    // so this constant IS the shipped budget. Every other test here names its
+    // own deadline, leaving a regression to e.g. 9s green under `testTimeout`.
+    vi.useFakeTimers();
+    try {
+      let settled = false;
+      const probe = probeLatestVersion(blackhole).then((v) => {
+        settled = true;
+        return v;
+      });
+
+      await vi.advanceTimersByTimeAsync(2_999);
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toBe(true); // flag before the await — see the test above
+      await expect(probe).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("is not vacuous — the same probe returns a REAL version from a channel that answers", async () => {
     // Without this, a `probeLatestVersion` that simply `return null`ed would pass
     // every assertion above. `null` must mean "bounded/failed", never "always".
