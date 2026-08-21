@@ -36,8 +36,15 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BUNDLE = join(REPO_ROOT, "sil-shopping");
 // The always-loaded router must name the whole v0 journey, not half of it: the
 // agent picks a tool by name at the moment of use, and a beat whose tool is
-// unnamed in SKILL.md is a beat it will improvise around. Add-only (4 → 6) with
-// the four-v0-tools card.
+// unnamed in SKILL.md is a beat it will improvise around. Add-only (4 → 6 with
+// the four-v0-tools card, 6 → 7 with the read-before-mint card).
+//
+// This list is HAND-MAINTAINED and separate from the dynamic "every registered
+// tool appears somewhere in the corpus" scan below: it is what forces a name into
+// `SKILL.md` ITSELF rather than into some `references/` file the agent may never
+// load. `sil_domain_find` has to be here, not merely in the corpus — the read is
+// the first move of the cold path, and a router that names only the mint sends an
+// empty shelf straight at the one write the product cannot undo.
 const CORE_TOOLS = [
   "sil_register",
   "sil_whoami",
@@ -45,6 +52,7 @@ const CORE_TOOLS = [
   "sil_product_get",
   "sil_stores",
   "sil_domain_create",
+  "sil_domain_find",
 ];
 // Tokens retired by the single-shopper + SDS-redesign pivots — no path, no doc,
 // no compat alias may resurrect them anywhere in the bundle. Each names a thing
@@ -138,9 +146,18 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     expect(registeredTools().filter((n) => !corpus.includes(n))).toEqual([]);
   });
 
-  it("the four core tools are named in SKILL.md itself (the always-loaded router)", () => {
+  it("every core tool is named in SKILL.md itself (the always-loaded router)", () => {
     const src = skillSrc();
     expect(CORE_TOOLS.filter((t) => !src.includes(t))).toEqual([]);
+  });
+
+  it("the frontmatter description enumerates the read, not just the mint", () => {
+    // The description is what the host shows BEFORE the body is loaded, so it is
+    // the only text that decides whether the skill is reached at all. A trigger
+    // list that names the mint but not the read advertises the write half of a
+    // read-then-write discipline.
+    const { description } = frontmatter();
+    expect(description).toContain("sil_domain_find");
   });
 
   it("every references/ and examples/ link in the bundle resolves to a real file", () => {
@@ -227,7 +244,7 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     expect(src).toMatch(/open[ -]web/i); // never sourced from the open web
   });
 
-  it("the Beat-2 naming discipline survives the sil_specs excision", () => {
+  it("the Beat-2 naming discipline survives the sil_domain_find arrival", () => {
     // The removal's collateral-damage guard (retire-the-dead-sil-specs-tool). What
     // died is the registry ROUND TRIP, not the vocabulary hygiene: Beat 4 still
     // sends these coined names verbatim as sil_search.filters.specs, so a synonym
@@ -236,8 +253,200 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     // TWO tokens, deliberately not a re-pinning of the wording (the 1 341-line
     // prose test was deleted for a reason).
     const src = read("references/method_and_prds.md");
-    expect(src).toContain("one spelling"); // reuse the exact ns.key you coined
+    expect(src).toContain("one spelling"); // reuse the exact key you coined
     expect(src).toContain("conventional name"); // take the Schelling-point name
+  });
+});
+
+// ===========================================================================
+// Card: sil-domain-find — READ BEFORE MINT, as the bundle states it.
+//
+// The tool alone does not close this card. `sil_domain_create` performs v0's ONE
+// permanent, un-undoable global registry write, and nothing in the plugin can
+// stop an agent reaching it — the discipline lives entirely in prose, so prose is
+// what has to be guarded. Each bar below holds a DECISION that changes the
+// shopper's behaviour if it is lost, never a sentence: the 1341-line prose test
+// this suite deleted stayed green through a live behavioural bug precisely
+// because it pinned wording instead.
+// ===========================================================================
+
+/** The router's table rows — what the agent matches an intent against. */
+const routingRows = (): string[] =>
+  frontmatter()
+    .body.split("\n")
+    .filter((line) => line.trimStart().startsWith("|"));
+
+/** The corpus cut into STATEMENTS — one bullet, one table row, one sentence. The
+ * bundle is hard-wrapped, so a line is not a statement; a bullet or a row is.
+ * Scoping matters more than the regexes it feeds: a corpus-wide `probe` + `not
+ * licensed` pair passes on the very wording this block rejects, because both
+ * strings already sit three lines apart in `method_and_prds.md` and the second is
+ * about the CAPPED branch. */
+const statements = (): string[] =>
+  bundleFiles().flatMap((rel) =>
+    // Per FILE, never over the joined corpus: a unit that straddles a file boundary
+    // could pair one file's `probe` with the next file's denial.
+    read(rel)
+      .split(/\n\s*(?:[-*+]\s|\|)|(?<=[.!?])\s+/)
+      .map((s) => s.replace(/\s+/g, " ").trim())
+      .filter(Boolean),
+  );
+
+/** Withholds the licence: "never licenses", "does not license", or the exclusivity
+ * form the tool itself uses ("only a `q` read licenses one"). Direction is
+ * load-bearing — the denial must PRECEDE the licence word, or "**mint licensed** —
+ * no returned match states…" satisfies it and the bar is born vacuous. */
+const DENIES_LICENCE = /\b(?:never|not|cannot|can'?t|no|only)\b[\s\S]*?licen/i;
+/** An EMPTY match list — the one thing a probe cannot produce. */
+const EMPTY_MATCH_LIST =
+  /matches:?\s*\[\s*\]|\bmatches\b[^.]{0,40}\bempty\b|\bempty\b[^.]{0,40}\bmatches\b/i;
+
+/** `[]` when some candidate satisfies the rule, else the candidates themselves — so
+ * a red PRINTS the statements the writer has to fix, not "0 is not greater than 0". */
+const unsatisfied = (candidates: string[], rule: (s: string) => boolean): string[] =>
+  candidates.some(rule) ? [] : candidates;
+
+describe("read before mint — the bundle's half of the card", () => {
+  it("S2 — NO file reaches the global write without also naming the read", () => {
+    // The card's spine, asserted structurally rather than by wording: a file that
+    // teaches the mint and never mentions the read is a door to a permanent write
+    // with the discipline missing. Derived from the corpus on disk, so a new
+    // reference file inherits the rule for free.
+    const offenders = bundleFiles().filter(
+      (rel) => read(rel).includes("sil_domain_create") && !read(rel).includes("sil_domain_find"),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("S2 — guard-of-the-guard: some file DOES name the mint (an empty scan passes)", () => {
+    expect(bundleFiles().filter((rel) => read(rel).includes("sil_domain_create")).length)
+      .toBeGreaterThan(0);
+  });
+
+  it("S2 — the router's read row sits ABOVE its mint row, and the mint row names the read", () => {
+    // Reading order, mechanised. The agent matches top-down; a mint row above the
+    // read row is a mint row it reaches first.
+    const rows = routingRows();
+    const readRow = rows.findIndex((r) => r.includes("sil_domain_find"));
+    const mintRow = rows.findIndex((r) => r.includes("sil_domain_create"));
+    expect(readRow).toBeGreaterThanOrEqual(0);
+    expect(mintRow).toBeGreaterThanOrEqual(0);
+    expect(readRow).toBeLessThan(mintRow);
+    // The mint row states what must have happened first — otherwise the trigger
+    // reads as "a cold category" and the read becomes optional.
+    expect(rows[mintRow]).toMatch(/sil_domain_find|\bread\b/);
+  });
+
+  it("S2 — a read that did NOT return is not a read that returned nothing", () => {
+    // BR-2. Without this the natural repair for a transient failure is to mint and
+    // move on — a permanent global write entered off a network blip.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/invalid_request/);
+    expect(corpus).toMatch(
+      /did not return|not a read that returned nothing|never coin around|leaves the mint (out of reach|unreachable)/i,
+    );
+  });
+
+  it("S2/BR-8 — an ambiguous `sil_search` refusal is settled by a PROBE, never by a mint", () => {
+    // The two refusals carry the same `invalid_request` on the wire and the plugin
+    // matches on no prose, so the refusal text alone cannot tell them apart. The
+    // stated `exists` decides — a global write is never entered off refusal prose.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/read alike|cannot tell|indistinguishable|same .*invalid_request/i);
+    expect(corpus).toMatch(/probe/i);
+    expect(corpus).toMatch(/exists/);
+  });
+
+  it("S3 — the read's input is the buyer's PROSE, and the bundle says why a guess is wrong", () => {
+    // `q` is matched against a domain's guide as well as its path text, so a
+    // path-shaped guess misses exactly the domains the read exists to surface.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/own words/i);
+    expect(corpus).toMatch(/path[- ]shaped guess|not a path guess|rather than a path guess/i);
+    expect(corpus).toMatch(/guide/i);
+  });
+
+  it("S4 — all four branch verdicts are present, and `capped` is one of them", () => {
+    // Dropping the `capped` branch ALONE re-creates the exact defect the route
+    // exists to prevent: minting while the standing path sat just past the bound.
+    const corpus = bundleCorpus();
+    const verdicts: [string, RegExp][] = [
+      ["adopt", /\badopt/i],
+      ["descend", /\bdescend/i],
+      ["mint licensed", /licens/i],
+      ["narrow on capped", /\bcapped\b/],
+    ];
+    expect(verdicts.filter(([, re]) => !re.test(corpus)).map(([name]) => name)).toEqual([]);
+    // The descend rule's whole content: a sibling or re-rooted path for a category
+    // that already stands is never coined, because the mint would ACCEPT it.
+    expect(corpus).toMatch(/never a sibling|not a sibling|sibling.*re-?rooted/i);
+  });
+
+  it("S4 — `capped: true` withholds the licence rather than shrinking the answer", () => {
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/capped:?\s*`?true/i);
+    expect(corpus).toMatch(/narrow|sharpen|read (once more|again)/i);
+  });
+
+  it("S4/BR-1b — the licence is an EMPTY `q` read, and a `path` probe never grants it", () => {
+    // The clause the plugin cannot enforce, and the one the bundle stated more
+    // weakly than the tool did. A probe MISS is not an empty answer: it returns a
+    // match carrying `exists: false` (`helpers/v0-wire.ts#domainFindProbeMiss`), so
+    // an `exists`-only licence test is SATISFIED by the single read that must never
+    // license a mint — and the agent coins a sibling of a path already standing
+    // under a different parent. That write is permanent, global and un-undoable, and
+    // `exists: false` at a guessed path is silent about it. Two halves, because
+    // either alone leaves the door: what the probe does NOT buy, and what the
+    // licence actually costs.
+    const units = statements();
+
+    const probeUnits = units.filter((s) => /probe/i.test(s));
+    expect(probeUnits.length).toBeGreaterThan(0); // guard-of-the-guard: an empty scan passes
+    expect(unsatisfied(probeUnits, (s) => DENIES_LICENCE.test(s))).toEqual([]);
+
+    const licenceUnits = units.filter((s) => /licen/i.test(s));
+    expect(licenceUnits.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(licenceUnits, (s) => EMPTY_MATCH_LIST.test(s) && /capped/i.test(s)),
+    ).toEqual([]);
+  });
+
+  it("S5 — the adoption discipline names its mechanism and says the keys travel VERBATIM", () => {
+    // "take the key sil already holds" was unreachable advice until this tool
+    // existed: nothing in the surface could read a standing domain's vocabulary.
+    const src = read("references/method_and_prds.md");
+    expect(src).toContain("sil_domain_find");
+    expect(src).toContain("## Search vocabulary");
+    expect(src).toMatch(/verbatim/i);
+  });
+
+  it("S5 — the read budget is stated as a NUMBER, and the probe is outside it", () => {
+    // Open question 9. An agent left to infer whether the probe counts against the
+    // bound either forfeits it — forking the vocabulary — or takes a third
+    // discovery read. Write the arithmetic; do not imply it.
+    const src = read("references/method_and_prds.md");
+    expect(src).toMatch(/\b2\b|\btwo\b/);
+    expect(src).toMatch(/probe/i);
+    expect(src).toMatch(/does\s*\*{0,2}not\*{0,2}\s*count|≤\s*2\s*\+\s*1|2 \+ 1/i);
+  });
+
+  it("S6 — a fenced match is ADOPTED, and the fence explains the result rather than removing one", () => {
+    // `validated_at: null` means minted but not yet validated by the pass. The
+    // sentence carrying this is exactly the shape `honestyExclusionOffenders`
+    // scans (an exclusion verb beside a maturity claim), and that scan runs over
+    // the whole bundle above — so this bar only has to pin the DECISION.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/validated_at/);
+    expect(corpus).toMatch(/adopted like any other|like any other match|a real (category|domain)/i);
+    expect(corpus).toMatch(/stays on the table|every result and seller/i);
+  });
+
+  it("S7 — a held path is the cold path's memory, not a per-search toll", () => {
+    // Without this the card ships a latency and spend regression on every warm
+    // search, which no other bar here would catch.
+    const corpus = bundleCorpus();
+    expect(corpus).toMatch(/no `?sil_domain_find`? call|without a read|no registry read|not re-?read/i);
+    expect(corpus).toMatch(/cold path'?s first move|never a per-search toll|already records/i);
   });
 });
 

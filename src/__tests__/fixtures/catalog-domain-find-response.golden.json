@@ -1,0 +1,120 @@
+{
+  "matches": [
+    {
+      "path": "product.sports.winter.ski.boots",
+      "exists": true,
+      "validated_at": "2026-08-14T09:12:03.000Z",
+      "guide": "Hard-shell alpine ski boots that clamp into a binding. Fit comes first: last width in millimetres decides which shells can be made to work at all, then flex index for the skier's weight and aggression, then the shell shape itself. Sizing is mondopoint, and a liner that can be heat-moulded buys about half a size of adjustment.",
+      "specs": [
+        {
+          "key": "brand",
+          "display_name": "Brand",
+          "data_type": "enum",
+          "unit": null,
+          "allowed_values": null,
+          "value_set": "brands",
+          "level": "product",
+          "defined_at": "product",
+          "inherited": true
+        },
+        {
+          "key": "flex_index",
+          "display_name": "Flex index",
+          "data_type": "number",
+          "unit": "count",
+          "allowed_values": null,
+          "value_set": null,
+          "level": null,
+          "defined_at": "product.sports.winter.ski.boots",
+          "inherited": false
+        },
+        {
+          "key": "heat_moldable",
+          "display_name": "Heat mouldable",
+          "data_type": "boolean",
+          "unit": null,
+          "allowed_values": null,
+          "value_set": null,
+          "level": "product",
+          "defined_at": "product.sports.winter.ski.boots",
+          "inherited": false
+        },
+        {
+          "key": "msrp",
+          "display_name": "MSRP",
+          "data_type": "money",
+          "unit": null,
+          "allowed_values": null,
+          "value_set": null,
+          "level": "variant",
+          "defined_at": "product.sports.winter.ski.boots",
+          "inherited": false
+        },
+        {
+          "key": "sole_norm",
+          "display_name": "Sole norm",
+          "data_type": "enum",
+          "unit": null,
+          "allowed_values": ["gripwalk", "alpine"],
+          "value_set": null,
+          "level": "variant",
+          "defined_at": "product.sports.winter.ski.boots",
+          "inherited": false
+        },
+        {
+          "key": "weight",
+          "display_name": "Weight",
+          "data_type": "number",
+          "unit": "g",
+          "allowed_values": null,
+          "value_set": null,
+          "level": "variant",
+          "defined_at": "product.sports.winter.ski.boots",
+          "inherited": false
+        }
+      ]
+    },
+    {
+      "path": "product.sports.winter.ski.boots.race",
+      "exists": true,
+      "validated_at": null,
+      "guide": "Race-plate alpine boots: FIS-legal shells run narrower and stiffer than the recreational line, and the sole norm is fixed by the discipline rather than chosen.",
+      "specs": [
+        {
+          "key": "brand",
+          "display_name": "Brand",
+          "data_type": "enum",
+          "unit": null,
+          "allowed_values": null,
+          "value_set": "brands",
+          "level": "product",
+          "defined_at": "product",
+          "inherited": true
+        },
+        {
+          "key": "flex_index",
+          "display_name": "Flex index",
+          "data_type": "number",
+          "unit": "count",
+          "allowed_values": null,
+          "value_set": null,
+          "level": null,
+          "defined_at": "product.sports.winter.ski.boots",
+          "inherited": true
+        },
+        {
+          "key": "weight",
+          "display_name": "Weight",
+          "data_type": "number",
+          "unit": "g",
+          "allowed_values": null,
+          "value_set": null,
+          "level": "variant",
+          "defined_at": "product.sports.winter.ski.boots",
+          "inherited": true
+        }
+      ]
+    }
+  ],
+  "capped": false
+}

@@ -236,8 +236,28 @@ describe("registered tool descriptions carry NO per-niche-expert vocabulary (who
  * `lib/honesty-vocabulary.test.ts`.
  * ------------------------------------------------------------------------- */
 
-/** The four v0 catalog tools, by SC6's own names — verbatim, not renamed. */
-const V0_TOOLS = ["sil_search", "sil_product_get", "sil_stores", "sil_domain_create"] as const;
+/**
+ * The v0 catalog tools, by SC6's own names — verbatim, not renamed.
+ *
+ * FIVE, not four. SC6 says "four tools" and that wording is now literally false:
+ * the design rule is 1:1 with the routes and never flags on one another, and
+ * `/catalog/domains` is served by TWO verbs — `GET` reads the registry, `POST`
+ * performs the one write nothing can undo. Shrinking the tool count to preserve
+ * SC6's sentence would put the read behind a `mode` flag on the write, which is
+ * the exact shape the rule forbids.
+ *
+ * This list is HAND-MAINTAINED and it drives three `it.each` guards below (the
+ * no-flags rule, the retired-parameter scan, and the discipline clause). It bites
+ * nothing when a tool is omitted — the registration check below is a SUBSET test —
+ * so an omission here silently narrows all three rather than going RED.
+ */
+const V0_TOOLS = [
+  "sil_search",
+  "sil_product_get",
+  "sil_stores",
+  "sil_domain_find",
+  "sil_domain_create",
+] as const;
 
 /** A tool's description plus every one of its parameter descriptions. */
 function agentFacingText(api: MockPluginAPI, name: string): string {
@@ -259,8 +279,8 @@ function wholeSurface(api: MockPluginAPI): [string, string][] {
   return [...api._tools.keys()].map((name) => [name, agentFacingText(api, name)]);
 }
 
-describe("v0 — the four tools are registered under SC6's names, 1:1 with the four routes", () => {
-  it("all four exist, spelled exactly as the goal names them", () => {
+describe("v0 — the tools are registered under SC6's names, 1:1 with the routes", () => {
+  it("all five exist, spelled exactly as the goal names them", () => {
     const names = registeredToolNames(allRegisteredTools());
     expect(V0_TOOLS.filter((t) => !names.has(t))).toEqual([]);
   });
@@ -424,6 +444,12 @@ describe("v0 — each of the four carries its discipline clause (R6.2.1)", () =>
     sil_product_get: [/shortlist/i, /live/i, /top-?k|top offers/i],
     sil_stores: [/three states/i, /unknown/i, /serviceab/i],
     sil_domain_create: [/\bNEW\b/, /research|read(ing)? up/i, /never[^.]*change|not to change/i],
+    // The read's discipline is a BUDGET and a mode rule: the two doors answer
+    // different questions, and a cold category is settled in at most two
+    // discovery reads plus one probe of the exact path about to be coined. An
+    // agent left to infer whether the probe counts against the bound either
+    // forfeits it (forking the vocabulary) or takes a third discovery read.
+    sil_domain_find: [/\b(2|two)\b/, /probe/i, /never both|exactly one of/i],
   };
 
   it.each(V0_TOOLS)("%s's description carries every load-bearing token of its clause", (name) => {

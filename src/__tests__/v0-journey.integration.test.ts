@@ -1,20 +1,30 @@
 /**
  * INTEGRATION — the whole v0 journey over ONE scripted `fetch`: a cold category
- * refused, researched, minted, searched, shortlisted and handed off.
+ * refused, READ, researched, minted, searched, shortlisted and handed off.
  *
- *   sil_search (400, unregistered) → sil_domain_create → sil_search
- *     → sil_product_get → sil_stores → one handoff URL
+ *   sil_search (400, unregistered) → sil_domain_find (matches: []) →
+ *     sil_domain_create → sil_search → sil_product_get → sil_stores
+ *     → one handoff URL
+ *
+ * THE READ IS PART OF THE CHAIN, and that is this file's newest claim. Before it
+ * existed the cold start ran refusal → mint, so the only thing standing between
+ * an empty shelf and a permanent, un-undoable global write was the agent's
+ * judgement. The read is what turns that into a step: the mint is entered only
+ * after a discovery read named nothing to adopt.
  *
  * SCOPE, deliberately. This is the TOOL CHAIN, not the agent. What the agent
  * SAYS — the mint announcement, the veto's three buckets, the dating of a
  * `stored` price — is not testable in this repo at any tier: it belongs to the
  * skill card and to sil-stage. There is no e2e tier here and none is invented
- * (CLAUDE.md: one `vitest run` is the whole gate).
+ * (CLAUDE.md: one `vitest run` is the whole gate). Nor can this file prove the
+ * agent WAITED for the read; what it proves is that the tools compose that way
+ * and that no tool performs another's job.
  *
  * What IS testable, and what this file exists to prove:
- *   - the four tools compose into a terminating journey with no fifth call and
- *     no tool standing in for another;
- *   - each hop calls exactly its own route, once;
+ *   - the tools compose into a terminating journey with no extra call and no
+ *     tool standing in for another;
+ *   - each hop calls exactly its own route, once — and the read and the mint,
+ *     which share a PATH, are told apart by their VERB;
  *   - the journey ENDS at one URL that came out of a sil tool result — every
  *     product, price, seller and URL presented is traceable to a tool response,
  *     never to anything the plugin invented.
@@ -42,6 +52,7 @@ import {
   GOLDEN_REFS,
   SEARCH_400,
   clone,
+  domainFindEmpty,
   mintGolden,
   resultGolden,
   storeFor,
@@ -86,6 +97,10 @@ function scriptTheJourney(): Router {
     if (kind === "search") {
       return nth === 0 ? { status: 400, body: SEARCH_400.unknownDomain } : ok(resultGolden());
     }
+    // The read answers with the MINT SIGNAL: the registry genuinely holds
+    // nothing for this ask, and says so completely (`capped: false`). That is
+    // the only answer that licenses the mint below.
+    if (kind === "domainFind") return ok(domainFindEmpty());
     if (kind === "domains") return ok(mintGolden());
     if (kind === "lookup") return ok(resultGolden());
     if (kind === "stores") return ok(storesGolden());
@@ -103,15 +118,29 @@ describe("the cold-start journey terminates at one handoff URL", () => {
   it("runs beat A → E, each tool once per beat, ending at a URL that came from sil", async () => {
     const router = scriptTheJourney();
 
-    // Beat A — the front door refuses. This IS the cold-start beat: there is no
-    // `GET /catalog/domains` at v0, so the refusal is how the agent learns the
-    // category is new.
+    // Beat A — the front door refuses. The refusal is a ROUTING SIGNAL, and on
+    // this wire it is ambiguous by design: an unregistered domain and a rejected
+    // predicate carry the same `invalid_request`. So it routes to the read, not
+    // to the mint.
     const refused = await call("sil_search", { domain: DOMAIN, query: "ski boots", n: 8 }, "j1");
     expect(refused["status"]).toBe("invalid_request");
     expect(refused["message"]).toContain("mint it first");
 
-    // Beat A′ — the mint, at the path the agent actually meant. (The research
-    // that produces `guide` is the agent's web work, outside the tool surface.)
+    // Beat A′ — the READ, in the buyer's own words. `matches: []` beside
+    // `capped: false` is a real answer and the one thing that licenses the write
+    // below; anything else (a match to adopt, a bounded list, a failed read)
+    // ends the cold start here.
+    const read = await call("sil_domain_find", { q: "ski boots" }, "j2");
+    expect(read["status"]).toBe("ok");
+    expect(read["matches"]).toEqual([]);
+    expect(read["capped"]).toBe(false);
+    // The read touched the registry's READ verb and nothing else — the write is
+    // still un-entered at this point in the journey.
+    expect(router.domains).toEqual([]);
+
+    // Beat A″ — the mint, at the path the agent actually meant, now that the
+    // read has named nothing to adopt. (The research that produces `guide` is
+    // the agent's web work, outside the tool surface.)
     const minted = await call(
       "sil_domain_create",
       {
@@ -119,7 +148,7 @@ describe("the cold-start journey terminates at one handoff URL", () => {
         guide: "Ski boots are bought by fit first: last width, then flex, then shell shape.",
         specs: [{ key: "flex_index", display_name: "Flex index", data_type: "number", unit: "index" }],
       },
-      "j2",
+      "j3",
     );
     expect(minted["status"]).toBe("ok");
     expect(minted["path"]).toBe(DOMAIN);
@@ -129,7 +158,7 @@ describe("the cold-start journey terminates at one handoff URL", () => {
     const results = await call(
       "sil_search",
       { domain: DOMAIN, query: "ski boots", n: 8, predicates: [{ key: "flex_index", op: "gte", value: 110 }] },
-      "j3",
+      "j4",
     );
     expect(results["status"]).toBe("ok");
     const shortlist = (results["results"] as Record<string, unknown>[]).map((r) => r["ref"] as string);
@@ -137,13 +166,13 @@ describe("the cold-start journey terminates at one handoff URL", () => {
 
     // Beat C — the shortlist re-read, by the refs sil returned, ≤5.
     expect(shortlist.length).toBeLessThanOrEqual(5);
-    const reread = await call("sil_product_get", { refs: shortlist }, "j4");
+    const reread = await call("sil_product_get", { refs: shortlist }, "j5");
     expect(reread["status"]).toBe("ok");
 
     // Beat D — the pick's sellers. The pick is a ref sil returned, not a
     // product the agent named.
     const pick = shortlist[0];
-    const stores = await call("sil_stores", { ref: pick, destination: "DE" }, "j5");
+    const stores = await call("sil_stores", { ref: pick, destination: "DE" }, "j6");
     expect(stores["status"]).toBe("ok");
 
     // Beat E — one URL, named for what it is.
@@ -155,12 +184,17 @@ describe("the cold-start journey terminates at one handoff URL", () => {
     // Each route hit exactly as many times as the journey has beats on it, and
     // nothing reached an unrouted path.
     expect(router.search).toHaveLength(2);
+    expect(router.domainFind).toHaveLength(1);
     expect(router.domains).toHaveLength(1);
     expect(router.lookup).toHaveLength(1);
     expect(router.stores).toHaveLength(1);
     expect(router.refresh).toEqual([]);
     expect(router.other).toEqual([]);
-    expect(router.all).toHaveLength(5);
+    expect(router.all).toHaveLength(6);
+    // The two `/catalog/domains` calls are ONE read and ONE write, told apart by
+    // the verb — never two of either.
+    expect(router.domainFind[0].method).toBe("GET");
+    expect(router.domains[0].method).toBe("POST");
   });
 
   it("every URL, price and seller presented came out of a sil tool result", async () => {
@@ -235,12 +269,27 @@ describe("no tool stands in for another, across the whole journey", () => {
     expect(router.all).toHaveLength(1);
   });
 
-  it("`sil_domain_create` never searches to check first — read-before-mint has no route at v0", async () => {
-    // The v0 substitute for read-before-mint is the 400/409 pair. A plugin-side
-    // pre-check would be a second, invented contract.
+  it("`sil_domain_create` performs NO read of its own — the read is the agent's step", async () => {
+    // Read-before-mint is a DISCIPLINE the agent follows across two tool calls,
+    // never a pre-check the mint runs for itself. A mint that silently read first
+    // would make the discipline unobservable — the agent could skip it and the
+    // chain would look identical — and it would hide a second round trip inside
+    // the one call that cannot be undone.
     const router = scriptTheJourney();
     await call("sil_domain_create", { path: DOMAIN, guide: "g", specs: [] }, "m5");
     expect(router.search).toEqual([]);
+    expect(router.domainFind).toEqual([]);
+    expect(router.all).toHaveLength(1);
+  });
+
+  it("`sil_domain_find` never mints — the read and the write share a path, not a verb", async () => {
+    // The inverse, and the more dangerous direction: a read that reached the
+    // POST would coin a category as a side effect of looking one up, with no
+    // undo and nothing downstream able to detect it.
+    const router = scriptTheJourney();
+    await call("sil_domain_find", { q: "ski boots" }, "m6");
+    expect(router.domains).toEqual([]);
+    expect(router.domainFind).toHaveLength(1);
     expect(router.all).toHaveLength(1);
   });
 });

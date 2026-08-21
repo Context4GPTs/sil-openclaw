@@ -14,6 +14,7 @@ named one — and certify a wire that does not exist.
 |---|---|---|
 | `catalog-result-response.golden.json` | `sil-services` `dev` @ **`6a2b5ba`** — `services/sil-api/src/handlers/../__tests__/response-schema-contract.unit.test.ts`'s `SEARCH_RESPONSE`, the wire spec written as an instance | validates against `packages/schemas/schema/catalog-result-response.schema.json` |
 | `catalog-stores-response.golden.json` | `sil-services` `dev` @ **`6a2b5ba`** — assembled to `packages/db/src/stores.ts#buildStore`'s emission (all three serviceability states, `policy_evidence` on the negative one only) | validates against `packages/schemas/schema/catalog-stores-response.schema.json` |
+| `catalog-domain-find-response.golden.json` | `sil-services` `dev` @ **`0f72be5`** — assembled to `services/sil-api/src/handlers/domains.ts#toMatch` × `packages/db/src/registry.ts#toAgentSpec`'s emission, over the vocabulary `domain-find.db.integration.test.ts` seeds (the leaf's five coined specs plus the root's inherited `brand`, with `weight` shadowing) | validates against `packages/schemas/schema/catalog-domains-response.schema.json` |
 
 ## What makes them load-bearing
 
@@ -26,6 +27,14 @@ veto is computable from it, so a projection that drops any input is caught.
 `catalog-stores-response.golden.json` carries `serviceable` · `unknown` · `not_serviceable`
 in one body — `unknown` is the state the whole product turns on, and it is the one a
 filtering consumer would silently drop.
+
+`catalog-domain-find-response.golden.json` carries **both sides of every `DomainSpecWire`
+field that is nullable**: a `unit` set beside a null one, an inline `allowed_values` beside a
+named `value_set` beside neither, a `level` of `product` beside `variant` beside null, and
+`inherited: true` (`defined_at` an ancestor) beside `false`. All four `data_type`s appear, and
+the second match is **fenced** (`validated_at: null`) beside the first's timestamp. Those are
+exactly the fields BR-4's "coin only the keys this path does not already inherit" is computed
+from, so a projector that drops any of them is caught rather than merely suspected.
 
 ## When the sibling's contract moves
 

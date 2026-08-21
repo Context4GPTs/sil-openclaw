@@ -12,6 +12,7 @@
     "tools": [
       "sil_doctor",
       "sil_domain_create",
+      "sil_domain_find",
       "sil_learn",
       "sil_product_get",
       "sil_profile_get",
