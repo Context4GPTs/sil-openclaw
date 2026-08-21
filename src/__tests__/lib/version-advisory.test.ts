@@ -330,7 +330,33 @@ describe("probeLatestVersion — bounded by a DEADLINE, not merely by an abort",
     // The null came FROM the deadline (timers never fire early), so it is a
     // bound — not a probe that happens to give up on its own.
     expect(elapsed).toBeGreaterThanOrEqual(250);
-    expect(elapsed).toBeLessThan(2_000);
+  });
+
+  it("fires the CALLER's deadline and no other — nothing at 299ms, null at 300ms", async () => {
+    // The bracket, on the TEST's clock: the assertion above pins only that a
+    // deadline fired, never WHICH. `setTimeout(…, PROBE_TIMEOUT_MS)` — the
+    // caller's argument ignored — survives every other assertion in this file,
+    // all of them comfortably inside `testTimeout: 10_000`.
+    vi.useFakeTimers();
+    try {
+      let settled = false;
+      const probe = probeLatestVersion(blackhole, 300).then((v) => {
+        settled = true;
+        return v;
+      });
+
+      await vi.advanceTimersByTimeAsync(299);
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      // The flag is read BEFORE the await deliberately: under every mutant this
+      // test kills, the promise never settles, so awaiting first would turn an
+      // instant red into a 10s hang.
+      expect(settled).toBe(true);
+      await expect(probe).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("is not vacuous — the same probe returns a REAL version from a channel that answers", async () => {
@@ -354,21 +380,11 @@ describe("probeLatestVersion — bounded by a DEADLINE, not merely by an abort",
     expect(signal!.aborted).toBe(true);
   });
 
-  it("does NOT wait for the deadline when the channel answers promptly", async () => {
-    // A race won by the deadline on every run would make `sil_doctor` cost its
-    // full timeout each time. With a 30s deadline, an implementation that awaits
-    // it fails by suite timeout rather than passing slowly.
-    const started = Date.now();
-
-    await expect(probeLatestVersion(okChannel("9.9.9"), 30_000)).resolves.toBe("9.9.9");
-
-    expect(Date.now() - started).toBeLessThan(5_000);
-  });
-
-  it("clears the deadline timer once the request wins — no dangling handle", async () => {
-    // A 30s timer left armed after `execute()` returns holds the host's event
-    // loop open — the same class of failure as the register()-opens-nothing
-    // invariant, one layer down.
+  it("resolves on the channel's answer, not the deadline — and leaves no timer armed", async () => {
+    // Two failures, one shape. A race won by the deadline every run would cost
+    // `sil_doctor` its full 30s; a 30s timer still armed after `execute()`
+    // returns holds the host's event loop open. Time is FROZEN here, so an
+    // implementation that awaits its deadline cannot resolve at all.
     vi.useFakeTimers();
     try {
       await expect(probeLatestVersion(okChannel("9.9.9"), 30_000)).resolves.toBe("9.9.9");
