@@ -60,7 +60,7 @@ import {
   readHostVersion,
   readSilWiringFacts,
 } from "../lib/host-wiring.js";
-import { findDocuments, readShopperIdentity } from "../lib/doc-store.js";
+import { findDocuments } from "../lib/doc-store.js";
 import { jsonResult } from "../lib/tool-result.js";
 import {
   buildGatewayCompatFinding,
@@ -701,15 +701,12 @@ function configFinding(): Finding {
 // ===========================================================================
 
 /** Consume the store's OWN fail-closed `unreadable[]` surfacing — never re-parse
- * the documents, never aggregate entries away, and never overwrite one. Each
- * entry becomes exactly one finding. A read-only pass: doctor reports on the store
+ * the documents, never aggregate entries away, and never overwrite one. ONE reader,
+ * so one corrupt file is one finding. A read-only pass: doctor reports on the store
  * it finds, so it never triggers the store's migration. */
 function checkStore(): Finding[] {
   const found = findDocuments();
-  return [
-    ...readShopperIdentity().unreadable,
-    ...(found.ok ? found.unreadable : []),
-  ].map(({ id, error }) => ({
+  return (found.ok ? found.unreadable : []).map(({ id, error }) => ({
     id: `store.unreadable:${id}`,
     severity: "warn" as Severity,
     status: "advisory" as const,

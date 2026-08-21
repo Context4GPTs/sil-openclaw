@@ -366,6 +366,11 @@ export function findDocuments(query: FindQuery = {}): FindResult | InvalidReques
         unreadableDocs.push({ id: "shopper", error: USER_SPEC_FILE + " has malformed or absent frontmatter" });
       } else {
         const name = parsed.fields["name"] ?? "";
+        // A shopper document that cannot say who it is degraded, not healthy — the
+        // same verdict `readShopperIdentity` reaches, reported once, here.
+        if (!nonBlank(name)) {
+          unreadableDocs.push({ id: "shopper", error: USER_SPEC_FILE + " frontmatter carries no name" });
+        }
         if (q === undefined || ("shopper " + name).toLowerCase().includes(q)) {
           result.shopper = { ref: "shopper", name, path };
         }
