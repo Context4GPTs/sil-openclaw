@@ -39,9 +39,9 @@
  *
  * The bin imports the COMPILED libs (`dist/lib/profile-store.js`) and shells the
  * `sil-openclaw-allowlist` bin (which imports `dist/lib/openclaw-allowlist.js`), so
- * beforeAll builds dist FROM THE CURRENT SOURCE — never a possibly-stale dist (a
- * stale dist silently tests old logic). The build is the same `tsc -p
- * tsconfig.build.json` the bin's `../dist` import needs.
+ * dist is built FROM THE CURRENT SOURCE — never a possibly-stale dist (a stale dist
+ * silently tests old logic). That build is `globalSetup`'s (`helpers/build-dist.ts`):
+ * once per run, installed by rename, so no bin ever reads a half-emitted module.
  *
  * THE fake `openclaw` shim is a faithful test double of the EXTERNAL host CLI: it
  * answers `agents list` / `agents add` / `config set` / `config validate` (and the
@@ -60,11 +60,10 @@ import {
   describe,
   it,
   expect,
-  beforeAll,
   beforeEach,
   afterEach,
 } from "vitest";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   mkdtempSync,
   rmSync,
@@ -73,6 +72,8 @@ import {
   writeFileSync,
   mkdirSync,
   chmodSync,
+  openSync,
+  closeSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -115,7 +116,13 @@ interface RunResult {
   status: number;
   stdout: string;
   stderr: string;
+  /** Non-null only if the child was KILLED — i.e. it never terminated on its own. */
+  signal: NodeJS.Signals | null;
 }
+
+/** Hard bound on a single bin run (~1 s in practice). Not a latency budget — a hang
+ * detector, so a bin that waits on an open handle fails the run instead of wedging it. */
+const RUN_TIMEOUT_MS = 20_000;
 
 /** The endorsed create-shopper spec. `agentId` is NOT a field — the bin derives it
  * from `name` (`deriveAgentId`), so the user authors ONE friendly display name. */
@@ -322,23 +329,6 @@ let emptyHome: string; // guaranteed-empty HOME so no real ~/.openclaw resolves
 let logPath: string; // shim invocation log
 let configPath: string;
 
-beforeAll(() => {
-  // The bin imports dist/lib/profile-store.js and shells the allowlist bin
-  // (dist/lib/openclaw-allowlist.js) — build the libs from the CURRENT source so
-  // the integration tier exercises what the dev wrote, never a stale dist. We
-  // invoke the TypeScript compiler's real JS entry (node_modules/.bin/tsc is a
-  // shell wrapper `node` cannot run directly).
-  execFileSync("node", ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"], {
-    cwd: REPO_ROOT,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  for (const rel of ["dist/lib/profile-store.js", "dist/lib/openclaw-allowlist.js"]) {
-    if (!existsSync(join(REPO_ROOT, rel))) {
-      throw new Error(`build did not emit ${rel} — the bin's import would 404`);
-    }
-  }
-}, 120_000);
-
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "sil-create-it-"));
   dataDir = mkdtempSync(join(tmpdir(), "sil-create-data-"));
@@ -421,25 +411,13 @@ interface RunOpts {
   fail?: string[];
   /** Override the resolved config env (for the "no config" fail-closed case). */
   env?: Record<string, string>;
+  /** Redirect the child's stdout/stderr to real FILES instead of pipes. */
+  toFiles?: boolean;
 }
 
-/** Spawn the bin as a child process with a hermetic, explicit env. */
-function runBin(opts: RunOpts = {}): RunResult {
-  const args = [SCRIPT];
-  let input = "";
-  if (opts.stdin !== undefined) {
-    input = opts.stdin;
-  } else if (opts.spec) {
-    if (opts.viaSpecFile) {
-      const specPath = join(workdir, "spec.json");
-      writeFileSync(specPath, JSON.stringify(opts.spec));
-      args.push("--spec", specPath);
-    } else {
-      input = JSON.stringify(opts.spec);
-    }
-  }
-
-  const env: Record<string, string> = {
+/** The hermetic, explicit env every spawn of the bin runs under. */
+function binEnv(opts: RunOpts = {}): Record<string, string> {
+  return {
     PATH: `${binDir}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
     HOME: emptyHome,
     OPENCLAW_CONFIG_PATH: configPath,
@@ -448,27 +426,76 @@ function runBin(opts: RunOpts = {}): RunResult {
     ...(opts.fail && opts.fail.length ? { OPENCLAW_SHIM_FAIL: opts.fail.join(",") } : {}),
     ...(opts.env ?? {}),
   };
+}
 
+/** `[SCRIPT, …]` plus the stdin body, per the chosen input channel. */
+function binArgs(opts: RunOpts): { args: string[]; input: string } {
+  const args = [SCRIPT];
+  if (opts.stdin !== undefined) return { args, input: opts.stdin };
+  if (!opts.spec) return { args, input: "" };
+  if (!opts.viaSpecFile) return { args, input: JSON.stringify(opts.spec) };
+  const specPath = join(workdir, "spec.json");
+  writeFileSync(specPath, JSON.stringify(opts.spec));
+  args.push("--spec", specPath);
+  return { args, input: "" };
+}
+
+/** Spawn the bin as a child process with a hermetic, explicit env. */
+function runBin(opts: RunOpts = {}): RunResult {
+  const { args, input } = binArgs(opts);
+  const env = binEnv(opts);
+
+  const outPath = join(workdir, "bin-stdout.txt");
+  const errPath = join(workdir, "bin-stderr.txt");
+  const fds = opts.toFiles ? [openSync(outPath, "w"), openSync(errPath, "w")] : null;
+
+  // `spawnSync`, never `execFileSync`: the latter returns ONLY stdout on success, so
+  // the whole success path was blind to a child that crashed and still exited 0 — the
+  // diagnostic hole this card's root cause hid behind for a day.
+  // `process.execPath`, never the bare "node": the ClawHub-channel tests below hand
+  // this an env whose PATH holds ONLY the `openclaw` shim, and a PATH lookup for the
+  // interpreter itself would fail there for a reason unrelated to what they prove.
   try {
-    // `process.execPath`, never the bare "node": the ClawHub-channel tests below
-    // hand this an env whose PATH holds ONLY the `openclaw` shim, and a PATH lookup
-    // for the interpreter itself would fail there for a reason that has nothing to
-    // do with what those tests are proving.
-    const stdout = execFileSync(process.execPath, args, {
+    const r = spawnSync(process.execPath, args, {
       input,
       env,
       encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: fds ? ["pipe", fds[0]!, fds[1]!] : ["pipe", "pipe", "pipe"],
+      timeout: RUN_TIMEOUT_MS,
+      // Generous: the >64 KB-marker test emits ~500 KB. An ENOBUFS truncation would
+      // read exactly like the marker truncation under test.
+      maxBuffer: 32 * 1024 * 1024,
     });
-    return { status: 0, stdout, stderr: "" };
-  } catch (err: unknown) {
-    const e = err as { status?: number; stdout?: Buffer | string; stderr?: Buffer | string };
+    if (r.error && (r.error as NodeJS.ErrnoException).code !== "ETIMEDOUT") {
+      throw new Error(`spawning the bin failed outright: ${r.error.message}`);
+    }
     return {
-      status: e.status ?? 1,
-      stdout: (e.stdout ?? "").toString(),
-      stderr: (e.stderr ?? "").toString(),
+      status: r.status ?? 1,
+      stdout: fds ? readFileSync(outPath, "utf8") : (r.stdout ?? ""),
+      stderr: fds ? readFileSync(errPath, "utf8") : (r.stderr ?? ""),
+      signal: r.signal,
     };
+  } finally {
+    for (const fd of fds ?? []) closeSync(fd);
   }
+}
+
+/** Run the bin with a real PTY on fd 1/2 (util-linux `script`). A terminal merges the
+ * two streams, so this returns ONE `merged` text — never split it back apart. */
+function runBinOnPty(spec: Spec): { status: number; signal: NodeJS.Signals | null; merged: string } {
+  const specPath = join(workdir, "pty-spec.json");
+  writeFileSync(specPath, JSON.stringify(spec));
+  const command = [process.execPath, SCRIPT, "--spec", specPath].map((a) => `'${a}'`).join(" ");
+  const r = spawnSync("script", ["-q", "-e", "-c", command, "/dev/null"], {
+    env: binEnv(),
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+    timeout: RUN_TIMEOUT_MS,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  if (r.error) throw new Error(`spawning \`script\` failed outright: ${r.error.message}`);
+  // The pty line discipline maps \n → \r\n; that \r is the terminal's, not the bin's.
+  return { status: r.status ?? 1, signal: r.signal, merged: (r.stdout ?? "").replace(/\r\n/g, "\n") };
 }
 
 /** Parse the single NDJSON marker the bin emits on the given stream. */
@@ -514,8 +541,6 @@ describe("created — one valid run wires every surface and returns the identity
     // … and the agentId is the lower-kebab id DERIVED from it — a concrete literal,
     // never echoed from an input (agentId is no longer a spec field).
     expect(m["agentId"]).toBe("my-shopper");
-    // No failure marker on stderr for a clean create.
-    expect(r.stderr.includes("sil_shopper_create_failed")).toBe(false);
   });
 
   it("materializes the sil artefacts — shared user_spec.md (frontmatter name), NO manifest, NO domains at create", () => {
@@ -1200,16 +1225,22 @@ describe("no PII/secret leakage — the markers never echo the persona or userSp
   it("neither stdout nor stderr contains the persona/userSpec secrets, on created OR on failure", () => {
     writeConfig(freshConfig());
 
+    // BOTH streams of BOTH runs: until this card `runBin` hardcoded `stderr: ""` on
+    // the success path, so this check could only ever see half the output.
     const ok = runBin({ spec: validSpec() });
     expect(ok.status).toBe(0);
-    expect(ok.stdout).not.toContain(PERSONA_SECRET);
-    expect(ok.stdout).not.toContain(USERSPEC_SECRET);
+    for (const stream of [ok.stdout, ok.stderr]) {
+      expect(stream).not.toContain(PERSONA_SECRET);
+      expect(stream).not.toContain(USERSPEC_SECRET);
+    }
 
     // A forced failure carries a path + cause — still never the persona/userSpec.
     const fail = runBin({ spec: validSpec({ name: "Leak Check" }), fail: ["config-validate"] });
     expect(fail.status).not.toBe(0);
-    expect(fail.stderr).not.toContain(PERSONA_SECRET);
-    expect(fail.stderr).not.toContain(USERSPEC_SECRET);
+    for (const stream of [fail.stdout, fail.stderr]) {
+      expect(stream).not.toContain(PERSONA_SECRET);
+      expect(stream).not.toContain(USERSPEC_SECRET);
+    }
   });
 });
 
@@ -1686,4 +1717,156 @@ describe("AC C1 — shell metacharacters round-trip verbatim via --spec", () => 
     expect(parseMarker(r.stdout)["status"]).toBe("created");
     expect(readFileSync(join(spec.workspace, "SOUL.md"), "utf8")).toContain(`'"'"'`);
   });
+});
+
+// ===========================================================================
+// THE OUTPUT CONTRACT — exactly ONE complete NDJSON line on the correct stream,
+// the other stream byte-empty, and the exit code that line claims. Card:
+// create-shopper-bin-dies-on-its-exit-path (`docs/decisions/create-shopper-bin.md`
+// §3). Content and code are pinned TOGETHER on purpose: "no crash banner" and
+// "the other stream is empty" both pass for free against a bin that emits nothing.
+// ===========================================================================
+
+/** The `created` marker echoes an unbounded `name` ~5× (name, agentId, and agentId twice
+ * more in the manual-bind warning), so 64 KiB of it makes the line ~328 KB — 5× a Linux
+ * pipe buffer. Measured on the pre-fix bin: truncated 10/10 at this size (still exit 0,
+ * no trailing newline), 2/6 at 50 k, 0/6 at 20 k. Bounded above too: the derived agentId
+ * goes to `openclaw agents add` as ONE argv element, and Linux caps that at
+ * MAX_ARG_STRLEN (32 pages) — past it the bin fails closed with `persistence_failed` and
+ * never reaches `emitCreated`, testing E2BIG instead of the pipe. 2× headroom either way. */
+const OVERFLOW_NAME_LEN = 65_536;
+
+/** The tails Node prints when it dies of an uncaught exception — the exact bytes that
+ * made `parseMarker` throw `Unexpected token 'N', "Node.js v24.19.0"`. */
+function assertNoCrashDump(...streams: string[]): void {
+  for (const text of streams) {
+    expect(text).not.toContain("Node.js v");
+    expect(text).not.toMatch(/^\s+at .+:\d+:\d+/m);
+    expect(text).not.toContain("throw er;");
+  }
+}
+
+/** The non-empty lines a stream carries. */
+function lines(text: string): string[] {
+  return text.split("\n").filter(Boolean);
+}
+
+describe("output contract — one whole line, one empty stream, the exit code it claims", () => {
+  it("created: stdout is EXACTLY one \\n-terminated created line, stderr is byte-empty, exit 0", () => {
+    writeConfig(freshConfig());
+
+    const r = runBin({ spec: validSpec() });
+
+    expect(r.status).toBe(0);
+    expect(r.signal).toBeNull();
+    // Byte-empty, not "carries no failure marker": until this card, runBin hardcoded
+    // `stderr: ""` on the success path, so a child that dumped a stack and still
+    // exited 0 was invisible to every assertion in this file.
+    expect(r.stderr).toBe("");
+    expect(r.stdout.endsWith("\n")).toBe(true);
+    expect(lines(r.stdout)).toHaveLength(1);
+    // Parsed from the WHOLE stream, not `parseMarker`'s last line — anything else on
+    // stdout is a contract violation, not something to skip past.
+    const m = JSON.parse(r.stdout) as Record<string, unknown>;
+    expect(m["event"]).toBe("sil_shopper_created");
+    expect(m["status"]).toBe("created");
+    assertNoCrashDump(r.stdout, r.stderr);
+  });
+
+  it("invalid_request: stderr is EXACTLY one line naming the field, stdout byte-empty, exit 1", () => {
+    writeConfig(freshConfig());
+
+    const r = runBin({ spec: { ...validSpec(), name: "   " } });
+
+    expect(r.status).toBe(1);
+    expect(r.signal).toBeNull();
+    expect(r.stdout).toBe("");
+    expect(r.stderr.endsWith("\n")).toBe(true);
+    expect(lines(r.stderr)).toHaveLength(1);
+    const m = JSON.parse(r.stderr) as Record<string, unknown>;
+    expect(m["event"]).toBe("sil_shopper_create_failed");
+    expect(m["status"]).toBe("invalid_request");
+    expect(m["field"]).toBe("name");
+    // The measured symptom: Node's dump landing AFTER the bin's own line, which made
+    // `parseMarker` take the banner as the marker and throw on 'N'.
+    assertNoCrashDump(r.stdout, r.stderr);
+  });
+
+  it("a created marker past the pipe buffer still arrives WHOLE — on a pipe, a file, and a pty", () => {
+    const spec = validSpec({ name: "N".repeat(OVERFLOW_NAME_LEN) });
+    // The derived agentId is as long as the name, so the default workspace path would
+    // be ENAMETOOLONG. The bin never puts the id in a path; this fixture must not either.
+    spec.workspace = join(workdir, "overflow-workspace");
+
+    writeConfig(freshConfig());
+    const onPipe = runBin({ spec });
+
+    expect(onPipe.status).toBe(0);
+    expect(onPipe.stderr).toBe("");
+    // Anti-vacuity: the whole point is a line the pipe buffer cannot hold in one go.
+    // If the bin ever bounds the echoed `name`, this is the assertion that should fail.
+    expect(onPipe.stdout.length).toBeGreaterThan(64 * 1024);
+    expect(lines(onPipe.stdout)).toHaveLength(1);
+    expect((JSON.parse(onPipe.stdout) as Record<string, unknown>)["name"]).toBe(spec.name);
+
+    // A file redirect and a terminal are the other two channels the shipped bin runs
+    // on (`node <creationEntrypoint>` from an agent's bash tool, or by hand).
+    rmSync(dataDir, { recursive: true, force: true });
+    mkdirSync(dataDir, { recursive: true });
+    writeConfig(freshConfig());
+    const toFile = runBin({ spec, toFiles: true });
+
+    expect(toFile.status).toBe(0);
+    expect(toFile.stderr).toBe("");
+    expect(lines(toFile.stdout)).toHaveLength(1);
+    expect((JSON.parse(toFile.stdout) as Record<string, unknown>)["name"]).toBe(spec.name);
+
+    rmSync(dataDir, { recursive: true, force: true });
+    mkdirSync(dataDir, { recursive: true });
+    writeConfig(freshConfig());
+    // Anti-vacuity for the channel itself: prove `script` really hands the child a tty,
+    // or this leg silently re-tests the pipe.
+    const ttyProbe = spawnSync(
+      "script",
+      ["-q", "-e", "-c", `'${process.execPath}' -e 'process.stdout.write(String(process.stdout.isTTY))'`, "/dev/null"],
+      { env: binEnv(), encoding: "utf8", timeout: RUN_TIMEOUT_MS },
+    );
+    expect(ttyProbe.stdout.trim()).toBe("true");
+
+    const onPty = runBinOnPty(spec);
+
+    expect(onPty.status).toBe(0);
+    expect(lines(onPty.merged)).toHaveLength(1);
+    expect((JSON.parse(onPty.merged) as Record<string, unknown>)["name"]).toBe(spec.name);
+
+    assertNoCrashDump(onPipe.stdout, onPipe.stderr, toFile.stdout, toFile.stderr, onPty.merged);
+  }, 60_000);
+
+  it("every terminal outcome exits on its own — never killed, never waiting on a handle", () => {
+    // The hang the `process.exitCode` + natural-exit direction invites. For the sole
+    // caller — a synchronous bash tool — a bin that never returns is worse than a
+    // wrong exit code, and no other test here would notice: `runBin`'s timeout kills
+    // it and every assertion then reads a plain non-zero status.
+    const outcomes: Array<[string, () => RunResult, number]> = [
+      ["created", () => runBin({ spec: validSpec() }), 0],
+      ["invalid_request", () => runBin({ stdin: "" }), 1],
+      ["collision", () => { seedExistingShopper(); return runBin({ spec: validSpec() }); }, 1],
+      ["persistence_failed", () => runBin({ spec: validSpec(), fail: ["agents-add"] }), 1],
+    ];
+
+    for (const [label, run, expected] of outcomes) {
+      rmSync(dataDir, { recursive: true, force: true });
+      mkdirSync(dataDir, { recursive: true });
+      writeConfig(freshConfig());
+
+      const r = run();
+
+      expect(r.signal, `${label}: the bin was KILLED, so it never terminated on its own`).toBeNull();
+      expect(r.status, `${label}: exit code must match the marker's claim`).toBe(expected);
+      // Anti-vacuity: a bin that emitted nothing would satisfy both of the above.
+      const marker = JSON.parse(expected === 0 ? r.stdout : r.stderr) as Record<string, unknown>;
+      expect(marker["status"]).toBe(label);
+      assertNoCrashDump(r.stdout, r.stderr);
+    }
+  }, 60_000);
 });
