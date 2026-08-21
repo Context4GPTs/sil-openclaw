@@ -157,7 +157,7 @@ function errCause(err) {
 
 /** Atomic single-file write: tmp sibling → write → rename over target, preserving
  * the given mode. A reader sees the old file or the new one, never a half-written
- * one (mirrors `allowlist-openclaw.mjs` / `profile-store.ts`). */
+ * one (mirrors `allowlist-openclaw.mjs` / `doc-store.ts`). */
 function atomicWrite(path, contents, mode) {
   const tmp = path + "." + randomBytes(6).toString("hex") + ".tmp";
   writeFileSync(tmp, contents, mode !== undefined ? { mode } : undefined);

@@ -155,7 +155,7 @@ agent  Different niche — camping. Learning how to buy a backpacking
 
 > **You teach it once; it stays sharp.** It keeps your facts and taste, web-refreshes its niche knowledge each visit, and never re-asks what it already knows. See what your shopper knows and which domains it has learned, look at how a domain is set up, forget one you're done with — or **refine** the shopper or a domain from what it watched you reject, so it gets sharper every session.
 
-**What it remembers, and where it lives.** Your shopper learns your shopping-relevant facts as it goes — measurements, budget band, the rules it must never break, brand likes/dislikes — captured **only when a request actually needs them** (never a big up-front form) so it doesn't re-ask. All of it is stored **locally on your machine** (`$SIL_DATA_DIR/shopper/`, owner-only `0600`), **per-user (one shopper, many domains)**. It is **never pooled across users and never sent to a server** for training or aggregation — creating and running your shopper is local and offline. The niche web-refresh reads public sources to keep the *domain* knowledge current; it does not upload anything about you. Inspect exactly what your shopper holds with `sil_profile_get`, and forget one domain it learned with `sil_profile_remove`.
+**What it remembers, and where it lives.** Your shopper learns your shopping-relevant facts as it goes — measurements, budget band, the rules it must never break, brand likes/dislikes — captured **only when a request actually needs them** (never a big up-front form) so it doesn't re-ask. All of it is stored **locally on your machine** (`$SIL_DATA_DIR/shopper/`, owner-only `0600`), **per-user (one shopper, one document per shopping job)**. It is **never pooled across users and never sent to a server** for training or aggregation — creating and running your shopper is local and offline. Research reads public sources to learn how a *category* is bought; it does not upload anything about you. Inspect exactly what your shopper holds with `sil_doc_find` / `sil_doc_read`, and forget a job it kept with `sil_doc_remove`.
 
 ---
 
@@ -179,13 +179,19 @@ Namespaced `sil_*` so they never collide with other plugins. Your agent calls th
 | `sil_stores` | For **one pick** (`ref`), every seller that carries it and what sil knows about shipping it to `destination`. Each seller carries `serviceability` — `serviceable` (sil read a route covering the destination), `not_serviceable` (sil read its policy and it excludes the destination), or `unknown` (sil has not read its policy) — plus its observed `fulfillment` routes, shipping `cost` and `free_threshold` ranges per currency, and a `handoff` that names its own promise (`source: buy_url` = a checkout path, `source: url` = the listing page). `unknown` is an ordinary answer that keeps the seller, and at v0 it is the common one. With no `destination` and no registered country the call is refused rather than answered for an unknown place. |
 | `sil_domain_create` | Add a **new** category to sil's shared registry: its `path`, a `guide` written from research into how that category is actually bought, and its first `specs`. New nodes only — an existing path is refused and nothing is written. What it writes is global, and a fresh node is provisional (`validated_at: null`): its first search answers come from the web while sil's catalog catches up. |
 
-**Your shopper** — create one shopper, then manage the domains it learns
+**Your shopper's documents** — two kinds, four verbs, all on your own disk
+
+Everything the shopper knows lives in markdown under `$SIL_DATA_DIR/shopper/`: one
+**shopper document** (`user_spec.md` — who you are) and one **Brief** per shopping job
+(`briefs/<slug>.md` — what you want). A document is addressed by a `ref`: `"shopper"` or
+`"brief:<slug>"`.
 
 | Tool | What it does |
 |---|---|
-| `sil_profile_materialize` | Write your shopper's behaviour artefacts under `$SIL_DATA_DIR/shopper/`. One tool, two modes: **create** your shopper (the shared, cross-niche `user_spec.md` + a `profile.json` manifest, no niche pack), or **mint/refresh a domain** the first time you shop a niche (that niche's `domain_spec.md` (deep researched niche expertise) + `intent_spec.md` (the decomposition-dimension schema) + `playbook.md` (your niche shopping taste), alongside the shared `user_spec.md`). (The persona is the agent's host workspace `SOUL.md`, not a sil artefact.) Validate-first and fail-closed; it never clobbers an existing domain, and a second shopper is refused. |
-| `sil_profile_get` | Show your shopper — with **no arguments**, the overview (`name`, the shared `userSpec`, the domain index of everything it has learned; an empty store is healthy); pass a `domainSlug` for one domain's `domainSpec` + `intentSpec` + `playbook`. |
-| `sil_profile_remove` | Forget ONE domain — pass its `domainSlug`; your shopper, your shared facts, and every other domain survive. Scoped and idempotent; the agent confirms with you before removing. |
+| `sil_doc_find` | List what your shopper has — the shopper document and every Brief, as **coordinates only** (ref, title, status, the job's items), never bodies. Optional `kind`, `domain` (a path prefix over the Briefs' items), `status` and free-text `query`, all composable; the bare call is the whole overview. A file with malformed frontmatter is reported as `unreadable` and keeps its place. |
+| `sil_doc_read` | Read ONE whole document body plus its frontmatter, by `ref`. An absent document is `not_found`; a present-but-corrupt one is `unreadable`, which the agent inspects rather than overwrites. |
+| `sil_doc_write` | Write ONE document — `body` is always the **whole** reconciled markdown, so a correction rewrites the line it changes instead of stacking a contradicting one. `mode: create` refuses if the ref already exists; `mode: replace` refuses if it does not. Atomic and owner-only. |
+| `sil_doc_remove` | Forget ONE Brief. Never a cascade, and the shopper document itself is not removable — correct it with a `replace` instead. The agent confirms with you first; removing something already gone is a safe no-op. |
 
 ---
 
@@ -193,7 +199,7 @@ Namespaced `sil_*` so they never collide with other plugins. Your agent calls th
 
 The plugin ships one bundled skill — **`sil-shopping`** 🛒 — that your agent loads automatically the first time you express a shopping intent. You don't invoke it; it's the playbook that makes the tools work well together:
 
-- **Routes intent to the right tool.** *"find me a keyboard"* → `sil_search`, *"look these up"* → `sil_product_get`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`, *"set up my shopper"* → the create flow, *"what does my shopper know / forget the grocery domain"* → the `sil_profile_*` tools.
+- **Routes intent to the right tool.** *"find me a keyboard"* → `sil_search`, *"look these up"* → `sil_product_get`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`, *"set up my shopper"* → the create flow, *"what does my shopper have / forget that job"* → the `sil_doc_*` tools.
 - **One shopper, many niches — minted on the fly.** Asked to set up shopping, it runs a short two-touchpoint onboarding (how your shopper should behave + your cross-niche facts and hard rules) and creates **one** shopper — creating nothing until you explicitly endorse the draft. From then on it shops *any* niche: it classifies what you're buying, reuses a niche it has already learned or **researches a new one on the spot** (announced, so you can correct it), and derives how to decompose every request — learning your facts and taste as it goes.
 - **Recovers the right way.** Every tool reports a status; the skill follows that tool's own recovery hint — re-register, fix the query, or retry — instead of guessing a fix that won't work.
 - **Keeps prices honest.** It treats price, availability, and checkout links as point-in-time and re-checks an item right before you buy, so the link you get is the link you pay.

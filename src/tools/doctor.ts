@@ -71,12 +71,12 @@ import {
 } from "../lib/version-advisory.js";
 
 /** Owner-only file mode. `DIR_MODE` (0o700) is owned by `credentials.ts` and
- * imported; the file mode is private per-module there and in `profile-store.ts`,
+ * imported; the file mode is private per-module there and in `doc-store.ts`,
  * so this mirrors that pattern rather than exporting a fourth copy. */
 const FILE_MODE = 0o600;
 
 /** An interrupted atomic write leaves `<path>.<hex>.tmp` behind
- * (`profile-store.ts`'s tmp → rename). The hex length is not pinned: it is a
+ * (`doc-store.ts`'s tmp → rename). The hex length is not pinned: it is a
  * detail of one call site's `randomBytes(n)`, and an orphan is an orphan.
  * Bytes on disk ⇒ surfaced, never deleted. */
 const STALE_TMP_RE = /\.[0-9a-f]+\.tmp$/;

@@ -12,6 +12,23 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
+- **`sil_doc_find` / `sil_doc_read` / `sil_doc_write` / `sil_doc_remove` — the
+  shopper's documents, four operations over one ref scheme.** `ref` is `"shopper"`
+  (the person) or `"brief:<slug>"` (one shopping job, many items, many domains).
+  `find` returns coordinates only, never bodies, filtered by `kind` · `domain` (a
+  path prefix over a Brief's `## Items`) · `status` · `query`. `write` takes the
+  WHOLE reconciled markdown — no append, no section patch — with `mode: create`
+  failing if the ref exists and `mode: replace` failing if it does not. `remove`
+  takes one Brief and never cascades; the shopper document is not removable.
+- **The skill drives the eight beats** (`SIL-DOMAINS-AND-SPECS.md` §5 at the
+  `SIL-V0-DOMAINS-AND-SPECS.md` §6 narrowing) at their real cadences — BRIEF once
+  per job, DOMAIN…FEEDBACK per item, VERDICT out of band per bought item. BRIEF and
+  DOMAIN are split (a job is scoped in the buyer's words before any category is
+  settled, and an unclassified item is a legal state); **ASK is its own beat**, so
+  `## Notes / open` is read back as its input rather than written as sediment; and
+  **VERDICT** is new — the out-of-band *did it work?* read that writes
+  `## Past purchases`, `## Fit` and any `## Shopping` section it contradicts.
+
 - **`sil_stores` — every seller of one pick, and where the buyer goes.** Calls
   `POST /catalog/stores` with a single `ref`. Each seller carries
   `serviceability` — `serviceable`, `not_serviceable`, or `unknown` — plus its
@@ -30,6 +47,16 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
+- **BREAKING — the shopper's store is FLAT, and the pre-0.5 layout migrates in one
+  hop on first touch of a `sil_doc_*` tool.** `shopper/user_spec.md` +
+  `shopper/briefs/<slug>.md` replace `shopper/domains/<slug>/{method.md,
+  prds/*.md}`. Each legacy method becomes a `## Shopping` `### <domain>` section on
+  the shopper document; each legacy PRD becomes a one-row-`## Items` Brief. A legacy
+  source file is deleted **only after its replacement reads back**, one that will not
+  parse is reported and left in place, and **bytes under a legacy `assets/` directory
+  are never deleted**.
+- **The `≤4` `sil_search` call bound is PER ITEM**, not per request. On a two-item
+  job the old reading either halved the second item's budget or blew the bound.
 - **The catalog contract is v0's, and the pre-v0 one is deleted.** `sil_search`
   now takes `domain` · `query` · `n` · `predicates` · `destination` and answers
   with the route's own result object — `results` (each with `ref`, `maturity`,
@@ -52,6 +79,12 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Removed
 
+- **BREAKING — `sil_learn`, `sil_profile_materialize`, `sil_profile_search`,
+  `sil_profile_get` and `sil_profile_remove` are deleted** (13 tools → 12), along
+  with the local domain model they addressed: `method.md`, intent-keyed PRDs, the
+  `{domain, product, intent}` triple, `attach-asset` and its MIME allowlist. The
+  buying guide and its vocabulary belong to the shared registry (`sil_domain_find`);
+  what is local is the person and their jobs.
 - **The pre-v0 catalog surface, outright.** Gone: `filters` (`category`,
   `price_min`/`price_max`, `condition`, `available`), `local_merchants`, `ship_to`,
   the `cursor` pagination, `checkout_url`, `specs_status`, the `{ns, key}` spec

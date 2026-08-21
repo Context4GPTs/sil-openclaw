@@ -98,7 +98,7 @@ function readSilFacts() {
 
 /** Atomic single-file write: tmp sibling → write → rename over target,
  * PRESERVING the source file's existing mode (host config is operator-readable,
- * NOT a 0600 credential — mirrors `src/lib/profile-store.ts:321-327` minus the
+ * NOT a 0600 credential — mirrors `src/lib/doc-store.ts`'s atomic write minus the
  * hardcoded mode). A reader sees either the old file or the new one, never a
  * half-written one; a crash before rename leaves the original untouched. */
 function atomicWrite(path, contents, mode) {
