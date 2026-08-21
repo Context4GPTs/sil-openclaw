@@ -1,6 +1,6 @@
 ---
 name: multi-domain-shopper-walkthrough
-description: A worked eight-beat run — create one shopper (after endorsement), then a single two-item job across two unrelated categories, showing beat 1 running once, beats 2–7 running per item, one merged ASK turn before any search, and a later session opening with the verdict ask. Illustrative, not a spec.
+description: A worked eight-beat run — create one shopper (after endorsement), then a single two-item job across two unrelated categories, showing beat 1 running once per job, beats 2–7 running per item, one merged ask turn before any search, and a later session opening with the verdict ask, out of band. Illustrative, not a spec.
 ---
 
 # Worked run — one shopper, one two-item job, eight beats
@@ -17,7 +17,7 @@ so it lives in the shopper document's `## Constraints`.
 
 ## The job: "a week in Chamonix — I need boots and a shell"
 
-### Beat 1 — BRIEF (once for the whole job)
+### Beat 1 — BRIEF (once per job)
 
 `sil_doc_find { kind: "brief", query: "chamonix ski" }` → nothing open. Open one Brief,
 `brief:chamonix-feb`, and write **scope only**:

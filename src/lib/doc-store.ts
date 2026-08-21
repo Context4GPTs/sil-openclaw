@@ -628,22 +628,33 @@ export function migrateLegacyStore(): MigrationSummary | null {
 
   const methods: LegacyMethod[] = [];
   const prds: LegacyPrd[] = [];
+  // A legacy file that will not parse is never guessed at and never deleted — it is
+  // reported every run instead, because a store nobody can read is a real problem and
+  // silence is how it stays one.
+  const corrupt: string[] = [];
   for (const slug of legacyDirs(legacyRoot)) {
     const methodPath = join(legacyRoot, slug, LEGACY_METHOD_FILE);
     const method = readArtefactFile(methodPath);
     if (method !== null) methods.push({ slug, path: methodPath, body: method.body });
+    else if (existsSync(methodPath)) corrupt.push(methodPath);
     const prdsDir = join(legacyRoot, slug, LEGACY_PRDS_SUBDIR);
     if (!existsSync(prdsDir)) continue;
     for (const file of readdirSync(prdsDir).filter((f) => f.endsWith(".md")).sort()) {
       const path = join(prdsDir, file);
       const prd = readArtefactFile(path);
-      if (prd === null) continue; // corrupt: left on disk for a human, never guessed at
+      if (prd === null) {
+        corrupt.push(path);
+        continue;
+      }
       prds.push({ domainSlug: slug, key: file.replace(/\.md$/, ""), path, fields: prd.fields, body: prd.body });
     }
   }
-  if (methods.length === 0 && prds.length === 0) return null;
+  if (methods.length === 0 && prds.length === 0 && corrupt.length === 0) return null;
 
-  const failed: Array<{ path: string; error: string }> = [];
+  const failed: Array<{ path: string; error: string }> = corrupt.map((path) => ({
+    path,
+    error: "malformed or absent frontmatter — left in place for repair, never migrated",
+  }));
   const shoppingSections = migrateMethods(methods, failed);
   const briefs = migratePrds(prds, failed);
   pruneLegacyTree(legacyRoot);

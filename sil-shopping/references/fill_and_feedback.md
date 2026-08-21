@@ -3,7 +3,7 @@ name: fill-ask-feedback-verdict
 description: Beats 3, 4, 7 and 8 of the shopping loop. Beat 3 FILL resolves the Brief's predicates from what is already held; Beat 4 ASK is the one gate for what is still open and load-bearing, and owns the ## Notes / open surface; Beat 7 FEEDBACK captures what the reaction surfaced; Beat 8 VERDICT is the out-of-band did-it-work read. All four write through sil_doc_write. Load within an active sil shopping loop.
 ---
 
-# Beats 3 (FILL), 4 (ASK), 7 (FEEDBACK) and 8 (VERDICT)
+# The four writing beats — FILL · ASK · FEEDBACK · VERDICT
 
 All four persist the same way: `sil_doc_read` the target, reconcile in context, then
 `sil_doc_write { mode: "replace" }` the **whole** body back. There is no append and no
@@ -46,8 +46,8 @@ values**: for item domain D, every row whose `domain` is ancestor-or-self of D. 
 once, visible in the document, checkable. Restating the values is how a corrected row
 and its copy come to disagree.
 
-**FILL's job is to RESOLVE, and it stops there.** What it could not resolve is handed to
-Beat 4 as-is. Fill asks the buyer nothing.
+**FILL's job is to RESOLVE, and it stops there.** What it could not resolve is handed
+untouched to Beat 4 ASK, which is the only beat that puts a question to the buyer.
 
 ## Beat 4 — ASK: one gate, and it owns `## Notes / open`
 

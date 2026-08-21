@@ -3,17 +3,20 @@ name: domain-and-brief
 description: Beat 2 of the loop — resolve each item's domain against sil's shared registry, adopt its guide, and run the exact-by-domain recall that raises the verdict ask — plus the shopper's two document kinds (the shopper document and Briefs), the flat store, and discovery/manage via sil_doc_find / sil_doc_read / sil_doc_write / sil_doc_remove. Load when classifying an item or reading and writing the shopper's own documents.
 ---
 
-# Beat 2 — the item's domain, the shopper's documents, and the store
+# The item's domain, the shopper's documents, and the store
+
+## Beat 2 — DOMAIN: settle the item's category and adopt its guide
 
 Beat 1 hands off a Brief whose `## Items` rows are in the buyer's words and carry **no
 domain**. Beat 2 settles the domain **per item** and brings that category's shared
 buying guide into the Brief, ready for Beat 3 to fill.
 
-**Per item, and independently.** A two-item job runs Beat 2 twice. Neither item's domain
-is inferred from the other's — *boots* and *shell* live under different parts of the tree,
-and carrying one across is how a job silently searches the wrong category.
+**Per item, and independently.** A two-item job runs Beat 2 twice, one resolution per
+item. Neither item's domain is inferred from the other's — *boots* and *shell* live under
+different parts of the tree, and carrying one across is how a job silently searches the
+wrong category.
 
-## The two reads Beat 2 makes
+### The two reads Beat 2 makes
 
 1. **`sil_domain_find { q: <the item's own prose> }`** — sil's shared registry: is there
    already a category for this, and what does it say about how the thing is bought?
@@ -28,7 +31,7 @@ trigger and the rules are in [`fill_and_feedback.md`](fill_and_feedback.md). No 
 done Brief with an undecided pick means **no ask** — the trigger is the undecided pick,
 never elapsed time and never a session count.
 
-## Reading the registry: adopt whole, coin only when nothing stands
+### Reading the registry: adopt whole, coin only when nothing stands
 
 **sil's registry is the first place you explore — before the web.** It is the cheapest
 read you have, and what it returns is what every other shopper already agreed to call
@@ -88,7 +91,7 @@ things.
 Naming is never a gate — an unresolved key costs precision, never blocks a search — and it
 is **silent to the buyer**: never surface key plumbing.
 
-## What Beat 2 writes back
+### What Beat 2 writes back
 
 Three things, into the Brief, with one `sil_doc_write { mode: "replace" }`:
 

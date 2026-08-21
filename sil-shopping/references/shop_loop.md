@@ -28,11 +28,11 @@ This file owns Beats 1, 5 and 6.
 
 ## Beat 1 — BRIEF: scope the job, in the buyer's words, before any domain
 
-**Recall first.** `sil_doc_find { kind: "brief", query: <the buyer's own words> }` — a
-**text** recall. When an open Brief already covers this job, **reuse it**; do not open a
-second Brief for one job. This is the first of two recalls and it does not replace the
-second: Beat 2 runs an **exact-by-domain** recall over a different question, and neither
-subsumes the other.
+**Recall first** — `sil_doc_find { kind: "brief", query: <the buyer's own words> }` is a
+**text** recall, and when an open Brief already covers this job you **reuse it** rather
+than open a second Brief for one job. This is the first of two recalls and it does not
+replace the second: Beat 2 runs an **exact-by-domain** recall over a different question,
+and neither subsumes the other.
 
 **Then decide scope, and only scope.** The Brief gets an `## Items` table with **one row
 per thing being bought**, and one **prose subsection per row** carrying that thing in the
@@ -69,9 +69,9 @@ Beat 5 **projects** what Beats 3–4 resolved; it never re-derives it. For **eac
 - **`n`** is a spend knob (the web leg fetches candidates to fill it) — choose it for the
   actual need rather than always asking for the ceiling.
 
-**The bound is ≤ 4 priority-ordered `sil_search` calls PER ITEM — not per job.** A
-two-item job gets its own fan-out for each item; halving one item's budget because
-another item spent it is not the bound, it is a bug.
+**The bound is ≤ 4 priority-ordered `sil_search` calls PER ITEM.** It is never spent
+across the whole job: each item gets its own fan-out, and halving one item's budget
+because another item spent it is not the bound, it is a bug.
 
 - **Call 1 is the tightest projection.** **Calls 2–4 are deliberate widenings**: relax the
   least load-bearing **soft** row, an adjacent phrasing that lifts recall, or an explicit
