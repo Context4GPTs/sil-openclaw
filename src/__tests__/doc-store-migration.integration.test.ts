@@ -57,6 +57,19 @@ const call = async (
 const shopperDir = (): string => join(dataDir, "shopper");
 const legacyDir = (slug: string): string => join(shopperDir(), "domains", slug);
 
+/** The lines under one H2, up to the next H2 — the SCOPE the "already carried over"
+ * probe must respect. A `### <slug>` heading somewhere else in the person's document
+ * is not evidence that this method was migrated. Absent heading ⇒ `""`, which fails
+ * every positive assertion below (the safe direction). */
+function section(body: string, heading: string): string {
+  const lines = body.split(/\r?\n/);
+  const start = lines.findIndex((l) => l.trim() === heading);
+  if (start < 0) return "";
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^##\s/.test(l));
+  return (end < 0 ? rest : rest.slice(0, end)).join("\n");
+}
+
 /** Every path under the shopper root, relative and sorted — the whole-tree assertion
  * the "no code path afterwards creates a legacy path" clause needs. */
 const tree = (): string[] =>
@@ -130,11 +143,14 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
     const shopper = await call("sil_doc_read", { ref: "shopper" });
     expect(shopper["status"]).toBe("ok");
     const body = String(shopper["body"]);
-    expect(body).toContain("## Shopping");
-    expect(body).toMatch(/^### coffee$/m);
-    expect(body).toMatch(/^### ski$/m);
-    expect(body).toContain("Prefers last-year models");
-    expect(body).toContain("Single-origin, medium roast");
+    // SCOPED: G6 puts each method UNDER `## Shopping`, so a heading loose in the
+    // document is not the claim. This is also what pins the heading demotion — an
+    // undemoted `##` inside a method body closes the very section it was put in.
+    const shopping = section(body, "## Shopping");
+    expect(shopping).toMatch(/^### coffee$/m);
+    expect(shopping).toMatch(/^### ski$/m);
+    expect(shopping).toContain("Prefers last-year models");
+    expect(shopping).toContain("Single-origin, medium roast");
     // The taste moved; the person did not get overwritten by it.
     expect(body).toContain("Buys once and keeps it");
     expect(body).toContain("Ships to Greece");
@@ -237,5 +253,107 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
         .mocked(api.logger.info)
         .mock.calls.filter(([marker]) => marker === "sil_doc_store_migrated"),
     ).toEqual([]);
+  });
+
+  // =========================================================================
+  // The VERIFY, four ways. A migration's verify must prove THE UNIT landed —
+  // not that the destination file re-parses. `migrateMethods` folds N methods
+  // into ONE `user_spec.md`, so "it still parses" is true even when this
+  // method's section is nowhere in it and the source is dropped anyway.
+  // Review round 1, P1: reproduced as unrecoverable loss under `failed: []`.
+  // =========================================================================
+
+  it("G6 — a `### <slug>` heading OUTSIDE `## Shopping` is not proof of migration: the taste is carried, and only then is the source dropped", async () => {
+    // The buyer's own document already says `### ski` — under `## Fit`, about their
+    // feet. A whole-body scan reads that as "already carried over", skips the
+    // transform, and deletes `method.md`: the taste is gone, and the summary says
+    // it succeeded. That is the `0.3.7 → 0.4.0` class this migration exists to stop.
+    write(
+      join(shopperDir(), "user_spec.md"),
+      artefact(
+        { name: "Ioannis" },
+        "## Who\nBuys once and keeps it.\n\n## Fit\n### ski\nNarrow heel, 27.5 Mondo.\n",
+      ),
+    );
+    write(
+      join(legacyDir("ski"), "method.md"),
+      artefact({ domain: "ski", name: "Ski" }, "Prefers last-year models. Never a narrow last.\n"),
+    );
+
+    expect((await call("sil_doc_find"))["status"]).toBe("ok");
+
+    const body = String((await call("sil_doc_read", { ref: "shopper" }))["body"]);
+    // The section landed where G6 puts it — scoped, because placement is the claim.
+    expect(section(body, "## Shopping")).toMatch(/^### ski$/m);
+    // …carrying the taste. Unscoped: this one is the data-loss assertion.
+    expect(body).toContain("Never a narrow last");
+    // …and the buyer's own `### ski` is still under `## Fit`, untouched. Also the
+    // guard-of-the-guard: it proves the two scopes above are genuinely distinct.
+    expect(section(body, "## Fit")).toMatch(/^### ski$/m);
+  });
+
+  it("G6 — a `### <slug>` heading under `## Shopping` carrying DIFFERENT words is not this method: the probe compares the section, not the heading", async () => {
+    // Beat 7 writes `## Shopping ### <domain>` sections itself, so a store can hold the
+    // buyer's own `### ski` AND a pre-0.5 `method.md` for the same niche. A probe that
+    // matches on the heading alone calls that "already carried over" and deletes the
+    // source — the same unrecoverable loss as above, one level in.
+    write(
+      join(shopperDir(), "user_spec.md"),
+      artefact(
+        { name: "Ioannis" },
+        "## Who\nBuys once.\n\n## Shopping\n### ski\nWhatever the shop recommends.\n",
+      ),
+    );
+    write(
+      join(legacyDir("ski"), "method.md"),
+      artefact({ domain: "ski", name: "Ski" }, "Prefers last-year models. Never a narrow last.\n"),
+    );
+
+    expect((await call("sil_doc_find"))["status"]).toBe("ok");
+
+    const shopping = section(String((await call("sil_doc_read", { ref: "shopper" }))["body"]), "## Shopping");
+    expect(shopping).toContain("Never a narrow last"); // the legacy taste came across
+    expect(shopping).toContain("Whatever the shop recommends"); // …beside the buyer's own
+  });
+
+  it("G6 — a legacy directory name carrying a regex metacharacter migrates through a structural probe, and never throws across the tool boundary", async () => {
+    // A slug interpolated into `new RegExp(...)` is a SyntaxError waiting on a live
+    // disk: `foo(bar` makes every `sil_doc_*` call throw for that store, forever,
+    // against `doc-store.ts:52` ("the store never throws across the tool boundary").
+    // A line-equality probe cannot throw and needs no escaping.
+    write(join(shopperDir(), "user_spec.md"), artefact({ name: "Ioannis" }, "## Who\nBuys once.\n"));
+    write(
+      join(legacyDir("foo(bar"), "method.md"),
+      artefact({ domain: "foo(bar" }, "Only the wide last fits.\n"),
+    );
+
+    expect((await call("sil_doc_find"))["status"]).toBe("ok");
+
+    const body = String((await call("sil_doc_read", { ref: "shopper" }))["body"]);
+    expect(section(body, "## Shopping")).toMatch(/^### foo\(bar$/m);
+    expect(body).toContain("Only the wide last fits");
+  });
+
+  it("G6 — a RESUMED migration carries a section once: `### ski` already under `## Shopping` with the source still on disk is recognised, not appended twice", async () => {
+    // The other side of the probe, and what an over-correction breaks. The run that
+    // wrote the section but died before the unlink leaves exactly this state; a
+    // transform that stopped probing would stack a second `### ski` on the person's
+    // document — the contradicting-row failure the whole write model exists to stop.
+    write(
+      join(shopperDir(), "user_spec.md"),
+      artefact({ name: "Ioannis" }, "## Who\nBuys once.\n\n## Shopping\n### ski\nPrefers last-year models.\n"),
+    );
+    write(
+      join(legacyDir("ski"), "method.md"),
+      artefact({ domain: "ski", name: "Ski" }, "Prefers last-year models.\n"),
+    );
+
+    expect((await call("sil_doc_find"))["status"]).toBe("ok");
+
+    const body = String((await call("sil_doc_read", { ref: "shopper" }))["body"]);
+    expect(body.split(/\r?\n/).filter((l) => l.trim() === "### ski")).toHaveLength(1);
+    // …and the hop still COMPLETES: recognising the section is not a reason to leave
+    // the legacy tree behind, which would re-run the migration on every call forever.
+    expect(existsSync(join(legacyDir("ski"), "method.md"))).toBe(false);
   });
 });
