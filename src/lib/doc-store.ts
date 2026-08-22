@@ -703,14 +703,10 @@ function migrateMethods(methods: LegacyMethod[], failed: Array<{ path: string; e
     return 0;
   }
   let body = existing.body;
-  const migrated: LegacyMethod[] = [];
   for (const m of methods) {
-    if (new RegExp("^###\\s+" + m.slug + "\\s*$", "m").test(body)) {
-      migrated.push(m); // already carried over by an interrupted earlier run
-      continue;
-    }
-    body = appendShoppingSection(body, m.slug, m.body);
-    migrated.push(m);
+    // Skipped only when an interrupted earlier run already carried this one over —
+    // same predicate as the drop gate, so appending and deleting cannot disagree.
+    if (!carriesMethod(body, m)) body = appendShoppingSection(body, shoppingSection(m));
   }
   try {
     atomicWrite(path, serializeArtefact(existing.fields, body));
@@ -723,21 +719,50 @@ function migrateMethods(methods: LegacyMethod[], failed: Array<{ path: string; e
     failed.push({ path, error: "the migrated user_spec.md did not read back" });
     return 0;
   }
-  for (const m of migrated) dropLegacyFile(m.path, failed);
-  return migrated.length;
+  let landed = 0;
+  for (const m of methods) {
+    if (!carriesMethod(verified.body, m)) {
+      failed.push({
+        path: m.path,
+        error: "its taste did not land under `### " + m.slug + "` in `## Shopping` —"
+          + " left in place rather than deleted unverified",
+      });
+      continue;
+    }
+    dropLegacyFile(m.path, failed);
+    landed += 1;
+  }
+  return landed;
 }
 
-/** Insert `### <slug>` at the END of `## Shopping`, minting the section when absent. */
-function appendShoppingSection(body: string, slug: string, methodBody: string): string {
-  const block = "### " + slug + "\n" + methodBody.trim() + "\n";
+/** One method in its migrated form: headings demoted two levels, because a `## ` inside
+ * the body would otherwise close the `## Shopping` scope the section now sits in. */
+function shoppingSection(m: LegacyMethod): string {
+  const demoted = m.body
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .replace(/^#{1,6}(?=\s)/gm, (h) => "#".repeat(Math.min(6, h.length + 2)));
+  return "### " + m.slug + "\n" + demoted;
+}
+
+/** Has THIS method's text landed under its own heading inside `## Shopping`? The unit of
+ * a migration is the SECTION, not the file — a `user_spec.md` that merely re-parses
+ * proves nothing, and a source deleted unverified is unrecoverable. Structural: a legacy
+ * directory name is compared, never compiled into a pattern. */
+function carriesMethod(body: string, m: LegacyMethod): boolean {
+  return sectionBody(body, "## Shopping").includes(shoppingSection(m));
+}
+
+/** Insert a section at the END of `## Shopping`, minting the section when absent. */
+function appendShoppingSection(body: string, section: string): string {
   const lines = body.split(/\r?\n/);
   const start = lines.findIndex((l) => l.trim() === "## Shopping");
   if (start < 0) {
-    return body.replace(/\n*$/, "\n\n") + "## Shopping\n\n" + block;
+    return body.replace(/\n*$/, "\n\n") + "## Shopping\n\n" + section + "\n";
   }
   const after = lines.slice(start + 1).findIndex((l) => /^##\s/.test(l));
   const at = after < 0 ? lines.length : start + 1 + after;
-  return [...lines.slice(0, at), block, ...lines.slice(at)].join("\n");
+  return [...lines.slice(0, at), section + "\n", ...lines.slice(at)].join("\n");
 }
 
 /** Each PRD becomes a one-row-`## Items` Brief. The legacy domain slug is a LOCAL
@@ -780,11 +805,15 @@ function migratePrds(prds: LegacyPrd[], failed: Array<{ path: string; error: str
   return count;
 }
 
+/** Suffixes tried before giving up: past this the store is pathological, and renaming
+ * on to `-51` serves nobody — the PRD is reported and left where the buyer can see it. */
+const MAX_BRIEF_SLUG_ATTEMPTS = 50;
+
 /** Flat briefs, so two domains' PRDs can collide on one slug; the suffix keeps both. */
 function freeBriefSlug(base: string): string | null {
   const root = base.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
   if (root === "" || root === "main") return null;
-  for (let n = 1; n <= 50; n += 1) {
+  for (let n = 1; n <= MAX_BRIEF_SLUG_ATTEMPTS; n += 1) {
     const slug = n === 1 ? root : root + "-" + n;
     if (!existsSync(briefPath(slug))) return slug;
   }

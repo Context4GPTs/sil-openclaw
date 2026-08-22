@@ -52,9 +52,10 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   `shopper/briefs/<slug>.md` replace `shopper/domains/<slug>/{method.md,
   prds/*.md}`. Each legacy method becomes a `## Shopping` `### <domain>` section on
   the shopper document; each legacy PRD becomes a one-row-`## Items` Brief. A legacy
-  source file is deleted **only after its replacement reads back**, one that will not
-  parse is reported and left in place, and **bytes under a legacy `assets/` directory
-  are never deleted**.
+  source file is deleted **only once its own section is in the re-read document** — a
+  destination that merely parses is not proof, since every method lands in one
+  `user_spec.md` — one that will not parse is reported and left in place, and **bytes
+  under a legacy `assets/` directory are never deleted**.
 - **The `≤4` `sil_search` call bound is PER ITEM**, not per request. On a two-item
   job the old reading either halved the second item's budget or blew the bound.
 - **The catalog contract is v0's, and the pre-v0 one is deleted.** `sil_search`
