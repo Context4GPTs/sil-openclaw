@@ -66,8 +66,9 @@ interface NotFound {
   message: string;
 }
 
-/** PRESENT but unparseable. Never conflated with `not_found`: an agent that reads
- * "absent" over a corrupt document re-mints and the buyer's own words are gone. */
+/** PRESENT but unreadable — a document that will not parse, or a store directory the
+ * OS will not list. Never conflated with `not_found`: an agent that reads "absent"
+ * over a corrupt document re-mints and the buyer's own words are gone. */
 interface Unreadable {
   ok: false;
   kind: "unreadable";
@@ -138,6 +139,26 @@ function listDir(dir: string): { entries: Dirent[]; error: string | null } {
 function listingError(cause: string): string {
   return "the directory could not be listed: " + cause
     + " — repair it by hand (it may be unreadable, or a file where a directory belongs)";
+}
+
+/** With `shopper/` ITSELF unlistable (EACCES, or a file in its place) every child
+ * `existsSync` answers false — so an absent store and a locked one read identically,
+ * and `not_found` would steer the agent to re-mint over documents still on disk. */
+function shopperDirError(): string | null {
+  const dir = getShopperArtefactDir();
+  if (!existsSync(dir)) return null;
+  const { error } = listDir(dir);
+  return error === null ? null : listingError(error);
+}
+
+/** The root's failure as a verb-facing variant — `unreadable`, never `not_found`. */
+function storeUnreadable(error: string): Unreadable {
+  return {
+    ok: false,
+    kind: "unreadable",
+    message: getShopperArtefactDir() + ": " + error
+      + ". The documents underneath may be intact — do NOT mint a fresh one over them.",
+  };
 }
 
 /** Names only, `.md` only, sorted — a scan's stable order. A DIRECTORY named `x.md`
@@ -377,6 +398,12 @@ export function findDocuments(query: FindQuery = {}): FindResult | InvalidReques
   if (nonBlank(query.status) && !(BRIEF_STATUSES as readonly string[]).includes(query.status)) {
     return invalid("status", "status must be one of " + BRIEF_STATUSES.join(" | ") + ".");
   }
+  const rootError = shopperDirError();
+  // Filters never suppress this: the whole store is behind that one directory, so an
+  // empty result here would read as "this shopper has nothing" for every query.
+  if (rootError !== null) {
+    return { ok: true, briefs: [], unreadable: [{ id: SHOPPER_SUBDIR, error: rootError }] };
+  }
   const filters = normalizeFilters(query);
   // A legacy file the migration could not parse is surfaced here, unfiltered: only the
   // doc TOOLS migrate, so without this the one file the transform cannot fix is
@@ -486,6 +513,8 @@ export type ReadDocResult =
 export function readDocument(ref: unknown): ReadDocResult {
   const target = resolveRef(ref);
   if ("ok" in target) return target;
+  const rootError = shopperDirError();
+  if (rootError !== null) return storeUnreadable(rootError);
   if (!existsSync(target.path)) {
     return notFound(
       "No document at " + JSON.stringify(target.ref) + " — list what exists with"
@@ -565,6 +594,8 @@ function preflightMode(
   target: ResolvedRef,
   mode: WriteMode,
 ): { ok: true; existing: Artefact | null } | InvalidRequest | NotFound | Unreadable {
+  const rootError = shopperDirError();
+  if (rootError !== null) return storeUnreadable(rootError);
   const present = existsSync(target.path);
   if (mode === "create") {
     if (!present) return { ok: true, existing: null };
@@ -615,6 +646,7 @@ export type RemoveDocResult =
   | { ok: true; ref: string; kind: DocKind; path: string }
   | InvalidRequest
   | NotFound
+  | Unreadable
   | PersistenceFailed;
 
 export function removeDocument(ref: unknown): RemoveDocResult {
@@ -629,6 +661,8 @@ export function removeDocument(ref: unknown): RemoveDocResult {
         + " written from. Correct it with sil_doc_write (mode: replace) instead.",
     );
   }
+  const rootError = shopperDirError();
+  if (rootError !== null) return storeUnreadable(rootError);
   if (!existsSync(target.path)) {
     return notFound("No document at " + JSON.stringify(target.ref) + " to remove (already gone).");
   }
@@ -653,6 +687,10 @@ export interface ShopperIdentity {
 }
 
 export function readShopperIdentity(): ShopperIdentity {
+  const rootError = shopperDirError();
+  // Inconclusive, not empty — the create-shopper bin reads an empty answer as "no
+  // shopper yet" and would mint a second person over the one it could not see.
+  if (rootError !== null) return { ok: true, unreadable: [{ id: SHOPPER_SUBDIR, error: rootError }] };
   const userSpecPath = join(getShopperArtefactDir(), USER_SPEC_FILE);
   if (!existsSync(userSpecPath)) return { ok: true, unreadable: [] };
   const parsed = readArtefactFile(userSpecPath);
