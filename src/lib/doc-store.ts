@@ -16,6 +16,7 @@ import {
   rmdirSync,
   writeFileSync,
 } from "node:fs";
+import type { Dirent } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { randomBytes } from "node:crypto";
 
@@ -123,16 +124,37 @@ function errCause(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** `readdirSync` is the store's one fs call that throws where `existsSync` already
+ * said yes — EACCES, or a directory present as a FILE (the read is ENOTDIR). Every
+ * listing goes through here so a broken tree is REPORTED, never thrown at a tool. */
+function listDir(dir: string): { entries: Dirent[]; error: string | null } {
+  try {
+    return { entries: readdirSync(dir, { withFileTypes: true }), error: null };
+  } catch (err) {
+    return { entries: [], error: errCause(err) };
+  }
+}
+
+function listingError(cause: string): string {
+  return "the directory could not be listed: " + cause
+    + " — repair it by hand (it may be unreadable, or a file where a directory belongs)";
+}
+
+/** Names only, `.md` only, sorted — a scan's stable order. A DIRECTORY named `x.md`
+ * is kept, so it reads `unreadable` rather than vanishing from the index. */
+function markdownNames(entries: Dirent[]): string[] {
+  return entries.filter((e) => e.name.endsWith(".md")).map((e) => e.name).sort();
+}
+
 // ===========================================================================
 // Refs — the only addressing scheme, and the only caller-supplied path segment.
 // ===========================================================================
 
-interface ResolvedRef {
-  ref: string;
-  kind: DocKind;
-  slug?: string;
-  path: string;
-}
+/** Discriminated on `kind`: the shopper is a singleton with no slug, a Brief always
+ * carries one. Nothing downstream asserts a slug the compiler cannot see. */
+type ResolvedRef =
+  | { ref: "shopper"; kind: "shopper"; path: string }
+  | { ref: string; kind: "brief"; slug: string; path: string };
 
 /** Validate a caller-supplied path segment BEFORE any join, so a traversal, a
  * separator, an absolute path, uppercase, or `main` never becomes one. */
@@ -336,6 +358,18 @@ export interface FindResult {
   unreadable: Array<{ id: string; error: string }>;
 }
 
+/** The query once validated: a filter is absent or a real value, so neither finder
+ * re-checks blankness. `q` is lowercased once, here. */
+interface FindFilters {
+  kind: string | undefined;
+  domain: string | undefined;
+  status: string | undefined;
+  q: string | undefined;
+}
+
+/** Entries accumulate across both finders in scan order — legacy, shopper, Briefs. */
+type UnreadableDocs = Array<{ id: string; error: string }>;
+
 export function findDocuments(query: FindQuery = {}): FindResult | InvalidRequest {
   if (nonBlank(query.kind) && !(DOC_KINDS as readonly string[]).includes(query.kind)) {
     return invalid("kind", "kind must be one of " + DOC_KINDS.join(" | ") + ".");
@@ -343,51 +377,72 @@ export function findDocuments(query: FindQuery = {}): FindResult | InvalidReques
   if (nonBlank(query.status) && !(BRIEF_STATUSES as readonly string[]).includes(query.status)) {
     return invalid("status", "status must be one of " + BRIEF_STATUSES.join(" | ") + ".");
   }
-  const q = nonBlank(query.query) ? query.query.toLowerCase() : undefined;
+  const filters = normalizeFilters(query);
   // A legacy file the migration could not parse is surfaced here, unfiltered: only the
   // doc TOOLS migrate, so without this the one file the transform cannot fix is
   // invisible to the read-only surfaces that exist to report it (`sil_doctor`).
-  const unreadableDocs: Array<{ id: string; error: string }> = scanLegacyTree().corrupt.map(
-    (path) => ({ id: relative(getShopperArtefactDir(), path), error: LEGACY_UNREADABLE_ERROR }),
-  );
-  const result: FindResult = { ok: true, briefs: [], unreadable: unreadableDocs };
+  const unreadable: UnreadableDocs = scanLegacyTree().corrupt.map(({ path, error }) => ({
+    id: relative(getShopperArtefactDir(), path),
+    error,
+  }));
+  const shopper = findShopper(filters, unreadable);
+  const briefs =
+    filters.kind !== undefined && filters.kind !== "brief" ? [] : findBriefs(filters, unreadable);
+  return { ok: true, ...(shopper !== undefined ? { shopper } : {}), briefs, unreadable };
+}
 
-  // The shopper carries no domain and no status, so either filter excludes it rather
-  // than matching it vacuously.
-  const wantShopper =
-    (!nonBlank(query.kind) || query.kind === "shopper")
-    && !nonBlank(query.domain)
-    && !nonBlank(query.status);
-  if (wantShopper) {
-    const path = join(getShopperArtefactDir(), USER_SPEC_FILE);
-    if (existsSync(path)) {
-      const parsed = readArtefactFile(path);
-      if (parsed === null) {
-        unreadableDocs.push({ id: "shopper", error: USER_SPEC_FILE + " has malformed or absent frontmatter" });
-      } else {
-        const name = parsed.fields["name"] ?? "";
-        // A shopper document that cannot say who it is degraded, not healthy — the
-        // same verdict `readShopperIdentity` reaches, reported once, here.
-        if (!nonBlank(name)) {
-          unreadableDocs.push({ id: "shopper", error: USER_SPEC_FILE + " frontmatter carries no name" });
-        }
-        if (q === undefined || ("shopper " + name).toLowerCase().includes(q)) {
-          result.shopper = { ref: "shopper", name, path };
-        }
-      }
-    }
+function normalizeFilters(query: FindQuery): FindFilters {
+  return {
+    kind: nonBlank(query.kind) ? query.kind : undefined,
+    domain: nonBlank(query.domain) ? query.domain : undefined,
+    status: nonBlank(query.status) ? query.status : undefined,
+    q: nonBlank(query.query) ? query.query.toLowerCase() : undefined,
+  };
+}
+
+/** The singleton. It carries no domain and no status, so either filter excludes it
+ * rather than matching it vacuously. */
+function findShopper(filters: FindFilters, unreadable: UnreadableDocs): ShopperCoord | undefined {
+  const wanted =
+    (filters.kind === undefined || filters.kind === "shopper")
+    && filters.domain === undefined
+    && filters.status === undefined;
+  if (!wanted) return undefined;
+  const path = join(getShopperArtefactDir(), USER_SPEC_FILE);
+  if (!existsSync(path)) return undefined;
+  const parsed = readArtefactFile(path);
+  if (parsed === null) {
+    unreadable.push({ id: "shopper", error: USER_SPEC_FILE + " has malformed or absent frontmatter" });
+    return undefined;
   }
+  const name = parsed.fields["name"] ?? "";
+  // A shopper document that cannot say who it is is degraded, not healthy — the same
+  // verdict `readShopperIdentity` reaches, reported once, here. Still a coordinate:
+  // the person exists, and hiding them would read as "no shopper".
+  if (!nonBlank(name)) {
+    unreadable.push({ id: "shopper", error: USER_SPEC_FILE + " frontmatter carries no name" });
+  }
+  if (filters.q !== undefined && !("shopper " + name).toLowerCase().includes(filters.q)) {
+    return undefined;
+  }
+  return { ref: "shopper", name, path };
+}
 
-  if (nonBlank(query.kind) && query.kind !== "brief") return result;
-
-  const briefsDir = join(getShopperArtefactDir(), BRIEFS_SUBDIR);
-  if (!existsSync(briefsDir)) return result;
-  for (const file of readdirSync(briefsDir).filter((f) => f.endsWith(".md")).sort()) {
-    const path = join(briefsDir, file);
+function findBriefs(filters: FindFilters, unreadable: UnreadableDocs): BriefCoord[] {
+  const dir = join(getShopperArtefactDir(), BRIEFS_SUBDIR);
+  if (!existsSync(dir)) return [];
+  const listing = listDir(dir);
+  if (listing.error !== null) {
+    unreadable.push({ id: BRIEFS_SUBDIR, error: listingError(listing.error) });
+    return [];
+  }
+  const briefs: BriefCoord[] = [];
+  for (const file of markdownNames(listing.entries)) {
+    const path = join(dir, file);
     const parsed = readArtefactFile(path);
     const slug = file.replace(/\.md$/, "");
     if (parsed === null) {
-      unreadableDocs.push({ id: "brief:" + slug, error: "brief has malformed or absent frontmatter" });
+      unreadable.push({ id: "brief:" + slug, error: "brief has malformed or absent frontmatter" });
       continue;
     }
     const coord: BriefCoord = {
@@ -399,14 +454,16 @@ export function findDocuments(query: FindQuery = {}): FindResult | InvalidReques
       path,
       updated_at: parsed.fields["updated_at"] ?? "",
     };
-    if (nonBlank(query.status) && coord.status !== query.status) continue;
-    if (nonBlank(query.domain) && !coord.items.some((i) => domainMatches(i.domain, query.domain as string))) {
-      continue;
-    }
-    if (q !== undefined && !(coord.slug + " " + coord.title).toLowerCase().includes(q)) continue;
-    result.briefs.push(coord);
+    if (admits(filters, coord)) briefs.push(coord);
   }
-  return result;
+  return briefs;
+}
+
+function admits(filters: FindFilters, coord: BriefCoord): boolean {
+  if (filters.status !== undefined && coord.status !== filters.status) return false;
+  const domain = filters.domain;
+  if (domain !== undefined && !coord.items.some((i) => domainMatches(i.domain, domain))) return false;
+  return filters.q === undefined || (coord.slug + " " + coord.title).toLowerCase().includes(filters.q);
 }
 
 // ===========================================================================
@@ -484,28 +541,12 @@ export function writeDocument(spec: WriteSpec): WriteDocResult {
     return invalid("status", "status must be one of " + BRIEF_STATUSES.join(" | ") + ".");
   }
 
-  const existing = existsSync(target.path) ? readArtefactFile(target.path) : null;
-  if (mode === "create" && existsSync(target.path)) {
-    return invalid(
-      "mode",
-      "A document already exists at " + JSON.stringify(target.ref) + " — read it"
-        + " (sil_doc_read), reconcile it in full, and write it back with mode: replace."
-        + " create only mints, it never overwrites.",
-    );
-  }
-  if (mode === "replace") {
-    if (!existsSync(target.path)) {
-      return notFound(
-        "No document at " + JSON.stringify(target.ref) + " to replace — mint it with"
-          + " mode: create first (replace rewrites an existing document, it never mints).",
-      );
-    }
-    if (existing === null) return unreadable(target.path);
-  }
+  const preflight = preflightMode(target, mode);
+  if (!preflight.ok) return preflight;
 
   const built = target.kind === "shopper"
-    ? shopperFields(spec, existing)
-    : briefFields(spec, existing, target.slug as string);
+    ? shopperFields(spec, preflight.existing)
+    : briefFields(spec, preflight.existing, target.slug);
   if (!built.ok) return built;
 
   try {
@@ -515,6 +556,34 @@ export function writeDocument(spec: WriteSpec): WriteDocResult {
     return persistenceFailed(target.path, err);
   }
   return { ok: true, ref: target.ref, kind: target.kind, mode, path: target.path };
+}
+
+/** The mode gate, and the only read of what is already on disk: create fails if the
+ * ref exists, replace fails if it does not — and replace over a corrupt document is
+ * refused, because reconciling needs the words that are still in there. */
+function preflightMode(
+  target: ResolvedRef,
+  mode: WriteMode,
+): { ok: true; existing: Artefact | null } | InvalidRequest | NotFound | Unreadable {
+  const present = existsSync(target.path);
+  if (mode === "create") {
+    if (!present) return { ok: true, existing: null };
+    return invalid(
+      "mode",
+      "A document already exists at " + JSON.stringify(target.ref) + " — read it"
+        + " (sil_doc_read), reconcile it in full, and write it back with mode: replace."
+        + " create only mints, it never overwrites.",
+    );
+  }
+  if (!present) {
+    return notFound(
+      "No document at " + JSON.stringify(target.ref) + " to replace — mint it with"
+        + " mode: create first (replace rewrites an existing document, it never mints).",
+    );
+  }
+  const existing = readArtefactFile(target.path);
+  if (existing === null) return unreadable(target.path);
+  return { ok: true, existing };
 }
 
 type BuiltFields = { ok: true; fields: Record<string, string> } | InvalidRequest;
@@ -634,8 +703,9 @@ interface LegacyScan {
   root: string;
   methods: LegacyMethod[];
   prds: LegacyPrd[];
-  /** Files that will not parse. Never guessed at, never deleted — reported instead. */
-  corrupt: string[];
+  /** What the scan could not read — a file that will not parse, a directory that will
+   * not list. Never guessed at, never deleted; reported with its cause instead. */
+  corrupt: Array<{ path: string; error: string }>;
 }
 
 /** Walk the legacy tree read-only. Empty on every store already in the flat layout,
@@ -644,24 +714,37 @@ function scanLegacyTree(): LegacyScan {
   const root = join(getShopperArtefactDir(), LEGACY_DOMAINS_SUBDIR);
   const scan: LegacyScan = { root, methods: [], prds: [], corrupt: [] };
   if (!existsSync(root)) return scan;
-  for (const slug of legacyDirs(root)) {
-    const methodPath = join(root, slug, LEGACY_METHOD_FILE);
-    const method = readArtefactFile(methodPath);
-    if (method !== null) scan.methods.push({ slug, path: methodPath, body: method.body });
-    else if (existsSync(methodPath)) scan.corrupt.push(methodPath);
-    const prdsDir = join(root, slug, LEGACY_PRDS_SUBDIR);
-    if (!existsSync(prdsDir)) continue;
-    for (const file of readdirSync(prdsDir).filter((f) => f.endsWith(".md")).sort()) {
-      const path = join(prdsDir, file);
-      const prd = readArtefactFile(path);
-      if (prd === null) {
-        scan.corrupt.push(path);
-        continue;
-      }
-      scan.prds.push({ domainSlug: slug, key: file.replace(/\.md$/, ""), path, fields: prd.fields, body: prd.body });
-    }
+  const domains = legacyDirs(root);
+  if (domains.error !== null) {
+    scan.corrupt.push({ path: root, error: listingError(domains.error) });
+    return scan;
   }
+  for (const slug of domains.names) scanLegacyDomain(root, slug, scan);
   return scan;
+}
+
+function scanLegacyDomain(root: string, slug: string, scan: LegacyScan): void {
+  const methodPath = join(root, slug, LEGACY_METHOD_FILE);
+  const method = readArtefactFile(methodPath);
+  if (method !== null) scan.methods.push({ slug, path: methodPath, body: method.body });
+  else if (existsSync(methodPath)) scan.corrupt.push({ path: methodPath, error: LEGACY_UNREADABLE_ERROR });
+
+  const prdsDir = join(root, slug, LEGACY_PRDS_SUBDIR);
+  if (!existsSync(prdsDir)) return;
+  const listing = listDir(prdsDir);
+  if (listing.error !== null) {
+    scan.corrupt.push({ path: prdsDir, error: listingError(listing.error) });
+    return;
+  }
+  for (const file of markdownNames(listing.entries)) {
+    const path = join(prdsDir, file);
+    const prd = readArtefactFile(path);
+    if (prd === null) {
+      scan.corrupt.push({ path, error: LEGACY_UNREADABLE_ERROR });
+      continue;
+    }
+    scan.prds.push({ domainSlug: slug, key: file.replace(/\.md$/, ""), path, fields: prd.fields, body: prd.body });
+  }
 }
 
 const LEGACY_UNREADABLE_ERROR =
@@ -673,21 +756,16 @@ export function migrateLegacyStore(): MigrationSummary | null {
   const { root, methods, prds, corrupt } = scanLegacyTree();
   if (methods.length === 0 && prds.length === 0 && corrupt.length === 0) return null;
 
-  const failed: Array<{ path: string; error: string }> = corrupt.map((path) => ({
-    path,
-    error: LEGACY_UNREADABLE_ERROR,
-  }));
+  const failed = [...corrupt];
   const shoppingSections = migrateMethods(methods, failed);
   const briefs = migratePrds(prds, failed);
   pruneLegacyTree(root);
   return { shoppingSections, briefs, failed };
 }
 
-function legacyDirs(root: string): string[] {
-  return readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => d.name)
-    .sort();
+function legacyDirs(root: string): { names: string[]; error: string | null } {
+  const { entries, error } = listDir(root);
+  return { names: entries.filter((d) => d.isDirectory()).map((d) => d.name).sort(), error };
 }
 
 /** Each `method.md` becomes a `## Shopping` `### <slug>` section on the shopper
@@ -829,9 +907,11 @@ function dropLegacyFile(path: string, failed: Array<{ path: string; error: strin
 }
 
 /** Remove only what is EMPTY. `assets/` bytes have no home in the flat store and are
- * irreplaceable, so a domain that still holds them keeps its directory. */
+ * irreplaceable, so a domain that still holds them keeps its directory. A root that
+ * will not list prunes nothing — the scan already reported it, and the surviving tree
+ * makes the next call re-run the hop rather than swallow the failure. */
 function pruneLegacyTree(legacyRoot: string): void {
-  for (const slug of legacyDirs(legacyRoot)) {
+  for (const slug of legacyDirs(legacyRoot).names) {
     rmdirIfEmpty(join(legacyRoot, slug, LEGACY_PRDS_SUBDIR));
     rmdirIfEmpty(join(legacyRoot, slug));
   }
