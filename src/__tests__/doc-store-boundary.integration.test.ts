@@ -266,3 +266,51 @@ describe("`doc-store.ts:52` — a store the OS will not let us list is REPORTED,
     expect(after.healthy).toBe(false);
   });
 });
+
+/**
+ * The FOURTH listing site — the store root — and a different failure than the three
+ * above. An unlistable `shopper/` throws NOTHING: `existsSync` on every child of it
+ * answers false, so the store reads a present store as an ABSENT one. That is the
+ * conflation `doc-store.ts:69` forbids in as many words, and it is the more dangerous
+ * shape, because a throw at least stops the agent.
+ */
+describe("`doc-store.ts:69` — an unlistable store ROOT is UNREADABLE, never absent", () => {
+  it.skipIf(AS_ROOT)("sil_doc_read {ref: shopper} answers `unreadable` — `not_found` steers a re-mint over the buyer's own words", async () => {
+    // The whole cost is the recovery: `not_found`'s message names sil_doc_write
+    // (mode: create), and the shopper document is the one `sil_doc_remove` refuses to
+    // delete precisely because nothing else on disk reproduces it.
+    seedShopper();
+
+    // Guard-of-the-guard: readable, this document reads back — so the bar below
+    // cannot pass on a store that simply never had a shopper.
+    const healthy = await call("sil_doc_read", { ref: "shopper" });
+    expect(healthy["status"]).toBe("ok");
+    expect(healthy["fields"]).toMatchObject({ name: "Ioannis" });
+
+    chmodSync(shopperDir(), 0o000);
+
+    const read = await call("sil_doc_read", { ref: "shopper" });
+    expect(read["status"]).toBe("unreadable");
+    expect(read["recovery"]).toBe("inspect_document");
+  });
+
+  it.skipIf(AS_ROOT)("sil_doc_find REPORTS it — a clean empty result tells sil_doctor a broken store is a healthy one", async () => {
+    // The read verb and the find verb reach the root through separate paths, so a
+    // guard on `readDocument` alone leaves this one answering `{briefs: [],
+    // unreadable: []}` — healthy, empty, and wrong. `checkStore()` believes it.
+    seedShopper();
+    seedBrief();
+
+    const healthy = await call("sil_doc_find");
+    expect(healthy["status"]).toBe("ok");
+    expect(healthy["unreadable"]).toEqual([]);
+    expect((healthy["briefs"] as unknown[]).length).toBe(1);
+
+    chmodSync(shopperDir(), 0o000);
+
+    const found = await call("sil_doc_find");
+    expect(found["status"]).toBe("ok");
+    expect(found["unreadable"]).not.toEqual([]);
+    expect(reported(found)).toContain("shopper");
+  });
+});
