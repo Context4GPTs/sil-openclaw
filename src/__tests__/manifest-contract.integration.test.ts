@@ -29,14 +29,13 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals { sil_doctor, sil_domain_create, sil_domain_find,
- *     sil_learn, sil_product_get, sil_profile_get, sil_profile_materialize,
- *     sil_profile_remove, sil_profile_search, sil_register, sil_search,
- *     sil_stores, sil_whoami } (13 tools: the four-v0-tools card ADDED
- *     sil_stores + sil_domain_create to the existing catalog group, and the
- *     read-before-mint card ADDS sil_domain_find, so the v0 catalog tools sit
- *     1:1 with the sil-services catalog routes — `/catalog/domains` being the
- *     first served by two verbs, one tool per verb).
+ *     both sides equals the TWELVE v0 tools (AC G1): the five catalog tools
+ *     1:1 with the sil-services catalog routes, the four `sil_doc_*` document
+ *     tools, the two identity tools and the doctor. 13 → 12: the eight-beat
+ *     card REPLACES `registerProfileTools`' five verbs with
+ *     `registerDocTools`' four, which is a GROUP SWAP — CLAUDE.md step 4 —
+ *     so `codeRegisteredNames()` below had to be rewired or it would have
+ *     silently narrowed instead of going red.
  */
 
 import { describe, it, expect } from "vitest";
@@ -45,7 +44,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
-import { registerProfileTools } from "../tools/profile.js";
+import { registerDocTools } from "../tools/doc.js";
 import { registerDoctorTools } from "../tools/doctor.js";
 import {
   createMockPluginApi,
@@ -88,7 +87,7 @@ function codeRegisteredNames(): Set<string> {
   const api = createMockPluginApi();
   registerIdentityTools(api);
   registerCatalogTools(api);
-  registerProfileTools(api);
+  registerDocTools(api);
   registerDoctorTools(api);
   return registeredToolNames(api);
 }
@@ -128,26 +127,21 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(sorted(codeRegisteredNames())).toEqual(sorted(manifestToolNames()));
   });
 
-  it("both sides equal exactly the real tool set — no example tool survives", () => {
-    // The card's spine: after removing the skeleton examples, the manifest
-    // AND the code both name exactly the real tools. Pinned by literal
-    // so a re-introduced sil_ping/sil_echo (on either side) flips this RED,
-    // not just the symmetric drift check above. Now 13 tools — the
-    // four-v0-tools card ADDED sil_stores + sil_domain_create (10 → 12) and the
-    // read-before-mint card ADDS sil_domain_find (12 → 13, add-only). All three
-    // live in `registerCatalogTools`, which `codeRegisteredNames()` already
-    // calls, so this guard picks them up for free — a NEW group would not have
-    // been.
+  it("AC G1 — both sides equal exactly the TWELVE v0 tools, and the four sil_doc_* are among them", () => {
+    // The card's spine, pinned by literal so a re-introduction on EITHER side flips
+    // RED rather than merely staying symmetric. 13 → 12: the eight-beat card swaps
+    // `registerProfileTools`' five verbs for `registerDocTools`' four. A GROUP swap,
+    // so the code side is NOT picked up for free — `codeRegisteredNames()` had to be
+    // rewired, and had it not been, this guard would have silently narrowed.
     const expected = [
+      "sil_doc_find",
+      "sil_doc_read",
+      "sil_doc_remove",
+      "sil_doc_write",
       "sil_doctor",
       "sil_domain_create",
       "sil_domain_find",
-      "sil_learn",
       "sil_product_get",
-      "sil_profile_get",
-      "sil_profile_materialize",
-      "sil_profile_remove",
-      "sil_profile_search",
       "sil_register",
       "sil_search",
       "sil_stores",
@@ -157,13 +151,30 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(sorted(manifestToolNames())).toEqual(expected);
   });
 
-  it("neither side names a removed example tool (sil_ping / sil_echo)", () => {
+  it("AC G1 — no RETIRED tool name is registered or declared, on either side", () => {
+    // ONE table replacing four near-identical per-name bars (sil_ping/sil_echo,
+    // sil_profile_list, sil_remember, sil_specs): the failure mode is the same for
+    // every entry — a compat alias, a deprecation stub, or a "tool that explains it
+    // is gone" — and a table is where the next retirement lands with no new test.
+    //
+    // The exact-set bar above ALREADY catches every one of these. This is the bar
+    // that says WHY they are absent, so a future reader does not "restore" one.
+    const RETIRED = [
+      "sil_ping",
+      "sil_echo", // the skeleton examples
+      "sil_profile_list", // folded into sil_profile_get, which is itself now gone
+      "sil_remember", // renamed to sil_learn, which is itself now gone
+      "sil_specs", // POST /catalog/specs was deleted server-side
+      "sil_learn", // ↓ the five verbs this card retires: no shim, no side-by-side
+      "sil_profile_materialize",
+      "sil_profile_search",
+      "sil_profile_get",
+      "sil_profile_remove",
+    ];
     const code = codeRegisteredNames();
     const manifest = manifestToolNames();
-    for (const removed of ["sil_ping", "sil_echo"]) {
-      expect(code.has(removed)).toBe(false);
-      expect(manifest.has(removed)).toBe(false);
-    }
+    expect(RETIRED.filter((n) => code.has(n))).toEqual([]);
+    expect(RETIRED.filter((n) => manifest.has(n))).toEqual([]);
   });
 
   it("sil_doctor is BOTH registered by register() and declared in contracts.tools", () => {
@@ -206,85 +217,6 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     // before merge. That asymmetry is the whole point of this guard.
     expect(codeRegisteredNames().has("sil_domain_find")).toBe(true);
     expect(manifestToolNames().has("sil_domain_find")).toBe(true);
-  });
-
-  it("sil_profile_materialize is BOTH registered by register() and declared in contracts.tools", () => {
-    // The agent-creation engine's behaviour-artefact tool (card:
-    // create-a-valid-sil-wired-openclaw-agent-profile). registerProfileTools is
-    // wired into codeRegisteredNames (and into src/index.ts#register()), so the
-    // new tool must appear on BOTH sides of the equal set: registered by
-    // registerProfileTools AND listed in openclaw.plugin.json#contracts.tools.
-    expect(codeRegisteredNames().has("sil_profile_materialize")).toBe(true);
-    expect(manifestToolNames().has("sil_profile_materialize")).toBe(true);
-  });
-
-  it("sil_profile_list is NOT registered and NOT declared (folded into sil_profile_get)", () => {
-    // The consolidate-profile-tools-to-the-singleton-surface card DELETES
-    // sil_profile_list, folding its read into sil_profile_get's no-args zoom. It
-    // must be absent on BOTH sides of the equal set — a re-introduction (in code or
-    // manifest) flips the set-equality RED, just as an addition would.
-    expect(codeRegisteredNames().has("sil_profile_list")).toBe(false);
-    expect(manifestToolNames().has("sil_profile_list")).toBe(false);
-  });
-
-  it("sil_profile_get is BOTH registered by register() and declared in contracts.tools", () => {
-    // The list-view-and-remove card's view tool. Same group, same self-enforcing
-    // bar: a missing manifest entry (or a stale one) flips the set-equality RED.
-    expect(codeRegisteredNames().has("sil_profile_get")).toBe(true);
-    expect(manifestToolNames().has("sil_profile_get")).toBe(true);
-  });
-
-  it("sil_profile_remove is BOTH registered by register() and declared in contracts.tools", () => {
-    // The list-view-and-remove card's destructive remove tool (artefact half).
-    // Must appear on BOTH sides — registered by registerProfileTools AND listed
-    // in openclaw.plugin.json#contracts.tools.
-    expect(codeRegisteredNames().has("sil_profile_remove")).toBe(true);
-    expect(manifestToolNames().has("sil_profile_remove")).toBe(true);
-  });
-
-  it("sil_remember is NOT registered and NOT declared (DELETED, renamed to sil_learn — not aliased)", () => {
-    // The spec-driven-shopping-redesign card DELETES sil_remember and replaces it
-    // with the target+change feedback verb sil_learn. No backwards compat, no
-    // alias: sil_remember must be absent on BOTH sides of the equal set. A
-    // re-introduction (in code or manifest) — including a compat alias kept alive
-    // beside sil_learn — flips the set-equality RED, exactly as the sil_profile_list
-    // removal is guarded above.
-    expect(codeRegisteredNames().has("sil_remember")).toBe(false);
-    expect(manifestToolNames().has("sil_remember")).toBe(false);
-  });
-
-  it("sil_learn is BOTH registered by register() and declared in contracts.tools", () => {
-    // The spec-driven-shopping-redesign card's target+change feedback verb — the
-    // single write tool for the whole method/PRD lifecycle (create + write +
-    // attach-asset), replacing sil_remember. Added to the existing
-    // registerProfileTools group (no new group, no src/index.ts change), so it is
-    // auto-picked-up by codeRegisteredNames. The load-bearing 3rd "add a tool"
-    // step: it MUST also be listed in openclaw.plugin.json#contracts.tools — a
-    // forgotten manifest entry flips the set-equality RED here, before merge.
-    expect(codeRegisteredNames().has("sil_learn")).toBe(true);
-    expect(manifestToolNames().has("sil_learn")).toBe(true);
-  });
-
-  it("sil_profile_search is BOTH registered by register() and declared in contracts.tools", () => {
-    // The spec-driven-shopping-redesign card's NEW frontmatter-as-truth query tool
-    // — the local discovery / reuse-before-mint primitive that returns artefact
-    // coordinates (no bodies) and replaces the deleted profile.json manifest's
-    // index role. Added to registerProfileTools; it must appear on BOTH sides of
-    // the equal set: registered by the group AND listed in contracts.tools.
-    expect(codeRegisteredNames().has("sil_profile_search")).toBe(true);
-    expect(manifestToolNames().has("sil_profile_search")).toBe(true);
-  });
-
-  it("sil_specs is NOT registered and NOT declared (DELETED — POST /catalog/specs is gone)", () => {
-    // The retire-the-dead-sil-specs-tool card DELETES sil_specs: sil-services
-    // removed the route it called when the v0 store landed, and NOTHING replaces
-    // it (v0's catalog surface mints at /catalog/domains, a different contract).
-    // No compat alias, no deprecation stub, no no-op tool that explains it is
-    // gone — it must be absent on BOTH sides of the equal set. A re-introduction
-    // (in code or manifest) flips the set-equality RED, exactly as the
-    // sil_profile_list and sil_remember removals are guarded above.
-    expect(codeRegisteredNames().has("sil_specs")).toBe(false);
-    expect(manifestToolNames().has("sil_specs")).toBe(false);
   });
 });
 

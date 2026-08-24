@@ -41,10 +41,11 @@ here's the shopper I'd set up…") and ask only to confirm-or-adjust.
 | Artefact | Where | Holds |
 |---|---|---|
 | **`SOUL.md`** (persona) | host workspace | the shopper's voice / standing rules — a **generalist** |
-| **`user_spec.md`** (shared) | sil data dir (**required**) | **cross-niche** facts + hard constraints (addresses, sizes, allergy/ethics rules, budget psychology) |
+| **the shopper document** (`user_spec.md`) | sil data dir (**required**) | **cross-category** facts + hard constraints (addresses, sizes, allergy/ethics rules, budget psychology) |
 
-The niche packs — deep know-how, per-request template, niche taste — are **not
-authored here**; they mint **lazily on first shop** ([`shop_loop.md`](shop_loop.md)).
+Per-category know-how is **not authored here** and never lives locally: the buying guide
+and its vocabulary belong to sil's shared registry, read at beat 2 of the loop
+([`shop_loop.md`](shop_loop.md)).
 
 1. **Persona** — confirm-or-adjust the seeded **voice/tone** and any **standing
    rules**. This surfaces voice, **not a niche**. Becomes the workspace **`SOUL.md`**.
@@ -87,9 +88,9 @@ authored here**; they mint **lazily on first shop** ([`shop_loop.md`](shop_loop.
 
 **Run ONLY after the endorsement gate above clears.** The engine persists **one**
 OpenClaw agent — the **shopper**: a host `agents` entry, sil plugin enabled + skill
-attached, persona in the workspace **`SOUL.md`**, the **shared user spec** in the sil
-data dir. A **singleton** that learns **domains** lazily on first shop — a fresh
-shopper's `domains` map is empty, which is healthy. Creation is **local + offline**: no
+attached, persona in the workspace **`SOUL.md`**, the **shopper document** in the sil
+data dir. A **singleton** that opens a Brief per job as it shops — a fresh shopper has
+no Brief at all, which is healthy. Creation is **local + offline**: no
 token, no `sil_register`/`sil_whoami`, no network — it registers the user later, on
 first shop.
 
@@ -139,16 +140,17 @@ The spec file's contents — one JSON object:
 | **name** | Human-readable display name; the `agentId` is **derived** from it. | sil store | yes |
 | **persona** | Who the shopper is — a generalist, its voice, standing rules. | host **`SOUL.md`** | yes |
 | **workspace** | The shopper's workspace directory. | host | yes |
-| **userSpec** | Shared **cross-niche** facts + hard constraints (seeded partial). | sil `user_spec.md` | yes |
+| **userSpec** | **Cross-category** facts + hard constraints (seeded partial). | the sil shopper document | yes |
 | **channel** | Setup conversation's channel, bound to the shopper. | host bindings | optional (fail-open) |
 
 The `agentId` is **not an input** — the bin derives it as `deriveAgentId(name)`
 (lower-kebab `^[a-z0-9][a-z0-9-]*$`; a `main`/empty slug silently folds to `sil-shopper`).
 
-**No per-niche input at create** — no method, no PRD; those mint lazily on first shop
-via `sil_learn create`. The shopper needs web tools (inherited from `agents.defaults`)
-to mint/refresh domains; if defaults grant none, the bin reports `created` with a
-`warnings` gap (`sil_search` itself still works) — surface it.
+**No per-category input at create** — no guide, no Brief; the guide is read from sil's
+shared registry at beat 2, and a Brief is opened per job. The shopper needs web tools
+(inherited from `agents.defaults`) to research a category it has to coin; if defaults
+grant none, the bin reports `created` with a `warnings` gap (`sil_search` itself still
+works) — surface it.
 
 ### What the bin does, in order (atomic, fail-closed)
 
@@ -157,17 +159,17 @@ to mint/refresh domains; if defaults grant none, the bin reports `created` with 
    `agentId = deriveAgentId(name)` — the derivation always yields a conforming id (empty
    or `main` slug → the silent `sil-shopper` fallback), so the id is never a failure mode.
 2. **Config + singleton pre-flight** — no host config → `persistence_failed`. An
-   existing shopper `user_spec.md`, or an `agentId` clash → **`collision`** ("a shopper
-   already exists"); steer to shop-a-new-niche or refine, **never a second shopper**. An
-   inconclusive read fails closed.
+   existing shopper document, or an `agentId` clash → **`collision`** ("a shopper
+   already exists"); steer to opening a new Brief or correcting the current shopper,
+   **never a second shopper**. An inconclusive read fails closed.
 3. **Snapshot `openclaw.json`** — the teardown anchor, before any write.
 4. **`openclaw agents add`** — the real `agents.list[]` entry + workspace bootstrap,
    inheriting model + tools from `agents.defaults`.
 5. **Write `SOUL.md`** = endorsed **persona + the standing "The sil way" creed block**
    (below).
-6. **Materialize the shared user spec** — `sil_profile_materialize { name, userSpec }`
-   (singleton, no agentId) writes **`user_spec.md`** atomically, name in its
-   frontmatter. **Setup-only: no domain, no method, no PRD.**
+6. **Write the shopper document** — the same `create` write `sil_doc_write { ref:
+   "shopper" }` performs, atomically, with the name in its frontmatter. **Setup-only:
+   no domain settled and no Brief opened.**
 7. **Attach skill + enable plugin** (value-mode `config set --strict-json`, the only
    mode the pinned `alpine/openclaw:2026.6.9` accepts):
    `agents.list[<idx>].skills` ← `["sil-shopping"]`; `plugins.entries.sil.enabled` ←
@@ -195,12 +197,13 @@ Exit 0 **only** on `created`.
 
 The persona is followed by a standing **"The sil way"** creed — an identity-level
 restatement (a philosophy, not a rulebook; the mechanics live in the attached skill)
-carrying the **explore-first** mantra, the loop in three lines, and the one distinction
-that matters: the shopper **mints an unlearned niche first** (a `sil_profile_search`
-MISS → `sil_learn create`, then search); **the sil catalog is where you buy, the open
-web is where you learn** (web only researches a niche's buying guide, never sources a
-pick); and its **shopping memory is the sil store** — it records what it learns through
-`sil_learn` / `sil_profile_*`.
+carrying the **explore-first** mantra, the loop in four lines, and the one distinction
+that matters: the shopper **scopes the job before it settles a category**, takes the
+buying guide sil already holds (`sil_domain_find`) and writes a node itself only when
+nothing stands; **the sil catalog is where you buy, the open web is where you learn**
+(web only researches how a category is bought, never sources a pick); and its
+**shopping memory is the sil store** — it reads and writes what it knows through
+`sil_doc_read` / `sil_doc_write`.
 
 ### Status taxonomy
 
@@ -214,10 +217,10 @@ pick); and its **shopping memory is the sil store** — it records what it learn
 
 ### Runtime
 
-At session start the host has injected the persona via **`SOUL.md`**. Load the shared
-**`user_spec.md`** (cross-niche facts + hard constraints; frontmatter carries the name);
-`sil_profile_search` scans the learned domains (empty is healthy) and each per-domain
-method loads **lazily at shop time**. The `sil_*` tools admitted at create, the shopper
-shops with no further setup, minting each niche on the fly on first shop
+At session start the host has injected the persona via **`SOUL.md`**. Read the shopper
+document with `sil_doc_read { ref: "shopper" }` (cross-category facts + hard constraints;
+frontmatter carries the name); `sil_doc_find` lists the open Briefs (none is healthy on a
+fresh shopper). The `sil_*` tools admitted at create, the shopper shops with no further
+setup, settling each category against sil's registry at beat 2
 ([`shop_loop.md`](shop_loop.md)). To sharpen it, see
 [`fill_and_feedback.md`](fill_and_feedback.md).

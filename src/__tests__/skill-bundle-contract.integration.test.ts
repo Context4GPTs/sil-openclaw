@@ -10,14 +10,13 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { CREATION_ENTRYPOINT_RELATIVE } from "../lib/creation-entrypoint.js";
 import { buildDoctorReport } from "../tools/doctor.js";
 import { registerIdentityTools } from "../tools/identity.js";
 import { registerCatalogTools } from "../tools/catalog.js";
-import { registerProfileTools } from "../tools/profile.js";
+import { registerDocTools } from "../tools/doc.js";
 import { registerDoctorTools } from "../tools/doctor.js";
 import {
   createMockPluginApi,
@@ -31,9 +30,24 @@ import {
   retiredV0Offenders,
   RETIRED_V0_TOKENS,
 } from "./helpers/honesty-vocabulary.js";
+// The bundle's reading + SCOPING primitives, shared with
+// `eight-beat-loop.integration.test.ts` so the two prose guards cannot drift apart.
+import {
+  BUNDLE,
+  REPO_ROOT,
+  beatFile,
+  bundleCorpus,
+  bundleEntries,
+  bundleFiles,
+  frontmatter,
+  read,
+  routingRows,
+  skillSrc,
+  splitStatements,
+  statements,
+  unsatisfied,
+} from "./helpers/skill-bundle.js";
 
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const BUNDLE = join(REPO_ROOT, "sil-shopping");
 // The always-loaded router must name the whole v0 journey, not half of it: the
 // agent picks a tool by name at the moment of use, and a beat whose tool is
 // unnamed in SKILL.md is a beat it will improvise around. Add-only (4 → 6 with
@@ -45,6 +59,12 @@ const BUNDLE = join(REPO_ROOT, "sil-shopping");
 // load. `sil_domain_find` has to be here, not merely in the corpus — the read is
 // the first move of the cold path, and a router that names only the mint sends an
 // empty shelf straight at the one write the product cannot undo.
+//
+// 7 → 9 with the eight-beat card: `sil_doc_find` is beat 1's recall (the loop's
+// FIRST move, so a router that omits it starts every job blind) and `sil_doc_write`
+// is what beats 1, 3, 7 and 8 all land in. `sil_doc_read` / `sil_doc_remove` stay on
+// the corpus scan below — a management verb reached from a reference is fine; the
+// two the loop cannot start or finish without are not.
 const CORE_TOOLS = [
   "sil_register",
   "sil_whoami",
@@ -53,6 +73,8 @@ const CORE_TOOLS = [
   "sil_stores",
   "sil_domain_create",
   "sil_domain_find",
+  "sil_doc_find",
+  "sil_doc_write",
 ];
 // Tokens retired by the single-shopper + SDS-redesign pivots — no path, no doc,
 // no compat alias may resurrect them anywhere in the bundle. Each names a thing
@@ -79,35 +101,33 @@ const CORE_TOOLS = [
 // needle would never match a lowered body and would sit here silently vacuous.
 const RETIRED_TOKENS = [
   "profile.json", "domain_spec", "intent_spec", "playbook", "sil_remember",
-  "sil_profile_list", "sil_ping", "sil_echo", "rubric", "manage_domains",
+  "sil_ping", "sil_echo", "rubric", "manage_domains",
   "refine_shopper", "sil_specs", "canonical",
+  // The eight-beat card's retirement (AC G7). Every one is a thing that is GONE,
+  // and this scan is THE only thing that catches stale prose about it: the "every
+  // registered tool is named in the bundle" scan above is ONE-DIRECTIONAL, so
+  // deleting the tool turns no passage red — the shopper simply ships driven at a
+  // tool that no longer exists, under a fully green suite. `sil_profile` as a PREFIX
+  // subsumes the old `sil_profile_list` entry and covers all five verbs at once.
+  "sil_profile", "sil_learn", "method.md", "prd", "domainslug", "six-beat",
 ];
 
-const read = (rel: string): string => readFileSync(join(BUNDLE, rel), "utf8");
-const skillSrc = (): string => read("SKILL.md");
-// The scanned file set is DERIVED from disk, never hardcoded: a hand-maintained
-// table silently misses a new bundle file, which is how a drift guard rots into a
-// vacuous green. `bundleEntries` is unfiltered so the floor test below can prove
-// nothing on disk escapes the `.md` scan.
-const bundleEntries = (): string[] =>
-  (readdirSync(BUNDLE, { recursive: true }) as string[]).filter((p) =>
-    statSync(join(BUNDLE, p)).isFile(),
-  );
-const bundleFiles = (): string[] => bundleEntries().filter((p) => p.endsWith(".md"));
-const bundleCorpus = (): string => bundleFiles().map(read).join("\n");
+/** The retired NAMES this card's AC G7 enumerates, as a separate list so the bite
+ * proof below drives the same scan the bundle does with each one in turn. */
+const G7_RETIRED_NAMES = [
+  "sil_learn", "sil_profile_materialize", "sil_profile_search", "sil_profile_get",
+  "sil_profile_remove", "method.md", "prd", "domainSlug", "six-beat",
+];
+
 const manifest = (): { skills?: unknown } =>
   JSON.parse(readFileSync(join(REPO_ROOT, "openclaw.plugin.json"), "utf8"));
 
-function frontmatter(): { name: string; description: string; body: string } {
-  const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(skillSrc());
-  if (!m) throw new Error("SKILL.md: no parseable --- frontmatter block");
-  const [, fm, body] = m;
-  return {
-    name: /^name:\s*["']?(.+?)["']?\s*$/m.exec(fm)?.[1] ?? "",
-    description: /^description:\s*(.+)$/m.exec(fm)?.[1]?.trim() ?? "",
-    body,
-  };
-}
+/** The retired-token scan, as ONE function, so the bundle sweep and the bite proof
+ * can never be two different rules. */
+const retiredTokenOffenders = (body: string): string[] => {
+  const lower = body.toLowerCase();
+  return RETIRED_TOKENS.filter((t) => lower.includes(t));
+};
 
 // Every register group, so the "named in the bundle" guard below covers the WHOLE
 // surface. A new group omitted here does not fail — it silently narrows the guard,
@@ -116,7 +136,7 @@ function registeredTools(): string[] {
   const api = createMockPluginApi();
   registerIdentityTools(api);
   registerCatalogTools(api);
-  registerProfileTools(api);
+  registerDocTools(api);
   registerDoctorTools(api);
   return [...registeredToolNames(api)];
 }
@@ -215,8 +235,7 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     const offenders: string[] = [];
     for (const rel of bundleFiles()) {
       const body = read(rel);
-      const lower = body.toLowerCase();
-      for (const t of RETIRED_TOKENS) if (lower.includes(t)) offenders.push(`${rel} → ${t}`);
+      for (const t of retiredTokenOffenders(body)) offenders.push(`${rel} → ${t}`);
       // The pre-v0 CATALOG vocabulary joins on the four-v0-tools card. This scan
       // is ONE-DIRECTIONAL — deleting the tools does not turn stale prose red;
       // only listing the token does. Without these entries the bundle ships
@@ -227,6 +246,23 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
       for (const ctx of perNicheExpertOffenders(body)) offenders.push(`${rel}: …${ctx}…`);
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("AC G7 — every name this card retires is CAUGHT by that scan (the one-directional guard, closed)", () => {
+    // THE bar the sil_specs failure exists to force. The scan above is a scan: it
+    // reports what it was told to look for and is silent about everything else. So
+    // "no retired name survives" is only worth what the LIST is worth, and the list
+    // is exactly what a rushed retirement forgets — leaving the shopper driven at
+    // `sil_learn` and `method.md` under a fully green suite.
+    //
+    // Proved by BITE, not by membership: each name is fed through the real scan
+    // inside a plausible sentence, so an entry that is present-but-unmatchable
+    // (upper-cased, mistyped, or a `sil_profile_x` the `sil_profile` prefix happens
+    // not to cover) fails here rather than sitting in the list looking protective.
+    const notCaught = G7_RETIRED_NAMES.filter(
+      (name) => retiredTokenOffenders(`Then call ${name} to record it.`).length === 0,
+    );
+    expect(notCaught).toEqual([]);
   });
 
   it("SKILL.md pins the mint-first, catalog-of-record forcing function (v0 vocabulary)", () => {
@@ -252,7 +288,12 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     // surviving rules turns nothing RED — the shopper just quietly gets worse.
     // TWO tokens, deliberately not a re-pinning of the wording (the 1 341-line
     // prose test was deleted for a reason).
-    const src = read("references/method_and_prds.md");
+    //
+    // Resolved through `beatFile(2)` rather than a filename: the eight-beat card
+    // renamed `method_and_prds.md` → `domain_and_brief.md`, and a hardcoded path
+    // would have to be re-fixed on every such rename while guarding nothing extra.
+    // The BEAT is the stable address; the file is not.
+    const src = read(beatFile(2));
     expect(src).toContain("one spelling"); // reuse the exact key you coined
     expect(src).toContain("conventional name"); // take the Schelling-point name
   });
@@ -270,27 +311,10 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
 // because it pinned wording instead.
 // ===========================================================================
 
-/** The router's table rows — what the agent matches an intent against. */
-const routingRows = (): string[] =>
-  frontmatter()
-    .body.split("\n")
-    .filter((line) => line.trimStart().startsWith("|"));
-
-/** The corpus cut into STATEMENTS — one bullet, one table row, one sentence. The
- * bundle is hard-wrapped, so a line is not a statement; a bullet or a row is.
- * Scoping matters more than the regexes it feeds: a corpus-wide `probe` + `not
- * licensed` pair passes on the very wording this block rejects, because both
- * strings already sit three lines apart in `method_and_prds.md` and the second is
- * about the CAPPED branch. */
-const statements = (): string[] =>
-  bundleFiles().flatMap((rel) =>
-    // Per FILE, never over the joined corpus: a unit that straddles a file boundary
-    // could pair one file's `probe` with the next file's denial.
-    read(rel)
-      .split(/\n\s*(?:[-*+]\s|\|)|(?<=[.!?])\s+/)
-      .map((s) => s.replace(/\s+/g, " ").trim())
-      .filter(Boolean),
-  );
+// `routingRows`, `statements` and `unsatisfied` moved to `helpers/skill-bundle.ts`
+// (imported above) when the eight-beat bars needed the same SCOPING. Duplicating
+// the statement splitter would have been the drift `honesty-vocabulary.ts` exists to
+// prevent: two prose guards, two definitions of "a statement", one of them wrong.
 
 /** Withholds the licence: "never licenses", "does not license", or the exclusivity
  * form the tool itself uses ("only a `q` read licenses one"). Direction is
@@ -300,11 +324,6 @@ const DENIES_LICENCE = /\b(?:never|not|cannot|can'?t|no|only)\b[\s\S]*?licen/i;
 /** An EMPTY match list — the one thing a probe cannot produce. */
 const EMPTY_MATCH_LIST =
   /matches:?\s*\[\s*\]|\bmatches\b[^.]{0,40}\bempty\b|\bempty\b[^.]{0,40}\bmatches\b/i;
-
-/** `[]` when some candidate satisfies the rule, else the candidates themselves — so
- * a red PRINTS the statements the writer has to fix, not "0 is not greater than 0". */
-const unsatisfied = (candidates: string[], rule: (s: string) => boolean): string[] =>
-  candidates.some(rule) ? [] : candidates;
 
 describe("read before mint — the bundle's half of the card", () => {
   it("S2 — NO file reaches the global write without also naming the read", () => {
@@ -337,7 +356,7 @@ describe("read before mint — the bundle's half of the card", () => {
     expect(rows[mintRow]).toMatch(/sil_domain_find|\bread\b/);
   });
 
-  it("S2 — a read that did NOT return is not a read that returned nothing", () => {
+  it("S2 (= AC B5) — a read that did NOT return is not a read that returned nothing", () => {
     // BR-2. Without this the natural repair for a transient failure is to mint and
     // move on — a permanent global write entered off a network blip.
     const corpus = bundleCorpus();
@@ -366,7 +385,7 @@ describe("read before mint — the bundle's half of the card", () => {
     expect(corpus).toMatch(/guide/i);
   });
 
-  it("S4 — all four branch verdicts are present, and `capped` is one of them", () => {
+  it("S4 (= AC B5) — all four branch verdicts are present, and `capped` is one of them", () => {
     // Dropping the `capped` branch ALONE re-creates the exact defect the route
     // exists to prevent: minting while the standing path sat just past the bound.
     const corpus = bundleCorpus();
@@ -382,13 +401,13 @@ describe("read before mint — the bundle's half of the card", () => {
     expect(corpus).toMatch(/never a sibling|not a sibling|sibling.*re-?rooted/i);
   });
 
-  it("S4 — `capped: true` withholds the licence rather than shrinking the answer", () => {
+  it("S4 (= AC B5) — `capped: true` withholds the licence rather than shrinking the answer", () => {
     const corpus = bundleCorpus();
     expect(corpus).toMatch(/capped:?\s*`?true/i);
     expect(corpus).toMatch(/narrow|sharpen|read (once more|again)/i);
   });
 
-  it("S4/BR-1b — the licence is an EMPTY `q` read, and a `path` probe never grants it", () => {
+  it("S4/BR-1b (= AC B5) — the licence is an EMPTY `q` read, and a `path` probe never grants it", () => {
     // The clause the plugin cannot enforce, and the one the bundle stated more
     // weakly than the tool did. A probe MISS is not an empty answer: it returns a
     // match carrying `exists: false` (`helpers/v0-wire.ts#domainFindProbeMiss`), so
@@ -414,17 +433,33 @@ describe("read before mint — the bundle's half of the card", () => {
   it("S5 — the adoption discipline names its mechanism and says the keys travel VERBATIM", () => {
     // "take the key sil already holds" was unreachable advice until this tool
     // existed: nothing in the surface could read a standing domain's vocabulary.
-    const src = read("references/method_and_prds.md");
+    //
+    // RETARGETED, not weakened. The `## Search vocabulary` literal this bar used to
+    // pin was a section of the PRD, and the eight-beat card deletes the PRD outright
+    // (§4.1: the guide and vocabulary are the registry's now). The DECISION did not
+    // move — adopted keys travel unchanged — only its destination did, from a
+    // per-domain PRD section to the Brief's predicate tables. Pinning a section that
+    // no longer exists would have made this bar and the retired-token scan mutually
+    // unsatisfiable, and the "fix" would have been to delete one of them.
+    const src = read(beatFile(2));
     expect(src).toContain("sil_domain_find");
-    expect(src).toContain("## Search vocabulary");
-    expect(src).toMatch(/verbatim/i);
+    const verbatimUnits = splitStatements(src).filter((s) => /verbatim/i.test(s));
+    expect(verbatimUnits.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(
+        verbatimUnits,
+        (s) =>
+          /\bkeys?\b/i.test(s)
+          && /predicate|## Hard constraints|## Preferences|vocabular/i.test(s),
+      ),
+    ).toEqual([]);
   });
 
   it("S5 — the read budget is stated as a NUMBER, and the probe is outside it", () => {
     // Open question 9. An agent left to infer whether the probe counts against the
     // bound either forfeits it — forking the vocabulary — or takes a third
     // discovery read. Write the arithmetic; do not imply it.
-    const src = read("references/method_and_prds.md");
+    const src = read(beatFile(2));
     expect(src).toMatch(/\b2\b|\btwo\b/);
     expect(src).toMatch(/probe/i);
     expect(src).toMatch(/does\s*\*{0,2}not\*{0,2}\s*count|≤\s*2\s*\+\s*1|2 \+ 1/i);

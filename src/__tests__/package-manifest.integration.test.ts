@@ -24,7 +24,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -237,15 +237,18 @@ describe("skill basename is sil-unique — no stale `./skill` literal, ships und
   });
 
   it("the skill subtree (references + example) moved under sil-shopping/ intact", () => {
-    // A representative-but-stable probe: the two most router-central references
-    // (method_and_prds — the method/PRD store, agent_creation_engine — onboarding +
-    // the creation engine) plus the example. Deliberately NOT the full reference set:
-    // that set churns as the skill is reshaped, so pinning it would be brittle — this
-    // guard proves the subtree shipped, not which exact files it holds today.
+    // A representative-but-stable probe: `references/` is populated, the one
+    // router-central reference whose NAME is a contract survives
+    // (agent_creation_engine — onboarding + the creation engine), and the example
+    // ships. Deliberately NOT the full reference set: that set churns as the skill
+    // is reshaped — this guard proves the subtree shipped, not which exact files it
+    // holds today. It previously named `method_and_prds.md`, which the eight-beat
+    // card renamed to `domain_and_brief.md`; swapping one churning literal for
+    // another would only move the next false RED, so it is a count now.
     const root = join(REPO_ROOT, "sil-shopping");
     expect(
-      existsSync(join(root, "references", "method_and_prds.md")),
-    ).toBe(true);
+      readdirSync(join(root, "references")).filter((f) => f.endsWith(".md")).length,
+    ).toBeGreaterThan(0);
     expect(
       existsSync(join(root, "references", "agent_creation_engine.md")),
     ).toBe(true);

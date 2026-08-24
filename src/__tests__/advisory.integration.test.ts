@@ -77,7 +77,7 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerDoctorTools } from "../tools/doctor.js";
 import { registerIdentityTools } from "../tools/identity.js";
-import { registerProfileTools } from "../tools/profile.js";
+import { registerDocTools } from "../tools/doc.js";
 import { sortFindings, type Finding } from "../lib/findings.js";
 import * as allowlist from "../lib/openclaw-allowlist.js";
 import { setApiUrl, setWebUrl } from "../lib/config.js";
@@ -333,7 +333,7 @@ type Payload = Record<string, unknown> & { advisories?: Finding[] };
 function registerAll(api: PluginAPI): void {
   registerIdentityTools(api);
   registerCatalogTools(api);
-  registerProfileTools(api);
+  registerDocTools(api);
   registerDoctorTools(api);
 }
 
@@ -371,8 +371,8 @@ const SUCCESS_PATHS: Array<{
   /** Real state the success needs, beyond a temp data dir. */
   setup?: () => void;
 }> = [
-  // profile — an empty store is `status: ok`, zero network.
-  { tool: "sil_profile_search", params: {} },
+  // documents — an empty store is `status: ok`, zero network.
+  { tool: "sil_doc_find", params: {} },
   // identity — `already_registered` short-circuits on stored tokens, zero network.
   { tool: "sil_register", params: {}, setup: writeTokensFile },
   // catalog — an empty match IS a success (`status: ok, products: []`).
@@ -460,7 +460,7 @@ describe("AC3 — skill attached by id: the tools are the only surviving messeng
     // AC3: "the finding is byte-identical whichever surface carries it". Both read
     // the EFFECTIVE wiring from the same `api.config`, so anything else would mean
     // two detectors — i.e. two things to drift apart.
-    const payload = await runTool("sil_profile_search", {}, misattachedConfig());
+    const payload = await runTool("sil_doc_find", {}, misattachedConfig());
     const report = await runDoctor(misattachedConfig());
 
     const fromTool = payload.advisories!.find((a) => a.id === SKILL_MISATTACHED);
@@ -482,9 +482,9 @@ describe("AC3 — skill attached by id: the tools are the only surviving messeng
     // misconfiguration is exactly what a fire-once advisory lets rot — and this one
     // was silent enough to cause incident #1. A cooldown here is a documented
     // regression, not a cleanup.
-    const first = await runTool("sil_profile_search", {}, misattachedConfig());
-    const second = await runTool("sil_profile_search", {}, misattachedConfig());
-    const third = await runTool("sil_profile_search", {}, misattachedConfig());
+    const first = await runTool("sil_doc_find", {}, misattachedConfig());
+    const second = await runTool("sil_doc_find", {}, misattachedConfig());
+    const third = await runTool("sil_doc_find", {}, misattachedConfig());
     expect(advisoryIds(first)).toEqual([SKILL_MISATTACHED]);
     expect(advisoryIds(second)).toEqual([SKILL_MISATTACHED]);
     expect(advisoryIds(third)).toEqual([SKILL_MISATTACHED]);
@@ -493,7 +493,7 @@ describe("AC3 — skill attached by id: the tools are the only surviving messeng
   it("compat NEVER rides a tool result — it is a doctor-only question (the catalogue)", async () => {
     // A gateway-compat gap answers a question nobody asked mid-`sil_search`. The
     // fold is earned by the self-carry paradox, which applies ONLY to wiring.
-    const payload = await runTool("sil_profile_search", {}, allDriftConfig());
+    const payload = await runTool("sil_doc_find", {}, allDriftConfig());
     expect(advisoryIds(payload)).not.toContain(GATEWAY_COMPAT);
     for (const advisory of payload.advisories ?? []) {
       expect(advisory.id.startsWith("wiring.")).toBe(true);
@@ -613,7 +613,7 @@ describe("AC6 — a healthy host is SILENT everywhere (absence of a problem is n
     // The auto-load-everything default: sil IS allowed. Flagging it would fire a
     // false advisory on a correctly-working default install — on every sil_* result,
     // forever. This is the easiest false positive in the card to ship.
-    const payload = await runTool("sil_profile_search", {}, healthyConfig());
+    const payload = await runTool("sil_doc_find", {}, healthyConfig());
     const report = await runDoctor(healthyConfig());
     expect(payload).not.toHaveProperty("advisories");
     expect(wiringFindings(report)).toEqual([]);
@@ -625,7 +625,7 @@ describe("AC6 — a healthy host is SILENT everywhere (absence of a problem is n
       tools: { alsoAllow: [PLUGIN_ID] },
       gateway: { version: HOST_FINE },
     };
-    const payload = await runTool("sil_profile_search", {}, config);
+    const payload = await runTool("sil_doc_find", {}, config);
     expect(payload).not.toHaveProperty("advisories");
     expect(wiringFindings(await runDoctor(config))).toEqual([]);
   });
@@ -647,7 +647,7 @@ describe("AC6 — a healthy host is SILENT everywhere (absence of a problem is n
   it("is NOT VACUOUS — the same surfaces DO speak when the host is drifted", async () => {
     // Without this, an implementation that folds nothing anywhere passes every
     // silence assertion in this block.
-    const payload = await runTool("sil_profile_search", {}, allDriftConfig());
+    const payload = await runTool("sil_doc_find", {}, allDriftConfig());
     const report = await runDoctor(allDriftConfig());
     expect(payload.advisories!.length).toBeGreaterThan(0);
     expect(wiringFindings(report).length).toBeGreaterThan(0);
@@ -780,7 +780,7 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
     expect(config).toEqual(before);
 
     registerAll(api);
-    await getTool(api, "sil_profile_search").execute("call-1", {});
+    await getTool(api, "sil_doc_find").execute("call-1", {});
     expect(config).toEqual(before);
 
     await getTool(api, "sil_doctor").execute("call-2", {});
@@ -798,7 +798,7 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
 
     expect(() => capturedRegisterFn!(api)).not.toThrow();
     registerAll(api);
-    await expect(getTool(api, "sil_profile_search").execute("call-1", {})).resolves.toBeDefined();
+    await expect(getTool(api, "sil_doc_find").execute("call-1", {})).resolves.toBeDefined();
     await expect(getTool(api, "sil_doctor").execute("call-2", {})).resolves.toBeDefined();
   });
 
@@ -815,7 +815,7 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
     lastApi = api;
     capturedRegisterFn!(api);
     registerAll(api);
-    await getTool(api, "sil_profile_search").execute("call-1", {});
+    await getTool(api, "sil_doc_find").execute("call-1", {});
     await getTool(api, "sil_doctor").execute("call-2", {});
 
     expect(spy).not.toHaveBeenCalled();
@@ -825,7 +825,7 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
     const config = allDriftConfig();
     const before = structuredClone(config);
     for (let i = 0; i < 3; i += 1) {
-      await runTool("sil_profile_search", {}, config);
+      await runTool("sil_doc_find", {}, config);
       await runDoctor(config);
     }
     expect(config).toEqual(before);
@@ -854,7 +854,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
       expect(finding.status).toBe("advisory");
     }
 
-    const payload = await runTool("sil_profile_search", {}, allDriftConfig());
+    const payload = await runTool("sil_doc_find", {}, allDriftConfig());
     for (const advisory of payload.advisories!) {
       expect(advisory.appliedAction).toBeNull();
       expect(advisory.status).toBe("advisory");
@@ -870,7 +870,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     mkdirSync(openclawDir, { recursive: true, mode: 0o700 });
     writeFileSync(join(openclawDir, "openclaw.json"), JSON.stringify(healthyConfig()), { mode: 0o600 });
 
-    const payload = await runTool("sil_profile_search", {}, misattachedConfig());
+    const payload = await runTool("sil_doc_find", {}, misattachedConfig());
     expect(advisoryIds(payload)).toEqual([SKILL_MISATTACHED]);
   });
 
@@ -883,7 +883,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     mkdirSync(openclawDir, { recursive: true, mode: 0o700 });
     writeFileSync(join(openclawDir, "openclaw.json"), JSON.stringify(allDriftConfig()), { mode: 0o600 });
 
-    const payload = await runTool("sil_profile_search", {}, healthyConfig());
+    const payload = await runTool("sil_doc_find", {}, healthyConfig());
     const report = await runDoctor(healthyConfig());
     expect(payload).not.toHaveProperty("advisories");
     expect(wiringFindings(report)).toEqual([]);
@@ -900,7 +900,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     lastApi = api;
     capturedRegisterFn!(api);
     registerAll(api);
-    await getTool(api, "sil_profile_search").execute("call-1", {});
+    await getTool(api, "sil_doc_find").execute("call-1", {});
     await getTool(api, "sil_doctor").execute("call-2", {});
 
     // No write, no chmod, no new file, and nothing under $HOME touched at all —
@@ -1013,7 +1013,7 @@ describe("AC11 — six flat fields, folded into the doctor's existing determinis
   });
 
   it("the folded advisories on a tool result carry the same six fields", async () => {
-    const payload = await runTool("sil_profile_search", {}, allDriftConfig());
+    const payload = await runTool("sil_doc_find", {}, allDriftConfig());
     for (const advisory of payload.advisories!) {
       expect(Object.keys(advisory).sort(), advisory.id).toEqual([
         "appliedAction",
@@ -1097,7 +1097,7 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
       expect(emittedStrings(report), secret).not.toContain(secret);
     }
 
-    const payload = await runTool("sil_profile_search", {}, config);
+    const payload = await runTool("sil_doc_find", {}, config);
     for (const secret of ALL_SECRETS) {
       expect(emittedStrings(payload), secret).not.toContain(secret);
     }
@@ -1122,7 +1122,7 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
     // The agent id IS a wiring fact and is required by the fix string. The agent's
     // `env` block sitting beside it is NOT — a naive implementation that serializes
     // the whole agent entry to name it leaks in the same breath as it helps.
-    const payload = await runTool("sil_profile_search", {}, secretBearingConfig());
+    const payload = await runTool("sil_doc_find", {}, secretBearingConfig());
     const advisory = payload.advisories!.find((a) => a.id === SKILL_MISATTACHED)!;
 
     expect(advisory.detected).toContain("shopper");
@@ -1139,7 +1139,7 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
     lastApi = api;
     capturedRegisterFn!(api);
     registerAll(api);
-    await getTool(api, "sil_profile_search").execute("call-1", {});
+    await getTool(api, "sil_doc_find").execute("call-1", {});
 
     expect(fetchSpy).not.toHaveBeenCalled();
   });

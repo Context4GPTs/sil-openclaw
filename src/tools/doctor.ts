@@ -60,10 +60,7 @@ import {
   readHostVersion,
   readSilWiringFacts,
 } from "../lib/host-wiring.js";
-import {
-  readShopperIdentity,
-  searchProfileFrontmatter,
-} from "../lib/profile-store.js";
+import { findDocuments } from "../lib/doc-store.js";
 import { jsonResult } from "../lib/tool-result.js";
 import {
   buildGatewayCompatFinding,
@@ -74,12 +71,12 @@ import {
 } from "../lib/version-advisory.js";
 
 /** Owner-only file mode. `DIR_MODE` (0o700) is owned by `credentials.ts` and
- * imported; the file mode is private per-module there and in `profile-store.ts`,
+ * imported; the file mode is private per-module there and in `doc-store.ts`,
  * so this mirrors that pattern rather than exporting a fourth copy. */
 const FILE_MODE = 0o600;
 
 /** An interrupted atomic write leaves `<path>.<hex>.tmp` behind
- * (`profile-store.ts`'s tmp → rename). The hex length is not pinned: it is a
+ * (`doc-store.ts`'s tmp → rename). The hex length is not pinned: it is a
  * detail of one call site's `randomBytes(n)`, and an orphan is an orphan.
  * Bytes on disk ⇒ surfaced, never deleted. */
 const STALE_TMP_RE = /\.[0-9a-f]+\.tmp$/;
@@ -700,26 +697,25 @@ function configFinding(): Finding {
 }
 
 // ===========================================================================
-// Behaviour-artefact store
+// The shopper's document store
 // ===========================================================================
 
 /** Consume the store's OWN fail-closed `unreadable[]` surfacing — never re-parse
- * the artefacts, never aggregate entries away, and never overwrite one. Each
- * entry becomes exactly one finding. */
+ * the documents, never aggregate entries away, and never overwrite one. ONE reader,
+ * so one corrupt file is one finding. A read-only pass: doctor reports on the store
+ * it finds, so it never triggers the store's migration. */
 function checkStore(): Finding[] {
-  return [
-    ...readShopperIdentity().unreadable,
-    ...searchProfileFrontmatter().unreadable,
-  ].map(({ id, error }) => ({
+  const found = findDocuments();
+  return (found.ok ? found.unreadable : []).map(({ id, error }) => ({
     id: `store.unreadable:${id}`,
     severity: "warn" as Severity,
     status: "advisory" as const,
-    // Name the artefact AND the corruption — this is what a human reads to go
+    // Name the document AND the corruption — this is what a human reads to go
     // repair the file. The store's own error text describes only the corruption.
     detected: `${id}: ${error}`,
     suggestedAction:
-      "Inspect and repair the artefact by hand — sil never overwrites a corrupt"
-      + " artefact, because it may still be recoverable.",
+      "Inspect and repair the document by hand — sil never overwrites a corrupt"
+      + " document, because it may still be recoverable.",
     appliedAction: null,
   }));
 }

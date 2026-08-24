@@ -1,102 +1,141 @@
 ---
-name: fill-and-feedback
-description: Beats 3 and 6 of the sil shopping loop. Beat 3 fills the PRD by precedence (multi-turn, authors the Search specs block, hard-constraint dual-enforce, the persistence split); Beat 6 is the reaction half (capture-gate, confirm-before-write, route-by-scope). Covers sil_learn, the one target+change write verb (create | write | attach-asset). Load within an active sil shopping loop.
+name: fill-ask-feedback-verdict
+description: Beats 3, 4, 7 and 8 of the shopping loop. Beat 3 FILL resolves the Brief's predicates from what is already held; Beat 4 ASK is the one gate for what is still open and load-bearing, and owns the ## Notes / open surface; Beat 7 FEEDBACK captures what the reaction surfaced; Beat 8 VERDICT is the out-of-band did-it-work read. All four write through sil_doc_write. Load within an active sil shopping loop.
 ---
 
-# Beat 3 (Fill) and Beat 6 (Feedback) — via `sil_learn`
+# The four writing beats — FILL · ASK · FEEDBACK · VERDICT
 
-Beats 1–2 hand off the resolved PRD + method body. Beat 3 fills it; Beat 6 captures
-what the reaction surfaces — both persist through **`sil_learn write`** (the whole
-reconciled doc, never a stacked bullet).
+All four persist the same way: `sil_doc_read` the target, reconcile in context, then
+`sil_doc_write { mode: "replace" }` the **whole** body back. There is no append and no
+section patch, so a correction rewrites the line it changes and never stacks a second,
+contradicting one.
 
-## Beat 3 — Fill by precedence
+## Beat 3 — FILL: resolve from what you already hold
 
-Enumerate the load-bearing dimensions the method names, then resolve each down the
-chain, **first hit wins**:
+**Read the shopper FIRST, then the guide.** `## Shopping` (root plus every
+ancestor-or-self section of this item's domain, nearest first) · `## Fit` ·
+`## Constraints` · `## Past purchases` — and only then the guide, whose job is to
+**translate** those facts and fill what the buyer left open. That order is what keeps a
+shared, deliberately impersonal guide from writing a repeat buyer's Brief; the guide
+frames the job only on a true cold start.
 
-**request-intent > PRD filled-pref > method taste > user_spec fact > method default**
+**Translate, don't reference.** The shopper document says *"foot wide, ~104 mm"* and
+*"wool is out"*; the guide says a shell should clear the ball by ~2 mm; the Brief ends
+with `last_width_mm gte 102` and `fibre_wool_pct eq 0` — **neither of which appears in
+either source**. The fact is durable, the conversion is domain knowledge, and the
+predicate is this job's.
 
-A pure **read-compose** — **most** dimensions **resolve** from stored state with
-**no question** (a revisited niche does not re-ask).
+**Precedence, first hit wins:**
 
-**Elicit the residue — multi-turn.** Only a dimension that is unresolved **and**
-load-bearing **and** not answerable from a sensible default goes to the buyer.
-Pursue each until **resolved** or explicitly **declined**, then search. Each turn is
-**a few at a time, never a battery**, each tied to **why**, playing the filled
-understanding back.
+> what the buyer said in THIS job > a **selected** thing's specs, translated > a
+> **resident** thing's specs, translated > a shopper fact, translated (nearest
+> `## Shopping` section first) > the guide's default > unset
 
-**Author the `## Search specs` block.** As dimensions resolve, project each into a
-`{ ns, key, op, value, unit?, hard? }` predicate (keys from the method's `## Search
-vocabulary`) — the block Beat 4 sends verbatim. A **preferred-value-with-fallback**
-("prefer ear hooks, fins acceptable") is **one `op:in` set** over the acceptable
-values, **not** a hard `eq` on the favourite; the favourite is a **Beat-5 ranking**
-preference. Mark a predicate **`hard: true`** only when a miss must **reject at pick** —
-loose hard-marking empties result sets.
+Every thing you read lands in **`## Working from`** — an unrecorded read is a nag; a
+recorded one is a link the buyer can check and delete.
 
-**Live request vs a stored durable pref — ask, don't guess.** When the request
-contradicts a stored **durable** PRD preference, the request wins **this** search,
-but ask whether it is **one-off** or **standing**. "Just this once" → ephemeral, no
-write. "From now on" → a **standing** change: **`write`** the reconciled PRD (the
-changed line rewritten in place). **Never silently overwrite** a standing preference.
+**Compile both tables.** Each resolved dimension becomes a row in `## Hard constraints`
+or `## Preferences` — the section IS the hardness. Keys come from the domain's resolved
+vocabulary, verbatim. **A hard row is never filled around**: the veto applies at pick
+(Beat 6), never during fill. A *"prefer X, Y/Z acceptable"* requirement is **one `op: in`
+set** over `{X, Y, Z}` with the X-preference applied as Beat-6 judgment — never a hard
+`eq` on X alone, which rejects the acceptable alternatives and empties the set.
 
-**Hard constraints are inviolable — dual-enforced.** A `user_spec` `[hard]` line and a
-PRD `## Search specs` `hard:true` predicate route to a real **filter** where one exists
-**and** to Beat 5's **reject-at-pick** check — because a `specs` predicate can read
-`applied:false`.
+**Write each item's `applies:` line** — the materialized partition, **keys only, never
+values**: for item domain D, every row whose `domain` is ancestor-or-self of D. Decided
+once, visible in the document, checkable. Restating the values is how a corrected row
+and its copy come to disagree.
 
-**The split — persist stated durable answers NOW.** Fill is the **first** of two
-persistence moments: a durable answer the buyer **stated** during elicitation is
-**written** into the PRD **now** — a `write` that folds it into `## Search specs` /
-`## Filled preferences` — so an abandoned session still recovers what was settled. What
-the buyer's **reaction** surfaces is **Beat 6's** write. One-off direction stays
-**ephemeral**, **never written** by either.
+**FILL's job is to RESOLVE, and it stops there.** What it could not resolve is handed
+untouched to Beat 4 ASK, which is the only beat that puts a question to the buyer.
 
-**Decline never blocks.** A declined question narrows **quality**, never **access**
-— proceed on the best-defensible params and **state the assumption** ("assuming
-waterproofing, since it's for the slope"). Unresolved-and-declined dimensions land
-in the PRD's **`## Notes / open`** so the next session recovers, not re-asks — a
-non-answer is a note, never a preference.
+## Beat 4 — ASK: one gate, and it owns `## Notes / open`
 
-## Beat 6 — Feedback: the reaction half
+ASK is a **beat**, not a step inside fill, and that is the whole point: `## Notes / open`
+has to be a **surface** the next session reads, not a record it writes and forgets.
 
-Beat 6 is the loop's **only reaction-time persistence**, a standing beat.
+**When.** After fill has resolved all it can for an item, and **before that item's first
+`sil_search` call**. No search is issued for an item whose ASK has not run.
 
-**The capture gate — most reactions persist nothing.** Write only a signal that is
-**durable AND new** — no **duplicate** (not already stored), no **noise**, no
-**empty** entry. A this-pick reaction ("too pricey this time") is not durable, never
+**What qualifies — all three, or it is not asked.** The dimension is (1) still
+unresolved, (2) load-bearing *per the guide* — the guide is what says it decides the buy
+— and (3) not answerable from a defensible default. **On a warm domain ASK asks nothing
+and the loop passes straight to Beat 5, and that is the common case.**
+
+**Its input is last session's `## Notes / open` rows.** Read them back and re-ask **only**
+what is still unresolved and still load-bearing. The section is consumed, not merely
 written.
 
-**Confirm before every durable write.** When the gate surfaces a new durable
-candidate, **confirm before** writing it ("want me to remember you run Shimano?") —
-**never a silent harvest**. The confirm is gated behind the candidate, so most
-reactions ask nothing.
+**How to ask.** A **few at a time, never a battery**. Each question carries **why it
+decides the buy**, in the guide's own terms. The turn **plays back the filled
+understanding** so a mis-translation is as cheap for the buyer to correct as an answer is
+to give. **Two items both holding an open dimension are merged into ONE turn** — per-item
+beats do not mean per-item interrogations.
 
-**Route by scope — the placement rule.** A confirmed signal lands at the **broadest
-scope where it stays true**:
+**Elicitation gates QUALITY, never ACCESS.** A declined question, or one the buyer simply
+does not answer, still searches: proceed on the **best defensible reading**, **state the
+assumption in the same turn** ("assuming waterproofing, since it's for the slope"), and
+write the dimension as a **`## Notes / open` row**. A half-resolved Brief runs.
 
-- a cross-domain **fact** / **hard** constraint → **`user_spec`**;
-- a durable per-domain **taste** → the **method** (`## Durable taste`);
-- a **this-job** preference or spec → the **PRD** (`## Filled preferences` /
-  `## Search specs`);
-- an **image** → **`attach-asset`** (per-domain).
+**ASK has two entry points.** Here, and again from Beat 6 when not-verified dominates the
+surviving set or the guide marks the risk unrecoverable after purchase. Neither of them
+is inside fill.
 
-**Every write is a reconciled whole-doc `write`.** Read the target
-(`sil_profile_get`), fold the new signal into the coherent whole, and `sil_learn write`
-it back — a correction **rewrites** the line it changes, so the doc **never stacks a
-contradicting bullet**. There is no append/amend/retract; reconciliation is the only
-update path.
+## Beat 7 — FEEDBACK: the reaction is the signal
 
-**Re-scope = write-broader-then-write-narrower.** When a reaction shows a stored fact
-is broader than where it lives, `write` it into the **broader** target and `write` the
-**narrower** one without the moved line (two `sil_learn write` calls). There is **no
-promote verb**.
+The buyer's reaction to the results is the loop's workhorse signal — the rule-out, the
+pick, the recurring correction. Write the item's and the Brief's `status`, and the
+matching `## Shopping` section when the signal earns it.
 
-## `sil_learn` — the one target + change write verb
+**Capture is silent — an open store, no confirm.** Every confirm costs a question, and
+what replaces the gate is **visibility**: the shopper document is readable whole with
+`sil_doc_read`, and any line in it is one turn from gone.
 
-`sil_learn` is the single **target + change** verb owning the whole method/PRD
-lifecycle. `target` selects where the change lands (`user_spec` / `method` / `prd`);
-the **kind** selects the change. **Three kinds:** **create** (mint a NEW method/PRD —
-errors if one already exists), **write** (replace an existing doc's whole body with the
-reconciled version you author — read it first, carry every buyer line forward),
-**attach-asset** (persist image bytes, linked by path). Every capture is reviewable via
-`sil_profile_get` and erasable via `sil_profile_remove` — never silently harvested.
+**Three disciplines, and each one is a veto on writing:**
+
+- **A this-pick reaction is never written.** *"Too pricey this time"* is about today.
+- **Only what the buyer said or did** — never a value that arrived from the guide, and
+  never one you inferred from the shortlist.
+- **Broadest-true placement.** A fact true in every domain goes to the root; taste true in
+  one goes to that domain's `### <domain-path>` section. Enriching an ancestor beats
+  minting a leaf.
+
+**Re-derive the touched section, never append.** Read the shopper document, fold the
+signal into the coherent whole, write the whole thing back.
+
+## Beat 8 — VERDICT: did the thing actually work?
+
+**Out of band** — days or weeks after the buy, **once per bought item**. It is the loop's
+sparse falsifier: sil has no checkout, so a click proves nothing, and Beat 7 is the
+workhorse.
+
+**The trigger is Beat 2's exact-by-domain recall**: a prior Brief in this domain is `done`
+and its pick carries no `## Past purchases` row. **No timer, no counting threshold** — the
+buyer is already in the domain, which is what makes the question cheap. **At most one
+verdict ask per session**, on the **oldest** undecided pick, and it opens the session
+**before the new job's fill**.
+
+**Ask one plain question, naming the actual thing** — *"before we shop boots again: how
+did the Salomons work out?"* — not a survey, not a rating scale.
+
+**An answer writes three places, in one `sil_doc_write { ref: "shopper", mode:
+"replace" }`:**
+
+1. **A `## Past purchases` row** — what · when · verdict · **why**.
+2. **`## Fit`** — a row, but **only when the size taught something**.
+3. **Every `## Shopping` section the answer contradicts, RE-DERIVED WHOLE** — the
+   contradicted line rewritten, never caveated and never a second appended line beside
+   it. `## Shopping` says where the buyer is now; `## Past purchases` is the dated
+   evidence for why.
+
+**The why is the buyer's own reason.** A verdict with no why falsifies nothing, and an
+inferred why is worse than none — never derive it from the pick, the guide or the price.
+On a bare `good` / `bad`, **ask once** for the reason and write the row either way,
+leaving the why **empty** rather than fabricating one.
+
+**A decline writes nothing**, is not repeated that session, and does not touch the new
+job — the buyer came here to shop.
+
+**What Beat 8 does NOT do, in this version.** It writes the shopper's own document and
+nothing else: **no review is written, no review tool is called** (none exists), and the
+shopper never offers to publish or share the verdict.

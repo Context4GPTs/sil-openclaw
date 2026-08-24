@@ -128,22 +128,23 @@ describe("plugin entry — registration contract", () => {
     // register() runs the real tool groups (no mock), so it populates the
     // api with exactly the real tools and NO example stub. This pins the
     // wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
-    // The four-v0-tools card ADDED sil_stores + sil_domain_create to the existing
-    // catalog group (10 → 12); the read-before-mint card ADDS sil_domain_find to
-    // that same group (12 → 13, add-only). All three join `registerCatalogTools`,
-    // so src/index.ts needs no new wiring — and no new hand-registering guard entry.
+    // 13 → 12: the eight-beat card REPLACES the five profile verbs with the four
+    // `sil_doc_*` document tools (a GROUP swap — `registerProfileTools` is gone from
+    // src/index.ts and `registerDocTools` is wired in its place), so this literal
+    // moves in BOTH directions at once. Exact on purpose: loosening it to `toContain`
+    // stops it catching a silent removal, which is how a shipped tool disappears
+    // under a green suite.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
+      "sil_doc_find",
+      "sil_doc_read",
+      "sil_doc_remove",
+      "sil_doc_write",
       "sil_doctor",
       "sil_domain_create",
       "sil_domain_find",
-      "sil_learn",
       "sil_product_get",
-      "sil_profile_get",
-      "sil_profile_materialize",
-      "sil_profile_remove",
-      "sil_profile_search",
       "sil_register",
       "sil_search",
       "sil_stores",

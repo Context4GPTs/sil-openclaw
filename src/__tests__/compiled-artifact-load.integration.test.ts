@@ -235,10 +235,15 @@ describe("compiled-artifact load runs against a FRESH dist, never the planted st
     expect([...api._tools.keys()].sort()).toEqual([...contractsTools()].sort());
   });
 
-  it("does NOT register the since-deleted sil_profile_list (the 0.3.6 phantom 9th tool)", () => {
+  it("does NOT register a since-deleted tool (the 0.3.6 phantom, and the profile group this release retires)", () => {
+    // Widened from the bare `sil_profile_list` literal in lockstep with the source-side
+    // twin in `plugin-load.integration.test.ts`. An unrebuilt `dist/` on this checkout
+    // still holds `lib/profile-store.js` and `tools/profile.js`, so the phantom a stale
+    // COMPILED artefact would reintroduce today is the whole profile group — the one
+    // name that used to be pinned here is the least likely of the six.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
-    expect([...api._tools.keys()]).not.toContain("sil_profile_list");
+    expect([...api._tools.keys()].filter((n) => /^sil_(profile_|learn$)/.test(n))).toEqual([]);
     expect(api._tools.size).toBe(contractsTools().length);
   });
 
