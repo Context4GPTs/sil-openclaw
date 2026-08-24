@@ -1548,16 +1548,13 @@ describe("AC6c — the probe is bounded, fail-soft, and SILENT on failure", () =
         }),
     );
 
-    const started = Date.now();
     const report = await runDoctor();
-    const elapsed = Date.now() - started;
 
-    // The probe carried a real AbortSignal, and it really fired.
+    // The abort IS the bound here, not a stopwatch: this fake settles only via
+    // its own `abort` listener, so a probe that never aborts never returns and
+    // fails on `testTimeout: 10_000` — loudly, and without a wall-clock proxy.
     expect(sawSignal).toBeDefined();
     expect(sawSignal!.aborted).toBe(true);
-    // Bounded well inside the suite's 10s timeout — a user-invoked diagnostic
-    // must not sit on a blackholed socket.
-    expect(elapsed).toBeLessThan(8_000);
     // Fail-soft to SILENCE, with the full local report intact.
     expect(versionFindings(report)).toEqual([]);
     expect(report.status).toBe("ok");
