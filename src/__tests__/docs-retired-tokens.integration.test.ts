@@ -8,7 +8,14 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,6 +84,15 @@ describe("an absent docs corpus declares itself — it never scans empty and pas
     mkdirSync(join(gutted, "docs"));
     expect(docsPresent(gutted)).toBe(true);
     expect(() => docsFiles(gutted)).toThrow(/docs/);
+
+    // …and the entry floor is not the same guarantee: a tree holding FILES but no
+    // prose passes the entry read, so the prose reader is the only thing left that
+    // can refuse. Without this the sieve scans zero docs and reports [].
+    const noProse = mkdtempSync(join(tmpdir(), "sil-docs-no-prose-"));
+    mkdirSync(join(noProse, "docs"));
+    writeFileSync(join(noProse, "docs", "diagram.png"), "");
+    expect(docsEntries(noProse)).toEqual(["diagram.png"]);
+    expect(() => docsFiles(noProse)).toThrow(/docs/);
   });
 
   it("AC14 — no test file fails for that absence: every test touching `docs/` gates on docsPresent()", () => {
@@ -87,7 +103,11 @@ describe("an absent docs corpus declares itself — it never scans empty and pas
       .filter((rel) => rel.endsWith(".test.ts"))
       .filter((rel) => statSync(join(TESTS_DIR, rel)).isFile())
       .map((rel) => ({ rel, body: readFileSync(join(TESTS_DIR, rel), "utf8") }));
-    const touching = sources.filter((s) => /["']docs["']/.test(s.body));
+    // A STRING-LITERAL `docs` path segment — `join(ROOT, "docs")`, `"docs/…"`.
+    // Deliberately not backticks: markdown-quoted `docs/` is how every comment in
+    // this repo names the folder, and matching those would red six files that
+    // touch nothing.
+    const touching = sources.filter((s) => /["']docs(\/|["'])/.test(s.body));
     expect(touching.length).toBeGreaterThan(0);
     expect(touching.filter((s) => !s.body.includes("docsPresent")).map((s) => s.rel)).toEqual([]);
   });

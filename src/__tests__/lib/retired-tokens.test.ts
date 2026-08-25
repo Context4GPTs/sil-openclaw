@@ -325,15 +325,24 @@ describe("the NAMED exemption — pinned per (file, needle), and it must still b
     ]);
   });
 
-  it("every recorded exemption names a REASON and a derived needle (an unexplained pair is an off switch)", () => {
-    // Failure mode no other test catches: a pair added with an empty reason, or
-    // keyed on a needle the docs side never scans, silences prose while looking
-    // deliberate. Neither shows up as a red anywhere else.
+  it("the recorded table stays two files deep, and every pair names a reason and a derived needle", () => {
+    // Failure modes no other test catches, and all three run where `docs/` is
+    // absent (the real-corpus Pin 1 above cannot). An unexplained pair is an off
+    // switch with no argument; a pair keyed on a needle the docs side never scans
+    // is decoration; and a table that keeps growing IS the corpus, which is how a
+    // guard stops firing without anyone deciding to switch it off.
     const needles = docsNeedles();
     expect(
       DOCS_EXEMPTIONS.filter((e) => e.reason.trim().length < 20 || !needles.includes(e.needle)).map(
         (e) => `${e.file} → ${e.needle}`,
       ),
     ).toEqual([]);
+    // Two files earn entries, and the card names both: one holds needles as DATA
+    // (the guard's own doc), the other as MEASUREMENT (the fan-out record). A third
+    // means the sieve is wrong, not the corpus — so it costs a visible diff line.
+    expect([...new Set(DOCS_EXEMPTIONS.map((e) => e.file))].sort()).toEqual([
+      "knowledge/adding-a-sil-tool-fans-out-to-exact-set-mirrors.md",
+      "knowledge/skill-prose-drift-guard-disavowal-discipline.md",
+    ]);
   });
 });
