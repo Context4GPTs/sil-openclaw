@@ -244,9 +244,10 @@ function mapFailure(api: PluginAPI, tool: string, result: StoreFailure) {
     return jsonResult({ status: "not_found", message: result.message });
   }
   if (result.kind === "unreadable") {
-    // A present-but-corrupt document — steer the agent to inspect/repair, NEVER write
-    // over it (silent loss of a recoverable document). Distinct from not_found.
-    api.logger.warn(tool + "_unreadable", {});
+    // NOT KNOWN TO BE ABSENT — presence unsettled, or a body that will not parse. Steer
+    // the agent to inspect/repair, NEVER write over it (silent loss of a recoverable
+    // document). Distinct from not_found.
+    api.logger.warn(tool + "_unreadable", { detail: result.detail });
     return jsonResult({ status: "unreadable", message: result.message, recovery: "inspect_document" });
   }
   api.logger.error(tool + "_persistence_failed", { error: result.error });

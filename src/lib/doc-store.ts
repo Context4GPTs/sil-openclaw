@@ -74,6 +74,9 @@ interface NotFound {
 interface Unreadable {
   ok: false;
   kind: "unreadable";
+  /** "<path>: <cause>" — what the log line needs to tell a chmod fault from a parse
+   * failure. Internal: the agent-facing envelope carries `message`. */
+  detail: string;
   message: string;
 }
 
@@ -100,6 +103,7 @@ function unreadable(path: string): Unreadable {
   return {
     ok: false,
     kind: "unreadable",
+    detail: path + ": malformed or absent frontmatter",
     message:
       path + ": the document is present but corrupt (malformed or absent frontmatter)"
         + " — inspect / repair, do NOT overwrite (it may still be recoverable).",
@@ -175,6 +179,7 @@ function presenceUnreadable(path: string, cause: string): Unreadable {
   return {
     ok: false,
     kind: "unreadable",
+    detail: path + ": " + cause,
     message: path + ": " + presenceError(cause)
       + ". The document may still be on disk, so do NOT mint a fresh one over it.",
   };
