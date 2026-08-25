@@ -171,11 +171,11 @@ function presenceError(cause: string): string {
 }
 
 /** An unsettled presence as a verb-facing variant — `unreadable`, never `not_found`. */
-function storeUnreadable(path: string, error: string): Unreadable {
+function presenceUnreadable(path: string, cause: string): Unreadable {
   return {
     ok: false,
     kind: "unreadable",
-    message: path + ": " + error
+    message: path + ": " + presenceError(cause)
       + ". The document may still be on disk, so do NOT mint a fresh one over it.",
   };
 }
@@ -554,7 +554,7 @@ export function readDocument(ref: unknown): ReadDocResult {
   const target = resolveRef(ref);
   if ("ok" in target) return target;
   const at = probe(target.path);
-  if (at.state === "unknown") return storeUnreadable(target.path, presenceError(at.error));
+  if (at.state === "unknown") return presenceUnreadable(target.path, at.error);
   if (at.state === "absent") {
     return notFound(
       "No document at " + JSON.stringify(target.ref) + " — list what exists with"
@@ -636,7 +636,7 @@ function preflightMode(
   mode: WriteMode,
 ): { ok: true; existing: Artefact | null } | InvalidRequest | NotFound | Unreadable {
   const at = probe(target.path);
-  if (at.state === "unknown") return storeUnreadable(target.path, presenceError(at.error));
+  if (at.state === "unknown") return presenceUnreadable(target.path, at.error);
   const present = at.state === "present";
   if (mode === "create") {
     if (!present) return { ok: true, existing: null };
@@ -703,7 +703,7 @@ export function removeDocument(ref: unknown): RemoveDocResult {
     );
   }
   const at = probe(target.path);
-  if (at.state === "unknown") return storeUnreadable(target.path, presenceError(at.error));
+  if (at.state === "unknown") return presenceUnreadable(target.path, at.error);
   if (at.state === "absent") {
     return notFound("No document at " + JSON.stringify(target.ref) + " to remove (already gone).");
   }
