@@ -180,8 +180,10 @@ as `unreadable` and keeps its place, never half-read.
   status and `## Items` rows. `domain` is a path prefix; `query` is a substring over slugs
   and titles; filters compose; the bare call is *"what does my shopper have?"*.
 - **`sil_doc_read { ref }`** — one whole body plus frontmatter. **Read before every
-  write** — reconcile from the real current body, never from memory. An absent document is
-  `not_found`; a present-but-corrupt one is `unreadable`, which is **never written over**.
+  write** — reconcile from the real current body, never from memory. `not_found` is
+  reported **only** when sil could list the directory that would hold the document and it
+  was not in it; a directory sil could not list is `unreadable`, as is a
+  present-but-corrupt document — and `unreadable` is **never written over**.
 - **`sil_doc_write { ref, mode, body, … }`** — `mode: create` fails if the ref exists,
   `mode: replace` fails if it does not. `body` is always the **whole reconciled markdown**
   — no append, no section patch, so a correction can never stack a row contradicting the

@@ -109,10 +109,12 @@ function registerRead(api: PluginAPI): void {
       + " `ref` is \"shopper\" (the person — their body facts, fit, shopping taste,"
       + " constraints and past purchases) or \"brief:<slug>\" (one shopping job — its"
       + " items, buying guide, hard constraints, preferences and open questions)."
-      + " Discover refs with sil_doc_find. An absent document answers not_found; a"
-      + " present but corrupt one answers unreadable — inspect and repair it, never"
-      + " write a fresh document over it, because the buyer's own words may still be"
-      + " recoverable. A ref that is not lower-kebab, or names a kind this version does"
+      + " Discover refs with sil_doc_find. not_found is reported ONLY when sil could"
+      + " list the directory that would hold the document and it was not in it — a"
+      + " directory sil could not list answers unreadable instead, as does a present but"
+      + " corrupt document: inspect and repair it, never write a fresh document over it,"
+      + " because the buyer's own words may still be recoverable."
+      + " A ref that is not lower-kebab, or names a kind this version does"
       + " not address, answers invalid_request. Local-only, no network.",
     parameters: Type.Object({
       ref: Type.String({
@@ -207,8 +209,10 @@ function registerRemove(api: PluginAPI): void {
       + " by sil_doctor rather than followed. Destructive, so confirm with the buyer"
       + " first. Only a Brief is removable; the shopper document is the person every"
       + " Brief was written from, so it answers invalid_request — correct it with"
-      + " sil_doc_write (mode: replace) instead. An already-gone document answers"
-      + " not_found, so a repeat call is safe. Local-only, no network.",
+      + " sil_doc_write (mode: replace) instead. not_found is reported ONLY when sil"
+      + " could list the directory that would hold the document and it was not in it;"
+      + " a directory sil could not list answers unreadable instead, and is never proof"
+      + " that the delete landed. Local-only, no network.",
     parameters: Type.Object({
       ref: Type.String({
         description: 'The document ref to remove: "brief:<slug>" (lower-kebab, not "main").',
