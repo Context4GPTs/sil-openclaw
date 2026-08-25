@@ -1,5 +1,5 @@
 /**
- * INTEGRATION — `doc-store.ts:52`'s standing invariant: THE STORE NEVER THROWS
+ * INTEGRATION — `doc-store.ts`'s standing invariant: THE STORE NEVER THROWS
  * ACROSS THE TOOL BOUNDARY. Real filesystem, real store, driven through the
  * REGISTERED tools, because an exception's entire cost is paid at `execute()` —
  * calling the store function directly would test a path production never takes.
@@ -14,6 +14,9 @@
  * store through the very scan that throws.
  *
  * THESE ASSERTIONS ARE THE SPEC. Do NOT weaken one to match the store.
+ *
+ * The two describes below name the contract by its SYMBOL, never by a line number: a
+ * `:52` anchor is a claim nothing verifies, and one added import silently made it a lie.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -206,7 +209,7 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe("`doc-store.ts:52` — a store the OS will not let us list is REPORTED, never thrown", () => {
+describe("`doc-store.ts`'s never-throws boundary — a store the OS will not let us list is REPORTED, never thrown", () => {
   it("`briefs` present as a FILE (ENOTDIR): sil_doc_find answers, names it, and still reports the shopper", async () => {
     // `existsSync(briefsDir)` passes on a file, and the very next `readdirSync`
     // raises ENOTDIR straight out of `execute()`. The shopper clause is what
@@ -321,10 +324,10 @@ describe("`doc-store.ts:52` — a store the OS will not let us list is REPORTED,
  * The FOURTH listing site — the store root — and a different failure than the three
  * above. An unlistable `shopper/` throws NOTHING: `existsSync` on every child of it
  * answers false, so the store reads a present store as an ABSENT one. That is the
- * conflation `doc-store.ts:69` forbids in as many words, and it is the more dangerous
- * shape, because a throw at least stops the agent.
+ * conflation `doc-store.ts`'s `Unreadable` forbids in as many words, and it is the more
+ * dangerous shape, because a throw at least stops the agent.
  */
-describe("`doc-store.ts:69` — an unlistable store ROOT is UNREADABLE, never absent", () => {
+describe("`doc-store.ts`'s `Unreadable` contract — an unlistable store ROOT is UNREADABLE, never absent", () => {
   it.skipIf(AS_ROOT)("sil_doc_read {ref: shopper} answers `unreadable` — `not_found` steers a re-mint over the buyer's own words", async () => {
     // The whole cost is the recovery: `not_found`'s message names sil_doc_write
     // (mode: create), and the shopper document is the one `sil_doc_remove` refuses to
@@ -568,21 +571,14 @@ describe("the CONTAINING directory — an unlistable `briefs/` is UNREADABLE, ne
  * answer that STOPS the agent: a false one is not a cosmetic wrong answer, it is a
  * refusal to shop. A shopper who has simply never written a Brief must never be told
  * their store is corrupt.
+ *
+ * AC7 — a miss inside a LISTABLE, non-empty `briefs/` — has no bar here, for the same
+ * reason AC14 has none: `tools/doc-surface.test.ts` G4 already reads
+ * `brief:never-existed` out of a populated `briefs/` and pins `not_found`, at this same
+ * registered-tool boundary. Measured, not assumed — an over-broad read gate turns G4
+ * red alongside AC8 / AC9 / AC23. Do not re-add it.
  */
 describe("…and real absence still reads as absence", () => {
-  it("AC7 — a real miss INSIDE a listable `briefs/` is still `not_found`", async () => {
-    seedShopper();
-    seedBrief();
-
-    // Guard-of-the-guard: the directory is real, listable and non-empty, so the miss
-    // below is a miss and not an empty store.
-    const found = await call("sil_doc_find");
-    expect(found["unreadable"]).toEqual([]);
-    expect((found["briefs"] as unknown[]).length).toBe(1);
-
-    expect((await call("sil_doc_read", { ref: "brief:never-written" }))["status"]).toBe("not_found");
-  });
-
   it("AC8 — an ABSENT `briefs/` is the normal mintable state: `not_found` on read, `ok` on create (beat 1, fresh machine)", async () => {
     seedShopper();
     expect(existsSync(briefsDir())).toBe(false); // guard-of-the-guard
