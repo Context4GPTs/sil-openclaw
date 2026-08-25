@@ -572,11 +572,10 @@ describe("the CONTAINING directory — an unlistable `briefs/` is UNREADABLE, ne
  * refusal to shop. A shopper who has simply never written a Brief must never be told
  * their store is corrupt.
  *
- * AC7 — a miss inside a LISTABLE, non-empty `briefs/` — has no bar here, for the same
- * reason AC14 has none: `tools/doc-surface.test.ts` G4 already reads
- * `brief:never-existed` out of a populated `briefs/` and pins `not_found`, at this same
- * registered-tool boundary. Measured, not assumed — an over-broad read gate turns G4
- * red alongside AC8 / AC9 / AC23. Do not re-add it.
+ * AC7 (a miss inside a LISTABLE, non-empty `briefs/`) has no bar here, for AC14's
+ * reason: `tools/doc-surface.test.ts` G4 pins `not_found` on `brief:never-existed`
+ * inside a populated `briefs/`, at this same boundary. Measured — an over-broad read
+ * gate reds G4 beside AC8 / AC9 / AC23. Do not re-add it.
  */
 describe("…and real absence still reads as absence", () => {
   it("AC8 — an ABSENT `briefs/` is the normal mintable state: `not_found` on read, `ok` on create (beat 1, fresh machine)", async () => {
