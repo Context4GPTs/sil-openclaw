@@ -189,9 +189,9 @@ Everything the shopper knows lives in markdown under `$SIL_DATA_DIR/shopper/`: o
 | Tool | What it does |
 |---|---|
 | `sil_doc_find` | List what your shopper has — the shopper document and every Brief, as **coordinates only** (ref, title, status, the job's items), never bodies. Optional `kind`, `domain` (a path prefix over the Briefs' items), `status` and free-text `query`, all composable; the bare call is the whole overview. A file with malformed frontmatter is reported as `unreadable` and keeps its place. |
-| `sil_doc_read` | Read ONE whole document body plus its frontmatter, by `ref`. An absent document is `not_found`; a present-but-corrupt one is `unreadable`, which the agent inspects rather than overwrites. |
+| `sil_doc_read` | Read ONE whole document body plus its frontmatter, by `ref`. `not_found` is answered only when sil could list the directory that would hold the document and it was not in it. A directory sil could **not** list is `unreadable`, as is a present-but-corrupt document — and `unreadable` is inspected and repaired, never overwritten, because your own words may still be recoverable. |
 | `sil_doc_write` | Write ONE document — `body` is always the **whole** reconciled markdown, so a correction rewrites the line it changes instead of stacking a contradicting one. `mode: create` refuses if the ref already exists; `mode: replace` refuses if it does not. Atomic and owner-only. |
-| `sil_doc_remove` | Forget ONE Brief. Never a cascade, and the shopper document itself is not removable — correct it with a `replace` instead. The agent confirms with you first; removing something already gone is a safe no-op. |
+| `sil_doc_remove` | Forget ONE Brief. Never a cascade, and the shopper document itself is not removable — correct it with a `replace` instead. The agent confirms with you first. |
 
 ---
 
