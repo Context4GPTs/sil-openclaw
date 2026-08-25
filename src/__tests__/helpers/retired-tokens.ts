@@ -1,15 +1,13 @@
 /**
- * The retired-vocabulary needle list and its TWO corpus rules, in one module so
- * the bundle scan and the docs scan can never become two different lists.
- *
- * The bundle is prose the agent ACTS on: a retired token there is EXPUNGED
- * (blanket forbid). `docs/` is prose the agent LEARNS from, and learning needs
- * the record of what changed: a retired token there is DISAVOWED — legal where
- * it is buried in its own sentence, illegal where it is asserted.
+ * One needle list, TWO corpus rules — so they cannot become two lists. The
+ * bundle is prose the agent ACTS on, so a retired token there is EXPUNGED
+ * (blanket forbid); `docs/` is prose it LEARNS from, and learning needs the
+ * record of what changed, so a token there is DISAVOWED — legal buried in its
+ * own statement, illegal asserted.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, posix } from "node:path";
+import { join, posix } from "node:path";
 import { REPO_ROOT } from "./skill-bundle.js";
 
 // Tokens retired by the single-shopper + SDS-redesign pivots. Matched
@@ -72,7 +70,7 @@ const LIVE_SOURCE = join(REPO_ROOT, "src");
 
 const liveSourceFiles = (): string[] =>
   (readdirSync(LIVE_SOURCE, { recursive: true }) as string[])
-    .filter((rel) => !rel.split(/[\\/]/)[0]?.startsWith("__tests__"))
+    .filter((rel) => !rel.startsWith("__tests__"))
     .filter((rel) => statSync(join(LIVE_SOURCE, rel)).isFile());
 
 /** Layer 1 — a needle whose string occurs in LIVE source is not a docs needle:
@@ -80,7 +78,7 @@ const liveSourceFiles = (): string[] =>
  * store migration puts three needles back to work with no edit here. */
 export function docsNeedleExclusions(): NeedleExclusion[] {
   const sources = liveSourceFiles().map((rel) => ({
-    rel: posix.join("src", rel.split(/[\\/]/).join("/")),
+    rel: posix.join("src", rel),
     body: readFileSync(join(LIVE_SOURCE, rel), "utf8").toLowerCase(),
   }));
   return RETIRED_TOKENS.map((needle) => ({
@@ -170,6 +168,8 @@ interface Unit {
 
 function cut(text: string, offset: number, boundary: RegExp): Unit[] {
   const units: Unit[] = [];
+  // Own copy: the module-level boundaries are /g, so a shared `lastIndex` would
+  // make one document's cut depend on the previous one's.
   const re = new RegExp(boundary.source, boundary.flags);
   let cursor = 0;
   let m: RegExpExecArray | null;
@@ -211,7 +211,8 @@ const hasMarker = (text: string): boolean =>
  * no INDEX row in the corpus means no exemption. */
 function historyOnly(file: DocFile, corpus: DocFile[]): boolean {
   if (!hasMarker(frontmatterTags(file.body))) return false;
-  const index = posix.join(dirname(file.path) === "." ? "" : dirname(file.path), "INDEX.md");
+  const folder = posix.dirname(file.path);
+  const index = folder === "." ? "INDEX.md" : posix.join(folder, "INDEX.md");
   const row = corpus
     .find((f) => f.path === index)
     ?.body.split("\n")
