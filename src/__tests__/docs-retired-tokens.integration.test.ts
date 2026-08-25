@@ -12,12 +12,16 @@ import { mkdtempSync, mkdirSync, readdirSync, readFileSync, statSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { docsRetiredTokenOffenders, inertExemptions } from "./helpers/retired-tokens.js";
+import {
+  DOCS_EXEMPTIONS,
+  docsRetiredTokenOffenders,
+  inertExemptions,
+} from "./helpers/retired-tokens.js";
 import {
   DOCS_ROOT,
   docsEntries,
-  docsEntryFloorOffenders,
   docsFiles,
+  docsEntryFloorOffenders,
   docsPresent,
 } from "./helpers/docs-corpus.js";
 
@@ -28,7 +32,9 @@ describe.skipIf(!DOCS)(`the real docs corpus (${DOCS_ROOT})`, () => {
   it("AC11 — no doc ASSERTS a retired token: every mention is buried, history-marked, or exempted by name", () => {
     // Offenders carry file → needle → line so a red is a fix list, not a verdict.
     expect(
-      docsRetiredTokenOffenders(docsFiles()).map((o) => `${o.file}:${o.line} → ${o.needle} — ${o.text}`),
+      docsRetiredTokenOffenders(docsFiles(), DOCS_EXEMPTIONS).map(
+        (o) => `${o.file}:${o.line} → ${o.needle} — ${o.text}`,
+      ),
     ).toEqual([]);
   });
 
@@ -46,24 +52,31 @@ describe.skipIf(!DOCS)(`the real docs corpus (${DOCS_ROOT})`, () => {
     // this one shows TODAY's table is still load-bearing. A pair whose doc was
     // since corrected would otherwise sit there blind to the next retirement —
     // this card's own defect, one level down.
-    expect(inertExemptions(docsFiles()).map((e) => `${e.file} → ${e.needle}`)).toEqual([]);
+    expect(inertExemptions(docsFiles(), DOCS_EXEMPTIONS).map((e) => `${e.file} → ${e.needle}`)).toEqual(
+      [],
+    );
   });
 });
 
 describe("an absent docs corpus declares itself — it never scans empty and passes", () => {
-  it("AC13 — `docsFiles()` THROWS on a missing or empty docs tree rather than returning []", () => {
+  it("AC13 — reading an absent or empty docs tree THROWS rather than returning []", () => {
     // R1, the highest-probability vacuous green: `docs/` does not exist in a card
-    // worktree, which is where every in-dev run happens. A helper that returned []
-    // would make each bar above pass without reading a byte. The throw is what
-    // makes a forgotten `skipIf` an error instead of a green.
+    // worktree, which is where every in-dev run happens. A reader that answers []
+    // makes every bar above pass without reading a byte, and the only thing
+    // standing between that and a green suite is remembering the `skipIf` at each
+    // call site — the hand-maintained discipline this repo keeps recording as
+    // "narrows silently to green". The throw makes a forgotten gate an ERROR.
     const missing = mkdtempSync(join(tmpdir(), "sil-docs-missing-"));
     expect(docsPresent(missing)).toBe(false);
     expect(() => docsFiles(missing)).toThrow(/docs/);
     expect(() => docsEntries(missing)).toThrow(/docs/);
 
-    const empty = mkdtempSync(join(tmpdir(), "sil-docs-empty-"));
-    mkdirSync(join(empty, "docs"));
-    expect(() => docsFiles(empty)).toThrow(/docs/);
+    // A tree that EXISTS and holds no prose is the same vacuous read wearing a
+    // present-looking gate, so the throw cannot be conditioned on `docsPresent`.
+    const gutted = mkdtempSync(join(tmpdir(), "sil-docs-gutted-"));
+    mkdirSync(join(gutted, "docs"));
+    expect(docsPresent(gutted)).toBe(true);
+    expect(() => docsFiles(gutted)).toThrow(/docs/);
   });
 
   it("AC14 — no test file fails for that absence: every test touching `docs/` gates on docsPresent()", () => {

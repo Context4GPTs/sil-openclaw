@@ -123,13 +123,20 @@ describe("docs needle DERIVATION — a needle that names live code is not a docs
   it("AC17 — matchability by BITE: every derived needle is caught in an asserting sentence, every excluded one is not", () => {
     // A needle present-but-unmatchable (upper-cased, mistyped) sits in the list
     // looking protective. Drive each one through the real docs sieve instead.
-    const caught = (needle: string): boolean =>
+    const caught = (written: string): boolean =>
       docsRetiredTokenOffenders(
-        [docOf("knowledge/synthetic.md", [`Then call ${needle} to record it.`])],
+        [docOf("knowledge/synthetic.md", [`Then call ${written} to record it.`])],
         [],
       ).length > 0;
-    expect(RETIRED_TOKENS.filter((t) => !DOCS_EXCLUDED_NEEDLES.includes(t) && !caught(t))).toEqual([]);
+    const derived = RETIRED_TOKENS.filter((t) => !DOCS_EXCLUDED_NEEDLES.includes(t));
+    expect(derived.filter((t) => !caught(t))).toEqual([]);
     expect(RETIRED_TOKENS.filter((t) => DOCS_EXCLUDED_NEEDLES.includes(t) && caught(t))).toEqual([]);
+
+    // …and the docs sieve lowers the BODY, exactly as the bundle scan does. A
+    // terminology word is Title-cased mid-sentence all the time (`Rubric`,
+    // `Playbook`), so a case-sensitive docs scan would let the two corpora diverge
+    // on case with nothing red — the needles are guarded lower-case, not the prose.
+    expect(derived.filter((t) => !caught(t.toUpperCase()))).toEqual([]);
   });
 });
 
@@ -278,7 +285,7 @@ describe("the WHOLESALE exemption — history in its entirety, announced where t
 });
 
 describe("the NAMED exemption — pinned per (file, needle), and it must still bite", () => {
-  const GUARD_DOC = docOf("knowledge/guard-doc.md", [
+  const GUARD_LINES = [
     "---",
     "id: guard-doc",
     "title: The retired-token guard",
@@ -286,7 +293,10 @@ describe("the NAMED exemption — pinned per (file, needle), and it must still b
     "---",
     "",
     "The shopper calls `sil_learn` after every search.",
-  ]);
+    "",
+    "`sil_ping` is still wired into the router.",
+  ];
+  const GUARD_DOC = docOf("knowledge/guard-doc.md", GUARD_LINES);
   const CORRECTED = docOf("knowledge/corrected.md", [
     "---",
     "id: corrected",
@@ -298,17 +308,20 @@ describe("the NAMED exemption — pinned per (file, needle), and it must still b
   ]);
   const TABLE: DocsExemption[] = [
     { file: "knowledge/guard-doc.md", needle: "sil_learn", reason: "quotes its own needle list" },
+    { file: "knowledge/guard-doc.md", needle: "sil_ping", reason: "quotes the removed example tool" },
     { file: "knowledge/corrected.md", needle: "sil_learn", reason: "rotted — the prose was corrected" },
   ];
 
-  it("AC15 — an exemption that has stopped being load-bearing is REPORTED, not left to rot into a blind spot", () => {
+  it("AC15 — an exemption is keyed per (file, needle) and is REPORTED once it stops being load-bearing", () => {
     // Pin 1. A per-(file, needle) table is the vacuity class this repo already
-    // recorded — it narrows silently to green. Withdrawing each exemption and
-    // re-scanning is what stops it: the list self-cleans instead of accumulating.
+    // recorded — it narrows silently to green. Two things stop it: withdrawing
+    // each pair and re-scanning (the list self-cleans), and keying on the NEEDLE
+    // as well as the file. Keyed per FILE, a doc exempted for one retirement goes
+    // blind to the NEXT one — this card's own defect, one level down.
     expect(docsRetiredTokenOffenders([GUARD_DOC, CORRECTED], TABLE)).toEqual([]);
-    expect(inertExemptions([GUARD_DOC, CORRECTED], TABLE)).toEqual([TABLE[1]]);
-    expect(named(docsRetiredTokenOffenders([GUARD_DOC, CORRECTED], [TABLE[1]]))).toEqual([
-      "knowledge/guard-doc.md:7 → sil_learn",
+    expect(inertExemptions([GUARD_DOC, CORRECTED], TABLE)).toEqual([TABLE[2]]);
+    expect(named(docsRetiredTokenOffenders([GUARD_DOC, CORRECTED], [TABLE[1], TABLE[2]]))).toEqual([
+      `knowledge/guard-doc.md:${lineOf(GUARD_LINES, "The shopper calls")} → sil_learn`,
     ]);
   });
 
