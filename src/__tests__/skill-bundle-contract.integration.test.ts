@@ -23,6 +23,10 @@ import {
   registeredToolNames,
 } from "./helpers/mock-plugin-api.js";
 import { perNicheExpertOffenders } from "./helpers/per-niche-expert.js";
+// The needle list + the bundle's blanket-forbid scan, shared with the docs guard
+// (`docs-retired-tokens.integration.test.ts`). One module, two corpus rules: the
+// docs side SUBTRACTS needles it may not scan, and can never edit the list here.
+import { RETIRED_TOKENS, retiredTokenOffenders } from "./helpers/retired-tokens.js";
 import {
   honestyExclusionOffenders,
   overPromiseOffenders,
@@ -76,42 +80,6 @@ const CORE_TOOLS = [
   "sil_doc_find",
   "sil_doc_write",
 ];
-// Tokens retired by the single-shopper + SDS-redesign pivots — no path, no doc,
-// no compat alias may resurrect them anywhere in the bundle. Each names a thing
-// that is GONE, so a blanket forbid is right: nothing legitimately disavows them
-// by name (unlike `expert`, which a corrected doc DOES name to bury it — that one
-// needs the retro-allowance scan below, never a blanket forbid).
-//   `domain_spec`/`intent_spec` keep their UNDERSCORE deliberately: the live
-//   vocabulary "intent"/"domain" must never trip this guard.
-//   `profile.json` is gone FOREVER — the store is frontmatter-as-truth and the
-//   versioned-store-migrations card was abandoned, so nothing will resurrect it.
-//   `sil_specs`/`canonical` join on the retire-the-dead-sil-specs-tool card, and
-//   they are THE enforcement for its skill-prose criteria: the "every registered
-//   tool is named in the bundle" scan above is ONE-DIRECTIONAL, so once the tool
-//   is unregistered every stale `sil_specs` passage passes GREEN and the shopper
-//   keeps being driven at a deleted tool under a fully green suite. `canonical`
-//   is a generic adjective and so carries a real false-RED cost on future prose —
-//   taken deliberately: the v0 shopper vocabulary has no canonical anything, a
-//   false RED is loud and names its file, and a silent miss is the defect being
-//   retired. (`dedup` is NOT here — shop_loop.md uses it legitimately for the
-//   Beat-4 merge.)
-// Matched CASE-INSENSITIVELY (each body is lowered, not the needle), so a
-// Title-cased prose reintroduction (`Rubric`) fails too. Entries MUST therefore
-// be lower-case — pinned by a guard-of-the-guard below, because an upper-case
-// needle would never match a lowered body and would sit here silently vacuous.
-const RETIRED_TOKENS = [
-  "profile.json", "domain_spec", "intent_spec", "playbook", "sil_remember",
-  "sil_ping", "sil_echo", "rubric", "manage_domains",
-  "refine_shopper", "sil_specs", "canonical",
-  // The eight-beat card's retirement (AC G7). Every one is a thing that is GONE,
-  // and this scan is THE only thing that catches stale prose about it: the "every
-  // registered tool is named in the bundle" scan above is ONE-DIRECTIONAL, so
-  // deleting the tool turns no passage red — the shopper simply ships driven at a
-  // tool that no longer exists, under a fully green suite. `sil_profile` as a PREFIX
-  // subsumes the old `sil_profile_list` entry and covers all five verbs at once.
-  "sil_profile", "sil_learn", "method.md", "prd", "domainslug", "six-beat",
-];
-
 /** The retired NAMES this card's AC G7 enumerates, as a separate list so the bite
  * proof below drives the same scan the bundle does with each one in turn. */
 const G7_RETIRED_NAMES = [
@@ -121,13 +89,6 @@ const G7_RETIRED_NAMES = [
 
 const manifest = (): { skills?: unknown } =>
   JSON.parse(readFileSync(join(REPO_ROOT, "openclaw.plugin.json"), "utf8"));
-
-/** The retired-token scan, as ONE function, so the bundle sweep and the bite proof
- * can never be two different rules. */
-const retiredTokenOffenders = (body: string): string[] => {
-  const lower = body.toLowerCase();
-  return RETIRED_TOKENS.filter((t) => lower.includes(t));
-};
 
 // Every register group, so the "named in the bundle" guard below covers the WHOLE
 // surface. A new group omitted here does not fail — it silently narrows the guard,
