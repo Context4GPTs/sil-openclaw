@@ -19,9 +19,11 @@
 import { describe, it, expect } from "vitest";
 import {
   honestyExclusionOffenders,
+  notFoundLicenceOffenders,
   overPromiseOffenders,
   overTriggerOffenders,
   retiredV0Offenders,
+  statesQualifiedNotFound,
   RETIRED_V0_TOKENS,
 } from "../helpers/honesty-vocabulary.js";
 
@@ -256,4 +258,91 @@ describe("retiredV0Offenders — the pre-v0 contract's dead strings", () => {
       expect(retiredV0Offenders(description)).toEqual([]);
     },
   );
+});
+
+/**
+ * The needle AC15 (tool descriptions) and AC16 (bundle prose) both read. Without a
+ * bite proof an unmatchable qualifier would leave BOTH of them green over prose
+ * that still hands the agent the licence — the failure neither of them can catch
+ * about itself.
+ *
+ * The spare rows are deliberately worded UNLIKE the descriptions they will run
+ * over: the rule is "state the listing condition", not "use this sentence".
+ */
+describe("notFoundLicenceOffenders — `not_found` is a positive claim, never a bare licence", () => {
+  const MUST_BITE: [string, string][] = [
+    ["sil_doc_read's shipped line, verbatim", "An absent document answers not_found."],
+    [
+      "sil_doc_remove's shipped line, verbatim — `not_found` as proof a delete landed",
+      "An already-gone document answers not_found, so a repeat call is safe.",
+    ],
+    [
+      "the bundle's shipped line, verbatim",
+      "An absent document is `not_found`; a present-but-corrupt one is `unreadable`.",
+    ],
+    [
+      "the re-mint instruction spelled out",
+      "If a Brief reads not_found, mint a fresh one with sil_doc_write (mode: create).",
+    ],
+    [
+      "the delete believed to have landed",
+      "A repeat sil_doc_remove answers not_found, which is proof the document is gone.",
+    ],
+    [
+      "sentence scope — a qualifier in the NEXT sentence does not reach it",
+      "not_found means the Brief is gone. sil reports it only when it could list the directory.",
+    ],
+    [
+      "bullet scope — a qualifier in the bullet BELOW does not reach it either",
+      "- An absent document answers not_found\n- sil could list the directory that would hold it",
+    ],
+  ];
+
+  it.each(MUST_BITE)("bites: %s", (_label, prose) => {
+    expect(notFoundLicenceOffenders(prose)).not.toEqual([]);
+  });
+
+  const MUST_SPARE: [string, string][] = [
+    [
+      "the condition stated plainly",
+      "not_found is reported only when sil could list the directory that would hold the document"
+        + " and it was not in it.",
+    ],
+    [
+      "the same rule from the other side — different words, same fact",
+      "not_found never means an unreadable directory: it is what sil answers when the folder"
+        + " listed cleanly and the document was gone.",
+    ],
+    [
+      "the negative form, naming the state it excludes",
+      "not_found is never returned for an unlistable directory, so an absent answer is a real"
+        + " absence.",
+    ],
+    [
+      "an enumeration of the wire's statuses claims nothing about absence",
+      "The store answers ok, not_found, unreadable or invalid_request.",
+    ],
+    [
+      "a HARD-WRAPPED sentence is one sentence — the rule is not a column-width rule",
+      "`not_found` is reported only when sil could list the\ndirectory that would hold the document"
+        + "\nand it was not in it.",
+    ],
+  ];
+
+  it.each(MUST_SPARE)("spares: %s", (_label, prose) => {
+    expect(notFoundLicenceOffenders(prose)).toEqual([]);
+  });
+
+  it("statesQualifiedNotFound separates teaching the rule from deleting the vocabulary", () => {
+    // The cheapest way to pass a forbid-scan is to stop naming `not_found` at all,
+    // which leaves the agent reading a status nothing explains. AC15/AC16 use this
+    // as their floor, so it has to be false on the bare form.
+    expect(
+      statesQualifiedNotFound(
+        "not_found is reported only when sil could list the directory that would hold it.",
+      ),
+    ).toBe(true);
+    expect(statesQualifiedNotFound("An absent document answers not_found.")).toBe(false);
+    expect(statesQualifiedNotFound("The document surface is local-only.")).toBe(false);
+  });
 });

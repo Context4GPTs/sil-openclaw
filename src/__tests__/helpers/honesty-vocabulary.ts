@@ -214,6 +214,73 @@ export function overTriggerOffenders(body: string): string[] {
 }
 
 /**
+ * The FOURTH honesty state, and the one that lives on the document surface:
+ * `not_found`. It is a POSITIVE claim — sil listed the directory that would hold
+ * the document and it was not in it — and the agent acts on it by minting a fresh
+ * document, or by believing a delete landed. Stated bare, it is the re-mint
+ * instruction: over a directory sil merely could not read, the buyer's own words
+ * are gone in one call.
+ *
+ * Same shape as the scanners above (sentence scope, the offending sentence
+ * returned), and the same reason for it: an agent reads the sentence on its own,
+ * so a qualifier three sentences away does not reach it.
+ *
+ * NOT a clause match. The qualifier is matched as a listing verb NEXT TO a
+ * container noun, in either order, so any wording that says sil could (or could
+ * not) list the directory holding the document satisfies it — the rule is pinned,
+ * the sentence is free.
+ */
+const NOT_FOUND_TOKEN = /\bnot_found\b/i;
+
+/** What `not_found` is being said to MEAN. */
+const ABSENCE_CLAIM =
+  /\b(absent|already[ -]gone|gone|missing|does\s+not\s+exist|doesn'?t\s+exist|isn'?t\s+there|no\s+such|never\s+written|nothing\s+(?:is\s+)?there)\b/i;
+
+/** What that meaning LICENSES — the two acts this rule exists to gate. */
+const ABSENCE_LICENCE =
+  /\b(mints?|minting|creates?|re-?mint\w*|write\s+a\s+fresh|fresh\s+(?:one|document)|repeat\s+call|safe|deleted|removed|delete\s+landed)\b/i;
+
+/**
+ * `store` is deliberately NOT a container noun here: this prose says "the sil
+ * shopper's store" constantly, so accepting it would let an unrelated "list what
+ * you have" clear the very sentence being guarded.
+ */
+const LISTED_QUALIFIER =
+  /\b(?:list\w*|enumerat\w+|scan\w*)\b[^.;]{0,30}\b(?:director\w+|folder|briefs|containing|would\s+hold)\b|\b(?:director\w+|folder|briefs|containing)\b[^.;]{0,30}\b(?:list\w*|enumerat\w+|scan\w*)\b|\bunlistable\b/i;
+
+/**
+ * This rule needs a CLAIM and its QUALIFIER in one unit, so unlike the scanners
+ * above it cannot treat a physical line break as a unit break: the bundle's prose
+ * is hard-wrapped, and the agent reads the rendered sentence, not the column
+ * width. Wrapped lines are joined; a blank line and a new bullet are still real
+ * boundaries.
+ */
+function unwrapped(body: string): string[] {
+  return sentences(body.replace(/\n(?!\s*\n)(?!\s*[-*•]\s)/g, " "));
+}
+
+/**
+ * Sentences that state `not_found` as a bare licence to mint, or as proof a
+ * delete landed. Empty ⇒ every such sentence carries the listing qualifier.
+ */
+export function notFoundLicenceOffenders(body: string): string[] {
+  return unwrapped(body)
+    .filter(
+      (s) =>
+        NOT_FOUND_TOKEN.test(s)
+        && (ABSENCE_CLAIM.test(s) || ABSENCE_LICENCE.test(s))
+        && !LISTED_QUALIFIER.test(s),
+    )
+    .map((s) => s.replace(/\s+/g, " "));
+}
+
+/** Does this body teach `not_found` WITH its qualifier at all? The forbid-scan
+ * above passes vacuously over prose that simply deleted the vocabulary. */
+export function statesQualifiedNotFound(body: string): boolean {
+  return unwrapped(body).some((s) => NOT_FOUND_TOKEN.test(s) && LISTED_QUALIFIER.test(s));
+}
+
+/**
  * Vocabulary the v0 contract retired, as TEXT — every entry is a dead string
  * that cannot appear innocently in English prose, so a blanket forbid is right.
  *

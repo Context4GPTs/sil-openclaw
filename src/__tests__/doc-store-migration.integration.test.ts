@@ -318,9 +318,9 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
 
   it("G6 — a legacy directory name carrying a regex metacharacter migrates through a structural probe, and never throws across the tool boundary", async () => {
     // A slug interpolated into `new RegExp(...)` is a SyntaxError waiting on a live
-    // disk: `foo(bar` makes every `sil_doc_*` call throw for that store, forever,
-    // against `doc-store.ts:52` ("the store never throws across the tool boundary").
-    // A line-equality probe cannot throw and needs no escaping.
+    // disk: `foo(bar` makes every `sil_doc_*` call throw for that store, forever, against
+    // `doc-store.ts`'s standing invariant that the store never throws across the tool
+    // boundary. A line-equality probe cannot throw and needs no escaping.
     write(join(shopperDir(), "user_spec.md"), artefact({ name: "Ioannis" }, "## Who\nBuys once.\n"));
     write(
       join(legacyDir("foo(bar"), "method.md"),
