@@ -1,8 +1,7 @@
 /**
- * Reading primitives for the `docs/**` corpus, mirroring `skill-bundle.ts` for
- * the bundle. Rooted at a CHECKOUT (not at `docs/` itself) and parameterised,
- * because `docs/` is gitignored: absence is the normal case in a card worktree
- * and has to be drivable rather than ambient.
+ * Reading primitives for `docs/**`, mirroring `skill-bundle.ts` for the bundle.
+ * Rooted at a CHECKOUT (not at `docs/`) and parameterised because `docs/` is
+ * gitignored: absence is normal in a card worktree, so it must be drivable.
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -24,12 +23,9 @@ export const docsPresent = (root: string = REPO_ROOT): boolean => {
   return existsSync(dir) && statSync(dir).isDirectory();
 };
 
-/** Every FILE on disk, unfiltered — a hand-maintained list silently misses the
- * next format and the scan narrows to a corpus nobody checks.
- *
+/** Every FILE on disk, unfiltered — a hand list misses the next format silently.
  * THROWS on an absent or empty tree rather than returning `[]`: every scan over
- * this corpus is `expect(...).toEqual([])`, so an empty read is a pass that read
- * nothing — the vacuous green this whole guard exists to foreclose. */
+ * this corpus is `toEqual([])`, so an empty read is a pass that read nothing. */
 export function docsEntries(root: string = REPO_ROOT): string[] {
   const dir = docsDir(root);
   if (!docsPresent(root)) throw new Error(`no docs corpus: ${dir} does not exist`);

@@ -1,13 +1,7 @@
 /**
- * UNIT — the docs half of the retired-token guard, proved over FIXTURES.
- *
- * `docs/` is gitignored and does not exist in a card worktree, so a bar written
- * against the real corpus would pass vacuously wherever the work happens (R1/R7).
- * Every rule below is therefore driven through the sieve as `{path, body}` pairs,
- * which is the whole reason it is a pure function.
- *
- * Tier: unit — pure string logic over in-memory docs. The needle DERIVATION reads
- * `src/**` (tracked, always present) and is unit by the architect's tier ruling.
+ * UNIT — the docs half of the guard, proved over FIXTURES: `docs/` is gitignored,
+ * so a bar against the real corpus passes vacuously wherever the work happens
+ * (R1/R7). Pure logic over `{path, body}`; only the DERIVATION reads `src/**`.
  */
 
 import { describe, it, expect } from "vitest";

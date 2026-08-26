@@ -1,10 +1,7 @@
 /**
- * INTEGRATION — the retired-token sieve over the REAL `docs/**` tree.
- *
- * `docs/` is gitignored, so it exists only in the canonical checkout: these four
- * bars are the ones that cannot be fixtured, and they declare themselves
- * inapplicable rather than passing over an absent corpus (R1). The sieve's own
- * rules are proved by fixture in `lib/retired-tokens.test.ts`.
+ * INTEGRATION — the retired-token sieve over the REAL `docs/**`: the bars that
+ * cannot be fixtured. `docs/` is gitignored, so absence is normal and must
+ * declare itself rather than pass (R1); the rules are fixtured in `lib/`.
  */
 
 import { describe, it, expect } from "vitest";
@@ -35,6 +32,32 @@ import {
 const TESTS_DIR = dirname(fileURLToPath(import.meta.url));
 const DOCS = docsPresent();
 
+// AC13's visibility half. A skipped bar tells an operator NOTHING: the entire
+// output of a docs-absent `vitest run` is `Tests N passed | M skipped`, which
+// reads identically whether the sweep was inapplicable or DELETED. This bar
+// always runs, and it declares the state where the gate is actually read.
+it(
+  DOCS
+    ? `AC13 — the real docs corpus IS present at ${DOCS_ROOT}; the sweep below scanned it`
+    : `AC13 — the real docs corpus is ABSENT at ${DOCS_ROOT}; the sweep below is inapplicable, and nothing passed over it`,
+  () => {
+    if (DOCS) {
+      expect(docsFiles().length).toBeGreaterThan(0);
+      return;
+    }
+    // The default reporter prints no passing test's NAME and swallows `console.*`
+    // outright — measured. A raw write is the only channel that reaches `pnpm
+    // test`, so the declaration is unmissable rather than merely recorded.
+    process.stderr.write(
+      `INAPPLICABLE — no docs corpus at ${DOCS_ROOT}: the docs retired-token sweep did not run. ` +
+        `(\`docs/\` is gitignored; seed this worktree or run in the canonical checkout.)\n`,
+    );
+    // …and the declaration is bound to reality: an absent corpus must be
+    // UNREADABLE, not merely unscanned, or the bars above could have passed.
+    expect(() => docsFiles()).toThrow(/docs/);
+  },
+);
+
 describe.skipIf(!DOCS)(`the real docs corpus (${DOCS_ROOT})`, () => {
   it("AC11 — no doc ASSERTS a retired token: every mention is buried, history-marked, or exempted by name", () => {
     // Offenders carry file → needle → line so a red is a fix list, not a verdict.
@@ -52,6 +75,13 @@ describe.skipIf(!DOCS)(`the real docs corpus (${DOCS_ROOT})`, () => {
     expect(files.length).toBeGreaterThanOrEqual(25);
     expect(files.reduce((n, f) => n + f.body.length, 0)).toBeGreaterThan(150_000);
     expect(docsEntryFloorOffenders(docsEntries())).toEqual([]);
+
+    // …and no doc holds an ODD number of fences: `maskFences` blanks a lone fence
+    // to EOF, so one unterminated fence silently drops the rest of a file out of
+    // the sieve — after the raw-length floor above has already passed it.
+    expect(
+      files.filter((f) => (f.body.match(/```/g) ?? []).length % 2 === 1).map((f) => f.path),
+    ).toEqual([]);
   });
 
   it("Pin 1 on the real table — no recorded exemption has stopped biting", () => {
@@ -67,12 +97,11 @@ describe.skipIf(!DOCS)(`the real docs corpus (${DOCS_ROOT})`, () => {
 
 describe("an absent docs corpus declares itself — it never scans empty and passes", () => {
   it("AC13 — reading an absent or empty docs tree THROWS rather than returning []", () => {
-    // R1, the highest-probability vacuous green: `docs/` does not exist in a card
-    // worktree, which is where every in-dev run happens. A reader that answers []
-    // makes every bar above pass without reading a byte, and the only thing
-    // standing between that and a green suite is remembering the `skipIf` at each
-    // call site — the hand-maintained discipline this repo keeps recording as
-    // "narrows silently to green". The throw makes a forgotten gate an ERROR.
+    // R1's vacuous green: `docs/` is absent in every card worktree, so a reader
+    // that answers [] makes every bar above pass without reading a byte — with
+    // only a remembered `skipIf` per call site in the way, the hand-maintained
+    // discipline this repo keeps recording as "narrows silently to green". The
+    // throw makes a forgotten gate an ERROR instead.
     const missing = mkdtempSync(join(tmpdir(), "sil-docs-missing-"));
     expect(docsPresent(missing)).toBe(false);
     expect(() => docsFiles(missing)).toThrow(/docs/);
@@ -109,6 +138,8 @@ describe("an absent docs corpus declares itself — it never scans empty and pas
     // touch nothing.
     const touching = sources.filter((s) => /["']docs(\/|["'])/.test(s.body));
     expect(touching.length).toBeGreaterThan(0);
-    expect(touching.filter((s) => !s.body.includes("docsPresent")).map((s) => s.rel)).toEqual([]);
+    // The CALL, not the identifier: `import { docsPresent }` alone satisfied the
+    // bare name while gating nothing.
+    expect(touching.filter((s) => !s.body.includes("docsPresent(")).map((s) => s.rel)).toEqual([]);
   });
 });

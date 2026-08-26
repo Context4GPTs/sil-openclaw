@@ -1,9 +1,7 @@
 /**
- * One needle list, TWO corpus rules — so they cannot become two lists. The
- * bundle is prose the agent ACTS on, so a retired token there is EXPUNGED
- * (blanket forbid); `docs/` is prose it LEARNS from, and learning needs the
- * record of what changed, so a token there is DISAVOWED — legal buried in its
- * own statement, illegal asserted.
+ * One needle list, TWO corpus rules, so they cannot become two lists: the bundle
+ * is prose the agent ACTS on, where a retired token is EXPUNGED; `docs/` is prose
+ * it LEARNS from, where it is DISAVOWED — buried is legal, asserted is not.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";

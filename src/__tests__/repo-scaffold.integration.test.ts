@@ -38,7 +38,11 @@ function readIfExists(rel: string): string | null {
 }
 
 describe("repo scaffolding — top-level files", () => {
-  it("has CLAUDE.md at the repo root", () => {
+  // `CLAUDE.md` is gitignored for the identical reason `docs/` is below, and the
+  // seed carries both — so docs presence is the seeded-checkout signal, and gating
+  // on it keeps this a real assertion rather than a tautology: docs seeded with
+  // CLAUDE.md missing still FAILS. Self-gating on CLAUDE.md could not.
+  it.skipIf(!docsPresent())("has CLAUDE.md at the repo root", () => {
     expect(existsSync(join(REPO_ROOT, "CLAUDE.md"))).toBe(true);
   });
 
@@ -66,7 +70,9 @@ describe.skipIf(!docsPresent())("repo scaffolding — docs taxonomy (decisions/k
   }
 });
 
-describe('repo scaffolding — the "how to add a tool" note states all three steps', () => {
+// Same gate, same reason: the note lives in the gitignored CLAUDE.md, so three of
+// these four bars fail in an unseeded worktree for a cause no one there can fix.
+describe.skipIf(!docsPresent())('repo scaffolding — the "how to add a tool" note states all three steps', () => {
   // The note may live in CLAUDE.md or README.md (the card names both).
   // We concatenate whichever exist and assert the THREE steps appear
   // across the combined contributor surface.
