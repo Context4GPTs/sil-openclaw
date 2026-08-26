@@ -29,9 +29,11 @@ import { perNicheExpertOffenders } from "./helpers/per-niche-expert.js";
 import { RETIRED_TOKENS, retiredTokenOffenders } from "./helpers/retired-tokens.js";
 import {
   honestyExclusionOffenders,
+  notFoundLicenceOffenders,
   overPromiseOffenders,
   overTriggerOffenders,
   retiredV0Offenders,
+  statesQualifiedNotFound,
   RETIRED_V0_TOKENS,
 } from "./helpers/honesty-vocabulary.js";
 // The bundle's reading + SCOPING primitives, shared with
@@ -182,6 +184,23 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
       for (const s of overTriggerOffenders(body)) offenders.push(`${rel}: ${s}`);
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("AC16 — the bundle states `not_found` as a claim from a listing, never as a bare licence to mint", () => {
+    // AC15's other surface, through the ONE shared needle
+    // (`helpers/honesty-vocabulary.ts`): the skill is what the agent reads before it
+    // ever sees a tool description, so a perfectly qualified `sil_doc_read`
+    // description is undone by a reference file that still says "an absent document
+    // is not_found". Two guards, one rule — the same discipline that keeps the
+    // honesty scans from drifting apart.
+    const offenders: string[] = [];
+    for (const rel of bundleFiles()) {
+      for (const s of notFoundLicenceOffenders(read(rel))) offenders.push(`${rel}: ${s}`);
+    }
+    expect(offenders).toEqual([]);
+    // Guard-of-the-guard: deleting the vocabulary passes the scan above vacuously.
+    // The bundle documents the document surface, so it must still teach the rule.
+    expect(bundleFiles().filter((rel) => statesQualifiedNotFound(read(rel)))).not.toEqual([]);
   });
 
   it("guard-of-the-guard: the scanned corpus is non-trivial", () => {

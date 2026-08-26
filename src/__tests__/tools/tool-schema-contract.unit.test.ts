@@ -45,9 +45,11 @@ import {
 import { perNicheExpertOffenders } from "../helpers/per-niche-expert.js";
 import {
   honestyExclusionOffenders,
+  notFoundLicenceOffenders,
   overPromiseOffenders,
   overTriggerOffenders,
   retiredV0Offenders,
+  statesQualifiedNotFound,
   RETIRED_V0_TOKENS,
 } from "../helpers/honesty-vocabulary.js";
 
@@ -518,6 +520,35 @@ describe("AC G8 — each document tool carries its DOMAINS §8 discipline clause
       }
     }
     expect(missing).toEqual([]);
+  });
+});
+
+describe("AC15 — `not_found` is stated as a claim sil can only make from a listing", () => {
+  it("AC15 — no registered description hands out the re-mint licence, and the two doc verbs still teach the rule", () => {
+    // The agent decides whether to re-mint from these descriptions alone, and
+    // `not_found` is the one status that instructs it to. Over a directory the store
+    // merely could not read, that instruction costs the buyer's own words in one
+    // call — the same loss the `unreadable` contract exists to prevent, arriving
+    // through prose instead of through code.
+    //
+    // Runs over the WHOLE registered surface (descriptions AND parameter
+    // descriptions), derived from the live registration, so a fifth verb that learns
+    // the habit is caught for free.
+    const api = allRegisteredTools();
+    const offenders: string[] = [];
+    for (const [name, text] of wholeSurface(api)) {
+      for (const sentence of notFoundLicenceOffenders(text)) offenders.push(`${name}: ${sentence}`);
+    }
+    expect(offenders).toEqual([]);
+
+    // Guard-of-the-guard: the cheapest way to pass a forbid-scan is to stop naming
+    // `not_found` anywhere, which leaves the agent reading a wire status no
+    // description explains. The two verbs that can answer it must still state the
+    // condition under which sil is entitled to.
+    const qualified = wholeSurface(api)
+      .filter(([, text]) => statesQualifiedNotFound(text))
+      .map(([name]) => name);
+    expect(qualified).toEqual(expect.arrayContaining(["sil_doc_read", "sil_doc_remove"]));
   });
 });
 

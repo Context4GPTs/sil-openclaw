@@ -103,6 +103,28 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   No alias and no deprecation stub — a shopper that called it was getting an
   error, and now gets a tool that simply is not there.
 
+### Fixed
+
+- **A directory sil cannot list no longer reads as an absent document.**
+  `sil_doc_read` / `sil_doc_write` / `sil_doc_remove` decided absence with
+  `existsSync` — a boolean over a stat that swallows every errno, so an
+  unlistable `briefs/` (or an unstat-able store root) answered `not_found` for a
+  Brief sitting on disk, while `sil_doc_find` reported that same directory in
+  `unreadable[]` in the same breath. `not_found`'s own message names
+  `sil_doc_write (mode: create)`, so the answer *was* the re-mint instruction and
+  the buyer's own words went with it; on `sil_doc_remove` it claimed a delete
+  that never happened. Every gate that decides absence now runs one probe —
+  **ENOENT alone is absence**; every other errno leaves presence unknown, and
+  unknown is stated as `unreadable` (`recovery: "inspect_document"`), never
+  guessed. Real absence is unchanged, so a first Brief on a fresh machine still
+  mints, and a directory that will not list but whose file reads still hands the
+  document over. `sil_doctor` inherits the new `unreadable[]` entries, so the
+  operator and agent surfaces describe one state — including the store root at
+  mode `0o400`, which until now no surface saw at all. The `sil_doc_read` /
+  `sil_doc_remove` descriptions and the `sil-shopping` bundle now state
+  `not_found` only with its qualifier: sil listed the containing directory and
+  the document was not in it.
+
 ## [0.4.6] - 2026-07-24
 
 ### Fixed

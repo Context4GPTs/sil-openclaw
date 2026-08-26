@@ -14,6 +14,7 @@ import {
   renameSync,
   rmSync,
   rmdirSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import type { Dirent } from "node:fs";
@@ -66,12 +67,16 @@ interface NotFound {
   message: string;
 }
 
-/** PRESENT but unreadable — a document that will not parse, or a store directory the
- * OS will not list. Never conflated with `not_found`: an agent that reads "absent"
- * over a corrupt document re-mints and the buyer's own words are gone. */
+/** NOT KNOWN TO BE ABSENT — a document that will not parse, a store directory the OS
+ * will not list, or a path the OS would not let us stat at all. Never conflated with
+ * `not_found`: an agent that reads "absent" over a corrupt document re-mints and the
+ * buyer's own words are gone. */
 interface Unreadable {
   ok: false;
   kind: "unreadable";
+  /** "<path>: <cause>" — what the log line needs to tell a chmod fault from a parse
+   * failure. Internal: the agent-facing envelope carries `message`. */
+  detail: string;
   message: string;
 }
 
@@ -98,6 +103,7 @@ function unreadable(path: string): Unreadable {
   return {
     ok: false,
     kind: "unreadable",
+    detail: path + ": malformed or absent frontmatter",
     message:
       path + ": the document is present but corrupt (malformed or absent frontmatter)"
         + " — inspect / repair, do NOT overwrite (it may still be recoverable).",
@@ -125,9 +131,9 @@ function errCause(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** `readdirSync` is the store's one fs call that throws where `existsSync` already
- * said yes — EACCES, or a directory present as a FILE (the read is ENOTDIR). Every
- * listing goes through here so a broken tree is REPORTED, never thrown at a tool. */
+/** `readdirSync` throws where the probe already settled presence — EACCES, or a
+ * directory present as a FILE (the read is ENOTDIR). Every listing goes through here
+ * so a broken tree is REPORTED, never thrown at a tool. */
 function listDir(dir: string): { entries: Dirent[]; error: string | null } {
   try {
     return { entries: readdirSync(dir, { withFileTypes: true }), error: null };
@@ -141,24 +147,54 @@ function listingError(cause: string): string {
     + " — repair it by hand (it may be unreadable, or a file where a directory belongs)";
 }
 
-/** With `shopper/` ITSELF unlistable (EACCES, or a file in its place) every child
- * `existsSync` answers false — so an absent store and a locked one read identically,
- * and `not_found` would steer the agent to re-mint over documents still on disk. */
-function shopperDirError(): string | null {
-  const dir = getShopperArtefactDir();
-  if (!existsSync(dir)) return null;
-  const { error } = listDir(dir);
-  return error === null ? null : listingError(error);
+/** ONE primitive for every gate that decides absence. `existsSync` is a boolean over a
+ * stat that swallows every errno, so its `false` means ENOENT *or* "I was not allowed to
+ * look" — the conflation `Unreadable` forbids. A throw here leaves presence UNKNOWN, and
+ * unknown is stated, never guessed as absence. */
+type Presence =
+  | { state: "present" }
+  | { state: "absent" }
+  | { state: "unknown"; error: string };
+
+function probe(path: string): Presence {
+  try {
+    statSync(path);
+    return { state: "present" };
+  } catch (err) {
+    // ENOENT alone is proof of absence (a dangling symlink included). `throwIfNoEntry`
+    // is NOT the classifier: it also swallows ENOTDIR, which is a broken tree.
+    return (err as NodeJS.ErrnoException).code === "ENOENT"
+      ? { state: "absent" }
+      : { state: "unknown", error: errCause(err) };
+  }
 }
 
-/** The root's failure as a verb-facing variant — `unreadable`, never `not_found`. */
-function storeUnreadable(error: string): Unreadable {
+function presenceError(cause: string): string {
+  return "presence could not be determined: " + cause
+    + " — repair it by hand (it may be unreadable, or a file where a directory belongs)";
+}
+
+/** An unsettled presence as a verb-facing variant — `unreadable`, never `not_found`. */
+function presenceUnreadable(path: string, cause: string): Unreadable {
   return {
     ok: false,
     kind: "unreadable",
-    message: getShopperArtefactDir() + ": " + error
-      + ". The documents underneath may be intact — do NOT mint a fresh one over them.",
+    detail: path + ": " + cause,
+    message: path + ": " + presenceError(cause)
+      + ". The document may still be on disk, so do NOT mint a fresh one over it.",
   };
+}
+
+/** The root as `findDocuments` alone needs it: the whole store sits behind this one
+ * directory, so its fault is reported once for every query. Enumeration IS the operation
+ * here — the ref-addressed verbs probe the path they were asked about instead. */
+function shopperDirError(): string | null {
+  const dir = getShopperArtefactDir();
+  const at = probe(dir);
+  if (at.state === "absent") return null;
+  if (at.state === "unknown") return presenceError(at.error);
+  const { error } = listDir(dir);
+  return error === null ? null : listingError(error);
 }
 
 /** Names only, `.md` only, sorted — a scan's stable order. A DIRECTORY named `x.md`
@@ -283,7 +319,6 @@ function stripLeadingFrontmatter(body: string): string {
 }
 
 function readArtefactFile(path: string): Artefact | null {
-  if (!existsSync(path)) return null;
   let raw: string;
   try {
     raw = readFileSync(path, "utf8");
@@ -436,7 +471,12 @@ function findShopper(filters: FindFilters, unreadable: UnreadableDocs): ShopperC
     && filters.status === undefined;
   if (!wanted) return undefined;
   const path = join(getShopperArtefactDir(), USER_SPEC_FILE);
-  if (!existsSync(path)) return undefined;
+  const at = probe(path);
+  if (at.state === "absent") return undefined;
+  if (at.state === "unknown") {
+    unreadable.push({ id: "shopper", error: presenceError(at.error) });
+    return undefined;
+  }
   const parsed = readArtefactFile(path);
   if (parsed === null) {
     unreadable.push({ id: "shopper", error: USER_SPEC_FILE + " has malformed or absent frontmatter" });
@@ -457,7 +497,12 @@ function findShopper(filters: FindFilters, unreadable: UnreadableDocs): ShopperC
 
 function findBriefs(filters: FindFilters, unreadable: UnreadableDocs): BriefCoord[] {
   const dir = join(getShopperArtefactDir(), BRIEFS_SUBDIR);
-  if (!existsSync(dir)) return [];
+  const at = probe(dir);
+  if (at.state === "absent") return [];
+  if (at.state === "unknown") {
+    unreadable.push({ id: BRIEFS_SUBDIR, error: presenceError(at.error) });
+    return [];
+  }
   const listing = listDir(dir);
   if (listing.error !== null) {
     unreadable.push({ id: BRIEFS_SUBDIR, error: listingError(listing.error) });
@@ -513,9 +558,9 @@ export type ReadDocResult =
 export function readDocument(ref: unknown): ReadDocResult {
   const target = resolveRef(ref);
   if ("ok" in target) return target;
-  const rootError = shopperDirError();
-  if (rootError !== null) return storeUnreadable(rootError);
-  if (!existsSync(target.path)) {
+  const at = probe(target.path);
+  if (at.state === "unknown") return presenceUnreadable(target.path, at.error);
+  if (at.state === "absent") {
     return notFound(
       "No document at " + JSON.stringify(target.ref) + " — list what exists with"
         + " sil_doc_find, or write it with sil_doc_write (mode: create).",
@@ -589,14 +634,15 @@ export function writeDocument(spec: WriteSpec): WriteDocResult {
 
 /** The mode gate, and the only read of what is already on disk: create fails if the
  * ref exists, replace fails if it does not — and replace over a corrupt document is
- * refused, because reconciling needs the words that are still in there. */
+ * refused, because reconciling needs the words that are still in there. Both guarantees
+ * need presence SETTLED, so an unsettled one abstains rather than guesses. */
 function preflightMode(
   target: ResolvedRef,
   mode: WriteMode,
 ): { ok: true; existing: Artefact | null } | InvalidRequest | NotFound | Unreadable {
-  const rootError = shopperDirError();
-  if (rootError !== null) return storeUnreadable(rootError);
-  const present = existsSync(target.path);
+  const at = probe(target.path);
+  if (at.state === "unknown") return presenceUnreadable(target.path, at.error);
+  const present = at.state === "present";
   if (mode === "create") {
     if (!present) return { ok: true, existing: null };
     return invalid(
@@ -661,9 +707,9 @@ export function removeDocument(ref: unknown): RemoveDocResult {
         + " written from. Correct it with sil_doc_write (mode: replace) instead.",
     );
   }
-  const rootError = shopperDirError();
-  if (rootError !== null) return storeUnreadable(rootError);
-  if (!existsSync(target.path)) {
+  const at = probe(target.path);
+  if (at.state === "unknown") return presenceUnreadable(target.path, at.error);
+  if (at.state === "absent") {
     return notFound("No document at " + JSON.stringify(target.ref) + " to remove (already gone).");
   }
   try {
@@ -687,12 +733,14 @@ export interface ShopperIdentity {
 }
 
 export function readShopperIdentity(): ShopperIdentity {
-  const rootError = shopperDirError();
+  const userSpecPath = join(getShopperArtefactDir(), USER_SPEC_FILE);
+  const at = probe(userSpecPath);
   // Inconclusive, not empty — the create-shopper bin reads an empty answer as "no
   // shopper yet" and would mint a second person over the one it could not see.
-  if (rootError !== null) return { ok: true, unreadable: [{ id: SHOPPER_SUBDIR, error: rootError }] };
-  const userSpecPath = join(getShopperArtefactDir(), USER_SPEC_FILE);
-  if (!existsSync(userSpecPath)) return { ok: true, unreadable: [] };
+  if (at.state === "unknown") {
+    return { ok: true, unreadable: [{ id: USER_SPEC_FILE, error: presenceError(at.error) }] };
+  }
+  if (at.state === "absent") return { ok: true, unreadable: [] };
   const parsed = readArtefactFile(userSpecPath);
   if (parsed === null) {
     return {
