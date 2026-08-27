@@ -1,17 +1,12 @@
 # cc-setup harness — local-only in this PUBLIC repo. The whole orchestration
 # harness is gitignored so none of it ships in the public plugin repo: the
 # .claude/ tree (skills, agents, hooks, commands, settings, worktrees,
-# agent-memory, logs), the kanban board + cards, the Obsidian vault, the
-# distilled docs, the contributor/agent instructions, and the MCP config.
-# The files live on-disk locally; the board runs from there.
+# agent-memory, logs), the distilled docs, the contributor/agent instructions,
+# and the MCP config. The files live on-disk locally.
 # To untrack anything committed before this rule: git rm -r --cached <path>
 .claude/
 *.worktree
 .mcp.json
-cards/
-BOARD.md
-INDEX.base
-.obsidian/
 docs/
 CLAUDE.md
 
