@@ -287,17 +287,40 @@ function readSkillAttachName() {
   return { name };
 }
 
-/** The agentId path-segment ids already registered in the host config's
- * `agents.list` — the authoritative, shim-independent clash source. */
+/** The agentId path-segment ids already registered in the host config — the
+ * authoritative, shim-independent clash source. Reads BOTH roster shapes: the
+ * `agents.entries` map (2026.8.1+) and the legacy `agents.list` array (<=2026.7.1);
+ * `openclaw agents add` writes whichever the running host uses, and the two never
+ * coexist on a live box (measured 2026-09-02). */
 function existingAgentIds(config) {
+  const ids = new Set();
   const list = Array.isArray(config?.agents?.list) ? config.agents.list : [];
-  return list.map((a) => a?.id).filter((id) => typeof id === "string");
+  for (const a of list) if (typeof a?.id === "string" && a.id) ids.add(a.id);
+  const entries = config?.agents?.entries;
+  if (entries && typeof entries === "object" && !Array.isArray(entries)) {
+    for (const id of Object.keys(entries)) if (id) ids.add(id);
+  }
+  return [...ids];
 }
 
-/** The index of `agentId` in `agents.list`, or -1 (used to target the skill attach). */
-function agentIndex(config, agentId) {
+/** The `openclaw config set` path for `agentId`'s skills array, in whichever roster
+ * shape the host uses: `agents.entries["<id>"].skills` on 2026.8.1+, or
+ * `agents.list[<idx>].skills` on <=2026.7.1. Returns null if the agent is in neither,
+ * so the caller fails closed. The bracket-quoted entries key is safe for hyphenated
+ * agent ids (e.g. `executive-shopper`) that a bare dot-path would split. */
+function skillAttachPath(config, agentId) {
+  const entries = config?.agents?.entries;
+  if (
+    entries &&
+    typeof entries === "object" &&
+    !Array.isArray(entries) &&
+    Object.prototype.hasOwnProperty.call(entries, agentId)
+  ) {
+    return `agents.entries[${JSON.stringify(agentId)}].skills`;
+  }
   const list = Array.isArray(config?.agents?.list) ? config.agents.list : [];
-  return list.findIndex((a) => a?.id === agentId);
+  const idx = list.findIndex((a) => a?.id === agentId);
+  return idx >= 0 ? `agents.list[${idx}].skills` : null;
 }
 
 /** True iff `openclaw config validate --json` reported `{valid:true}`. The host
@@ -563,15 +586,15 @@ function main() {
 
   // --- 8. Attach the sil skill + enable the sil plugin (value-mode, --strict-json) ---
   const postAddConfig = readConfig(configPath);
-  const idx = agentIndex(postAddConfig, agentId);
-  if (idx < 0) {
-    failAndTeardown(configPath, "the created agent " + JSON.stringify(agentId) + " is not in agents.list after `openclaw agents add`");
+  const skillsPath = skillAttachPath(postAddConfig, agentId);
+  if (skillsPath === null) {
+    failAndTeardown(configPath, "the created agent " + JSON.stringify(agentId) + " is in neither agents.entries nor agents.list after `openclaw agents add`");
   }
   // Attach the skill by its PUBLISHED name (`sil-shopping`), NOT the plugin id
   // (`sil`) — a skill and the plugin are two distinct host keys, and the per-agent
   // attach is the only skill surface, so the plugin id here would load no skill.
   const skillRes = runOpenclaw(
-    ["config", "set", `agents.list[${idx}].skills`, JSON.stringify([skillAttachName]), "--strict-json"],
+    ["config", "set", skillsPath, JSON.stringify([skillAttachName]), "--strict-json"],
     configPath,
   );
   if (!skillRes.ok) {
