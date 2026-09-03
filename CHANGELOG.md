@@ -12,6 +12,10 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
+- **`sil_domain_create` specs take an optional `axis: true`** — the ONE variant-level key
+  merchants sell the category by (a boot's mondopoint). At most one per category and
+  `level: variant` only; the route refuses both. sil keys a page's size selector on it
+  when the page names no key.
 - **`sil_doc_find` / `sil_doc_read` / `sil_doc_write` / `sil_doc_remove` — the
   shopper's documents, four operations over one ref scheme.** `ref` is `"shopper"`
   (the person) or `"brief:<slug>"` (one shopping job, many items, many domains).
