@@ -543,6 +543,15 @@ function registerDomainCreate(api: PluginAPI): void {
                 "product or variant. Omit it where the category is not sure which.",
             }),
           ),
+          axis: Type.Optional(
+            Type.Boolean({
+              description:
+                "true on the ONE variant-level key merchants sell this category by — the"
+                + " size axis of a boot, never a colour. At most one per category, and it"
+                + " must be level variant; sil keys a size selector on it when a page"
+                + " names no key.",
+            }),
+          ),
         }),
         {
           maxItems: 50,

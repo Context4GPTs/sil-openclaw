@@ -490,6 +490,7 @@ export type SpecDefinitionInput = {
   allowed_values?: string[];
   value_set?: string;
   level?: string;
+  axis?: boolean;
 };
 
 export type DomainMintParams = {
