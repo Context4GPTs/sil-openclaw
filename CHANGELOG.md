@@ -109,6 +109,12 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Fixed
 
+- **`create-shopper` attaches the skill where a 2026.8.1+ host looks.** The host's config
+  migration renamed `agents.list` (an array) to `agents.entries` (a map keyed by id), and
+  `openclaw agents add` writes that shape, so creation failed closed after the add on every
+  2026.8.1+ gateway. The script now reads both shapes and attaches the skill at
+  `agents.entries["<id>"].skills` (bracket-quoted for hyphenated ids) or `agents.list[<i>]`,
+  whichever the host uses; the two never coexist. Measured live on 2026.8.1 and 2026.9.2.
 - **A directory sil cannot list no longer reads as an absent document.**
   `sil_doc_read` / `sil_doc_write` / `sil_doc_remove` decided absence with
   `existsSync` — a boolean over a stat that swallows every errno, so an
