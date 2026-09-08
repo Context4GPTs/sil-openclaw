@@ -173,8 +173,8 @@ works) — surface it.
    no domain settled and no Brief opened.**
 7. **Attach skill + enable plugin** (value-mode `config set --strict-json`, the only
    mode the pinned `alpine/openclaw:2026.6.9` accepts):
-   `agents.entries["<agentId>"].skills` ← `["sil-shopping"]` (the bracket form the host
-   itself prints for a key it would not write bare; `agents.list[<idx>].skills` on
+   `agents.entries["<agentId>"].skills` ← `["sil-shopping"]` (bracket-quoted: the host's
+   path parser accepts that form for every key; `agents.list[<idx>].skills` on
    ≤2026.7.1); `plugins.entries.sil.enabled` ← `true`. The attach is then **re-read from
    `openclaw.json`** — an exit-0 write that landed on the wrong key is a silent
    misattach, so it fails closed instead. **No per-agent `tools.deny`** — the shopper

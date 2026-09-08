@@ -195,9 +195,9 @@ function die(msg) { process.stderr.write("shim: " + msg + "\n"); process.exit(1)
 
 // Tokenize a config path as the host does (vendor/openclaw src/shared/dot-path.ts,
 // 2026.9.2): a bracket segment is ONE key — [N] an array index, a quoted one a string
-// key that may contain dots — and every other segment splits on dots. Only dots may
-// sit between tokens; on anything else the host THROWS, so the shim must too rather
-// than silently writing a path the host would have refused.
+// key that may contain dots — and every other segment splits on dots. The shim dies on
+// a path it cannot fully consume (the host throws there too); it is looser than the host
+// on malformed separators such as agents..list, which no path the bin emits contains.
 function pathParts(path) {
   const parts = [];
   const seg = /\[(\d+)\]|\["([^"]*)"\]|\['([^']*)'\]|\[([^\]]*)\]|([^.\[\]]+)/g;

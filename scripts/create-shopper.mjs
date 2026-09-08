@@ -307,8 +307,8 @@ function existingAgentIds(config) {
 /** `agentId`'s skills slot — the `openclaw config set` path AND the value currently
  * there — or null when the agent sits in neither roster shape (the caller fails
  * closed). One resolver, so the write and its verification cannot target different
- * places. The entries key is bracket-quoted: that is the host's own canonical form
- * for a key it would not print bare (`appendConfigPathSegment`, 2026.9.2). */
+ * places. The entries key rides bracket-quoted (`JSON.stringify`): the host's parser
+ * accepts that form for every key and it is escape-safe (dot-path.ts, 2026.9.2). */
 function skillSlot(config, agentId) {
   const entries = config?.agents?.entries;
   if (

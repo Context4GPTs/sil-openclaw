@@ -169,11 +169,9 @@ function findMisattachedAgents(
 }
 
 /**
- * Every roster agent as `{ label, skills }`, from BOTH host shapes: the
- * `agents.entries` map keyed by id (2026.8.1+) and the `agents.list` array
- * (<=2026.7.1). Reading only the array left this detector blind on every
- * migrated host. `label` is what the fix string points at, so an entry with no
- * usable id is reported by its path — never as `undefined` or a blank.
+ * Every roster agent as `{ label, skills }`, from BOTH host shapes: the `agents.entries`
+ * map keyed by id (2026.8.1+) and the `agents.list` array (<=2026.7.1). `label` is what
+ * the fix string points at, so an entry with no usable id is reported by its path.
  */
 function rosterAgents(
   config: Record<string, unknown>,
