@@ -51,7 +51,7 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
-- **`openclaw.build.openclawVersion` / `pluginSdkVersion` record `2026.9.2`**, the host this
+- **`openclaw.build.openclawVersion` / `pluginSdkVersion` record `2026.9.3`**, the host this
   plugin is now verified against (the stage pins it). Diagnostics only on the host side; the
   `compat` floor stays `>=2026.7.1` — nothing here needs a newer API.
 - **BREAKING — the shopper's store is FLAT, and the pre-0.5 layout migrates in one
@@ -121,7 +121,7 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   when the skill is not there — a host that parses the path differently writes one
   literal key and still exits 0, and that silent misattach is the state the fix exists to
   prevent. The entries shape was measured live on 2026.8.1 (the fleet's hotfix) and on
-  2026.9.2 in an isolated container (`agents add` writes the map; the bracket path
+  2026.9.3 in an isolated container (`agents add` writes the map; the bracket path
   round-trips through `config set` / `config get`); the attach and its read-back are
   graded by the shimmed suite. The wiring-drift detector reads both shapes too, so it no
   longer goes blind on a migrated host.

@@ -308,7 +308,7 @@ function existingAgentIds(config) {
  * there — or null when the agent sits in neither roster shape (the caller fails
  * closed). One resolver, so the write and its verification cannot target different
  * places. The entries key rides bracket-quoted (`JSON.stringify`): the host's parser
- * accepts that form for every key and it is escape-safe (dot-path.ts, 2026.9.2). */
+ * accepts that form for every key and it is escape-safe (dot-path.ts, 2026.9.3). */
 function skillSlot(config, agentId) {
   const entries = config?.agents?.entries;
   if (

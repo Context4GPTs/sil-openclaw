@@ -172,7 +172,7 @@ works) — surface it.
    "shopper" }` performs, atomically, with the name in its frontmatter. **Setup-only:
    no domain settled and no Brief opened.**
 7. **Attach skill + enable plugin** (value-mode `config set --strict-json`, measured on
-   `openclaw/openclaw:2026.9.2` and every pinned host before it):
+   `openclaw/openclaw:2026.9.3` and every pinned host before it):
    `agents.entries["<agentId>"].skills` ← `["sil-shopping"]` (bracket-quoted: the host's
    path parser accepts that form for every key; `agents.list[<idx>].skills` on
    ≤2026.7.1); `plugins.entries.sil.enabled` ← `true`. The attach is then **re-read from
