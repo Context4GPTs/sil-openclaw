@@ -163,8 +163,9 @@ works) — surface it.
    already exists"); steer to opening a new Brief or correcting the current shopper,
    **never a second shopper**. An inconclusive read fails closed.
 3. **Snapshot `openclaw.json`** — the teardown anchor, before any write.
-4. **`openclaw agents add`** — the real `agents.list[]` entry + workspace bootstrap,
-   inheriting model + tools from `agents.defaults`.
+4. **`openclaw agents add`** — the real host roster entry (`agents.entries` on
+   2026.8.1+, `agents.list[]` on ≤2026.7.1) + workspace bootstrap, inheriting model +
+   tools from `agents.defaults`.
 5. **Write `SOUL.md`** = endorsed **persona + the standing "The sil way" creed block**
    (below).
 6. **Write the shopper document** — the same `create` write `sil_doc_write { ref:
@@ -172,8 +173,12 @@ works) — surface it.
    no domain settled and no Brief opened.**
 7. **Attach skill + enable plugin** (value-mode `config set --strict-json`, the only
    mode the pinned `alpine/openclaw:2026.6.9` accepts):
-   `agents.list[<idx>].skills` ← `["sil-shopping"]`; `plugins.entries.sil.enabled` ←
-   `true`. **No per-agent `tools.deny`** — the shopper inherits the host default toolset.
+   `agents.entries["<agentId>"].skills` ← `["sil-shopping"]` (bracket-quoted — a bare
+   dot-path splits a hyphenated id; `agents.list[<idx>].skills` on ≤2026.7.1);
+   `plugins.entries.sil.enabled` ← `true`. The attach is **read back** with `config get`
+   — an exit-0 write that landed on the wrong key is a silent misattach, so it fails
+   closed instead. **No per-agent `tools.deny`** — the shopper inherits the host default
+   toolset.
 8. **Admit sil (plugin trust)** — the shipped **`scripts/allowlist-openclaw.mjs`** helper
    (which the script runs itself, by absolute path via `node` — never the bare name)
    additively merges the three trust surfaces (`plugins.allow` + `tools.alsoAllow` +

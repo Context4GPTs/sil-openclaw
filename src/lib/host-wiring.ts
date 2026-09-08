@@ -1,7 +1,7 @@
 /**
  * Host-wiring drift — is sil wired the way it thinks it is?
  *
- * A skill attaches per-agent at `agents.list[i].skills` by its PUBLISHED NAME
+ * A skill attaches per-agent in the roster's `skills` array by its PUBLISHED NAME
  * (`sil-shopping` = the skill-dir basename); tools admit by PLUGIN ID (`sil`).
  * Two different host keys, and conflating them seeded incident #1 — silently,
  * because the host fails a bad skill ref with a warning, not an error.
@@ -158,27 +158,45 @@ function findMisattachedAgents(
   config: Record<string, unknown>,
   facts: SilWiringFacts,
 ): string[] {
-  const agents = isRecord(config["agents"]) ? config["agents"] : undefined;
-  const list = Array.isArray(agents?.["list"]) ? agents["list"] : [];
-
   const labels: string[] = [];
+  for (const { label, skills: declared } of rosterAgents(config)) {
+    const skills = stringsOf(declared);
+    if (skills === null) continue;
+    if (!skills.includes(facts.id) || skills.includes(facts.skill)) continue;
+    labels.push(label);
+  }
+  return labels;
+}
+
+/**
+ * Every roster agent as `{ label, skills }`, from BOTH host shapes: the
+ * `agents.entries` map keyed by id (2026.8.1+) and the `agents.list` array
+ * (<=2026.7.1). Reading only the array left this detector blind on every
+ * migrated host. `label` is what the fix string points at, so a list entry with
+ * no usable id is reported positionally, never as `undefined`.
+ */
+function rosterAgents(
+  config: Record<string, unknown>,
+): Array<{ label: string; skills: unknown }> {
+  const agents = isRecord(config["agents"]) ? config["agents"] : undefined;
+  const found: Array<{ label: string; skills: unknown }> = [];
+
+  const entries = isRecord(agents?.["entries"]) ? agents["entries"] : undefined;
+  for (const [id, entry] of Object.entries(entries ?? {})) {
+    if (isRecord(entry)) found.push({ label: id, skills: entry["skills"] });
+  }
+
+  const list = Array.isArray(agents?.["list"]) ? agents["list"] : [];
   for (let i = 0; i < list.length; i += 1) {
     const entry: unknown = list[i];
     if (!isRecord(entry)) continue;
-
-    const skills = stringsOf(entry["skills"]);
-    if (skills === null) continue;
-    if (!skills.includes(facts.id) || skills.includes(facts.skill)) continue;
-
-    // The fix string points at this agent, so it must be legible. An entry with
-    // no usable id is operator corruption — the drift is still real, so report
-    // it positionally rather than printing `undefined` at the operator.
     const id = entry["id"];
-    labels.push(
-      typeof id === "string" && id.length > 0 ? id : `agents.list[${i}]`,
-    );
+    found.push({
+      label: typeof id === "string" && id.length > 0 ? id : `agents.list[${i}]`,
+      skills: entry["skills"],
+    });
   }
-  return labels;
+  return found;
 }
 
 /**

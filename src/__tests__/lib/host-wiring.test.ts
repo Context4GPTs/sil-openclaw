@@ -5,8 +5,8 @@
  * Card: self-upgrade-detect-host-wiring-advisory — **AC4, AC8, AC9** (+ the
  * `readHostVersion` seam AC2/AC10 depend on).
  *
- * This is the incident-#1 detector. A skill attaches per-agent at
- * `agents.list[i].skills` by its **published name** (`sil-shopping` = the skill-dir
+ * This is the incident-#1 detector. A skill attaches per-agent in the roster's
+ * `skills` array by its **published name** (`sil-shopping` = the skill-dir
  * basename); tools admit by **plugin id** (`sil` in `tools.alsoAllow`). They are two
  * different host keys, and conflating them is what seeded incident #1 — silently,
  * because the host fails a bad skill ref with a warning, not an error.
@@ -97,8 +97,8 @@ const only = (config: unknown, id: string, facts: SilWiringFacts = REAL) => {
   return found[0]!;
 };
 
-/** An agent entry as the host writes it (`openclaw agents add` → `{id, skills}`;
- * `create-shopper.mjs` then sets `agents.list[i].skills`). */
+/** An `agents.list` entry as a <=2026.7.1 host writes it (`openclaw agents add` →
+ * `{id, skills}`; `create-shopper.mjs` then sets that entry's `skills`). */
 const agent = (id: string, skills: unknown): Record<string, unknown> => ({ id, skills });
 
 /** A fully HEALTHY config for the given facts: skill attached by published name,
@@ -201,6 +201,19 @@ describe("detectWiringDrift — skill attached by ID instead of PUBLISHED NAME (
     expect(drift).toHaveLength(1);
     expect(drift[0]!.detected).toContain("shopper-a");
     expect(drift[0]!.detected).toContain("shopper-c");
+  });
+
+  it("reads the 2026.8.1+ `agents.entries` MAP too — otherwise the detector is blind on every migrated host", () => {
+    // 2026.8.1 renamed `agents.list` (array) to `agents.entries` (map keyed by id),
+    // and the two never coexist. A detector reading only the array sees NO agents
+    // there, so the drift it exists for goes silent on exactly the hosts that ran
+    // the migration — the failure mode that is invisible by construction.
+    const config = {
+      ...healthy(),
+      agents: { entries: { "beta-shopper": { skills: [REAL.id] } } },
+    };
+    expect(ids(config)).toEqual([SKILL_MISATTACHED]);
+    expect(only(config, SKILL_MISATTACHED).detected).toContain("beta-shopper");
   });
 
   it("NAMES NOTHING FROM THE MANIFEST ITSELF — the detector is fact-driven, never hardcoded", () => {

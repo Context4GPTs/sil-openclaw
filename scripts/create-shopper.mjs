@@ -29,12 +29,13 @@
  *      an INCONCLUSIVE read (degraded store / CLI error) fails closed — never fabricates
  *      a "no shopper" verdict, never proceeds to `agents add`
  *   4. snapshot openclaw.json      — the whole-file teardown anchor, taken BEFORE step 5
- *   5. openclaw agents add         — create the real agents.list entry + workspace bootstrap
+ *   5. openclaw agents add         — create the real host roster entry + workspace bootstrap
  *   6. write <workspace>/SOUL.md   — the persona (atomic tmp→rename); never a sil artefact
  *   7. writeDocument               — REUSED; { ref: shopper, mode: create } ⇒ the shopper
  *                                    document user_spec.md (frontmatter carries the name);
  *                                    no manifest, no Brief written at create
- *   8. attach the sil skill + enable the sil plugin (config set)
+ *   8. attach the sil skill + enable the sil plugin (config set, then a config get
+ *      read-back — an exit-0 `config set` that wrote the wrong key is a silent misattach)
  *   9. sil-openclaw-allowlist      — REUSED whole; additive/idempotent/atomic three-surface
  *                                    trust merge (plugins.allow + tools.alsoAllow + plugins.entries.sil)
  *  10. bind the current channel    — FAIL-OPEN convenience, NOT fail-closed: resolve the channel
@@ -46,7 +47,7 @@
  *  12. one { status, … } JSON result; exit 0 ONLY on `created`.
  *
  * Teardown on ANY failure after step 5 = whole-file snapshot-restore of
- * openclaw.json (reverses the agents.list entry + skill + plugin + trust in ONE
+ * openclaw.json (reverses the roster entry + skill + plugin + trust in ONE
  * atomic op, superseding the allowlist bin's inner `.bak`), plus removal of the
  * workspace dir (only if WE created it) and the singleton shopper dir (only if it
  * did not pre-exist — the singleton pre-flight guarantees it was ours). This
@@ -261,7 +262,7 @@ function readConfig(configPath) {
   }
 }
 
-/** Resolve the sil SKILL's published name to attach at `agents.list[i].skills`,
+/** Resolve the sil SKILL's published name to attach at the agent's `skills` array,
  * single-sourced from the shipped manifest (mirrors `allowlist-openclaw.mjs`'s
  * `readSilFacts`). A skill attaches by its PUBLISHED name = the skill-dir basename
  * = `basename(openclaw.plugin.json#skills[0])` (`sil-shopping`) — NOT the plugin id
@@ -291,7 +292,7 @@ function readSkillAttachName() {
  * authoritative, shim-independent clash source. Reads BOTH roster shapes: the
  * `agents.entries` map (2026.8.1+) and the legacy `agents.list` array (<=2026.7.1);
  * `openclaw agents add` writes whichever the running host uses, and the two never
- * coexist on a live box (measured 2026-09-02). */
+ * coexist on a live host (measured 2026-09-02). */
 function existingAgentIds(config) {
   const ids = new Set();
   const list = Array.isArray(config?.agents?.list) ? config.agents.list : [];
@@ -303,11 +304,10 @@ function existingAgentIds(config) {
   return [...ids];
 }
 
-/** The `openclaw config set` path for `agentId`'s skills array, in whichever roster
- * shape the host uses: `agents.entries["<id>"].skills` on 2026.8.1+, or
- * `agents.list[<idx>].skills` on <=2026.7.1. Returns null if the agent is in neither,
- * so the caller fails closed. The bracket-quoted entries key is safe for hyphenated
- * agent ids (e.g. `executive-shopper`) that a bare dot-path would split. */
+/** The `openclaw config set` path for `agentId`'s skills array, or null when the
+ * agent sits in neither roster shape (the caller fails closed). The entries key is
+ * bracket-QUOTED because a bare dot-path splits a hyphenated id like
+ * `executive-shopper` into two segments. */
 function skillAttachPath(config, agentId) {
   const entries = config?.agents?.entries;
   if (
@@ -521,7 +521,7 @@ function main() {
   if (existingAgentIds(preConfig).includes(agentId)) {
     emitFailure("collision", {
       cause: "the agentId " + JSON.stringify(agentId)
-        + " already exists in the host agents.list — refusing to overwrite an existing agent's persona or wiring.",
+        + " already exists in the host agent roster — refusing to overwrite an existing agent's persona or wiring.",
     });
   }
 
@@ -599,6 +599,17 @@ function main() {
   );
   if (!skillRes.ok) {
     failAndTeardown(configPath, "attaching the sil skill failed: " + (skillRes.stderr || "non-zero exit"));
+  }
+  // Read the attach back: a host that parses the path differently writes a LITERAL
+  // key and still exits 0 — a silent misattach, the loudest place to be wrong. The
+  // name's PRESENCE is the invariant; `config get --json`'s wrapper shape is not.
+  const skillReadBack = runOpenclaw(["config", "get", skillsPath, "--json"], configPath);
+  if (!skillReadBack.stdout.includes(skillAttachName)) {
+    failAndTeardown(
+      configPath,
+      "the sil skill did not stick: `openclaw config set " + skillsPath + "` exited 0 but the "
+        + "read-back of that path does not carry " + JSON.stringify(skillAttachName),
+    );
   }
   // No per-agent `tools.deny` is set: the shopper inherits the host's default toolset
   // untouched. A deny of the fs-mutators is inert here — codex brings its OWN shell

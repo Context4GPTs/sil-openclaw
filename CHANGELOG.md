@@ -113,8 +113,13 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   migration renamed `agents.list` (an array) to `agents.entries` (a map keyed by id), and
   `openclaw agents add` writes that shape, so creation failed closed after the add on every
   2026.8.1+ gateway. The script now reads both shapes and attaches the skill at
-  `agents.entries["<id>"].skills` (bracket-quoted for hyphenated ids) or `agents.list[<i>]`,
-  whichever the host uses; the two never coexist. Measured live on 2026.8.1 and 2026.9.2.
+  `agents.entries["<id>"].skills` (bracket-quoted for hyphenated ids) or
+  `agents.list[<i>].skills`, whichever the host uses; the two never coexist. The attach
+  is then read back with `config get` and fails closed when the skill is not there —
+  a host that parses the path differently writes one literal key and still exits 0, and
+  that silent misattach is the state the fix exists to prevent. Measured live on
+  2026.8.1 and 2026.9.2; the wiring-drift detector reads both shapes too, so it no
+  longer goes blind on a migrated host.
 - **A directory sil cannot list no longer reads as an absent document.**
   `sil_doc_read` / `sil_doc_write` / `sil_doc_remove` decided absence with
   `existsSync` — a boolean over a stat that swallows every errno, so an
