@@ -173,12 +173,12 @@ works) — surface it.
    no domain settled and no Brief opened.**
 7. **Attach skill + enable plugin** (value-mode `config set --strict-json`, the only
    mode the pinned `alpine/openclaw:2026.6.9` accepts):
-   `agents.entries["<agentId>"].skills` ← `["sil-shopping"]` (bracket-quoted — a bare
-   dot-path splits a hyphenated id; `agents.list[<idx>].skills` on ≤2026.7.1);
-   `plugins.entries.sil.enabled` ← `true`. The attach is **read back** with `config get`
-   — an exit-0 write that landed on the wrong key is a silent misattach, so it fails
-   closed instead. **No per-agent `tools.deny`** — the shopper inherits the host default
-   toolset.
+   `agents.entries["<agentId>"].skills` ← `["sil-shopping"]` (the bracket form the host
+   itself prints for a key it would not write bare; `agents.list[<idx>].skills` on
+   ≤2026.7.1); `plugins.entries.sil.enabled` ← `true`. The attach is then **re-read from
+   `openclaw.json`** — an exit-0 write that landed on the wrong key is a silent
+   misattach, so it fails closed instead. **No per-agent `tools.deny`** — the shopper
+   inherits the host default toolset.
 8. **Admit sil (plugin trust)** — the shipped **`scripts/allowlist-openclaw.mjs`** helper
    (which the script runs itself, by absolute path via `node` — never the bare name)
    additively merges the three trust surfaces (`plugins.allow` + `tools.alsoAllow` +

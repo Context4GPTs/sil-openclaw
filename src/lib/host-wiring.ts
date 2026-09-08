@@ -172,8 +172,8 @@ function findMisattachedAgents(
  * Every roster agent as `{ label, skills }`, from BOTH host shapes: the
  * `agents.entries` map keyed by id (2026.8.1+) and the `agents.list` array
  * (<=2026.7.1). Reading only the array left this detector blind on every
- * migrated host. `label` is what the fix string points at, so a list entry with
- * no usable id is reported positionally, never as `undefined`.
+ * migrated host. `label` is what the fix string points at, so an entry with no
+ * usable id is reported by its path — never as `undefined` or a blank.
  */
 function rosterAgents(
   config: Record<string, unknown>,
@@ -183,7 +183,8 @@ function rosterAgents(
 
   const entries = isRecord(agents?.["entries"]) ? agents["entries"] : undefined;
   for (const [id, entry] of Object.entries(entries ?? {})) {
-    if (isRecord(entry)) found.push({ label: id, skills: entry["skills"] });
+    if (!isRecord(entry)) continue;
+    found.push({ label: id.length > 0 ? id : `agents.entries[""]`, skills: entry["skills"] });
   }
 
   const list = Array.isArray(agents?.["list"]) ? agents["list"] : [];

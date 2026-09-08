@@ -152,7 +152,6 @@ interface Spec {
  *                            fail: config-set-literal ⇒ write the WHOLE path as ONE
  *                            literal key and still exit 0 — the silent misattach a host
  *                            that cannot parse the path performs]
- *   config get <path> --json → the value at <path>, or `null`. The attach read-back.
  *   config validate --json → {valid:true,path}                          [fail: config-validate
  *                            ⇒ {valid:false,path,issues,error}, exit 0]
  *   agents bind --agent <id> --bind <ch> --json
@@ -194,16 +193,26 @@ function readCfg() { return JSON.parse(readFileSync(cfgPath, "utf8")); }
 function writeCfg(c) { writeFileSync(cfgPath, JSON.stringify(c, null, 2) + "\n"); }
 function die(msg) { process.stderr.write("shim: " + msg + "\n"); process.exit(1); }
 
-// Split a config path into segments: dots, "[N]" indexes, and the bracket-QUOTED
-// keys 2026.8.1+ needs for hyphenated agent ids — "agents.list[0].skills",
-// "plugins.entries.sil.enabled", 'agents.entries["my-shopper"].skills'.
+// Tokenize a config path as the host does (vendor/openclaw src/shared/dot-path.ts,
+// 2026.9.2): a bracket segment is ONE key — [N] an array index, a quoted one a string
+// key that may contain dots — and every other segment splits on dots. Only dots may
+// sit between tokens; on anything else the host THROWS, so the shim must too rather
+// than silently writing a path the host would have refused.
 function pathParts(path) {
   const parts = [];
-  const seg = /\[(\d+)\]|\["([^"]*)"\]|\['([^']*)'\]|([^.\[\]]+)/g;
+  const seg = /\[(\d+)\]|\["([^"]*)"\]|\['([^']*)'\]|\[([^\]]*)\]|([^.\[\]]+)/g;
+  let consumed = 0;
   let m;
   while ((m = seg.exec(path)) !== null) {
-    if (m[1] !== undefined) parts.push(Number(m[1]));
-    else parts.push(m[2] !== undefined ? m[2] : m[3] !== undefined ? m[3] : m[4]);
+    if (path.slice(consumed, m.index).replace(/\./g, "") !== "") break;
+    consumed = seg.lastIndex;
+    if (m[1] !== undefined) { parts.push(Number(m[1])); continue; }
+    const key = m[2] ?? m[3] ?? m[4] ?? m[5];
+    if (key === "") die("empty path segment in " + path);
+    parts.push(key);
+  }
+  if (parts.length === 0 || path.slice(consumed).replace(/\./g, "") !== "") {
+    die("unparseable config path " + path);
   }
   return parts;
 }
@@ -219,15 +228,6 @@ function setPath(obj, path, val) {
     cur = cur[k];
   }
   cur[parts[parts.length - 1]] = val;
-}
-
-function getPath(obj, path) {
-  let cur = obj;
-  for (const k of pathParts(path)) {
-    if (cur === null || typeof cur !== "object") return undefined;
-    cur = cur[k];
-  }
-  return cur;
 }
 
 const a0 = argv[0];
@@ -282,12 +282,6 @@ if (a0 === "config" && a1 === "set") {
   if (fails.includes("config-set-literal")) c[path] = val;
   else setPath(c, path, val);
   writeCfg(c);
-  process.exit(0);
-}
-
-if (a0 === "config" && a1 === "get") {
-  const v = getPath(readCfg(), argv[2]);
-  process.stdout.write(JSON.stringify(v === undefined ? null : v) + "\n");
   process.exit(0);
 }
 
@@ -1002,13 +996,9 @@ describe("collision — an agentId clash on the DERIVED id refuses without overw
 });
 
 // ===========================================================================
-// The 2026.8.1+ roster shape. Every test above drives the <=2026.7.1
-// `agents.list` ARRAY; `openclaw agents add` on a migrated host writes an
-// `agents.entries` MAP keyed by id instead, and the skill must attach at the
-// bracket-QUOTED `agents.entries["<id>"].skills` — a bare dot-path splits a
-// hyphenated id. The two shapes never coexist on a live host, so these runs
-// carry NO agents.list at all. Creation was fail-closed-broken on every 2026.8.1+
-// gateway until the bin read both shapes; nothing here re-drives the array.
+// The 2026.8.1+ roster shape: `openclaw agents add` writes an `agents.entries` MAP
+// keyed by id, never the `agents.list` ARRAY every test above drives. Creation was
+// fail-closed-broken on every migrated gateway until the bin read both shapes.
 // ===========================================================================
 
 /** A host whose `openclaw agents add` writes the 2026.8.1+ roster map. */
@@ -1017,8 +1007,6 @@ const ENTRIES_HOST = { OPENCLAW_SHIM_ROSTER: "entries" };
 describe("entries roster (2026.8.1+) — the skill lands where a migrated host looks", () => {
   it('attaches at agents.entries["<id>"].skills, never as a literal bracketed key', () => {
     writeConfig(freshConfig());
-    // A HYPHENATED id on purpose: it is the id a bare dot-path would split into
-    // `executive` / `shopper`, which is why the entries key is bracket-quoted.
     const spec = validSpec({ name: "Executive Shopper" });
     const r = runBin({ spec, env: ENTRIES_HOST });
 
@@ -1060,6 +1048,8 @@ describe("entries roster (2026.8.1+) — the skill lands where a migrated host l
     // one literal key and exits 0; every later gate — the allowlist merge, `config
     // validate` — passes over it, so WITHOUT the read-back this run declares `created`
     // with the skill attached nowhere. That is the failure the whole fix exists to stop.
+    // The verification reads openclaw.json, not the CLI: a single-parser host reads its
+    // OWN literal key back and confirms its own misattach.
     writeConfig(freshConfig());
     const preConfig = readFileSync(configPath, "utf8");
     const spec = validSpec({ name: "Executive Shopper" });
@@ -1070,8 +1060,9 @@ describe("entries roster (2026.8.1+) — the skill lands where a migrated host l
     const m = parseMarker(r.stderr);
     expect(m["status"]).toBe("persistence_failed");
     expect(r.stdout.includes("sil_shopper_created")).toBe(false);
-    // The read-back ran, and the cause names the skill that never stuck.
-    expect(shimLog()).toContain("config get");
+    // Writes had begun — the attach was issued and exited 0 — and the cause names the
+    // skill that never stuck.
+    expect(shimLog()).toContain("config set");
     expect(String(m["cause"])).toContain(SIL_SKILL);
     // Teardown reverted the literal key and everything else this run wrote.
     expect(readFileSync(configPath, "utf8")).toBe(preConfig);

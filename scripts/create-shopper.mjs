@@ -34,8 +34,8 @@
  *   7. writeDocument               — REUSED; { ref: shopper, mode: create } ⇒ the shopper
  *                                    document user_spec.md (frontmatter carries the name);
  *                                    no manifest, no Brief written at create
- *   8. attach the sil skill + enable the sil plugin (config set, then a config get
- *      read-back — an exit-0 `config set` that wrote the wrong key is a silent misattach)
+ *   8. attach the sil skill + enable the sil plugin (config set, then re-read openclaw.json
+ *      — an exit-0 `config set` that wrote the wrong key is a silent misattach)
  *   9. sil-openclaw-allowlist      — REUSED whole; additive/idempotent/atomic three-surface
  *                                    trust merge (plugins.allow + tools.alsoAllow + plugins.entries.sil)
  *  10. bind the current channel    — FAIL-OPEN convenience, NOT fail-closed: resolve the channel
@@ -304,11 +304,12 @@ function existingAgentIds(config) {
   return [...ids];
 }
 
-/** The `openclaw config set` path for `agentId`'s skills array, or null when the
- * agent sits in neither roster shape (the caller fails closed). The entries key is
- * bracket-QUOTED because a bare dot-path splits a hyphenated id like
- * `executive-shopper` into two segments. */
-function skillAttachPath(config, agentId) {
+/** `agentId`'s skills slot — the `openclaw config set` path AND the value currently
+ * there — or null when the agent sits in neither roster shape (the caller fails
+ * closed). One resolver, so the write and its verification cannot target different
+ * places. The entries key is bracket-quoted: that is the host's own canonical form
+ * for a key it would not print bare (`appendConfigPathSegment`, 2026.9.2). */
+function skillSlot(config, agentId) {
   const entries = config?.agents?.entries;
   if (
     entries &&
@@ -316,11 +317,14 @@ function skillAttachPath(config, agentId) {
     !Array.isArray(entries) &&
     Object.prototype.hasOwnProperty.call(entries, agentId)
   ) {
-    return `agents.entries[${JSON.stringify(agentId)}].skills`;
+    return {
+      path: `agents.entries[${JSON.stringify(agentId)}].skills`,
+      skills: entries[agentId]?.skills,
+    };
   }
   const list = Array.isArray(config?.agents?.list) ? config.agents.list : [];
   const idx = list.findIndex((a) => a?.id === agentId);
-  return idx >= 0 ? `agents.list[${idx}].skills` : null;
+  return idx >= 0 ? { path: `agents.list[${idx}].skills`, skills: list[idx]?.skills } : null;
 }
 
 /** True iff `openclaw config validate --json` reported `{valid:true}`. The host
@@ -585,30 +589,29 @@ function main() {
   }
 
   // --- 8. Attach the sil skill + enable the sil plugin (value-mode, --strict-json) ---
-  const postAddConfig = readConfig(configPath);
-  const skillsPath = skillAttachPath(postAddConfig, agentId);
-  if (skillsPath === null) {
+  const slot = skillSlot(readConfig(configPath), agentId);
+  if (slot === null) {
     failAndTeardown(configPath, "the created agent " + JSON.stringify(agentId) + " is in neither agents.entries nor agents.list after `openclaw agents add`");
   }
   // Attach the skill by its PUBLISHED name (`sil-shopping`), NOT the plugin id
   // (`sil`) — a skill and the plugin are two distinct host keys, and the per-agent
   // attach is the only skill surface, so the plugin id here would load no skill.
   const skillRes = runOpenclaw(
-    ["config", "set", skillsPath, JSON.stringify([skillAttachName]), "--strict-json"],
+    ["config", "set", slot.path, JSON.stringify([skillAttachName]), "--strict-json"],
     configPath,
   );
   if (!skillRes.ok) {
     failAndTeardown(configPath, "attaching the sil skill failed: " + (skillRes.stderr || "non-zero exit"));
   }
-  // Read the attach back: a host that parses the path differently writes a LITERAL
-  // key and still exits 0 — a silent misattach, the loudest place to be wrong. The
-  // name's PRESENCE is the invariant; `config get --json`'s wrapper shape is not.
-  const skillReadBack = runOpenclaw(["config", "get", skillsPath, "--json"], configPath);
-  if (!skillReadBack.stdout.includes(skillAttachName)) {
+  // Verify against the FILE, never the CLI: a host that writes the path as a literal
+  // key still exits 0, and its own `config get` would read that same literal key back
+  // — the misattach would confirm itself. openclaw.json is what the gateway loads.
+  const attached = skillSlot(readConfig(configPath), agentId)?.skills;
+  if (!(Array.isArray(attached) && attached.includes(skillAttachName))) {
     failAndTeardown(
       configPath,
-      "the sil skill did not stick: `openclaw config set " + skillsPath + "` exited 0 but the "
-        + "read-back of that path does not carry " + JSON.stringify(skillAttachName),
+      "the sil skill did not stick: `openclaw config set " + slot.path + "` exited 0 but "
+        + slot.path + " in openclaw.json does not carry " + JSON.stringify(skillAttachName),
     );
   }
   // No per-agent `tools.deny` is set: the shopper inherits the host's default toolset

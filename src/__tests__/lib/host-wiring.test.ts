@@ -563,15 +563,22 @@ describe("detectWiringDrift — pure, non-mutating, and unthrowable (AC8/AC12)",
     }
   });
 
-  it("an agent entry with a mis-attached skill but NO usable id still reports legibly", () => {
-    // `agents.list[i].id` is what the fix string points at. An entry without one is
-    // operator corruption — the finding must still fire (the drift is real) and
-    // must not print `undefined` at the operator.
-    const config = { agents: { list: [{ skills: [REAL.id] }] }, tools: { alsoAllow: [REAL.id] } };
-    const drift = detectWiringDrift(config, REAL).filter((f) => f.id === SKILL_MISATTACHED);
-    expect(drift).toHaveLength(1);
-    expect(drift[0]!.detected).not.toContain("undefined");
-    expect(drift[0]!.suggestedAction).not.toContain("undefined");
+  it("a mis-attached agent with NO usable id still reports legibly — in EITHER roster shape", () => {
+    // The label is what the fix string points at. A list entry with no `id`, and an
+    // entries key of "", are both operator corruption — the finding must still fire
+    // (the drift is real) and must name a path, never `undefined` or a blank where
+    // an agent name goes.
+    const corrupt: Array<[Record<string, unknown>, string]> = [
+      [{ list: [{ skills: [REAL.id] }] }, "agents.list[0]"],
+      [{ entries: { "": { skills: [REAL.id] } } }, `agents.entries[""]`],
+    ];
+    for (const [agents, label] of corrupt) {
+      const config = { agents, tools: { alsoAllow: [REAL.id] } };
+      const drift = detectWiringDrift(config, REAL).filter((f) => f.id === SKILL_MISATTACHED);
+      expect(drift, label).toHaveLength(1);
+      expect(drift[0]!.detected).toContain(label);
+      expect(drift[0]!.suggestedAction).not.toContain("undefined");
+    }
   });
 });
 
