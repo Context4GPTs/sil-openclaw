@@ -90,7 +90,7 @@ const SCRIPT = join(REPO_ROOT, "scripts", "create-shopper.mjs");
 const SIL_ID = "sil";
 /** The bundled skill's PUBLISHED name = the basename of the manifest's skills
  * ref (`./sil-shopping` → `sil-shopping`) — the key the host attaches a skill by
- * at `agents.list[i].skills`. Single-sourced from openclaw.plugin.json so a skill
+ * in the agent's `skills` array. Single-sourced from openclaw.plugin.json so a skill
  * rename tracks here automatically, and so this pins the create bin against the
  * manifest rather than a second literal. It is the skill NAME, NEVER the plugin
  * id `sil` — attaching the plugin id is the total skill-load failure this card
@@ -143,10 +143,15 @@ interface Spec {
  * Contract (matches what the bin actually needs — the bin reads `agents list`/
  * `agents add` only by exit code, then re-reads the config FILE):
  *   agents list --json     → exit 0 (empty output is fine)               [fail: agents-list]
- *   agents add <id> …      → append {id,skills:[]} to agents.list, mkdir
- *                            the --workspace dir + bootstrap SOUL.md/AGENTS.md, exit 0
+ *   agents add <id> …      → append {id,skills:[]} to agents.list — or, on an ENTRIES
+ *                            host (OPENCLAW_SHIM_ROSTER=entries), write
+ *                            agents.entries[<id>] = {skills:[]} instead; mkdir the
+ *                            --workspace dir + bootstrap SOUL.md/AGENTS.md, exit 0
  *                                                                        [fail: agents-add]
- *   config set <path> <v>  → apply the set to openclaw.json, exit 0      [fail: config-set]
+ *   config set <path> <v>  → apply the set to openclaw.json, exit 0      [fail: config-set;
+ *                            fail: config-set-literal ⇒ write the WHOLE path as ONE
+ *                            literal key and still exit 0 — the silent misattach a host
+ *                            that cannot parse the path performs]
  *   config validate --json → {valid:true,path}                          [fail: config-validate
  *                            ⇒ {valid:false,path,issues,error}, exit 0]
  *   agents bind --agent <id> --bind <ch> --json
@@ -188,15 +193,32 @@ function readCfg() { return JSON.parse(readFileSync(cfgPath, "utf8")); }
 function writeCfg(c) { writeFileSync(cfgPath, JSON.stringify(c, null, 2) + "\n"); }
 function die(msg) { process.stderr.write("shim: " + msg + "\n"); process.exit(1); }
 
-// Set a value at a dotted path that may contain "[N]" index segments, e.g.
-// "agents.list[0].skills" or "plugins.entries.sil.enabled".
-function setPath(obj, path, val) {
+// Tokenize a config path as the host does (vendor/openclaw src/shared/dot-path.ts,
+// 2026.9.3): a bracket segment is ONE key — [N] an array index, a quoted one a string
+// key that may contain dots — and every other segment splits on dots. The shim dies on
+// a path it cannot fully consume (the host throws there too); it is looser than the host
+// on malformed separators such as agents..list, which no path the bin emits contains.
+function pathParts(path) {
   const parts = [];
-  for (const seg of path.split(".")) {
-    const m = seg.match(/^([^\[]+)\[(\d+)\]$/);
-    if (m) { parts.push(m[1]); parts.push(Number(m[2])); }
-    else { parts.push(seg); }
+  const seg = /\[(\d+)\]|\["([^"]*)"\]|\['([^']*)'\]|\[([^\]]*)\]|([^.\[\]]+)/g;
+  let consumed = 0;
+  let m;
+  while ((m = seg.exec(path)) !== null) {
+    if (path.slice(consumed, m.index).replace(/\./g, "") !== "") break;
+    consumed = seg.lastIndex;
+    if (m[1] !== undefined) { parts.push(Number(m[1])); continue; }
+    const key = m[2] ?? m[3] ?? m[4] ?? m[5];
+    if (key === "") die("empty path segment in " + path);
+    parts.push(key);
   }
+  if (parts.length === 0 || path.slice(consumed).replace(/\./g, "") !== "") {
+    die("unparseable config path " + path);
+  }
+  return parts;
+}
+
+function setPath(obj, path, val) {
+  const parts = pathParts(path);
   let cur = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const k = parts[i];
@@ -213,9 +235,13 @@ const a1 = argv[1];
 
 if (a0 === "agents" && a1 === "list") {
   if (fails.includes("agents-list")) die("agents list forced failure");
-  let list = [];
-  try { const c = readCfg(); if (c.agents && Array.isArray(c.agents.list)) list = c.agents.list; } catch (e) {}
-  process.stdout.write(JSON.stringify({ agents: list.map((x) => ({ id: x && x.id })) }) + "\n");
+  let ids = [];
+  try {
+    const roster = readCfg().agents || {};
+    if (roster.entries && typeof roster.entries === "object") ids = Object.keys(roster.entries);
+    else if (Array.isArray(roster.list)) ids = roster.list.map((x) => x && x.id);
+  } catch (e) {}
+  process.stdout.write(JSON.stringify({ agents: ids.map((id) => ({ id: id })) }) + "\n");
   process.exit(0);
 }
 
@@ -226,8 +252,15 @@ if (a0 === "agents" && a1 === "add") {
   const ws = wsIdx >= 0 ? argv[wsIdx + 1] : null;
   const c = readCfg();
   if (!c.agents || typeof c.agents !== "object") c.agents = {};
-  if (!Array.isArray(c.agents.list)) c.agents.list = [];
-  c.agents.list.push({ id: id, skills: [] });
+  // 2026.8.1+ keeps the roster as a MAP keyed by id; <=2026.7.1 as an ARRAY. A live
+  // host has exactly one of the two, never both.
+  if (process.env.OPENCLAW_SHIM_ROSTER === "entries") {
+    if (!c.agents.entries || typeof c.agents.entries !== "object") c.agents.entries = {};
+    c.agents.entries[id] = { skills: [] };
+  } else {
+    if (!Array.isArray(c.agents.list)) c.agents.list = [];
+    c.agents.list.push({ id: id, skills: [] });
+  }
   writeCfg(c);
   if (ws) {
     mkdirSync(ws, { recursive: true });
@@ -245,7 +278,9 @@ if (a0 === "config" && a1 === "set") {
   let val;
   try { val = JSON.parse(rawVal); } catch (e) { val = rawVal; }
   const c = readCfg();
-  setPath(c, path, val);
+  // A host that cannot parse the path writes it as ONE literal key and still exits 0.
+  if (fails.includes("config-set-literal")) c[path] = val;
+  else setPath(c, path, val);
   writeCfg(c);
   process.exit(0);
 }
@@ -957,6 +992,82 @@ describe("collision — an agentId clash on the DERIVED id refuses without overw
     // Never overwrote the existing agent, never minted a shopper dir.
     expect(readFileSync(configPath, "utf8")).toBe(preConfig);
     expect(existsSync(shopperDir())).toBe(false);
+  });
+});
+
+// ===========================================================================
+// The 2026.8.1+ roster shape: `openclaw agents add` writes an `agents.entries` MAP
+// keyed by id, never the `agents.list` ARRAY every test above drives. Creation was
+// fail-closed-broken on every migrated gateway until the bin read both shapes.
+// ===========================================================================
+
+/** A host whose `openclaw agents add` writes the 2026.8.1+ roster map. */
+const ENTRIES_HOST = { OPENCLAW_SHIM_ROSTER: "entries" };
+
+describe("entries roster (2026.8.1+) — the skill lands where a migrated host looks", () => {
+  it('attaches at agents.entries["<id>"].skills, never as a literal bracketed key', () => {
+    writeConfig(freshConfig());
+    const spec = validSpec({ name: "Executive Shopper" });
+    const r = runBin({ spec, env: ENTRIES_HOST });
+
+    expect(r.status).toBe(0);
+    expect(parseMarker(r.stdout)["status"]).toBe("created");
+
+    const c = readConfig();
+    expect(c.agents.entries["executive-shopper"].skills).toEqual([SIL_SKILL]);
+    // The silent misattach this pins shut: the path landing as ONE literal key
+    // (`agents['entries["executive-shopper"]']`, or the whole path at the root).
+    expect(Object.keys(c.agents).filter((k) => k.includes("["))).toEqual([]);
+    expect(Object.keys(c).filter((k) => k.includes("["))).toEqual([]);
+    // A migrated host grew no array — the bin must not have fabricated one.
+    expect(c.agents.list).toBeUndefined();
+  });
+
+  it("the DERIVED id already keys agents.entries ⇒ collision, existing agent untouched, never added over", () => {
+    // The list-shape twin of this test seeds `agents.list`; on a migrated host the
+    // clash source is the MAP's keys, and a bin reading only the array sees an empty
+    // roster and overwrites the operator's agent.
+    const cfg = freshConfig() as any;
+    cfg.agents = {
+      entries: { [deriveAgentId("My Shopper")]: { skills: ["other"], workspace: "/pre/existing" } },
+    };
+    writeConfig(cfg);
+    const preConfig = readFileSync(configPath, "utf8");
+
+    const r = runBin({ spec: validSpec({ name: "My Shopper" }), env: ENTRIES_HOST });
+
+    expect(r.status).not.toBe(0);
+    expect(parseMarker(r.stderr)["status"]).toBe("collision");
+    expect(shimLog()).not.toContain("agents add");
+    expect(readFileSync(configPath, "utf8")).toBe(preConfig);
+    expect(existsSync(shopperDir())).toBe(false);
+  });
+
+  it("a `config set` that exits 0 having written the WRONG key ⇒ persistence_failed, never created over an unattached skill", () => {
+    // The read-back's reason for existing. A host that cannot parse the path writes
+    // one literal key and exits 0; every later gate — the allowlist merge, `config
+    // validate` — passes over it, so WITHOUT the read-back this run declares `created`
+    // with the skill attached nowhere. That is the failure the whole fix exists to stop.
+    // The verification reads openclaw.json, not the CLI: a single-parser host reads its
+    // OWN literal key back and confirms its own misattach.
+    writeConfig(freshConfig());
+    const preConfig = readFileSync(configPath, "utf8");
+    const spec = validSpec({ name: "Executive Shopper" });
+
+    const r = runBin({ spec, env: ENTRIES_HOST, fail: ["config-set-literal"] });
+
+    expect(r.status).not.toBe(0);
+    const m = parseMarker(r.stderr);
+    expect(m["status"]).toBe("persistence_failed");
+    expect(r.stdout.includes("sil_shopper_created")).toBe(false);
+    // Writes had begun — the attach was issued and exited 0 — and the cause names the
+    // skill that never stuck.
+    expect(shimLog()).toContain("config set");
+    expect(String(m["cause"])).toContain(SIL_SKILL);
+    // Teardown reverted the literal key and everything else this run wrote.
+    expect(readFileSync(configPath, "utf8")).toBe(preConfig);
+    expect(existsSync(shopperDir())).toBe(false);
+    expect(existsSync(spec.workspace)).toBe(false);
   });
 });
 

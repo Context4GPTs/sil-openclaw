@@ -99,11 +99,12 @@ describe("registration and schema", () => {
     expect(props()["specs"]["maxItems"]).toBe(50);
   });
 
-  it("a spec declares the route's seven fields, with `key`/`display_name`/`data_type` required", () => {
+  it("a spec declares the route's nine fields, with `key`/`display_name`/`data_type` required", () => {
     const item = props()["specs"]["items"] as Record<string, unknown>;
     const itemProps = item["properties"] as Record<string, Record<string, unknown>>;
     expect(Object.keys(itemProps).sort()).toEqual([
       "allowed_values",
+      "axis",
       "data_type",
       "description",
       "display_name",
@@ -113,6 +114,16 @@ describe("registration and schema", () => {
       "value_set",
     ]);
     expect((item["required"] as string[]).sort()).toEqual(["data_type", "display_name", "key"]);
+  });
+
+  it("`axis` is an optional boolean whose description says ONE and variant-level", () => {
+    // The route refuses a second axis and a product-level one; the agent's only warning is here.
+    const itemProps = (props()["specs"]["items"] as Record<string, unknown>)[
+      "properties"
+    ] as Record<string, Record<string, unknown>>;
+    expect(itemProps["axis"]["type"]).toBe("boolean");
+    expect(String(itemProps["axis"]["description"])).toMatch(/ONE variant-level key/);
+    expect(String(itemProps["axis"]["description"])).toMatch(/At most one/);
   });
 
   it("`data_type` stays a PLAIN STRING — a closed union would hide the offending spec key", () => {

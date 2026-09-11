@@ -75,6 +75,10 @@ things.
 - **Common attribute → conventional name.** When you are coining a new category's first
   keys, a widely-shared attribute (screen size, weight, RAM, waterproof rating,
   material…) takes its **conventional** name. Coin fresh only for a genuinely niche one.
+- **Name the axis the category is sold by.** Where merchants price and stock by ONE
+  variant-level key — a boot's mondopoint, a tyre's width — mark that spec `axis: true`
+  (it must be `level: variant`, and a category has at most one). sil keys a page's size
+  selector on it when the page names no key; a colour or a fit is never the axis.
 - **A read that did not return is not a read that returned nothing.** Any non-`ok` status
   — `invalid_request`, a transient, `not_registered` — leaves the mint out of reach:
   settle the read, never coin around it. And when `sil_search` refuses, its two refusals

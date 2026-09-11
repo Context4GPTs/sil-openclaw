@@ -12,6 +12,10 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
+- **`sil_domain_create` specs take an optional `axis: true`** — the ONE variant-level key
+  merchants sell the category by (a boot's mondopoint). At most one per category and
+  `level: variant` only; the route refuses both. sil keys a page's size selector on it
+  when the page names no key.
 - **`sil_doc_find` / `sil_doc_read` / `sil_doc_write` / `sil_doc_remove` — the
   shopper's documents, four operations over one ref scheme.** `ref` is `"shopper"`
   (the person) or `"brief:<slug>"` (one shopping job, many items, many domains).
@@ -47,6 +51,9 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
+- **`openclaw.build.openclawVersion` / `pluginSdkVersion` record `2026.9.3`**, the host this
+  plugin is now verified against (the stage pins it). Diagnostics only on the host side; the
+  `compat` floor stays `>=2026.7.1` — nothing here needs a newer API.
 - **BREAKING — the shopper's store is FLAT, and the pre-0.5 layout migrates in one
   hop on first touch of a `sil_doc_*` tool.** `shopper/user_spec.md` +
   `shopper/briefs/<slug>.md` replace `shopper/domains/<slug>/{method.md,
@@ -105,6 +112,19 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Fixed
 
+- **`create-shopper` attaches the skill where a 2026.8.1+ host looks.** The host's config
+  migration renamed `agents.list` (an array) to `agents.entries` (a map keyed by id), and
+  `openclaw agents add` writes that shape, so creation failed closed after the add on every
+  2026.8.1+ gateway. The script now reads both shapes and attaches the skill at
+  `agents.entries["<id>"].skills` or `agents.list[<i>].skills`, whichever the host uses;
+  the two never coexist. The attach is then re-read from `openclaw.json` and fails closed
+  when the skill is not there — a host that parses the path differently writes one
+  literal key and still exits 0, and that silent misattach is the state the fix exists to
+  prevent. The entries shape was measured live on 2026.8.1 (the fleet's hotfix) and on
+  2026.9.3 in an isolated container (`agents add` writes the map; the bracket path
+  round-trips through `config set` / `config get`); the attach and its read-back are
+  graded by the shimmed suite. The wiring-drift detector reads both shapes too, so it no
+  longer goes blind on a migrated host.
 - **A directory sil cannot list no longer reads as an absent document.**
   `sil_doc_read` / `sil_doc_write` / `sil_doc_remove` decided absence with
   `existsSync` — a boolean over a stat that swallows every errno, so an
