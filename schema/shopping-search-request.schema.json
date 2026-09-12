@@ -77,9 +77,10 @@
           },
           "currency": {
             "type": "string",
+            "pattern": "^[A-Z]{3}$",
             "minLength": 3,
             "maxLength": 3,
-            "description": "Required on money: sil holds no exchange rate, so the bound is tested against offers in this currency only."
+            "description": "Required on money: sil holds no exchange rate, so the bound is tested against offers in this currency only, and `eur` matches no offer sil stores."
           }
         },
         "additionalProperties": false

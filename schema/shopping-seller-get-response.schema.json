@@ -159,6 +159,7 @@
                             },
                             "currency": {
                               "type": "string",
+                              "pattern": "^[A-Z]{3}$",
                               "minLength": 3,
                               "maxLength": 3,
                               "description": "Quotes the amount in this currency."
@@ -186,6 +187,7 @@
                             },
                             "currency": {
                               "type": "string",
+                              "pattern": "^[A-Z]{3}$",
                               "minLength": 3,
                               "maxLength": 3,
                               "description": "Quotes the range in this currency."
@@ -212,6 +214,7 @@
                             },
                             "currency": {
                               "type": "string",
+                              "pattern": "^[A-Z]{3}$",
                               "minLength": 3,
                               "maxLength": 3,
                               "description": "Quotes the amount in this currency."
@@ -239,6 +242,7 @@
                             },
                             "currency": {
                               "type": "string",
+                              "pattern": "^[A-Z]{3}$",
                               "minLength": 3,
                               "maxLength": 3,
                               "description": "Quotes the range in this currency."

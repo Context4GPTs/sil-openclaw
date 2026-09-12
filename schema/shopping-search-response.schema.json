@@ -84,6 +84,7 @@
                 },
                 "currency": {
                   "type": "string",
+                  "pattern": "^[A-Z]{3}$",
                   "minLength": 3,
                   "maxLength": 3,
                   "description": "Reads which currency the range is in; sil converts nothing."
@@ -138,7 +139,7 @@
               },
               "text": {
                 "type": "string",
-                "description": "Reads the page's own words for a provisional pick, never as verified; cut at 1500 characters on the search, whole on the dossier."
+                "description": "Reads the page's own words for a provisional pick, never as verified. On the search it is the page's labelled lines first, then its description, then the rest, within 1500 characters; on the dossier it is the whole page."
               }
             },
             "additionalProperties": false,

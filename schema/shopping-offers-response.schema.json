@@ -51,6 +51,7 @@
           },
           "currency": {
             "type": "string",
+            "pattern": "^[A-Z]{3}$",
             "minLength": 3,
             "maxLength": 3,
             "description": "Quotes the price in this currency."
