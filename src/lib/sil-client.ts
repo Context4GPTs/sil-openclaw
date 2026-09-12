@@ -696,14 +696,12 @@ function extractUser(raw: unknown): ClaimedUser {
 /**
  * A non-null plain object, or null for anything else (incl. arrays/primitives).
  *
- * THE ARRAY ARM CHANGES NO OUTCOME TODAY, and that is measured rather than assumed:
- * every caller reads a NAMED key, and a parsed JSON array has none, so an array already
- * falls to the same branch `null` does at all seven call sites — the 200 gate included
- * (`[{status:"ok"}]` has no `status` of its own). It stays because the function's whole
- * contract is its name: hand a caller an array typed `Record<string, unknown>` and the
- * first one to spread it, count its keys, or `Object.entries` it is wrong in a way none
- * of these branches would catch. Do not add a test claiming to cover it — there is no
- * input that discriminates, so such a test passes with the arm deleted.
+ * The array arm decides an OUTCOME at exactly one site, and it is not a body gate:
+ * {@link extractIdentity} filters `addresses` through this PER ELEMENT, so the return
+ * value is membership rather than a branch — without the arm a bare array survives and
+ * ships as one of the buyer's own addresses (pinned in `whoami.integration.test.ts`).
+ * At the body sites it changes nothing, because each reads a named key and a parsed
+ * array has none; the element site is the whole reason it stays.
  */
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
