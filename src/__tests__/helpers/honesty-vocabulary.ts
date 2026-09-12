@@ -6,19 +6,17 @@
  * `per-niche-expert.ts`: one module means the allowance can never drift between
  * the two surfaces that carry the same rule.
  *
- * WHAT IT PROTECTS. The v0 wire answers with honesty fields — `serviceability:
- * unknown`, `values[k].state: unset`, `predicates[].applied: false`, `maturity:
- * web`. Every one of them is an ORDINARY answer that KEEPS its subject. The
- * agent learns what to do with them almost entirely from the tool descriptions,
- * and prose is the only carrier of the rule — so prose is what has to be guarded.
+ * WHAT IT PROTECTS. The wire answers with honesty fields — `ships: unknown`, a key
+ * absent from `fit`, an empty `variants`, a `webpage_info` block, a price in a currency
+ * the bound could not be tested against. Every one of them is an ORDINARY answer that
+ * KEEPS its subject. The agent learns what to do with them almost entirely from the tool
+ * descriptions, and prose is the only carrier of the rule — so prose is what is guarded.
  *
- * `unknown` is the one that silently breaks the product. `/catalog/stores` fails
- * closed: `not_serviceable` is a positive claim needing policy evidence sil read,
- * and at v0 NOTHING writes `corpus.purposes='policy'` — so `unknown` is the
- * MAJORITY answer and `not_serviceable` is structurally unreachable. A
- * description that reads as "drop the unknowns" undoes the route's fail-closed
- * design one layer up and collapses the shortlist to near-empty WHILE LOOKING
- * LIKE IT FILTERED. Nothing downstream can detect that.
+ * `unknown` is the one that silently breaks the product. The seller read fails closed:
+ * `not_serviceable` is a positive claim needing a policy sil actually read, so `unknown`
+ * is a common answer. A description that reads as "drop the unknowns" undoes that
+ * fail-closed design one layer up and collapses the shortlist to near-empty WHILE
+ * LOOKING LIKE IT FILTERED. Nothing downstream can detect that.
  *
  * WHY IT IS NOT A BLANKET FORBID. The correct description must NAME the state in
  * order to keep it ("`unknown` … never a reason to drop a seller: keep it"). A
@@ -32,12 +30,13 @@
  */
 
 /**
- * The honesty states, as they are actually written in agent-facing prose —
- * bare (`unknown`, `unset`), backticked, or as a field assertion
- * (`applied: false`, `maturity: "web"`).
+ * The honesty states, as they are actually written in agent-facing prose — bare
+ * (`unknown`, a `gap`), backticked (`webpage_info`), or as the phrase the contract uses
+ * for the two that have no field of their own (an empty `variants`, a bound in another
+ * currency sil could not test).
  */
 const HONESTY_TOKEN =
-  /\b(unknown|unset)\b|applied\s*[`'":=]*\s*false|maturity\s*[`'":=]*\s*['"`]?web/i;
+  /\b(unknown|webpage_info|unverified|gap)\b|\bnot\s+(?:yet\s+)?verified\b|\bcould\s+not\s+test\b|variants\s*[`'":=]*\s*\[\s*\]|\bempty\s+variants\b/i;
 
 /**
  * Verbs that remove a subject from what the buyer sees. `deprioritise` is here
@@ -55,6 +54,8 @@ const EXCLUSION =
 const ABSOLUTE_EXCLUSION = [
   /\bonly\s+(?:the\s+|show\s+|present\s+|list\s+|return\s+|keep\s+)*serviceable\b/i,
   /\bserviceable\s+(?:sellers?\s+|results?\s+|ones?\s+)?only\b/i,
+  /\bonly\s+(?:the\s+|show\s+|present\s+|list\s+|return\s+|keep\s+)*verified\b/i,
+  /\bverified\s+(?:products?\s+|results?\s+|ones?\s+)?only\b/i,
   /\bsoft(?:er)?\s+not_serviceable\b/i,
   /\bunknown\s+means\s+(?:it\s+)?(?:can(?:not|'t)\s+ship|no\b|not\s+available)/i,
   /\btreat\s+unknown\s+as\s+(?:not_serviceable|unavailable|no\b)/i,
@@ -152,11 +153,11 @@ export function honestyExclusionOffenders(body: string): string[] {
 }
 
 /**
- * Claims a v0 route cannot honour (R6.2.3). Each names a state the wire can
- * genuinely be in: a price whose `observed` is `stored` is not "the current
- * price"; a seller whose `serviceability` is `unknown` does not "ship to you";
- * a result whose predicate is `applied: false` does not "match your
- * requirements"; a `report.blocked > 0` answer is not "everything available".
+ * Claims a route cannot honour. Each names a state the wire can genuinely be in: a price
+ * range on a card is dated by nothing and is not "the current price"; a seller whose
+ * `ships` is `unknown` does not "ship to you"; a product whose `fit` is silent on a key
+ * does not "match your requirements"; a shortlist bounded by `n` is not "everything
+ * available".
  *
  * Same sentence scope and same negation allowance — prose must be able to
  * forbid the claim by quoting it.
@@ -187,10 +188,9 @@ export function overPromiseOffenders(body: string): string[] {
 }
 
 /**
- * Over-trigger (R6.2.5): a description that claims the general category instead
- * of what THIS tool does. `sil_search` searches sil's catalog in ONE registry
- * domain — an agent told it "searches the web" will reach for it constantly and
- * for the wrong thing. A prior card on this board was bounced for exactly this.
+ * Over-trigger: a description that claims the general category instead of what THIS tool
+ * does. `shopping_search` searches sil's catalog in ONE settled category — an agent told
+ * it "searches the web" will reach for it constantly and for the wrong thing.
  *
  * NO negation allowance: unlike the honesty rules, there is no legitimate reason
  * for a tool description to quote an over-broad trigger at all, and the phrases
@@ -281,10 +281,13 @@ export function statesQualifiedNotFound(body: string): boolean {
 }
 
 /**
- * Vocabulary the v0 contract retired, as TEXT — every entry is a dead string
+ * Vocabulary the pre-contract request surface retired, as TEXT — every entry is a dead string
  * that cannot appear innocently in English prose, so a blanket forbid is right.
  *
- * The pre-v0 PARAMETER names that ARE innocent words (`category`, `condition`,
+ * `ship_to` is deliberately NOT here any more: the agent contract's seller read takes it
+ * as a request field, so forbidding the word would fight the wire it guards.
+ *
+ * The retired PARAMETER names that ARE innocent words (`category`, `condition`,
  * `cursor`) are deliberately absent: they are guarded STRUCTURALLY instead, off
  * each tool's own `parameters` schema (exact, and free of the false RED a bare
  * "category" would cause in prose that legitimately says "research how the
@@ -300,7 +303,6 @@ export const RETIRED_V0_TOKENS = [
   "price_min",
   "price_max",
   "local_merchants",
-  "ship_to",
   "specs_status",
   "filters.specs",
   "ns.key",

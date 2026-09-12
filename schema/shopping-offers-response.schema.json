@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-offers-response.schema.json",
+  "title": "sil shopping_offers — response",
+  "type": "object",
+  "required": [
+    "status",
+    "offers"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "offers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "variant_id",
+          "seller_id",
+          "seller_name",
+          "price",
+          "currency",
+          "availability",
+          "observed_at",
+          "url"
+        ],
+        "properties": {
+          "variant_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Matches the offer to the pick."
+          },
+          "seller_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Passes it to `shopping_seller_get`."
+          },
+          "seller_name": {
+            "type": "string",
+            "description": "Names the shop to the buyer."
+          },
+          "price": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+            "description": "Quotes the price as read, never converted."
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "description": "Quotes the price in this currency."
+          },
+          "availability": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "in_stock"
+              },
+              {
+                "type": "string",
+                "const": "backorder"
+              },
+              {
+                "type": "string",
+                "const": "preorder"
+              },
+              {
+                "type": "string",
+                "const": "out_of_stock"
+              },
+              {
+                "type": "string",
+                "const": "discontinued"
+              },
+              {
+                "type": "string",
+                "const": "unknown"
+              }
+            ],
+            "description": "Tells the buyer whether it can be bought now."
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Dates the price to the buyer — this offer was read live, at this moment."
+          },
+          "url": {
+            "type": "string",
+            "description": "Hands the buyer the listing."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Lists where the pick can be bought — one variant at one seller per entry."
+    }
+  },
+  "additionalProperties": false
+}

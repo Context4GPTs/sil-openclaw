@@ -380,7 +380,7 @@ function domainMatches(itemDomain: string, filter: string): boolean {
 }
 
 // ===========================================================================
-// sil_doc_find — the index, and the only discovery path. COORDINATES ONLY.
+// shopping_doc_find — the index, and the only discovery path. COORDINATES ONLY.
 // ===========================================================================
 
 export interface FindQuery {
@@ -539,7 +539,7 @@ function admits(filters: FindFilters, coord: BriefCoord): boolean {
 }
 
 // ===========================================================================
-// sil_doc_read — one whole body + frontmatter.
+// shopping_doc_read — one whole body + frontmatter.
 // ===========================================================================
 
 export type ReadDocResult =
@@ -563,7 +563,7 @@ export function readDocument(ref: unknown): ReadDocResult {
   if (at.state === "absent") {
     return notFound(
       "No document at " + JSON.stringify(target.ref) + " — list what exists with"
-        + " sil_doc_find, or write it with sil_doc_write (mode: create).",
+        + " shopping_doc_find, or write it with shopping_doc_write (mode: create).",
     );
   }
   const parsed = readArtefactFile(target.path);
@@ -579,7 +579,7 @@ export function readDocument(ref: unknown): ReadDocResult {
 }
 
 // ===========================================================================
-// sil_doc_write — the WHOLE reconciled markdown. create fails if the ref exists,
+// shopping_doc_write — the WHOLE reconciled markdown. create fails if the ref exists,
 // replace fails if it does not: a mint never clobbers, a write never mints.
 // ===========================================================================
 
@@ -648,7 +648,7 @@ function preflightMode(
     return invalid(
       "mode",
       "A document already exists at " + JSON.stringify(target.ref) + " — read it"
-        + " (sil_doc_read), reconcile it in full, and write it back with mode: replace."
+        + " (shopping_doc_read), reconcile it in full, and write it back with mode: replace."
         + " create only mints, it never overwrites.",
     );
   }
@@ -685,7 +685,7 @@ function briefFields(spec: WriteSpec, existing: Artefact | null, slug: string): 
 }
 
 // ===========================================================================
-// sil_doc_remove — one document, never a cascade.
+// shopping_doc_remove — one document, never a cascade.
 // ===========================================================================
 
 export type RemoveDocResult =
@@ -700,11 +700,11 @@ export function removeDocument(ref: unknown): RemoveDocResult {
   if ("ok" in target) return target;
   if (target.kind === "shopper") {
     // The person is not a document you delete: every Brief was compiled from these
-    // facts, and nothing else on disk can reproduce them. Rewrite it with sil_doc_write.
+    // facts, and nothing else on disk can reproduce them. Rewrite it with shopping_doc_write.
     return invalid(
       "ref",
       "The shopper document is never removed — it is the person every Brief was"
-        + " written from. Correct it with sil_doc_write (mode: replace) instead.",
+        + " written from. Correct it with shopping_doc_write (mode: replace) instead.",
     );
   }
   const at = probe(target.path);

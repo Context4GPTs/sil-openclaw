@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-seller-get-response.schema.json",
+  "title": "sil shopping_seller_get — response",
+  "type": "object",
+  "required": [
+    "status",
+    "ship_to",
+    "sellers"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "ship_to": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "Says which destination every `ships` below is about."
+    },
+    "sellers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "host",
+          "country",
+          "ships"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Matches the seller to the offers that named it."
+          },
+          "name": {
+            "type": "string",
+            "description": "Names the shop to the buyer."
+          },
+          "host": {
+            "type": "string",
+            "description": "Names the site the buyer would buy from."
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$",
+                "minLength": 2,
+                "maxLength": 2
+              },
+              {
+                "type": "string",
+                "const": "unknown"
+              }
+            ],
+            "description": "Says where the shop is; `unknown` says sil has not read where this seller is, never that it is nowhere."
+          },
+          "ships": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "serviceable"
+              },
+              {
+                "type": "string",
+                "const": "not_serviceable"
+              },
+              {
+                "type": "string",
+                "const": "unknown"
+              }
+            ],
+            "description": "Says whether it ships there; `unknown` keeps the seller and says sil has not read its policy."
+          },
+          "shipping": {
+            "type": "object",
+            "required": [
+              "policy_url",
+              "routes"
+            ],
+            "properties": {
+              "policy_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Links the policy page; `null` when the routes were read off a product page and sil holds no policy page."
+              },
+              "routes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "country",
+                    "service"
+                  ],
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "minLength": 2,
+                      "maxLength": 2,
+                      "description": "Checks the route covers the buyer."
+                    },
+                    "service": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "economy"
+                        },
+                        {
+                          "type": "string",
+                          "const": "standard"
+                        },
+                        {
+                          "type": "string",
+                          "const": "express"
+                        },
+                        {
+                          "type": "string",
+                          "const": "same_day"
+                        },
+                        {
+                          "type": "string",
+                          "const": "pickup"
+                        },
+                        {
+                          "type": "string",
+                          "const": "locker"
+                        }
+                      ],
+                      "description": "Tells the buyer which service the route is."
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "Quotes the merchant's own name for the service."
+                    },
+                    "cost": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "amount",
+                            "currency"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                              "description": "Quotes the amount as the page states it."
+                            },
+                            "currency": {
+                              "type": "string",
+                              "minLength": 3,
+                              "maxLength": 3,
+                              "description": "Quotes the amount in this currency."
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "currency"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "string",
+                              "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                              "description": "Quotes the low end."
+                            },
+                            "max": {
+                              "type": "string",
+                              "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                              "description": "Quotes the high end."
+                            },
+                            "currency": {
+                              "type": "string",
+                              "minLength": 3,
+                              "maxLength": 3,
+                              "description": "Quotes the range in this currency."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Tells the buyer what shipping costs on this route."
+                    },
+                    "free_over": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "amount",
+                            "currency"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                              "description": "Quotes the amount as the page states it."
+                            },
+                            "currency": {
+                              "type": "string",
+                              "minLength": 3,
+                              "maxLength": 3,
+                              "description": "Quotes the amount in this currency."
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "min",
+                            "max",
+                            "currency"
+                          ],
+                          "properties": {
+                            "min": {
+                              "type": "string",
+                              "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                              "description": "Quotes the low end."
+                            },
+                            "max": {
+                              "type": "string",
+                              "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                              "description": "Quotes the high end."
+                            },
+                            "currency": {
+                              "type": "string",
+                              "minLength": 3,
+                              "maxLength": 3,
+                              "description": "Quotes the range in this currency."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Tells the buyer what basket clears the shipping charge."
+                    },
+                    "days": {
+                      "type": "object",
+                      "required": [
+                        "min",
+                        "max"
+                      ],
+                      "properties": {
+                        "min": {
+                          "type": "integer",
+                          "description": "Tells the buyer the soonest it arrives."
+                        },
+                        "max": {
+                          "type": "integer",
+                          "description": "Tells the buyer the latest."
+                        }
+                      },
+                      "additionalProperties": false,
+                      "description": "Tells the buyer how long the route takes."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "Quotes the route that covers the buyer."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Quotes the shipping terms and links the policy page."
+          },
+          "returns": {
+            "type": "object",
+            "required": [
+              "policy_url"
+            ],
+            "properties": {
+              "policy_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Links the returns page; `null` the same way as shipping."
+              },
+              "window_days": {
+                "type": "integer",
+                "description": "Tells the buyer how long they have to send it back."
+              },
+              "restocking_fee": {
+                "type": "number",
+                "description": "Tells the buyer what a return costs: the fraction of the price the seller withholds, 0 to 1."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Tells the buyer the return terms and links the page."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Reads the terms before recommending a seller."
+    }
+  },
+  "additionalProperties": false
+}

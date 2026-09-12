@@ -1,11 +1,11 @@
 /**
  * sil OpenClaw plugin — entry point.
  *
- * A UCP commerce plugin for sil. It registers its real tool groups —
- * identity (`sil_register`, `sil_whoami`), catalog (`sil_search`,
- * `sil_product_get`, `sil_stores`, `sil_domain_create`, `sil_domain_find`)
- * and the shopper's own documents (`sil_doc_find`, `sil_doc_read`,
- * `sil_doc_write`, `sil_doc_remove`) — so they load in an OpenClaw host.
+ * A UCP commerce plugin for sil. It registers its real tool groups — the account
+ * tools (`sil_register`, `sil_whoami`, `sil_doctor`), the seven `shopping_*`
+ * catalog tools, and the shopper's own documents (`shopping_doc_find`,
+ * `shopping_doc_read`, `shopping_doc_write`, `shopping_doc_remove`) — so they load
+ * in an OpenClaw host.
  * There is no transport, no persistent service, and no background work at
  * register time — `register()` is strictly synchronous and opens nothing.
  *
@@ -90,7 +90,7 @@ export default definePluginEntry({
     // The pull surface a paired client resolves a search page from. Registering
     // a closure opens nothing — no socket, no timer — so the invariant above
     // holds; the store behind it is touched only inside the handler and inside
-    // sil_search's execute(). NOT a tool and NOT a `registerXTools` group: it
+    // shopping_search's execute(). NOT a tool and NOT a `registerXTools` group: it
     // never reaches the model, and the manifest's `contracts` vocabulary has no
     // gateway-method key, so this call IS the declaration.
     registerSearchResultsMethod(api);

@@ -11,9 +11,16 @@
 
 import type { ToolResult } from "openclaw/plugin-sdk";
 
-/** Format a successful JSON response as a tool result. */
-export function jsonResult(data: unknown): ToolResult {
+/**
+ * Format a JSON payload as a tool result. Each extra part becomes its OWN content
+ * block — the only way to send something alongside a body whose keys are the API's
+ * contract and may not be added to.
+ */
+export function jsonResult(data: unknown, ...extra: unknown[]): ToolResult {
   return {
-    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    content: [data, ...extra].map((part) => ({
+      type: "text" as const,
+      text: JSON.stringify(part, null, 2),
+    })),
   };
 }

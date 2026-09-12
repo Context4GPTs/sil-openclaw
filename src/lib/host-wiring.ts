@@ -243,7 +243,7 @@ function findUnadmittedReasons(
  * stays byte-identical to today. Absence of a problem is not a finding, and an
  * always-present key is one consumers start depending on.
  *
- * Additive, never a wrapper: a `sil_search` result carrying an advisory is still
+ * Additive, never a wrapper: a search result carrying an advisory is still
  * the same search result, with the same products in the same order.
  *
  * It recurs on every result while the drift persists — that is the feature, not
@@ -258,6 +258,18 @@ function findUnadmittedReasons(
 export function wiringAdvisories(api: PluginAPI): { advisories?: Finding[] } {
   const drift = detectWiringDrift(api.config, readSilWiringFacts());
   return drift.length === 0 ? {} : { advisories: drift };
+}
+
+/**
+ * The same advisory as its OWN result block, or nothing at all.
+ *
+ * A shopping tool's payload IS the API's 200 body, passed through verbatim, so the
+ * advisory cannot ride as a key beside the contract's — it would either collide with
+ * one or teach a consumer to expect a field sil-services never sends.
+ */
+export function wiringAdvisoryBlocks(api: PluginAPI): [{ advisories: Finding[] }] | [] {
+  const drift = detectWiringDrift(api.config, readSilWiringFacts());
+  return drift.length === 0 ? [] : [{ advisories: drift }];
 }
 
 function buildSkillMisattachedFinding(

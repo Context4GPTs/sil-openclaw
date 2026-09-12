@@ -2,7 +2,7 @@
  * INTEGRATION — `sil.search_results`, the whole seam (tier: integration).
  *
  * The REAL plugin entry: `register()` wires the tool groups AND the gateway
- * method, `sil_search` runs through the real sil-client against a mocked `fetch`
+ * method, `shopping_search` runs through the real sil-client against a mocked `fetch`
  * (the host/network boundary — the only thing doubled), the page lands in the
  * real store, and the real handler answers a real `respond`. Nothing about the
  * delivery leg is stubbed.
@@ -12,7 +12,7 @@
  * to, or trimmed. A red over there is a regression in the unchanged path, and the
  * whole point of the additive re-scope is that its assertions still stand.
  *
- * WHAT IS LOAD-BEARING HERE. The FIRST describe block. `sil_search`'s tool result
+ * WHAT IS LOAD-BEARING HERE. The FIRST describe block. `shopping_search`'s tool result
  * must be byte-identical with and without this card's machinery in play, because
  * that single property is what keeps Telegram, WhatsApp and a plain CLI
  * untouched. Everything below it is the new pull surface; that block is the
@@ -60,7 +60,7 @@ import {
   type MockPluginAPI,
 } from "./helpers/mock-plugin-api.js";
 
-const TOOL = "sil_search";
+const TOOL = "shopping_search";
 const METHOD = "sil.search_results";
 const SIL_WEB = "https://sil-web.test.example.com";
 const SIL_API = "https://sil-api.test.example.com";
@@ -87,64 +87,30 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 /**
- * One real v0 `SearchResult`, re-derived onto the four-v0-tools contract. Carries
- * the veto's three inputs — a `values` entry that is `set` beside one that is
- * `unset`, a `maturity`, and offers whose `observed`/`observed_at` state the
- * price's age. Anti-false-green: a `{stub:true}` echo carries none of these, and
- * neither would a projection that kept only the fields it knew about.
+ * One real product off the wire, carrying what the agent's honesty reading is computed
+ * from — a filled `fit` beside a key the ask named and sil holds nothing for, a priced
+ * `variants` entry, and the page's own words. Anti-false-green: a `{stub:true}` echo
+ * carries none of these, and neither would a projection that kept only what it knew.
  */
-function wireResult(n: number): Record<string, unknown> {
+function wireProduct(n: number): Record<string, unknown> {
   return {
-    ref: `variant:0198f2a1-4c3d-7000-8000-${String(n).padStart(12, "0")}`,
-    maturity: n % 2 === 0 ? "catalog" : "web",
-    product: { title: `Ergonomic Task Chair ${n}` },
-    option_set: { Colour: "Graphite" },
-    media: [{ url: `https://shop.example/i/chair-${n}.jpg`, alt: null, position: 0 }],
-    values: {
-      brand: {
-        state: "set",
-        value: `Maker ${n % 7}`,
-        origin: "observed",
-        source_ref: `url:https://shop.example/chair-${n}`,
-        observed_at: "2026-01-15T10:00:00.000Z",
-      },
-      seat_height_mm: { state: "unset" },
+    id: `p-${String(n).padStart(4, "0")}`,
+    title: `Ergonomic Task Chair ${n}`,
+    brand: `Maker ${n % 7}`,
+    image: `https://shop.example/i/chair-${n}.jpg`,
+    fit: { seat_height: 440 + n },
+    price: [{ from: `${1000 + n}.99`, to: `${1100 + n}.99`, currency: "USD" }],
+    variants: [{ id: `v-${String(n).padStart(4, "0")}`, colour: "Graphite" }],
+    webpage_info: {
+      url: `https://shop.example/chair-${n}`,
+      text: "Seat height 42–52 cm, mesh back, twelve-year warranty.",
     },
-    pairs: [{ label: "Warranty", value: "12 years" }],
-    offers: [
-      {
-        seller: { host: `merchant-${n % 7}.example` },
-        price: `${1000 + n}.990000`,
-        currency: "USD",
-        observed: n % 3 === 0 ? "live" : "stored",
-        observed_at: "2026-01-15T10:00:00.000Z",
-        url: `https://shop.example/chair-${n}`,
-      },
-    ],
   };
 }
 
-/** The v0 result object — the four top-level keys, `sources` closed over the
- * refs the results actually cite. */
-function searchEnvelope(
-  results: Record<string, unknown>[],
-  report: unknown = { searches: 1, fetched: results.length, blocked: 0 },
-): unknown {
-  const sources: Record<string, unknown> = {};
-  for (const result of results) {
-    const ref = `url:https://shop.example/chair-${(result["product"] as { title: string }).title.split(" ").pop()}`;
-    sources[ref] = {
-      url: ref.slice("url:".length),
-      host: "shop.example",
-      fetched_at: "2026-01-15T10:00:00.000Z",
-    };
-  }
-  return {
-    results,
-    sources,
-    predicates: [{ key: "seat_height_mm", applied: false }],
-    report,
-  };
+/** The `shopping_search` 200 body — `status` and the shortlist, and nothing else. */
+function searchEnvelope(products: Record<string, unknown>[]): unknown {
+  return { status: "ok", products };
 }
 
 // ---------------------------------------------------------------------------
@@ -289,8 +255,8 @@ async function expectNothingStored(
 }
 
 /** Run one `ok` search and hand back everything the assertions need. */
-/** A valid v0 `sil_search` call — `domain` and `n` are REQUIRED at v0. */
-const V0_PARAMS = {
+/** A valid `shopping_search` call — `domain` and `n` are required. */
+const SEARCH_PARAMS = {
   domain: "product.furniture.seating.task_chairs",
   query: "office chair",
   n: 10,
@@ -299,7 +265,7 @@ const V0_PARAMS = {
 async function runSearch(
   api: MockPluginAPI,
   callId: string,
-  params: Record<string, unknown> = { ...V0_PARAMS },
+  params: Record<string, unknown> = { ...SEARCH_PARAMS },
 ): Promise<{ raw: string; payload: Record<string, unknown> }> {
   const result = await getTool(api, TOOL).execute(callId, params);
   return { raw: rawOf(result), payload: payloadOf(result) };
@@ -333,7 +299,7 @@ afterEach(() => {
 // A1 — THE LOAD-BEARING GUARD: the envelope every channel gets is UNCHANGED
 // ===========================================================================
 
-describe("A1 — the sil_search envelope is byte-identical, with or without this card", () => {
+describe("A1 — the shopping_search envelope is byte-identical, with or without this card", () => {
   it("returns the SAME BYTES whether or not the gateway method is registered", async () => {
     // The whole promise of the additive re-scope. A plugin whose tool result
     // changes shape when a client happens to be able to pull it is not
@@ -341,7 +307,7 @@ describe("A1 — the sil_search envelope is byte-identical, with or without this
     // tell this card shipped.
     installRouter((kind) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireResult(1), wireResult(2)]) }
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
         : { status: 500, body: {} },
     );
 
@@ -366,24 +332,21 @@ describe("A1 — the sil_search envelope is byte-identical, with or without this
     // about what it can truthfully say changes.
     installRouter((kind) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireResult(1), wireResult(2), wireResult(3)]) }
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2), wireProduct(3)]) }
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
     const { payload, raw } = await runSearch(api, "call_1");
 
     expect(payload["status"]).toBe("ok");
-    const results = payload["results"] as Record<string, unknown>[];
-    expect(results).toHaveLength(3);
-    // The real v0 result, not a placeholder and not a projection: the veto's
-    // three inputs are all present on the page the agent receives.
-    expect(results[0]!["ref"]).toBe("variant:0198f2a1-4c3d-7000-8000-000000000001");
-    expect(results[0]!["maturity"]).toBe("web");
-    expect((results[0]!["values"] as Record<string, unknown>)["seat_height_mm"]).toEqual({
-      state: "unset",
-    });
-    expect(payload["predicates"]).toEqual([{ key: "seat_height_mm", applied: false }]);
-    expect(payload["report"]).toEqual({ searches: 1, fetched: 3, blocked: 0 });
+    const products = payload["products"] as Record<string, unknown>[];
+    expect(products).toHaveLength(3);
+    // The real body, not a placeholder and not a projection: what the agent reads the
+    // honesty off is all present on the page it receives.
+    expect(products[0]!["id"]).toBe("p-0001");
+    expect(products[0]!["fit"]).toEqual({ seat_height: 441 });
+    expect(products[0]!["variants"]).toEqual([{ id: "v-0001", colour: "Graphite" }]);
+    expect(products[0]).toHaveProperty("webpage_info");
     // Nothing was ADDED to the envelope.
     expect(payload).not.toHaveProperty("result_ref");
     expect(payload).not.toHaveProperty("callId");
@@ -395,15 +358,15 @@ describe("A1 — the sil_search envelope is byte-identical, with or without this
   it("the envelope's top-level key set is exactly what the outcome carries — nothing extra", async () => {
     installRouter((kind) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireResult(1)]) }
+        ? { status: 200, body: searchEnvelope([wireProduct(1)]) }
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
     const { payload } = await runSearch(api, "call_1");
 
-    // `advisories` rides host-wiring drift and is outside this card's control,
-    // so it is tolerated — but no OTHER key may appear.
-    const allowed = new Set(["status", "results", "sources", "predicates", "report", "advisories"]);
+    // The body is the API's, verbatim. `advisories` rides its OWN content block now, so
+    // not even the wiring channel may add a key here.
+    const allowed = new Set(["status", "products"]);
     for (const key of Object.keys(payload)) {
       expect(allowed.has(key)).toBe(true);
     }
@@ -415,7 +378,7 @@ describe("A1 — the sil_search envelope is byte-identical, with or without this
     // between the first search of a session and a later identical one.
     installRouter((kind) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireResult(1), wireResult(2)]) }
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
@@ -435,31 +398,33 @@ describe("A1 — the sil_search envelope is byte-identical, with or without this
 // ===========================================================================
 
 describe("what the ok path stores (A2, A4, A5)", () => {
-  it("stores EXACTLY the page — the envelope minus `advisories` — under the host callId", async () => {
-    // Host-misconfiguration guidance is operator/agent copy, not product data; a
-    // client rendering a grid must never receive it. The comparison is on BYTES,
-    // so a reordered or re-wrapped page fails too.
+  it("stores EXACTLY the page the agent got — and the advisory rides its OWN block", async () => {
+    // Host-misconfiguration guidance is operator copy, not product data; a client
+    // rendering a grid must never receive it. Since the body's keys are the API's
+    // contract, the advisory cannot ride beside them at all — it is a SECOND content
+    // block, which is also why the stored page and the agent's first block are the
+    // same bytes.
     installRouter((kind) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireResult(1), wireResult(2)]) }
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
         : { status: 500, body: {} },
     );
-    // A drifting host config so `wiringAdvisories` actually folds something on —
-    // otherwise this assertion is vacuous.
+    // A drifting host config so the advisory actually rides — otherwise this is vacuous.
     const api = createMockPluginApi({
       config: { agents: { list: [{ id: "shopper", skills: ["sil"] }] } },
     });
     capturedRegisterFn!(api);
 
-    const { payload } = await runSearch(api, "call_1");
-    expect(payload).toHaveProperty("advisories"); // premise of this test
+    const result = await getTool(api, TOOL).execute("call_1", { ...SEARCH_PARAMS });
+    expect(result.content).toHaveLength(2);
+    const payload = JSON.parse(result.content[0]!.text!) as Record<string, unknown>;
+    const second = JSON.parse(result.content[1]!.text!) as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("advisories");
+    expect(second).toHaveProperty("advisories"); // premise of this test
 
     const body = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_1" }));
     expect(body).not.toHaveProperty("advisories");
-
-    const expected = { ...payload };
-    delete expected["advisories"];
-    expect(JSON.stringify(body)).toBe(JSON.stringify(expected));
+    expect(JSON.stringify(body)).toBe(JSON.stringify(payload));
   });
 
   it("an EMPTY match is stored and resolves as a genuine `{status:'ok', results:[]}` (A4)", async () => {
@@ -472,11 +437,11 @@ describe("what the ok path stores (A2, A4, A5)", () => {
     const api = registerPlugin();
 
     const { payload } = await runSearch(api, "call_empty");
-    expect(payload["results"]).toEqual([]);
+    expect(payload["products"]).toEqual([]);
 
     const body = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_empty" }));
     expect(body["status"]).toBe("ok");
-    expect(body["results"]).toEqual([]);
+    expect(body["products"]).toEqual([]);
   });
 
   it.each([
@@ -488,16 +453,16 @@ describe("what the ok path stores (A2, A4, A5)", () => {
     // as a shortlist the client cannot qualify.
     [
       "retryable (a 200 that fails the four-key gate)",
-      { status: 200, body: { results: [wireResult(1)], sources: {} } },
-      V0_PARAMS,
+      { status: 200, body: { results: [wireProduct(1)], sources: {} } },
+      SEARCH_PARAMS,
     ],
     [
       "invalid_request (sil-api 400)",
       { status: 400, body: { error: "invalid_request", message: "no" } },
-      V0_PARAMS,
+      SEARCH_PARAMS,
     ],
-    ["retryable (sil-api 500)", { status: 500, body: {} }, V0_PARAMS],
-    ["forbidden (403)", { status: 403, body: { error: "principal_mismatch" } }, V0_PARAMS],
+    ["retryable (sil-api 500)", { status: 500, body: {} }, SEARCH_PARAMS],
+    ["forbidden (403)", { status: 403, body: { error: "principal_mismatch" } }, SEARCH_PARAMS],
   ])("stores NOTHING on a non-ok outcome — %s (A5)", async (_label, reply, params) => {
     // These envelopes steer the AGENT's recovery and carry no product data to
     // deliver. A store write here would make an error resolvable as if it were
@@ -536,7 +501,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
   it("responds with the EXACT stored page over a leg with no network, no timer, no model", async () => {
     const rec = installRouter((kind) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireResult(1), wireResult(2)]) }
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
@@ -553,13 +518,13 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
     expect(rec.all).toHaveLength(1);
     expect(timeoutSpy).not.toHaveBeenCalled();
     expect(intervalSpy).not.toHaveBeenCalled();
-    expect(body["results"]).toEqual(payload["results"]);
+    expect(body["products"]).toEqual(payload["products"]);
   });
 
   it("is DETERMINISTIC — two calls in the window return byte-identical payloads", async () => {
     installRouter((kind) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireResult(1), wireResult(2)]) }
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
@@ -574,7 +539,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
     // A consume-on-read store passes the first assertion above and blanks the
     // shopper's screen the moment the client refreshes.
     installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
     await runSearch(api, "call_1");
@@ -582,7 +547,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
     for (let i = 0; i < 4; i += 1) {
       const body = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_1" }));
       expect(body["status"]).toBe("ok");
-      expect((body["results"] as unknown[])).toHaveLength(1);
+      expect((body["products"] as unknown[])).toHaveLength(1);
     }
   });
 
@@ -593,7 +558,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
     // plugin would still resolve its OWN key just fine.
     const HOST_CALL_ID = "call_FSW68ywnbj8V6pZ5U8avz9Sn";
     installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
     await runSearch(api, HOST_CALL_ID);
@@ -608,20 +573,18 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
     // passing through a model turn, a transcript entry, or any host projection of
     // the tool result — so it is immune to a provider that omits `data.result`, to
     // a per-provider transcript cap, and to transcript rewriting alike.
-    const many = Array.from({ length: 60 }, (_, i) => wireResult(i));
+    const many = Array.from({ length: 60 }, (_, i) => wireProduct(i));
     installRouter((kind) =>
       kind === "search" ? { status: 200, body: searchEnvelope(many) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
     const { payload } = await runSearch(api, "call_big");
 
-    const stored = { ...payload };
-    delete stored["advisories"];
-    const storedJson = JSON.stringify(stored);
+    const storedJson = JSON.stringify(payload);
     // The test proves its own premise: a page that is not actually large would
     // make this a round-trip of nothing in particular.
     expect(storedJson.length).toBeGreaterThan(12 * 1024);
-    expect((payload["results"] as unknown[])).toHaveLength(60);
+    expect((payload["products"] as unknown[])).toHaveLength(60);
 
     const body = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_big" }));
     expect(JSON.stringify(body)).toBe(storedJson);
@@ -641,7 +604,7 @@ describe("D3 — every intermediate search in a run stays resolvable", () => {
     const RUN_SEARCHES = 10;
     installRouter((kind, nth) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireResult(nth * 100), wireResult(nth * 100 + 1)]) }
+        ? { status: 200, body: searchEnvelope([wireProduct(nth * 100), wireProduct(nth * 100 + 1)]) }
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
@@ -649,14 +612,14 @@ describe("D3 — every intermediate search in a run stays resolvable", () => {
     const expected = new Map<string, string>();
     for (let i = 0; i < RUN_SEARCHES; i += 1) {
       const { payload } = await runSearch(api, `call_${i}`, { query: `search ${i}` });
-      expected.set(`call_${i}`, JSON.stringify(payload["results"]));
+      expected.set(`call_${i}`, JSON.stringify(payload["products"]));
     }
 
     // Resolve OUT OF ORDER — a store that returned "the most recent" would pass a
     // sequential walk and fail this.
     for (const callId of [...expected.keys()].reverse()) {
       const body = bodyOf(await callGatewayMethod(api, METHOD, { callId }));
-      expect(JSON.stringify(body["results"])).toBe(expected.get(callId));
+      expect(JSON.stringify(body["products"])).toBe(expected.get(callId));
     }
 
     // Every page is distinct — no two callIds resolved to the same results.
@@ -690,7 +653,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
 
   it("an EXPIRED callId returns the identical body to an unknown one (C2)", async () => {
     installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
     await runSearch(api, "call_1");
@@ -708,7 +671,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
 
   it("a WRONG-PRINCIPAL callId returns the identical body — never the page, never a `forbidden` tell (C3)", async () => {
     installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
     await runSearch(api, "call_1");
@@ -729,7 +692,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
     // store keyed only by process or device survives a logout and hands the next
     // person the last one's shopping.
     installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
     await runSearch(api, "call_1");
@@ -747,7 +710,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
     // caller cannot tell "not yours" from "never existed" from "expired" from
     // "logged out", so no failure leaks the existence of a page.
     installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
 
     const bodies = new Set<string>();
@@ -799,7 +762,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
     // able to tell the causes apart. That distinction lives in the log and ONLY
     // in the log — the wire body above is one for all four.
     installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
     await runSearch(api, "call_1");
@@ -839,7 +802,7 @@ describe("malformed input is a distinct, structured invalid_request", () => {
 
   it("an extra unexpected param is ignored, not an error", async () => {
     installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
     await runSearch(api, "call_1");
@@ -861,7 +824,7 @@ describe("C7 — behaviour never varies with client presence", () => {
     // behaves exactly as today, the page is buffered, nothing errors, and no
     // listener is probed — a client that pairs inside the window resolves it.
     installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const toolsOnly = createMockPluginApi();
     registerCatalogTools(toolsOnly);
@@ -878,7 +841,7 @@ describe("C7 — behaviour never varies with client presence", () => {
 
   it("the search path makes EXACTLY ONE request and never invokes the handler", async () => {
     const rec = installRouter((kind) =>
-      kind === "search" ? { status: 200, body: searchEnvelope([wireResult(1)]) } : { status: 500, body: {} },
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
     );
     const api = registerPlugin();
     await runSearch(api, "call_1");
@@ -913,20 +876,22 @@ describe("registration shape (C5) and log privacy", () => {
   // sil_* add or removal must bump it, count in the title included. It went
   // undocumented for a release because nobody greps a "…-method…" file for tool
   // tests; see docs/knowledge/adding-a-sil-tool-fans-out-to-exact-set-mirrors.md.
-  it("registering the gateway method does not change the tool set (still 12)", () => {
+  it("registering the gateway method does not change the tool set (still fourteen)", () => {
     const api = registerPlugin();
     expect([...api._tools.keys()].sort()).toEqual([
-      "sil_doc_find",
-      "sil_doc_read",
-      "sil_doc_remove",
-      "sil_doc_write",
+      "shopping_doc_find",
+      "shopping_doc_read",
+      "shopping_doc_remove",
+      "shopping_doc_write",
+      "shopping_domain_create",
+      "shopping_domain_get",
+      "shopping_domain_search",
+      "shopping_offers",
+      "shopping_product_get",
+      "shopping_search",
+      "shopping_seller_get",
       "sil_doctor",
-      "sil_domain_create",
-      "sil_domain_find",
-      "sil_product_get",
       "sil_register",
-      "sil_search",
-      "sil_stores",
       "sil_whoami",
     ]);
     // The method is NOT a tool and must never leak into the tool surface.
@@ -936,7 +901,7 @@ describe("registration shape (C5) and log privacy", () => {
   it("the hit log carries {found, count} and NO product data", async () => {
     installRouter((kind) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireResult(1), wireResult(2)]) }
+        ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
         : { status: 500, body: {} },
     );
     const api = registerPlugin();

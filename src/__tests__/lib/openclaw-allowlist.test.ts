@@ -54,27 +54,28 @@ import {
 // unit core takes them as an argument so the test pins behaviour, not wiring).
 const SIL: SilAllowlistFacts = {
   id: "sil",
-  // The real 12-tool set — the five v0 catalog tools, the four `sil_doc_*`
+  // The real 12-tool set — the five v0 catalog tools, the four `shopping_doc_*`
   // document tools, the two identity tools and the doctor.
   //
-  // THIS CARRIER IS THE SILENT ONE, and it had already gone stale once: it claimed
-  // "the real 10-tool set" while the four-v0-tools card had taken the surface to
-  // 12. Nothing here goes RED on a stale entry — the loop below only asserts each
-  // name is ABSENT from a fresh config, which a shorter list satisfies just as well
-  // — so a fixture that lies about the canonical set can sit here indefinitely.
-  // Bumped in lockstep with the mirrors that do bite.
+  // THIS CARRIER IS THE SILENT ONE, and it has gone stale before. Nothing here goes RED
+  // on a stale entry — the loop below only asserts each name is ABSENT from a fresh
+  // config, which a shorter list satisfies just as well — so a fixture that lies about
+  // the canonical set can sit here indefinitely. Bumped in lockstep with the mirrors
+  // that do bite (`manifest-contract`, `index.test`).
   tools: [
-    "sil_doc_find",
-    "sil_doc_read",
-    "sil_doc_remove",
-    "sil_doc_write",
+    "shopping_doc_find",
+    "shopping_doc_read",
+    "shopping_doc_remove",
+    "shopping_doc_write",
+    "shopping_domain_create",
+    "shopping_domain_get",
+    "shopping_domain_search",
+    "shopping_offers",
+    "shopping_product_get",
+    "shopping_search",
+    "shopping_seller_get",
     "sil_doctor",
-    "sil_domain_create",
-    "sil_domain_find",
-    "sil_product_get",
     "sil_register",
-    "sil_search",
-    "sil_stores",
     "sil_whoami",
   ],
   skill: "./sil-shopping",

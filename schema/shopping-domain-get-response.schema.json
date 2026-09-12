@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-domain-get-response.schema.json",
+  "title": "sil shopping_domain_get — response",
+  "type": "object",
+  "required": [
+    "status",
+    "path",
+    "guide",
+    "specs"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "path": {
+      "type": "string",
+      "description": "Sends it verbatim as `shopping_search.domain`."
+    },
+    "guide": {
+      "type": "string",
+      "description": "Copies into `## Buying guide`; translates the buyer facts through it; reads from it which keys decide the buy."
+    },
+    "specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "display_name",
+          "type",
+          "operators"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Names the key in the Brief and sends it as a `shopping_search` spec key."
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Calls the key this when it writes it down or says it out loud."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Phrases the question to the buyer from it."
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "number"
+              },
+              {
+                "type": "string",
+                "const": "boolean"
+              },
+              {
+                "type": "string",
+                "const": "enum"
+              },
+              {
+                "type": "string",
+                "const": "money"
+              }
+            ],
+            "description": "Types the value the agent sends and reads for this key."
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "description": "States the value in this unit, the one sil holds it in."
+          },
+          "allowed_values": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "description": "Maps the buyer's word into the closed set; an enum without one takes any name, a maker's for `brand`."
+          },
+          "operators": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "eq"
+                },
+                {
+                  "type": "string",
+                  "const": "neq"
+                },
+                {
+                  "type": "string",
+                  "const": "gte"
+                },
+                {
+                  "type": "string",
+                  "const": "lte"
+                },
+                {
+                  "type": "string",
+                  "const": "in"
+                },
+                {
+                  "type": "string",
+                  "const": "nin"
+                }
+              ]
+            },
+            "minItems": 1,
+            "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
+          },
+          "variant_spec": {
+            "type": "boolean",
+            "const": true,
+            "description": "Settles these before searching when the buyer has not said them; expects their values under `variants[]`."
+          },
+          "product_spec": {
+            "type": "boolean",
+            "const": true,
+            "description": "Sends it as a hard row when the buyer names it; never treats two products that differ on it as one."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Builds predicates with keys the registry holds."
+    }
+  },
+  "additionalProperties": false
+}

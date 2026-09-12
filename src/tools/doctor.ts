@@ -522,7 +522,7 @@ function checkIdentity(): Finding[] {
   const tokensPath = getTokensPath();
 
   if (!hasTokens()) {
-    // A valid state, not an error: bare `sil_search` works unregistered.
+    // A valid state, not an error: a bare shopping search works unregistered.
     findings.push({
       id: "identity.tokens_present",
       severity: "info",

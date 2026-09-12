@@ -104,10 +104,14 @@ describe("docs needle DERIVATION — a needle that names live code is not a docs
     // Pin 2. Layer 1 subtracts silently: without this literal, adding a live
     // identifier containing a needle disables it across all of `docs/` with no red.
     expect([...DOCS_EXCLUDED_NEEDLES].sort()).toEqual([
+      "applied",
       "canonical",
+      "capped",
       "domainslug",
       "method.md",
       "prd",
+      "sil_search",
+      "unset",
     ]);
     expect([...docsNeedleExclusions().map((e) => e.needle)].sort()).toEqual([
       ...DOCS_EXCLUDED_NEEDLES,
@@ -160,7 +164,7 @@ describe("the docs SIEVE — a retired token is DISAVOWED here, not expunged", (
       "tags: [gotcha]",
       "---",
       "",
-      "`sil_learn` was deleted 2026-08-24 — use `sil_doc_write`.",
+      "`sil_learn` was deleted 2026-08-24 — use `shopping_doc_write`.",
     ];
     expect(docsRetiredTokenOffenders([docOf("knowledge/how-the-shopper-records.md", lines)], [])).toEqual([]);
   });

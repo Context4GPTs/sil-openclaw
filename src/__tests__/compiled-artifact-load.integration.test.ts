@@ -264,55 +264,38 @@ describe("compiled-artifact load runs against a FRESH dist, never the planted st
 
 // ===========================================================================
 // AC2 — ONE register() on the COMPILED entry yields ONE store across BOTH
-// surfaces (the writer `sil_search` and the reader `sil.search_results`)
+// surfaces (the writer `shopping_search` and the reader `sil.search_results`)
 // ===========================================================================
 
 const METHOD = "sil.search_results";
 const SIL_API = "https://sil-api.compiled.test.example.com";
 const ACCOUNT = "user-compiled";
 
-/** A valid v0 `sil_search` call — the route is domain-gated and `n` is required. */
-const V0_SEARCH_PARAMS = {
+/** A valid `shopping_search` call — the route is domain-gated and `n` is required. */
+const SEARCH_PARAMS = {
   domain: "product.furniture.seating.task_chairs",
   query: "office chair",
   n: 10,
 } as const;
 
 /**
- * One real v0 `SearchResult` off the sil-api wire, carrying the veto's inputs —
- * a `maturity`, a `set` value beside an `unset` one, and an offer whose
- * `observed`/`observed_at` state the price's age. Anti-false-green: a
- * `{stub:true}` echo carries none of these, and neither does a body the
- * compiled client's four-key gate would refuse.
+ * One real product off the sil-api wire, carrying what the agent's honesty reading is
+ * computed from — a filled `fit`, a priced `variants` entry, a page's own words in
+ * `webpage_info`. Anti-false-green: a `{stub:true}` echo carries none of these, and
+ * neither does a body the compiled client's 200 gate would refuse.
  */
-function wireResult(n: number): Record<string, unknown> {
+function wireProduct(n: number): Record<string, unknown> {
   return {
-    ref: `variant:compiled-${n}`,
-    maturity: "catalog",
-    product: { title: `Ergonomic Task Chair ${n}` },
-    option_set: {},
-    media: [],
-    values: {
-      brand: {
-        state: "set",
-        value: `Maker ${n}`,
-        origin: "observed",
-        source_ref: `url:https://shop.example/chair-${n}`,
-        observed_at: "2026-01-15T10:00:00.000Z",
-      },
-      seat_height_mm: { state: "unset" },
+    id: `p-compiled-${n}`,
+    title: `Ergonomic Task Chair ${n}`,
+    brand: `Maker ${n}`,
+    fit: { seat_height: 480 },
+    price: [{ from: `${1000 + n}.99`, to: `${1000 + n}.99`, currency: "USD" }],
+    variants: [{ id: `v-compiled-${n}`, colour: "Black" }],
+    webpage_info: {
+      url: `https://shop.example/chair-${n}`,
+      text: "Seat height 42–52 cm, mesh back, 5-year warranty.",
     },
-    pairs: [],
-    offers: [
-      {
-        seller: { host: `merchant-${n}.example` },
-        price: `${1000 + n}.990000`,
-        currency: "USD",
-        observed: "stored",
-        observed_at: "2026-01-15T10:00:00.000Z",
-        url: `https://shop.example/chair-${n}`,
-      },
-    ],
   };
 }
 
@@ -332,14 +315,13 @@ function seedSession(): void {
   );
 }
 
-/** The catalog-search boundary — the ONLY thing doubled. Records every outbound
- * URL so "the compiled client, at the configured origin" is assertable by count.
+/** The catalog-search boundary — the ONLY thing doubled. Records every outbound URL so
+ * "the compiled client, at the configured origin" is assertable by count.
  *
- * The body is the v0 result object. A `{products: []}` body now FAILS the
- * compiled client's four-key gate and classifies `retryable`, so the resolve
- * would have nothing to serve and every assertion here would pass vacuously
- * against an error envelope. */
-function installSearchRouter(results: unknown[]): { urls: string[] } {
+ * The body is the route's own 200. A body that did not state `status: "ok"` classifies
+ * `retryable`, so the resolve would have nothing to serve and every assertion here would
+ * pass vacuously against an error envelope. */
+function installSearchRouter(products: unknown[]): { urls: string[] } {
   const urls: string[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation((input: unknown) => {
     const url = typeof input === "string" ? input : String(input);
@@ -348,14 +330,7 @@ function installSearchRouter(results: unknown[]): { urls: string[] } {
     return Promise.resolve(
       new Response(
         JSON.stringify(
-          isSearch
-            ? {
-                results,
-                sources: {},
-                predicates: [{ key: "seat_height_mm", applied: false }],
-                report: { searches: 1, fetched: results.length, blocked: 0 },
-              }
-            : {},
+          isSearch ? { status: "ok", products } : {},
         ),
         {
           status: isSearch ? 200 : 500,
@@ -373,7 +348,7 @@ function payloadOf(result: { content: { text?: string }[] }): Record<string, unk
   return JSON.parse(text) as Record<string, unknown>;
 }
 
-describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and the sil.search_results READER share ONE store", () => {
+describe("AC2 — one register() on dist/index.js ⇒ the shopping_search WRITER and the sil.search_results READER share ONE store", () => {
   // The gap 0.4.5's suite structurally could not close. Its ~30 assertions drove
   // the SOURCE modules through a harness that imports the tool and the handler
   // separately; nothing proved that the artefact a host actually loads yields one
@@ -390,8 +365,8 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     vi.restoreAllMocks();
   });
 
-  it("resolves the page the COMPILED sil_search just wrote, under the same host callId", async () => {
-    const rec = installSearchRouter([wireResult(1), wireResult(2)]);
+  it("resolves the page the COMPILED shopping_search just wrote, under the same host callId", async () => {
+    const rec = installSearchRouter([wireProduct(1), wireProduct(2)]);
     seedSession();
 
     // ONE register() — the shipped posture. Both surfaces are captured off the
@@ -402,14 +377,14 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
 
     const CALL_ID = "call_compiled_hit";
     const payload = payloadOf(
-      await getTool(api, "sil_search").execute(CALL_ID, V0_SEARCH_PARAMS),
+      await getTool(api, "shopping_search").execute(CALL_ID, SEARCH_PARAMS),
     );
     // Premise of the whole test: the search really succeeded and carries real
     // real v0 results, not an error envelope the resolve could never store.
     expect(payload["status"]).toBe("ok");
-    const results = payload["results"] as Record<string, unknown>[];
-    expect(results).toHaveLength(2);
-    expect(results[0]!["ref"]).toBe("variant:compiled-1");
+    const products = payload["products"] as Record<string, unknown>[];
+    expect(products).toHaveLength(2);
+    expect(products[0]!["id"]).toBe("p-compiled-1");
     // The COMPILED config module resolved the pluginConfig override — the request
     // went to the test origin, so this is the compiled client's own leg.
     expect(rec.urls.filter((u) => u.startsWith(SIL_API))).toHaveLength(1);
@@ -421,7 +396,7 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     expect(frames[0]!.ok).toBe(true);
     const body = frames[0]!.payload as Record<string, unknown>;
     expect(body["status"]).toBe("ok");
-    expect(body["results"]).toEqual(payload["results"]);
+    expect(body["products"]).toEqual(payload["products"]);
   });
 
   it("serves it from the COMPILED module's OWN store — the source store never saw the page", async () => {
@@ -430,7 +405,7 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     // the "one register(), one store" claim would be about the harness rather
     // than the artefact. The compiled entry has its own module instance, so the
     // source store must be EMPTY for a callId the compiled tool just stored.
-    installSearchRouter([wireResult(7)]);
+    installSearchRouter([wireProduct(7)]);
     seedSession();
 
     const api = createMockPluginApi({ pluginConfig: { sil_api_url: SIL_API } });
@@ -438,7 +413,7 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
 
     const CALL_ID = "call_compiled_instance";
     const payload = payloadOf(
-      await getTool(api, "sil_search").execute(CALL_ID, V0_SEARCH_PARAMS),
+      await getTool(api, "shopping_search").execute(CALL_ID, SEARCH_PARAMS),
     );
     expect(payload["status"]).toBe("ok");
 
@@ -447,14 +422,14 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     const body = (await callGatewayMethod(api, METHOD, { callId: CALL_ID }))[0]!
       .payload as Record<string, unknown>;
     expect(body["status"]).toBe("ok");
-    expect((body["results"] as unknown[])).toHaveLength(1);
+    expect((body["products"] as unknown[])).toHaveLength(1);
   });
 
   it("is NOT VACUOUS — the same compiled handler answers not_found for a callId it never stored", async () => {
     // Without this, every `status:"ok"` above is equally satisfied by a handler
     // that answers ok unconditionally — the assertion would be measuring the
     // fixture, not the store.
-    installSearchRouter([wireResult(1)]);
+    installSearchRouter([wireProduct(1)]);
     seedSession();
 
     const api = createMockPluginApi({ pluginConfig: { sil_api_url: SIL_API } });
@@ -467,6 +442,6 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     expect(frames[0]!.ok).toBe(true);
     const body = frames[0]!.payload as Record<string, unknown>;
     expect(body["status"]).toBe("not_found");
-    expect(body).not.toHaveProperty("results");
+    expect(body).not.toHaveProperty("products");
   });
 });

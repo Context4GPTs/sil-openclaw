@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-domain-create-request.schema.json",
+  "title": "sil shopping_domain_create — request",
+  "type": "object",
+  "required": [
+    "path",
+    "guide",
+    "specs"
+  ],
+  "properties": {
+    "path": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+      "maxLength": 255,
+      "description": "Mints this path; only its root must already stand."
+    },
+    "guide": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "Writes what the category is and how it is bought — the prose a read hands back."
+    },
+    "specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "display_name",
+          "type"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Coins the key here; a key an ancestor already defines is refused by name."
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Names the key for a reader in the buyer's words."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Says what the key means, for whoever reads this domain next."
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "number"
+              },
+              {
+                "type": "string",
+                "const": "boolean"
+              },
+              {
+                "type": "string",
+                "const": "enum"
+              },
+              {
+                "type": "string",
+                "const": "money"
+              }
+            ],
+            "description": "Types the value the agent sends and reads for this key."
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Declares the unit every value of this key is in."
+          },
+          "allowed_values": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "description": "Declares the closed set an enum takes."
+          },
+          "variant_spec": {
+            "type": "boolean",
+            "const": true,
+            "description": "Marks a key that, alone or with the others so marked, identifies a purchasable variant."
+          },
+          "product_spec": {
+            "type": "boolean",
+            "const": true,
+            "description": "Marks a key that, with the brand and the others so marked, tells one product from the next."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 50,
+      "description": "Coins the keys this category is bought by; the registry derives the operators."
+    }
+  },
+  "additionalProperties": false
+}

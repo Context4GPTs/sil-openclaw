@@ -129,7 +129,7 @@ describe("plugin entry — registration contract", () => {
     // api with exactly the real tools and NO example stub. This pins the
     // wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
     // 13 → 12: the eight-beat card REPLACES the five profile verbs with the four
-    // `sil_doc_*` document tools (a GROUP swap — `registerProfileTools` is gone from
+    // `shopping_doc_*` document tools (a GROUP swap — `registerProfileTools` is gone from
     // src/index.ts and `registerDocTools` is wired in its place), so this literal
     // moves in BOTH directions at once. Exact on purpose: loosening it to `toContain`
     // stops it catching a silent removal, which is how a shipped tool disappears
@@ -137,17 +137,19 @@ describe("plugin entry — registration contract", () => {
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
-      "sil_doc_find",
-      "sil_doc_read",
-      "sil_doc_remove",
-      "sil_doc_write",
+      "shopping_doc_find",
+      "shopping_doc_read",
+      "shopping_doc_remove",
+      "shopping_doc_write",
+      "shopping_domain_create",
+      "shopping_domain_get",
+      "shopping_domain_search",
+      "shopping_offers",
+      "shopping_product_get",
+      "shopping_search",
+      "shopping_seller_get",
       "sil_doctor",
-      "sil_domain_create",
-      "sil_domain_find",
-      "sil_product_get",
       "sil_register",
-      "sil_search",
-      "sil_stores",
       "sil_whoami",
     ]);
   });

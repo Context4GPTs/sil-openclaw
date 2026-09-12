@@ -12,138 +12,106 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
-- **`sil_domain_create` specs take an optional `axis: true`** — the ONE variant-level key
-  merchants sell the category by (a boot's mondopoint). At most one per category and
-  `level: variant` only; the route refuses both. sil keys a page's size selector on it
-  when the page names no key.
-- **`sil_doc_find` / `sil_doc_read` / `sil_doc_write` / `sil_doc_remove` — the
-  shopper's documents, four operations over one ref scheme.** `ref` is `"shopper"`
-  (the person) or `"brief:<slug>"` (one shopping job, many items, many domains).
-  `find` returns coordinates only, never bodies, filtered by `kind` · `domain` (a
-  path prefix over a Brief's `## Items`) · `status` · `query`. `write` takes the
-  WHOLE reconciled markdown — no append, no section patch — with `mode: create`
-  failing if the ref exists and `mode: replace` failing if it does not. `remove`
-  takes one Brief and never cascades; the shopper document is not removable.
-- **The skill drives the eight beats** (`SIL-DOMAINS-AND-SPECS.md` §5 at the
-  `SIL-V0-DOMAINS-AND-SPECS.md` §6 narrowing) at their real cadences — BRIEF once
-  per job, DOMAIN…FEEDBACK per item, VERDICT out of band per bought item. BRIEF and
-  DOMAIN are split (a job is scoped in the buyer's words before any category is
-  settled, and an unclassified item is a legal state); **ASK is its own beat**, so
-  `## Notes / open` is read back as its input rather than written as sediment; and
-  **VERDICT** is new — the out-of-band *did it work?* read that writes
-  `## Past purchases`, `## Fit` and any `## Shopping` section it contradicts.
-
-- **`sil_stores` — every seller of one pick, and where the buyer goes.** Calls
-  `POST /catalog/stores` with a single `ref`. Each seller carries
-  `serviceability` — `serviceable`, `not_serviceable`, or `unknown` — plus its
-  observed fulfillment routes, cost and free-threshold ranges per currency, and a
-  `handoff` that names its own promise (`buy_url` = a checkout path, `url` = the
-  listing page). The three states are **not symmetric**: `not_serviceable` is a
-  positive claim requiring policy evidence sil actually read, so everything else
-  is `unknown` — an ordinary answer that KEEPS the seller. A well-formed ref sil
-  does not hold is a distinct `not_found`, never an empty seller list.
-- **`sil_domain_create` — the one registry write path.** Calls
-  `POST /catalog/domains` with a `path`, a researched buying `guide` and the
-  category's first `specs`. NEW nodes only: an existing path comes back as
-  `already_exists`, which is **not a failure** — it means the vocabulary is there,
-  so the recovery is to search that same path. A minted node is born fenced
-  (`validated_at: null`).
+- **The eleven `shopping_*` tools, on the agent contract.** Seven catalog tools 1:1 with
+  the sil-api routes — `shopping_domain_search` (read the registry in the buyer's words),
+  `shopping_domain_get` (a category's buying guide and the keys it is bought by),
+  `shopping_domain_create` (coin a new one), `shopping_search`, `shopping_product_get`
+  (the whole dossier on 1–10 variants), `shopping_offers` (dated prices per seller, read
+  live) and `shopping_seller_get` (whether that seller ships to the buyer, and on what
+  terms) — plus the four document verbs, renamed `shopping_doc_find` / `read` / `write` /
+  `remove`. Every tool the loop calls is named for what it does for the shopper; only
+  `sil_register`, `sil_whoami` and `sil_doctor` keep the `sil_` name.
+- **The fourteen schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
+  its committed request artifact, copied verbatim from `sil-services`
+  (`schema/PROVENANCE.md` names the commit), and each `ok` result IS the API's 200 body,
+  handed over untouched. The plugin adds no shape of its own in either direction, so
+  there is nothing here for the contract to drift from.
+- **`shopping_domain_create` marks a key `variant_spec` or `product_spec`** — what
+  identifies a purchasable variant, and what tells one product from the next. The
+  registry derives each key's operators from its `type`.
+- **The shopper's documents, four operations over one ref scheme.** `ref` is `"shopper"`
+  (the person) or `"brief:<slug>"` (one shopping job, many items, many domains). `find`
+  returns coordinates only, never bodies. `write` takes the WHOLE reconciled markdown —
+  no append, no section patch — with `mode: create` failing if the ref exists and
+  `mode: replace` failing if it does not. `remove` takes one Brief and never cascades.
+- **The skill drives the eight beats** at their real cadences — BRIEF once per job,
+  DOMAIN…FEEDBACK per item, VERDICT out of band per bought item. BRIEF and DOMAIN are
+  split (a job is scoped in the buyer's words before any category is settled, and an
+  unclassified item is a legal state); **ASK is its own beat**, so `## Notes / open` is
+  read back as its input rather than written as sediment; and **VERDICT** is the
+  out-of-band *did it work?* read that writes `## Past purchases`, `## Fit` and any
+  `## Shopping` section it contradicts.
 
 ### Changed
 
-- **`openclaw.build.openclawVersion` / `pluginSdkVersion` record `2026.9.3`**, the host this
-  plugin is now verified against (the stage pins it). Diagnostics only on the host side; the
-  `compat` floor stays `>=2026.7.1` — nothing here needs a newer API.
-- **BREAKING — the shopper's store is FLAT, and the pre-0.5 layout migrates in one
-  hop on first touch of a `sil_doc_*` tool.** `shopper/user_spec.md` +
-  `shopper/briefs/<slug>.md` replace `shopper/domains/<slug>/{method.md,
-  prds/*.md}`. Each legacy method becomes a `## Shopping` `### <domain>` section on
-  the shopper document; each legacy PRD becomes a one-row-`## Items` Brief. A legacy
-  source file is deleted **only once its own section is in the re-read document** — a
-  destination that merely parses is not proof, since every method lands in one
-  `user_spec.md` — one that will not parse is reported and left in place, and **bytes
-  under a legacy `assets/` directory are never deleted**.
-- **The `≤4` `sil_search` call bound is PER ITEM**, not per request. On a two-item
-  job the old reading either halved the second item's budget or blew the bound.
-- **The catalog contract is v0's, and the pre-v0 one is deleted.** `sil_search`
-  now takes `domain` · `query` · `n` · `predicates` · `destination` and answers
-  with the route's own result object — `results` (each with `ref`, `maturity`,
-  `values` including stated `unset` ones, `pairs`, `offers` whose prices say
-  `observed: live | stored`), `sources`, `predicates[].applied` and `report`.
-  `sil_product_get` takes up to five `refs` and answers with the **same** object,
-  offers refreshed. The payload passes through **verbatim**: the plugin gates the
-  envelope structurally and projects nothing, because the agent's three-state veto
-  is computed from `values[].state`, `predicates[].applied` and `maturity` — the
-  exact fields a projector drops. **One exception, and sil-services needs to know
-  it:** a response body declaring `status` or `advisories` at its *top level* is
-  refused whole as `retryable`. Those are the plugin's own envelope keys, so
-  spreading such a payload would overwrite the key the agent dispatches on or
-  swallow the server's field. Adding either to a catalog route is a breaking
-  change on this side, and the only symptom is a tool that stops answering.
-- **`sil.search_results` now buffers the v0 result object.** The gateway method,
-  its two-layer authz and its one not-found body are untouched; the page it
-  carries is the new shape. A client decoding the pre-v0 `{products, cursor}` page
-  must move — no back-compat, by rule.
+- **BREAKING — the catalog answer is the agent contract's, and the pre-contract one is
+  deleted.** `shopping_search` takes `domain` · `query` · `n` · `specs` and answers with
+  `products[]`, each carrying `fit` (only what sil verified — a key absent from it is a
+  gap to name, never a miss), the `variants` that fit, a price range per currency, and
+  `webpage_info` where sil has not read the page yet. The dossier, the offers and the
+  seller terms are three separate reads now. Nothing is projected on the way back.
+- **The honesty vocabulary the agent reads.** `webpage_info` present means sil has not
+  read that page; its absence means the values were verified. An empty `variants` says no
+  listed option fits. A price in another currency is a bound sil could not test.
+  `ships: unknown` keeps the seller.
+- **BREAKING — the shopper's store is FLAT, and the pre-0.5 layout migrates in one hop on
+  first touch of a document tool.** `shopper/user_spec.md` + `shopper/briefs/<slug>.md`
+  replace `shopper/domains/<slug>/`. A legacy source file is deleted **only once its own
+  section is in the re-read document**; one that will not parse is reported and left in
+  place, and bytes under a legacy `assets/` directory are never deleted.
+- **The `≤4` search-call bound is PER ITEM**, not per request. On a two-item job the old
+  reading either halved the second item's budget or blew the bound.
+- **`sil.search_results` carries the `shopping_search` body** (`{status, products}`). The
+  method name, its two-layer authz and its one not-found body are untouched.
+- **`openclaw.build.openclawVersion` / `pluginSdkVersion` record `2026.9.3`**, the host
+  this plugin is verified against. Diagnostics only; the `compat` floor stays
+  `>=2026.7.1` — nothing here needs a newer API.
 
 ### Removed
 
+- **BREAKING — `sil_search`, `sil_product_get`, `sil_stores`, `sil_domain_find`,
+  `sil_domain_create` and the four `sil_doc_*` verbs.** Renamed, never aliased: the old
+  names do not register, and there is no deprecation stub.
+- **The hand-mirrored wire types and their four structural gates.** The response shape
+  lives in the committed artifact; a second copy in the plugin was the first thing to
+  drift from it. What survives is one 200 gate — a plain object stating `status: "ok"`.
+- **The top-level `status` / `advisories` refusal.** `status` is on the API body now, and
+  the wiring advisory rides its OWN result block rather than a key beside the contract's,
+  so a catalog route adding a field is no longer a breaking change on this side.
+- **The registry's retired vocabulary** — `maturity`, `unset`, `predicates`, `applied`,
+  `option_set`, `charged_currency`, `handoff`, `data_type`, `level`, `axis`, `capped`,
+  `validated_at`, `value_set` — gone from the wire, the skill and the drift guards.
 - **BREAKING — `sil_learn`, `sil_profile_materialize`, `sil_profile_search`,
-  `sil_profile_get` and `sil_profile_remove` are deleted** (13 tools → 12), along
-  with the local domain model they addressed: `method.md`, intent-keyed PRDs, the
-  `{domain, product, intent}` triple, `attach-asset` and its MIME allowlist. The
-  buying guide and its vocabulary belong to the shared registry (`sil_domain_find`);
-  what is local is the person and their jobs.
-- **The pre-v0 catalog surface, outright.** Gone: `filters` (`category`,
-  `price_min`/`price_max`, `condition`, `available`), `local_merchants`, `ship_to`,
-  the `cursor` pagination, `checkout_url`, `specs_status`, the `{ns, key}` spec
-  predicate path, and every client-side pre-flight validator behind them. Every v0
-  route refuses before it spends and names the offender in its own message, so a
-  second validator here could only drift. The 422 `source_rejected` arm is gone
-  with them — no v0 route emits one.
-
-- **`sil_specs` — deleted, with no replacement.** The tool called
-  `POST /catalog/specs`, a route sil-services removed when the v0 store landed;
-  every call had been failing since. Gone with it: the spec-registry client arm
-  (`specsCatalog`, `classifySpecsResponse`, and the resolution types), the
-  manifest's `contracts.tools` entry, and the bundled skill's
-  canonicalize-before-persist beat.
-  No alias and no deprecation stub — a shopper that called it was getting an
-  error, and now gets a tool that simply is not there.
+  `sil_profile_get` and `sil_profile_remove`**, along with the local domain model they
+  addressed: `method.md`, intent-keyed PRDs, the `{domain, product, intent}` triple,
+  `attach-asset` and its MIME allowlist. The buying guide and its keys belong to the
+  shared registry; what is local is the person and their jobs.
+- **The pre-contract request surface, outright.** Gone: `filters` (`category`,
+  `price_min`/`price_max`, `condition`, `available`), `local_merchants`, the `cursor`
+  pagination, `checkout_url`, `specs_status`, the `{ns, key}` spec path, `sil_specs` (its
+  route was removed server-side and every call had been failing), and every client-side
+  pre-flight validator behind them. Each route refuses before it spends and names the
+  offender in its own message, so a second validator here could only drift.
 
 ### Fixed
 
 - **`create-shopper` attaches the skill where a 2026.8.1+ host looks.** The host's config
   migration renamed `agents.list` (an array) to `agents.entries` (a map keyed by id), and
-  `openclaw agents add` writes that shape, so creation failed closed after the add on every
-  2026.8.1+ gateway. The script now reads both shapes and attaches the skill at
-  `agents.entries["<id>"].skills` or `agents.list[<i>].skills`, whichever the host uses;
-  the two never coexist. The attach is then re-read from `openclaw.json` and fails closed
-  when the skill is not there — a host that parses the path differently writes one
-  literal key and still exits 0, and that silent misattach is the state the fix exists to
-  prevent. The entries shape was measured live on 2026.8.1 (the fleet's hotfix) and on
-  2026.9.3 in an isolated container (`agents add` writes the map; the bracket path
-  round-trips through `config set` / `config get`); the attach and its read-back are
-  graded by the shimmed suite. The wiring-drift detector reads both shapes too, so it no
-  longer goes blind on a migrated host.
-- **A directory sil cannot list no longer reads as an absent document.**
-  `sil_doc_read` / `sil_doc_write` / `sil_doc_remove` decided absence with
-  `existsSync` — a boolean over a stat that swallows every errno, so an
-  unlistable `briefs/` (or an unstat-able store root) answered `not_found` for a
-  Brief sitting on disk, while `sil_doc_find` reported that same directory in
-  `unreadable[]` in the same breath. `not_found`'s own message names
-  `sil_doc_write (mode: create)`, so the answer *was* the re-mint instruction and
-  the buyer's own words went with it; on `sil_doc_remove` it claimed a delete
-  that never happened. Every gate that decides absence now runs one probe —
-  **ENOENT alone is absence**; every other errno leaves presence unknown, and
-  unknown is stated as `unreadable` (`recovery: "inspect_document"`), never
-  guessed. Real absence is unchanged, so a first Brief on a fresh machine still
-  mints, and a directory that will not list but whose file reads still hands the
-  document over. `sil_doctor` inherits the new `unreadable[]` entries, so the
-  operator and agent surfaces describe one state — including the store root at
-  mode `0o400`, which until now no surface saw at all. The `sil_doc_read` /
-  `sil_doc_remove` descriptions and the `sil-shopping` bundle now state
-  `not_found` only with its qualifier: sil listed the containing directory and
-  the document was not in it.
+  `openclaw agents add` writes that shape, so creation failed closed after the add on
+  every 2026.8.1+ gateway. The script now reads both shapes, and the attach is re-read
+  from `openclaw.json` and fails closed when the skill is not there — a host that parses
+  the path differently writes one literal key and still exits 0, and that silent
+  misattach is the state the fix exists to prevent. The wiring-drift detector reads both
+  shapes too, so it no longer goes blind on a migrated host.
+- **A directory sil cannot list no longer reads as an absent document.** The document
+  verbs decided absence with `existsSync` — a boolean over a stat that swallows every
+  errno, so an unlistable `briefs/` answered `not_found` for a Brief sitting on disk. The
+  answer *was* the re-mint instruction, and the buyer's own words went with it; on a
+  remove it claimed a delete that never happened. Every gate that decides absence now
+  runs one probe — **ENOENT alone is absence**; every other errno leaves presence
+  unknown, and unknown is stated as `unreadable` (`recovery: "inspect_document"`), never
+  guessed. `sil_doctor` inherits the new `unreadable[]` entries, so the operator and
+  agent surfaces describe one state.
 
 ## [0.4.6] - 2026-07-24
 

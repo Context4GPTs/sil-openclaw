@@ -83,7 +83,7 @@ function registerRegister(api: PluginAPI): void {
       // it tells the skill "the moment after a confirmed registration is where to
       // introduce the shopper". identity.ts stays decoupled from the document store
       // — it reads NO shopper state here; the skill owns the actual gate (a no-arg
-      // sil_doc_find empty-store check) so a user who already has a shopper is
+      // shopping_doc_find empty-store check) so a user who already has a shopper is
       // never offered a second one (the shopper is a singleton). The hint rides
       // ONLY this confirmed-registration path — never the pre-registration
       // `awaiting_browser` return, nor any poll/error terminal.
@@ -94,7 +94,7 @@ function registerRegister(api: PluginAPI): void {
           user: config?.user ?? null,
           next_step: "offer_shopper",
           // Folded here but NOT onto `awaiting_browser`: this is a terminal
-          // result, whereas that one is a mid-flow auth handoff whose whole job
+          // result, whereas that one is a mid-flow auth hand-off whose whole job
           // is to get one link in front of the user.
           ...wiringAdvisories(api),
         });
@@ -176,8 +176,8 @@ function registerRegister(api: PluginAPI): void {
  *   1. Read tokens.json. Absent → terminal `not_registered` (run sil_register),
  *      ZERO network calls (nothing to authenticate with).
  *   2. fetchIdentity(sil-api, access_token), then route the outcome through the
- *      SHARED `refreshAndRetryOnce` choreography — the SAME path sil_search and
- *      sil_product_get use, so 401 recovery is uniform across every
+ *      SHARED `refreshAndRetryOnce` choreography — the SAME path every
+ *      `shopping_*` call uses, so 401 recovery is uniform across every
  *      sil-api-calling tool (factored so the three cannot drift apart; FLAG-10).
  *      The helper owns the bounded refresh-and-retry-once: on a 401 it refreshes
  *      ONCE via sil-web (rotates tokens.json), re-reads the rotated pair, and
@@ -239,8 +239,8 @@ function registerWhoami(api: PluginAPI): void {
       };
 
       // 2 — read identity; on a 401 refresh-and-retry ONCE via the shared
-      // choreography (the SAME `refreshAndRetryOnce` path sil_search /
-      // sil_product_get use — 401 recovery is uniform across every
+      // choreography (the SAME `refreshAndRetryOnce` path every `shopping_*`
+      // call uses — 401 recovery is uniform across every
       // sil-api-calling tool, factored so the three cannot drift apart).
       const first = await fetchIdentity(getApiUrl(), stored.access_token);
       const recovered = await refreshAndRetryOnce(
@@ -580,7 +580,7 @@ function presentAuthLink(authUrl: string): string {
 }
 
 /**
- * System-browser steer copy (the proactive webview → default-browser handoff).
+ * System-browser steer copy (the proactive webview → default-browser hand-off).
  *
  * Auth0's hosted login sets its session cookie on its OWN domain; an app's
  * embedded/in-app webview routinely partitions or blocks that cookie, so opening

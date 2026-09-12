@@ -8,7 +8,7 @@ description: The one-time setup script the router defers to when state shows sil
 The router defers the **one-time setup script** here: the five-stage progression, the
 after-register offer, the per-search pitch. None applies once setup is complete — the router
 sheds it. **Read the stage from state, never guess:** `sil_whoami` (registered?) + a bare
-**`sil_doc_find`** (is there a `shopper` document, and are there any Briefs?). Present
+**`shopping_doc_find`** (is there a `shopper` document, and are there any Briefs?). Present
 **only the current stage's beat and its single next step**.
 
 ## The five-stage progression
@@ -19,15 +19,15 @@ sheds it. **Read the stage from state, never guess:** `sil_whoami` (registered?)
    (name + addresses, read by `sil_whoami`), stored **locally**; the shopper's documents
    live under `$SIL_DATA_DIR`, never leaving the device via the plugin; **search** hits sil's
    catalog. Next: `sil_register`.
-2. **Registered, no shopper** — identity exists, `sil_doc_find` returns no `shopper`
-   document. A shopper-less `sil_search` works — it still needs a registry `domain` —
+2. **Registered, no shopper** — identity exists, `shopping_doc_find` returns no `shopper`
+   document. A shopper-less `shopping_search` works — it still needs a settled `domain` —
    but isn't the finished state; guide the user to
    **set up their shopper**, naming up front it takes a **couple of minutes and a few
    questions**. The after-register offer owns the gate.
-3. **Shopper, no job yet** — the shopper was created (engine `created`) but `sil_doc_find`
+3. **Shopper, no job yet** — the shopper was created (engine `created`) but `shopping_doc_find`
    returns no Brief. The first shopping intent **opens the first Brief** and settles its
    items' domains, each announced so the user can correct it. Next: state a shopping intent.
-4. **Shopper active** — `sil_doc_find` returns ≥ 1 Brief. Milestones: the **first Brief
+4. **Shopper active** — `shopping_doc_find` returns ≥ 1 Brief. Milestones: the **first Brief
    opened**, and softer, that a durable fact or taste landed on the shopper document.
 5. **Setup complete** — a shopper with ≥ 1 Brief. **Shed** every onboarding beat; **show only
    how to use** the plugin well — the eight-beat loop ([`shop_loop.md`](shop_loop.md)).
@@ -35,20 +35,20 @@ sheds it. **Read the stage from state, never guess:** `sil_whoami` (registered?)
 ## After register — offer the shopper, once (offer_shopper)
 
 `sil_register` returns `already_registered` with `next_step: "offer_shopper"` on a confirmed
-registration. Run a bare **`sil_doc_find`**, then branch:
+registration. Run a bare **`shopping_doc_find`**, then branch:
 
 - **No shopper document:** introduce the shopper in one beat and offer to set it up — name
   the value (weighs picks against how the category is actually bought; reuses the sizes +
   hard limits it knows so nothing is re-asked; explains why each pick fits). Load
   [`agent_creation_engine.md`](agent_creation_engine.md) **only if the user accepts** — its
   Part 1 onboarding runs first, the engine only after endorsement. Take no for an answer;
-  a shopper-less `sil_search` stays first-class.
+  a shopper-less `shopping_search` stays first-class.
 - **A shopper exists:** **skip this beat.** The shopper is a **singleton** — never offer a
   second.
 
 ## After a shopper-less search — the per-search pitch (post-result)
 
-When a plain `sil_search` **completes `ok`** in a **shopper-less** session, present the results
+When a plain `shopping_search` **completes `ok`** in a **shopper-less** session, present the products
 best-first **exactly as returned**, then append **one short trailing line** naming what a
 shopper adds. Never a pre-search question, never a re-rank. Name one or two of three levers,
 rotating which you lead with:

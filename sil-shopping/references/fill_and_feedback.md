@@ -1,12 +1,12 @@
 ---
 name: fill-ask-feedback-verdict
-description: Beats 3, 4, 7 and 8 of the shopping loop. Beat 3 FILL resolves the Brief's predicates from what is already held; Beat 4 ASK is the one gate for what is still open and load-bearing, and owns the ## Notes / open surface; Beat 7 FEEDBACK captures what the reaction surfaced; Beat 8 VERDICT is the out-of-band did-it-work read. All four write through sil_doc_write. Load within an active sil shopping loop.
+description: Beats 3, 4, 7 and 8 of the shopping loop. Beat 3 FILL resolves the Brief's spec rows from what is already held; Beat 4 ASK is the one gate for what is still open and load-bearing, and owns the ## Notes / open surface; Beat 7 FEEDBACK captures what the reaction surfaced; Beat 8 VERDICT is the out-of-band did-it-work read. All four write through shopping_doc_write. Load within an active sil shopping loop.
 ---
 
 # The four writing beats — FILL · ASK · FEEDBACK · VERDICT
 
-All four persist the same way: `sil_doc_read` the target, reconcile in context, then
-`sil_doc_write { mode: "replace" }` the **whole** body back. There is no append and no
+All four persist the same way: `shopping_doc_read` the target, reconcile in context, then
+`shopping_doc_write { mode: "replace" }` the **whole** body back. There is no append and no
 section patch, so a correction rewrites the line it changes and never stacks a second,
 contradicting one.
 
@@ -21,24 +21,24 @@ frames the job only on a true cold start.
 
 **Translate, don't reference.** The shopper document says *"foot wide, ~104 mm"* and
 *"wool is out"*; the guide says a shell should clear the ball by ~2 mm; the Brief ends
-with `last_width_mm gte 102` and `fibre_wool_pct eq 0` — **neither of which appears in
+with `last_width gte 102` and `fibre_wool_pct eq 0` — **neither of which appears in
 either source**. The fact is durable, the conversion is domain knowledge, and the
-predicate is this job's.
+spec row is this job's.
 
 **Precedence, first hit wins:**
 
 > what the buyer said in THIS job > a **selected** thing's specs, translated > a
 > **resident** thing's specs, translated > a shopper fact, translated (nearest
-> `## Shopping` section first) > the guide's default > unset
+> `## Shopping` section first) > the guide's default > nothing at all
 
 Every thing you read lands in **`## Working from`** — an unrecorded read is a nag; a
 recorded one is a link the buyer can check and delete.
 
 **Compile both tables.** Each resolved dimension becomes a row in `## Hard constraints`
-or `## Preferences` — the section IS the hardness. Keys come from the domain's resolved
-vocabulary, verbatim. **A hard row is never filled around**: the veto applies at pick
+or `## Preferences` — the section IS the hardness. Keys come from what the domain read
+returned, verbatim. **A hard row is never filled around**: the veto applies at pick
 (Beat 6), never during fill. A *"prefer X, Y/Z acceptable"* requirement is **one `op: in`
-set** over `{X, Y, Z}` with the X-preference applied as Beat-6 judgment — never a hard
+set** over `{X, Y, Z}` with the X-preference weighed as Beat-6 judgment — never a hard
 `eq` on X alone, which rejects the acceptable alternatives and empties the set.
 
 **Write each item's `applies:` line** — the materialized partition, **keys only, never
@@ -55,7 +55,7 @@ ASK is a **beat**, not a step inside fill, and that is the whole point: `## Note
 has to be a **surface** the next session reads, not a record it writes and forgets.
 
 **When.** After fill has resolved all it can for an item, and **before that item's first
-`sil_search` call**. No search is issued for an item whose ASK has not run.
+`shopping_search` call**. No search is issued for an item whose ASK has not run.
 
 **What qualifies — all three, or it is not asked.** The dimension is (1) still
 unresolved, (2) load-bearing *per the guide* — the guide is what says it decides the buy
@@ -89,7 +89,7 @@ matching `## Shopping` section when the signal earns it.
 
 **Capture is silent — an open store, no confirm.** Every confirm costs a question, and
 what replaces the gate is **visibility**: the shopper document is readable whole with
-`sil_doc_read`, and any line in it is one turn from gone.
+`shopping_doc_read`, and any line in it is one turn from gone.
 
 **Three disciplines, and each one is a veto on writing:**
 
@@ -118,7 +118,7 @@ verdict ask per session**, on the **oldest** undecided pick, and it opens the se
 **Ask one plain question, naming the actual thing** — *"before we shop boots again: how
 did the Salomons work out?"* — not a survey, not a rating scale.
 
-**An answer writes three places, in one `sil_doc_write { ref: "shopper", mode:
+**An answer writes three places, in one `shopping_doc_write { ref: "shopper", mode:
 "replace" }`:**
 
 1. **A `## Past purchases` row** — what · when · verdict · **why**.

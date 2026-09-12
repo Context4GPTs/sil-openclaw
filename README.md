@@ -155,29 +155,35 @@ agent  Different niche — camping. Learning how to buy a backpacking
 
 > **You teach it once; it stays sharp.** Your facts and taste live on one shopper document; each shopping job gets its own Brief. How a category is bought comes from sil's shared registry — read before the web, so it is current without you teaching it twice — and every pick, rejection and verdict you give it is written back to those documents. Nothing to re-answer, and sharper every session.
 
-**What it remembers, and where it lives.** Your shopper learns your shopping-relevant facts as it goes — measurements, budget band, the rules it must never break, brand likes/dislikes — captured **only when a request actually needs them** (never a big up-front form) so it doesn't re-ask. All of it is stored **locally on your machine** (`$SIL_DATA_DIR/shopper/`, owner-only `0600`), **per-user (one shopper, one document per shopping job)**. It is **never pooled across users and never sent to a server** for training or aggregation — creating and running your shopper is local and offline. Research reads public sources to learn how a *category* is bought; it does not upload anything about you. Inspect exactly what your shopper holds with `sil_doc_find` / `sil_doc_read`, and forget a job it kept with `sil_doc_remove`.
+**What it remembers, and where it lives.** Your shopper learns your shopping-relevant facts as it goes — measurements, budget band, the rules it must never break, brand likes/dislikes — captured **only when a request actually needs them** (never a big up-front form) so it doesn't re-ask. All of it is stored **locally on your machine** (`$SIL_DATA_DIR/shopper/`, owner-only `0600`), **per-user (one shopper, one document per shopping job)**. It is **never pooled across users and never sent to a server** for training or aggregation — creating and running your shopper is local and offline. Research reads public sources to learn how a *category* is bought; it does not upload anything about you. Inspect exactly what your shopper holds with `shopping_doc_find` / `shopping_doc_read`, and forget a job it kept with `shopping_doc_remove`.
 
 ---
 
 ## Tools
 
-Namespaced `sil_*` so they never collide with other plugins. Your agent calls them for you — you just say what you want.
+Fourteen tools. The eleven the shopping loop calls are named `shopping_*` — for what they
+do for you — and the three account tools keep the `sil_` name. Your agent calls them for
+you; you just say what you want.
 
-**Identity**
+**Your account**
 
 | Tool | What it does |
 |---|---|
-| `sil_register` | Start a browser sign-in and link your agent to your sil identity. Returns an `auth_url` to open; once you've signed in, the agent is registered and can transact. Takes no arguments. |
+| `sil_register` | Start a browser sign-in and link your agent to your sil identity. Takes no arguments. |
 | `sil_whoami` | Read your sil identity — name and saved addresses — as the agent sees it. Takes no arguments. |
+| `sil_doctor` | Check the install: file modes, credential health, host wiring, and whether a newer plugin is published. Reports; repairs only what is safe. |
 
-**Catalog**
+**Shopping**
 
 | Tool | What it does |
 |---|---|
-| `sil_search` | Search sil for buyable items in **one registry domain**. Takes the `domain` path, the buyer's own words as `query`, how many results to return (`n`, 1–50 — a spend knob, no default), optional typed `predicates` (`{ key, op, value, currency? }`) and an optional `destination` (2-letter country; leave it empty to use your registered one). Returns up to `n` results in **server rank order** — present them as returned, do not re-rank — each carrying the values sil holds (`unset` where it holds none), the merchant's own printed `pairs`, every `offer` it has read, and `maturity` (`catalog` = built and verified by sil, `web` = a listing read minutes ago). `predicates[]` reports, per requirement, whether sil could apply it. A domain that is not in the registry is refused — mint it with `sil_domain_create`. |
-| `sil_product_get` | Re-read up to **5** results you already hold, by the `ref` sil returned, before the buyer decides. Same result object, with the top offers' prices read live: each offer says `observed: live` (read just now) or `stored` (quote it with the date it was read, never as the current price). Only the offers move — values, pairs and media are the stored read. A ref that resolves to nothing is simply **absent** from the results; nothing is substituted for it. |
-| `sil_stores` | For **one pick** (`ref`), every seller that carries it and what sil knows about shipping it to `destination`. Each seller carries `serviceability` — `serviceable` (sil read a route covering the destination), `not_serviceable` (sil read its policy and it excludes the destination), or `unknown` (sil has not read its policy) — plus its observed `fulfillment` routes, shipping `cost` and `free_threshold` ranges per currency, and a `handoff` that names its own promise (`source: buy_url` = a checkout path, `source: url` = the listing page). `unknown` is an ordinary answer that keeps the seller, and at v0 it is the common one. With no `destination` and no registered country the call is refused rather than answered for an unknown place. |
-| `sil_domain_create` | Add a **new** category to sil's shared registry: its `path`, a `guide` written from research into how that category is actually bought, and its first `specs`. New nodes only — an existing path is refused and nothing is written. What it writes is global, and a fresh node is provisional (`validated_at: null`): its first search answers come from the web while sil's catalog catches up. |
+| `shopping_domain_search` | Read sil's shared registry in your own words and get back the categories that match, each with a line on how the thing is bought. An empty list is the one answer that licenses a mint. |
+| `shopping_domain_get` | Read one standing category: its buying guide, and every key it is bought by with the operators, unit and allowed values each takes. |
+| `shopping_domain_create` | Coin a NEW category — its path, a guide written from research, and its first keys. The one permanent, global write in sil; an existing path is refused and nothing is written. |
+| `shopping_search` | Search one settled category. Send the domain, your own words, how many products you want, and the values you want as `specs`. Products come back best-first with `fit` (what sil verified), their variants, a price range, and `webpage_info` where sil has not read the page yet. |
+| `shopping_product_get` | Open the whole of what sil holds on 1–10 shortlisted variants: the description, the images, every key sil holds, and where each reading came from and when. |
+| `shopping_offers` | Price 1–10 variants live: one entry per seller, each with the price exactly as the page prints it, its currency, availability, the listing URL and the moment sil read it. |
+| `shopping_seller_get` | For 1–10 sellers, whether each ships to you — `serviceable`, `not_serviceable`, or `unknown` — plus the shipping routes and return terms sil has read. `unknown` keeps the seller; it just means sil has not read that policy. |
 
 **Your shopper's documents** — two kinds, four verbs, all on your own disk
 
@@ -188,10 +194,14 @@ Everything the shopper knows lives in markdown under `$SIL_DATA_DIR/shopper/`: o
 
 | Tool | What it does |
 |---|---|
-| `sil_doc_find` | List what your shopper has — the shopper document and every Brief, as **coordinates only** (ref, title, status, the job's items), never bodies. Optional `kind`, `domain` (a path prefix over the Briefs' items), `status` and free-text `query`, all composable; the bare call is the whole overview. A file with malformed frontmatter is reported as `unreadable` and keeps its place. |
-| `sil_doc_read` | Read ONE whole document body plus its frontmatter, by `ref`. `not_found` is answered only when sil could list the directory that would hold the document and it was not in it. A directory sil could **not** list is `unreadable`, as is a present-but-corrupt document — and `unreadable` is inspected and repaired, never overwritten, because your own words may still be recoverable. |
-| `sil_doc_write` | Write ONE document — `body` is always the **whole** reconciled markdown, so a correction rewrites the line it changes instead of stacking a contradicting one. `mode: create` refuses if the ref already exists; `mode: replace` refuses if it does not. Atomic and owner-only. |
-| `sil_doc_remove` | Forget ONE Brief. Never a cascade, and the shopper document itself is not removable — correct it with a `replace` instead. The agent confirms with you first. |
+| `shopping_doc_find` | List what your shopper has, as **coordinates only** — ref, title, status, the job's items — never bodies. Filters by `kind`, `domain`, `status` and free text, all composable. |
+| `shopping_doc_read` | Read ONE whole document body plus its frontmatter. A present-but-corrupt document answers `unreadable` and is repaired, never overwritten. |
+| `shopping_doc_write` | Write ONE document — `body` is always the **whole** reconciled markdown, so a correction rewrites the line it changes instead of stacking a contradicting one. |
+| `shopping_doc_remove` | Forget ONE Brief. Never a cascade, and the shopper document itself is not removable. |
+
+**The wire is a contract, not a convention.** Each shopping tool's input schema IS the
+artifact under [`schema/`](./schema), copied verbatim from sil-services, and each answer
+is the API's own 200 body handed over untouched.
 
 ---
 
@@ -199,10 +209,11 @@ Everything the shopper knows lives in markdown under `$SIL_DATA_DIR/shopper/`: o
 
 The plugin ships one bundled skill — **`sil-shopping`** 🛒 — that your agent loads automatically the first time you express a shopping intent. You don't invoke it; it's the playbook that makes the tools work well together:
 
-- **Routes intent to the right tool.** *"find me a keyboard"* → `sil_search`, *"look these up"* → `sil_product_get`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`, *"set up my shopper"* → the create flow, *"what does my shopper have / forget that job"* → the `sil_doc_*` tools.
+- **Routes intent to the right tool.** *"find me a keyboard"* → `shopping_search`, *"what does it cost?"* → `shopping_offers`, *"will it reach me?"* → `shopping_seller_get`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`, *"set up my shopper"* → the create flow, *"what does my shopper have / forget that job"* → the `shopping_doc_*` tools.
 - **One shopper, many niches — minted on the fly.** Asked to set up shopping, it runs a short two-touchpoint onboarding (how your shopper should behave + your cross-niche facts and hard rules) and creates **one** shopper — creating nothing until you explicitly endorse the draft. From then on it shops *any* niche: it classifies what you're buying, reuses a niche it has already learned or **researches a new one on the spot** (announced, so you can correct it), and derives how to decompose every request — learning your facts and taste as it goes.
 - **Recovers the right way.** Every tool reports a status; the skill follows that tool's own recovery hint — re-register, fix the query, or retry — instead of guessing a fix that won't work.
-- **Keeps prices honest.** It treats price, availability, and checkout links as point-in-time and re-checks an item right before you buy, so the link you get is the link you pay.
+- **Keeps prices honest.** A price is dated only where sil dated it, so the skill re-reads an item's offers right before you buy and quotes the moment they were read.
+- **Says what sil verified, and says the rest as what it is.** A key sil holds no value for is named as a gap, not passed off as a miss; a page sil has not read yet is quoted as the merchant's own words; a seller sil knows nothing about keeps its place.
 
 Because the skill ships inside the plugin, installing the plugin installs the skill — there's nothing extra to set up.
 

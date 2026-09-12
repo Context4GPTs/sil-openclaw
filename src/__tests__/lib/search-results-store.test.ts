@@ -1,7 +1,7 @@
 /**
  * UNIT — the search-results delivery buffer (tier: unit, pure module, no I/O).
  *
- * The store `sil_search` writes each `ok` page into and `sil.search_results`
+ * The store `shopping_search` writes each `ok` page into and `sil.search_results`
  * reads back out of. It is a DELIVERY BUFFER, not scrollback and not history:
  * bounded by a product-chosen retention window and an entry ceiling, in-memory,
  * process-local, and TIMER-FREE (the plugin's `register()` opens nothing, so a
@@ -26,7 +26,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import type { SearchResultPage } from "../../lib/search-results-store.js";
-import { resultGolden } from "../helpers/v0-wire.js";
+import { contractResponse } from "../helpers/shopping-wire.js";
 import {
   RETENTION_MS,
   MAX_ENTRIES,
@@ -37,28 +37,18 @@ import {
 } from "../../lib/search-results-store.js";
 
 /**
- * A real v0 search page — `{ status: "ok" }` over the route's result object, the
- * exact shape a client's decoder accepts. Built from the CHECKED-IN GOLDEN so
- * the store is exercised against a body sil-services actually emits, carrying
- * the veto's three inputs (`predicates`, `values` incl. `unset`, `maturity`) and
- * a `report`. Anti-false-green: a store that hands back a placeholder rather
- * than what it was given cannot satisfy the deep-equality assertions below, and
- * one that keeps only `results` strips the honesty rails.
+ * A real search page — the agent contract's own `shopping_search` 200, which is exactly
+ * what the tool buffers. Anti-false-green: a store that hands back a placeholder rather
+ * than what it was given cannot satisfy the deep-equality assertions below, and one that
+ * keeps only `products` strips the honesty rails the client renders from.
  */
-function page(label: string, extra: { blocked?: number } = {}): SearchResultPage {
-  const golden = resultGolden();
-  const results = (golden["results"] as Record<string, unknown>[]).map((result) => ({
-    ...result,
-    ref: `${result["ref"] as string}#${label}`,
+function page(label: string): SearchResultPage {
+  const body = contractResponse("shopping_search");
+  const products = (body["products"] as Record<string, unknown>[]).map((product) => ({
+    ...product,
+    id: `${product["id"] as string}#${label}`,
   }));
-  return {
-    status: "ok",
-    ...golden,
-    results,
-    ...(extra.blocked === undefined
-      ? {}
-      : { report: { ...(golden["report"] as object), blocked: extra.blocked } }),
-  } as SearchResultPage;
+  return { ...body, status: "ok", products } as SearchResultPage;
 }
 
 const PRINCIPAL = "user-42";
@@ -127,23 +117,18 @@ describe("the key is the host callId, verbatim (A3, B3)", () => {
   });
 
   it("returns the page BY VALUE-EQUALITY, preserving every honesty rail", () => {
-    // `predicates`, `sources` and `report` are siblings of `results` on the page
-    // the client decodes; a store that keeps only `results` silently strips the
-    // veto's inputs, and the renderer would show a shortlist it cannot qualify.
-    const stored = page("a", { blocked: 4 });
+    // `fit`, `variants` and `webpage_info` are what the client renders the honesty from;
+    // a store that kept only the titles would show a shortlist it cannot qualify.
+    const stored = page("a");
     putSearchResult("call_1", stored, PRINCIPAL);
     const read = getSearchResult("call_1", PRINCIPAL);
     expect(read).toEqual(stored);
-    expect(read).toHaveProperty("predicates");
-    expect(read).toHaveProperty("sources");
-    expect(read).toHaveProperty("report");
-    // `unset` entries survive the round trip — the NOT-VERIFIED bucket depends
-    // on them being stated rather than absent.
-    const values = (read!.results as unknown as Record<string, unknown>[])[0]["values"] as Record<
-      string,
-      unknown
-    >;
-    expect(values["flex_index"]).toEqual({ state: "unset" });
+    const products = read!.products as Record<string, unknown>[];
+    // The cold body's empty `fit` and its `webpage_info` survive the round trip — both
+    // are what say "sil has not verified this yet", and an absent one reads as verified.
+    expect(products[0]).toHaveProperty("fit");
+    expect(products[0]).toHaveProperty("webpage_info");
+    expect(products[0]["fit"]).toEqual({});
   });
 
   it("an unknown callId is a MISS, never another entry's page", () => {

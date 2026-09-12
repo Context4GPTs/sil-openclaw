@@ -149,7 +149,7 @@ The `agentId` is **not an input** — the bin derives it as `deriveAgentId(name)
 **No per-category input at create** — no guide, no Brief; the guide is read from sil's
 shared registry at beat 2, and a Brief is opened per job. The shopper needs web tools
 (inherited from `agents.defaults`) to research a category it has to coin; if defaults
-grant none, the bin reports `created` with a `warnings` gap (`sil_search` itself still
+grant none, the bin reports `created` with a `warnings` gap (`shopping_search` itself still
 works) — surface it.
 
 ### What the bin does, in order (atomic, fail-closed)
@@ -168,7 +168,7 @@ works) — surface it.
    tools from `agents.defaults`.
 5. **Write `SOUL.md`** = endorsed **persona + the standing "The sil way" creed block**
    (below).
-6. **Write the shopper document** — the same `create` write `sil_doc_write { ref:
+6. **Write the shopper document** — the same `create` write `shopping_doc_write { ref:
    "shopper" }` performs, atomically, with the name in its frontmatter. **Setup-only:
    no domain settled and no Brief opened.**
 7. **Attach skill + enable plugin** (value-mode `config set --strict-json`, measured on
@@ -204,11 +204,11 @@ The persona is followed by a standing **"The sil way"** creed — an identity-le
 restatement (a philosophy, not a rulebook; the mechanics live in the attached skill)
 carrying the **explore-first** mantra, the loop in four lines, and the one distinction
 that matters: the shopper **scopes the job before it settles a category**, takes the
-buying guide sil already holds (`sil_domain_find`) and writes a node itself only when
+buying guide sil already holds (`shopping_domain_search`) and writes a node itself only when
 nothing stands; **the sil catalog is where you buy, the open web is where you learn**
 (web only researches how a category is bought, never sources a pick); and its
 **shopping memory is the sil store** — it reads and writes what it knows through
-`sil_doc_read` / `sil_doc_write`.
+`shopping_doc_read` / `shopping_doc_write`.
 
 ### Status taxonomy
 
@@ -223,8 +223,8 @@ nothing stands; **the sil catalog is where you buy, the open web is where you le
 ### Runtime
 
 At session start the host has injected the persona via **`SOUL.md`**. Read the shopper
-document with `sil_doc_read { ref: "shopper" }` (cross-category facts + hard constraints;
-frontmatter carries the name); `sil_doc_find` lists the open Briefs (none is healthy on a
+document with `shopping_doc_read { ref: "shopper" }` (cross-category facts + hard constraints;
+frontmatter carries the name); `shopping_doc_find` lists the open Briefs (none is healthy on a
 fresh shopper). The `sil_*` tools admitted at create, the shopper shops with no further
 setup, settling each category against sil's registry at beat 2
 ([`shop_loop.md`](shop_loop.md)). To sharpen it, see

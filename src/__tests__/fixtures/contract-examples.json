@@ -1,0 +1,450 @@
+{
+  "shopping_domain_search": {
+    "response": {
+      "status": "ok",
+      "matches": [
+        {
+          "path": "product.sports.winter.ski.boots",
+          "about": "Ski boots are bought primarily by exact Mondopoint length, forefoot last width/volume, flex, and use case."
+        }
+      ]
+    }
+  },
+  "shopping_domain_get": {
+    "response": {
+      "status": "ok",
+      "path": "product.sports.winter.ski.boots",
+      "guide": "Ski boots are bought primarily by exact Mondopoint length, forefoot last width/volume, flex, and use case. …",
+      "specs": [
+        {
+          "key": "mondo_size",
+          "display_name": "Mondopoint size",
+          "description": "Boot size as foot length in centimetres; the size selector axis.",
+          "type": "number",
+          "unit": "cm",
+          "variant_spec": true,
+          "operators": [
+            "eq",
+            "in"
+          ]
+        },
+        {
+          "key": "model_year",
+          "display_name": "Model year",
+          "description": "The year the maker sells it as; retailers print it as the season.",
+          "type": "number",
+          "product_spec": true,
+          "operators": [
+            "eq",
+            "in",
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "flex_index",
+          "display_name": "Flex index",
+          "description": "Manufacturer flex rating; compare mainly within a brand.",
+          "type": "number",
+          "unit": "flex",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "last_width",
+          "display_name": "Last width",
+          "description": "Approximate forefoot width at the reference shell size.",
+          "type": "number",
+          "unit": "mm",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "discipline",
+          "display_name": "Discipline",
+          "description": "Primary skiing use.",
+          "type": "enum",
+          "allowed_values": [
+            "alpine",
+            "all-mountain",
+            "freeride",
+            "touring",
+            "freeride-touring"
+          ],
+          "operators": [
+            "eq",
+            "in",
+            "neq",
+            "nin"
+          ]
+        },
+        {
+          "key": "brand",
+          "display_name": "Brand",
+          "description": "The maker's name.",
+          "type": "enum",
+          "operators": [
+            "eq",
+            "in",
+            "neq",
+            "nin"
+          ]
+        },
+        {
+          "key": "weight",
+          "display_name": "Weight",
+          "type": "number",
+          "unit": "kg",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        }
+      ]
+    }
+  },
+  "shopping_domain_create": {
+    "response": {
+      "status": "ok",
+      "path": "product.sports.winter.ski.boots",
+      "specs": [
+        {
+          "key": "mondo_size",
+          "variant_spec": true
+        },
+        {
+          "key": "model_year",
+          "product_spec": true
+        },
+        {
+          "key": "flex_index"
+        },
+        {
+          "key": "last_width"
+        },
+        {
+          "key": "discipline"
+        }
+      ]
+    },
+    "request": {
+      "path": "product.sports.winter.ski.boots",
+      "guide": "Ski boots are bought primarily by exact Mondopoint length, forefoot last width/volume, flex, and use case. …",
+      "specs": [
+        {
+          "key": "mondo_size",
+          "display_name": "Mondopoint size",
+          "type": "number",
+          "unit": "cm",
+          "variant_spec": true,
+          "description": "Boot size as foot length in centimetres; the size selector axis."
+        },
+        {
+          "key": "model_year",
+          "display_name": "Model year",
+          "type": "number",
+          "product_spec": true,
+          "description": "The year the maker sells it as; retailers print it as the season."
+        },
+        {
+          "key": "flex_index",
+          "display_name": "Flex index",
+          "type": "number",
+          "unit": "flex",
+          "description": "Manufacturer flex rating; compare mainly within a brand."
+        },
+        {
+          "key": "last_width",
+          "display_name": "Last width",
+          "type": "number",
+          "unit": "mm",
+          "description": "Approximate forefoot width at the reference shell size."
+        },
+        {
+          "key": "discipline",
+          "display_name": "Discipline",
+          "type": "enum",
+          "description": "Primary skiing use.",
+          "allowed_values": [
+            "alpine",
+            "all-mountain",
+            "freeride",
+            "touring",
+            "freeride-touring"
+          ]
+        }
+      ]
+    }
+  },
+  "shopping_search": {
+    "response": {
+      "status": "ok",
+      "products": [
+        {
+          "id": "p1",
+          "title": "2027 Atomic Hawx Ultra 130 S Dual Boa Ski Boots",
+          "brand": "Atomic",
+          "image": "https://cdn.shopify.com/s/files/1/0670/5135/6456/files/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580-gs2qoce3w9aoubnfhm89.jpg?v=1770768168",
+          "fit": {},
+          "price": [
+            {
+              "from": "939.95",
+              "to": "939.95",
+              "currency": "USD"
+            }
+          ],
+          "variants": [
+            {
+              "id": "v1",
+              "mondo_size": 27.5
+            }
+          ],
+          "webpage_info": {
+            "url": "https://www.skiessentials.com/products/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580",
+            "text": "… dual BOA system provides unmatched fit micro-adjustability. Flex: 130, Last: 98 mm, Intended Use: Freeride, Ability Level: Advanced to Expert"
+          }
+        },
+        {
+          "id": "p2",
+          "title": "Atomic Men's Hawx Prime 100 BOA Ski Boots 2027",
+          "brand": "Atomic",
+          "image": "https://www.skibarn.com/cdn/shop/files/Screenshot2026-08-11140738.png?v=1786478456&width=638",
+          "fit": {},
+          "price": [
+            {
+              "from": "549.95",
+              "to": "549.95",
+              "currency": "USD"
+            }
+          ],
+          "variants": [
+            {
+              "id": "v2",
+              "mondo_size": 27.5,
+              "color": "Black/Red"
+            }
+          ],
+          "webpage_info": {
+            "url": "https://skibarn.com/products/atomic-mens-hawx-prime-100-boa-boot",
+            "text": "… 100 Flex Rating: Balanced 100 flex provides a blend of comfort and responsiveness, making it ideal for intermediate and advanced all-mountain skiers. 100mm Medium-Volume Last: Designed with Atomic's versatile 100mm fit, offering an excellent balance of comfort, precision, and all-day performance. …"
+          }
+        },
+        {
+          "id": "p3",
+          "title": "Rossignol Alltrack 80 W GW Woman Alpine Ski Boots",
+          "brand": "Rossignol",
+          "image": "https://www.tradeinn.com/f/14250/142503605/rossignol-alltrack-80-w-gw-woman-alpine-ski-boots.webp",
+          "fit": {},
+          "price": [
+            {
+              "from": "210.49",
+              "to": "272.99",
+              "currency": "EUR"
+            }
+          ],
+          "variants": [],
+          "webpage_info": {
+            "url": "https://www.tradeinn.com/snowinn/en/rossignol-alltrack-80-w-gw-woman-alpine-ski-boots/142503605/p",
+            "text": "… Technical Specifications:\n* Gender: Women\n* Skill Level: Beginner-Intermediate\n* Flex Index: 80 (Range: 65-110)\n* Last Width: 102 mm (Range: 101-105 mm)\n* Skiing Style: All Mountain Ski …"
+          }
+        }
+      ]
+    },
+    "alternate": {
+      "status": "ok",
+      "products": [
+        {
+          "id": "p1",
+          "title": "HAWX ULTRA 130 S DUAL BOA",
+          "brand": "Atomic",
+          "image": "https://cdn.shopify.com/s/files/1/0670/5135/6456/files/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580-gs2qoce3w9aoubnfhm89.jpg?v=1770768168",
+          "fit": {
+            "flex_index": 130
+          },
+          "price": [
+            {
+              "from": "939.95",
+              "to": "1150.00",
+              "currency": "USD"
+            }
+          ],
+          "variants": [
+            {
+              "id": "v1",
+              "mondo_size": 27.5
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "title": "Atomic Hawx Prime 100 Boa",
+          "brand": "Atomic",
+          "image": "https://geartrade.com/cdn/shop/files/744b2a67-3740-405b-bf9a-e58356722b35.webp?v=1786184367&width=1920",
+          "fit": {
+            "flex_index": 100
+          },
+          "price": [
+            {
+              "from": "237.67",
+              "to": "237.67",
+              "currency": "USD"
+            }
+          ],
+          "variants": [
+            {
+              "id": "v6",
+              "mondo_size": 27.5,
+              "color": "Black"
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "title": "Atomic Men's Hawx Prime 100 BOA Ski Boots 2027",
+          "brand": "Atomic",
+          "image": "https://www.skibarn.com/cdn/shop/files/Screenshot2026-08-11140738.png?v=1786478456&width=638",
+          "fit": {
+            "flex_index": 100
+          },
+          "price": [
+            {
+              "from": "549.95",
+              "to": "549.95",
+              "currency": "USD"
+            }
+          ],
+          "variants": [
+            {
+              "id": "v2",
+              "mondo_size": 27.5,
+              "color": "Black/Red"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "shopping_product_get": {
+    "response": {
+      "status": "ok",
+      "variants": [
+        {
+          "id": "v1",
+          "title": "HAWX ULTRA 130 S DUAL BOA",
+          "brand": "Atomic",
+          "description": "… dual BOA system provides unmatched fit micro-adjustability. Flex: 130, Last: 98 mm, Intended Use: Freeride, Ability Level: Advanced to Expert",
+          "images": [
+            "https://cdn.shopify.com/s/files/1/0670/5135/6456/files/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580-gs2qoce3w9aoubnfhm89.jpg?v=1770768168"
+          ],
+          "specs": {
+            "mondo_size": 27.5,
+            "model_year": 2027,
+            "flex_index": 130,
+            "last_width": 98,
+            "discipline": "freeride"
+          },
+          "sources": [
+            {
+              "host": "www.skiessentials.com",
+              "read_at": "2026-09-10T15:38:00Z"
+            },
+            {
+              "host": "www.atomic.com",
+              "read_at": "2026-09-10T15:38:05Z"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "shopping_offers": {
+    "response": {
+      "status": "ok",
+      "offers": [
+        {
+          "variant_id": "v1",
+          "seller_id": "s1",
+          "seller_name": "SkiEssentials",
+          "price": "939.95",
+          "currency": "USD",
+          "availability": "in_stock",
+          "observed_at": "2026-09-11T10:02:14Z",
+          "url": "https://www.skiessentials.com/products/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580"
+        },
+        {
+          "variant_id": "v1",
+          "seller_id": "s2",
+          "seller_name": "Atomic",
+          "price": "1150.00",
+          "currency": "USD",
+          "availability": "out_of_stock",
+          "observed_at": "2026-09-11T10:02:14Z",
+          "url": "https://www.atomic.com/en-us/shop/product/hawx-ultra-130-s-dual-boa-ae0002296.html"
+        }
+      ]
+    }
+  },
+  "shopping_seller_get": {
+    "response": {
+      "status": "ok",
+      "ship_to": "GR",
+      "sellers": [
+        {
+          "id": "s1",
+          "name": "SkiEssentials",
+          "host": "www.skiessentials.com",
+          "country": "US",
+          "ships": "not_serviceable",
+          "shipping": {
+            "policy_url": "https://www.skiessentials.com/shipping",
+            "routes": [
+              {
+                "country": "US",
+                "service": "standard",
+                "label": "Eastern US",
+                "free_over": {
+                  "amount": "49",
+                  "currency": "USD"
+                }
+              },
+              {
+                "country": "US",
+                "service": "standard",
+                "label": "Western US",
+                "free_over": {
+                  "amount": "49",
+                  "currency": "USD"
+                }
+              },
+              {
+                "country": "US",
+                "service": "express",
+                "label": "Next Day Air"
+              },
+              {
+                "country": "US",
+                "service": "express",
+                "label": "2nd Day Air"
+              }
+            ]
+          },
+          "returns": {
+            "policy_url": "https://www.skiessentials.com/returns",
+            "window_days": 30
+          }
+        },
+        {
+          "id": "s2",
+          "name": "Atomic",
+          "host": "www.atomic.com",
+          "country": "AT",
+          "ships": "unknown"
+        }
+      ]
+    }
+  }
+}

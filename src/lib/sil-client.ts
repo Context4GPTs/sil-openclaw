@@ -1,9 +1,9 @@
 /**
  * Typed HTTP wrappers for every endpoint the plugin calls — the two sil-web auth
- * endpoints, the sil-api identity read and the five v0 catalog routes — each
- * returning a DISCRIMINATED UNION over the documented outcomes so the status
- * taxonomy lives in exactly one place and the caller switches on `kind` rather
- * than re-deriving meaning from `res.status` at every site.
+ * endpoints, the sil-api identity read and the seven shopping routes — each returning
+ * a DISCRIMINATED UNION over the documented outcomes so the status taxonomy lives in
+ * exactly one place and the caller switches on `kind` rather than re-deriving meaning
+ * from `res.status` at every site.
  *
  * Wire contract (pinned to the already-merged sil-web routes —
  * sil-services/apps/sil-web/src/app/api/v1/...):
@@ -30,83 +30,33 @@
  *     5xx / network / abort                           → retryable
  *
  * Wire contract for the sil-API identity read (a SECOND origin — sil-api, the
- * Fastify domain service — NOT sil-web; bare path, not /api/v1; see the
- * sil-whoami card). The authenticated self-read is a BODYLESS GET; the
- * Authorization header carries the stored session token and IS the principal —
- * sil-api derives the user from the JWT `sub`, not a request body:
+ * Fastify domain service — NOT sil-web; bare path, not /api/v1). The authenticated
+ * self-read is a BODYLESS GET; the Authorization header carries the stored session
+ * token and IS the principal — sil-api derives the user from the JWT `sub`, not a
+ * request body:
  *
  *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
- *                               (no body, no content-type)
  *     200 { name, addresses }                             → ok (carries identity)
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     5xx / network / abort                               → retryable
  *
- * Wire contract for the FIVE v0 catalog routes (SAME origin as the identity read —
- * sil-api, bare paths, NOT /api/v1). All five take the same Bearer, share one auth
- * plugin (401 / 403 / 503) and one error envelope `{ error, message }`. Four are
- * POSTs carrying a body; the fifth is a bodyless GET — and `/catalog/domains` is
- * the one path served by TWO VERBS, so the METHOD, not the path, decides whether a
- * call reads the registry or writes to it permanently:
+ * THE SHOPPING WIRE IS NOT MIRRORED HERE. Each tool's request shape is the committed
+ * artifact under `schema/`, registered as the tool's own `parameters`; each 200 body is
+ * the agent contract's, handed back VERBATIM. So this file declares no product type at
+ * all — a hand-mirror of the response would be a second copy of the contract, and the
+ * first thing to drift from it. {@link classifyShoppingResponse} gates the 200 on the
+ * ONE thing the plugin genuinely owns (a plain object stating `status: "ok"`) and maps
+ * every other status onto the contract's §4 vocabulary.
  *
- *   POST <silApiUrl>/catalog/search   body { domain, query, n, predicates?, destination? }
- *     200 SearchResponse                             → ok
- *     400 { error:"invalid_request", message }       → invalid_request. TWO causes with
- *         ONE code: the domain is not in the registry (mint it), or a predicate's
- *         grammar was refused (fix the predicate). The message is the only wire
- *         discriminator, so the plugin surfaces it VERBATIM and never matches on it.
- *
- *   POST <silApiUrl>/catalog/lookup   body { refs }   (1–5; `variant:<uuid>` | `url:<url>`)
- *     200 THE SAME SearchResponse                    → ok
- *     400 (ref grammar; the message names the ref)   → invalid_request
- *
- *   POST <silApiUrl>/catalog/stores   body { ref, destination? }
- *     200 StoresResponse                             → ok
- *     400 no destination anywhere / ref grammar      → invalid_request
- *     404 { error:"not_found", message }             → not_found (sil holds no such ref)
- *
- *   POST <silApiUrl>/catalog/domains  body { path, guide, specs }
- *     200 DomainMintResult (`validated_at` always null — a mint is born FENCED)
- *     400 path / spec grammar                        → invalid_request
- *     409 { error:"domain_exists", message }         → already_exists (NOT a failure:
- *         the vocabulary is usable — re-issue the search on the SAME path)
- *
- *   GET  <silApiUrl>/catalog/domains?q=<ask> | ?path=<ltree>   (no body, no content-type)
- *     200 DomainFindResponse { matches, capped }     → ok. `matches: []` is a genuine
- *         empty answer and a SUCCESS — it is what LICENSES a mint, so mapping it to a
- *         failure would recreate the collision this route exists to delete. `capped`
- *         says the list was bounded, which is the difference between "nothing stands
- *         here" and "nothing stands here that I was shown".
- *     400 { error:"invalid_request", message }       → invalid_request. Exactly one of
- *         `q` / `path` per call, checked in the route's HANDLER (not a schema `oneOf`)
- *         so the message NAMES the parameter at fault — which is why the plugin
- *         forwards what it was given and refuses nothing locally. The refusal costs
- *         one round trip and touches no registry row.
- *     There is no 404 and no 409 arm: a path with no row is a 200 stating
- *     `exists: false`, and a read collides with nothing.
- *
- * SEARCH AND LOOKUP ANSWER WITH THE SAME OBJECT, by contract (`@sil/schemas`
- * `search.ts:1-30`) — hence ONE {@link CatalogResultOutcome} and one classifier for
- * both. They differ in what they were asked and in what they spend, never in what
- * they answer with.
- *
- * THE PAYLOAD PASSES THROUGH VERBATIM. The classifiers gate the envelope's top level
- * plus the four load-bearing per-result fields and then hand the SAME object over —
- * no projection, no rename, no default, no re-order. That is not laziness: the
- * agent's three-state veto is computed from `values[].state`, `predicates[].applied`
- * and `results[].maturity`, and a per-field projector drops exactly those. It also
- * means an additive server field reaches the agent unreviewed, which is the trade
- * this wire is designed around (an omitted key and a stated `unset` are DIFFERENT
- * answers here, and only a stated one may be repeated to a buyer). The ONE refusal
- * is a body declaring `status` or `advisories` at its top level — those are the
- * tool envelope's own keys, so spreading such a payload would overwrite the agent's
- * dispatch key or swallow the server's field; the gate takes `retryable` instead.
- *
- * Wire types are MIRRORED from `@sil/schemas`
- * (`packages/schemas/src/{search,stores,domain-find}.ts`), never imported — no
- * cross-repo dependency, and `@ucp-js/sdk` carries zero catalog types. The v0 result
- * body is deliberately NOT a UCP shape: a UCP variant carries one merchant's price,
- * which would delete the price spread that IS the answer.
+ * THE subtle correctness point (architect Risk "claim taxonomy mis-mapping"):
+ * 200-pending and 200-success are BOTH HTTP 200. `classifyClaimResponse` branches
+ * on the BODY SHAPE (both tokens present) — never on `res.ok` — so "keep polling"
+ * is never conflated with "success". A malformed/partial 200 falls to the SAFE
+ * non-terminal `pending` path, never to a false success that would persist a
+ * non-credential as tokens. The classifier is exported and pure so it can be
+ * unit-tested in isolation, since misclassifying two 200s is the highest-risk
+ * subtle bug in the whole flow.
  *
  * The VERB is load-bearing: sil-api's `POST /identity` is the agent enrich-STUB
  * ({kind, verified, subject, ...} — no name/addresses); `GET /identity` is the
@@ -117,15 +67,6 @@
  * `name`) falls to `retryable`, NEVER to a false `ok`, so a stray stub 200 (or a
  * malformed body) can't be green while the product promise is unmet. An EMPTY
  * `addresses: []` IS a valid identity (a provisioned, address-less user).
- *
- * THE subtle correctness point (architect Risk "claim taxonomy mis-mapping"):
- * 200-pending and 200-success are BOTH HTTP 200. `classifyClaimResponse` branches
- * on the BODY SHAPE (both tokens present) — never on `res.ok` — so "keep polling"
- * is never conflated with "success". A malformed/partial 200 falls to the SAFE
- * non-terminal `pending` path, never to a false success that would persist a
- * non-credential as tokens. The classifier is exported and pure so it can be
- * unit-tested in isolation, since misclassifying two 200s is the highest-risk
- * subtle bug in the whole flow.
  *
  * Tokens never appear in a log line here (mirrors sil-web's invariant) — they
  * only travel inside the returned union variant.
@@ -204,447 +145,56 @@ export type IdentityOutcome =
   | { kind: "forbidden"; reason: string }
   | { kind: "retryable" };
 
-/* ────────────────────────────────────────────────────────────────────────────
- * The v0 catalog wire, mirrored as a READ SUBSET of `@sil/schemas`.
- *
- * Every type below is a hand-mirror of `sil-services/packages/schemas/src/`
- * (`search.ts`, `stores.ts`). They describe what the plugin reads; they never
- * reshape what it forwards. Extra fields a future sil-services adds are absent
- * from these declarations and present in the payload — that is the point.
- * ──────────────────────────────────────────────────────────────────────────── */
-
-/** How much sil knows about a result. `catalog` — a variant the pass built and
- * verified. `web` — a page fetched during this request, read for its structured
- * markup only: a real listing at a real price, every spec value honestly `unset`.
- * It is the veto's third input and NEVER a veto on its own. */
-export type SearchMaturity = "catalog" | "web";
-
-/** Whether THIS price came from bytes fetched during THIS request. Required on
- * both routes: at the call site "no `observed`" and "we do not know" are the same
- * absence, and only one is an honest answer about a price a buyer is about to pay. */
-export type SearchObserved = "live" | "stored";
-
-/** What happened to one submitted predicate — about the PREDICATE, never about a
- * result. `false` = there was nothing to evaluate it against. `partial` = a
- * set-valued predicate where some names resolved and some did not. */
-export type PredicateApplied = true | "partial" | false;
-
-/** We hold no value for this key — `state` and NOTHING else, so a value-shaped
- * null is unrepresentable rather than merely discouraged. STATED, never omitted. */
-export interface SearchValueUnset {
-  state: "unset";
-}
-
-/** The selected winner for this key, with where and WHEN we read it. */
-export interface SearchValueSet {
-  state: "set";
-  /** Typed by the spec's `data_type`; a `money` value is a DECIMAL STRING. */
-  value: number | boolean | string;
-  value_currency?: string;
-  origin: "observed" | "derived";
-  chart_ref?: string;
-  source_ref: string;
-  observed_at: string;
-}
-
-/** A real discriminated union on `state`: the arms share no field but the tag. */
-export type SearchValueEntry = SearchValueSet | SearchValueUnset;
-
-/** `display_name`/`country` are ABSENT when unknown — never the host as a name. */
-export interface SearchSeller {
-  host: string;
-  display_name?: string;
-  country?: string;
-}
-
-/** One seller's current listing. Several offers on one result IS the price
- * spread, which is the answer — never collapsed to a "best" one. */
-export interface SearchOffer {
-  seller: SearchSeller;
-  /** Decimal string. `numeric(20,6)` through a JS float is not the printed price. */
-  price: string;
-  currency: string;
-  list_price?: string;
-  availability?: string;
-  observed: SearchObserved;
-  observed_at: string;
-  url: string;
-  /** Absent when the listing published none — never `url` copied in. */
-  buy_url?: string;
-}
-
-export interface SearchMedia {
-  url: string;
-  /** NULLABLE, unlike every other unknown here: no alt text is a fact about the
-   * image, not a field sil failed to fill. */
-  alt: string | null;
-  position: number;
-}
-
-/** A label/value the page printed, VERBATIM. A pair is never a spec value:
- * keying needs the model, and no model runs in the request path. */
-export interface SearchPair {
-  label: string;
-  value: string;
-}
-
-export interface SearchProduct {
-  title: string;
-  description?: string;
-  description_source_ref?: string;
-}
-
-export interface SearchResult {
-  /** Search MINTS it, lookup ECHOES the submitted ref verbatim — which is what
-   * makes a ref absent from `results` an unambiguous miss, not a failure. */
-  ref: string;
-  maturity: SearchMaturity;
-  product: SearchProduct;
-  option_set: Record<string, string>;
-  media: SearchMedia[];
-  /** One entry per RESOLVED-vocabulary key, `unset` included. */
-  values: Record<string, SearchValueEntry>;
-  pairs: SearchPair[];
-  offers: SearchOffer[];
-}
-
-export interface SearchSource {
-  url: string;
-  host: string;
-  fetched_at: string;
-}
-
-export interface SearchResolution {
-  name: string;
-  canonical: string | null;
-}
-
-export interface SearchPredicateResult {
-  key: string;
-  applied: PredicateApplied;
-  resolution?: SearchResolution[];
-}
-
-/** What the two legs actually did. `blocked` is what stops a short answer reading
- * as "the web held nothing else". */
-export interface SearchReport {
-  searches: number;
-  fetched: number;
-  blocked: number;
-}
-
-/** The body BOTH `/catalog/search` and `/catalog/lookup` answer with. */
-export interface SearchResponse {
-  results: SearchResult[];
-  sources: Record<string, SearchSource>;
-  predicates: SearchPredicateResult[];
-  report: SearchReport;
-}
-
-/** Three states, NOT symmetric: `not_serviceable` is a positive claim requiring
- * policy evidence sil read; everything else is `unknown`. At v0 nothing writes
- * that evidence, so `unknown` is the MAJORITY answer and never a filter. */
-export type StoreServiceability = "serviceable" | "not_serviceable" | "unknown";
-
-export interface StorePolicyEvidence {
-  source_ref: string;
-  observed_at: string;
-}
-
-export interface StoresFulfillment {
-  country: string;
-  service: string;
-  option_label?: string;
-  observed_at: string;
-  source_ref: string;
-  values: Record<string, SearchValueEntry>;
-}
-
-/** A range, never a number: `min === max` is emitted deliberately, because
- * delivery cost is the seller's own function of weight and service. */
-export interface StoresRange {
-  min: string;
-  max: string;
-}
-
-/** Keyed by currency — sil holds no FX rate anywhere, so a blended min/max would
- * be meaningless rather than approximate. */
-export type StoresCost = Record<string, StoresRange>;
-
-/** Where the buyer goes, and WHICH promise it is. v0's transaction boundary IS
- * this URL and nothing past it. */
-export interface StoresHandoff {
-  url: string;
-  source: "buy_url" | "url";
-}
-
-export interface StoreEntry {
-  seller: SearchSeller;
-  serviceability: StoreServiceability;
-  /** Present iff `serviceability` is `not_serviceable` — it dates the exclusion. */
-  policy_evidence?: StorePolicyEvidence;
-  fulfillment: StoresFulfillment[];
-  cost: StoresCost;
-  free_threshold: StoresCost;
-  values: Record<string, SearchValueEntry>;
-  charged_currency: SearchValueEntry;
-  offer: SearchOffer;
-  handoff: StoresHandoff;
-}
-
-export interface StoresResponse {
-  /** Echoed, because every verdict in the body is relative to it and it may have
-   * come from the account's default country rather than the request. */
-  destination: string;
-  stores: StoreEntry[];
-  sources: Record<string, SearchSource>;
-}
-
-/** `validated_at` is always `null`: a minted domain is born FENCED and only the
- * pass lifts it. On the wire so the agent can SEE its vocabulary is not yet live. */
-export interface DomainMintResult {
-  path: string;
-  validated_at: null;
-  specs: string[];
-}
-
-/** One entry of a domain's RESOLVED vocabulary — its own specs plus every
- * ancestor's, nearest definition winning. `defined_at` + `inherited` are what let
- * an agent coin only the keys a path does not already inherit; dropping either
- * makes that diff uncomputable while everything still looks healthy. NULLABLE,
- * never optional: an absent key is indistinguishable from a serialization bug. */
-export interface DomainSpecWire {
-  key: string;
-  display_name: string;
-  data_type: string;
-  unit: string | null;
-  allowed_values: string[] | null;
-  value_set: string | null;
-  level: string | null;
-  defined_at: string;
-  inherited: boolean;
-}
-
-/** One domain the read names — the SAME element in both query modes, so a caller
- * handles a probe result with no branch. `guide` is the ONLY thing fit may be
- * judged on: a path that merely reads like the category is not a match, and
- * adopting a wrong one pollutes silently. On an `exists: false` probe, `specs` is
- * the vocabulary this path WOULD inherit if minted. */
-export interface DomainMatch {
-  path: string;
-  /** STATED. Never inferable from a `null` `guide`, never from a non-empty
-   * `specs` — a path with no row still resolves its ancestors' vocabulary. */
-  exists: boolean;
-  /** The fence, as the column: `null` = minted but not yet validated by the pass. */
-  validated_at: string | null;
-  guide: string | null;
-  specs: DomainSpecWire[];
-}
-
-/** The `GET /catalog/domains` 200 body. `capped` is the anti-defect field: an
- * agent that reads a bounded list, sees nothing fit and mints — while the standing
- * path sat just past the bound — has done exactly what the route exists to
- * prevent, and only `capped` tells it. */
-export interface DomainFindResponse {
-  matches: DomainMatch[];
-  capped: boolean;
-}
-
-/* ── request side. Object TYPE ALIASES, not interfaces: only an alias carries an
- * implicit index signature, and these are handed straight to `postJson`. ── */
-
-export type SearchPredicateOp = "eq" | "neq" | "gte" | "lte" | "in" | "nin" | "exists";
-
-/** Forwarded verbatim — the plugin never interprets an op or a value. `currency`
- * is required on a money predicate; there is no FX rate anywhere in the system. */
-export type SearchPredicate = {
-  key: string;
-  op: SearchPredicateOp;
-  value?: unknown;
-  currency?: string;
-};
-
-export type SearchParams = {
-  domain: string;
-  query: string;
-  /** A SPEND knob (the web leg fetches candidates), so it has no plugin default. */
-  n: number;
-  predicates?: SearchPredicate[];
-  /** Empty means "ship to me" — the route resolves the account's default country. */
-  destination?: string;
-};
-
-export type StoresParams = {
-  ref: string;
-  destination?: string;
-};
-
-/** `data_type` stays a plain string, mirroring the route: a closed union here
- * would produce a schema-path 400 that never names the offending spec KEY. */
-export type SpecDefinitionInput = {
-  key: string;
-  display_name: string;
-  description?: string;
-  data_type: string;
-  unit?: string;
-  allowed_values?: string[];
-  value_set?: string;
-  level?: string;
-  axis?: boolean;
-};
-
-export type DomainMintParams = {
-  path: string;
-  guide: string;
-  specs: SpecDefinitionInput[];
-};
-
-/** EXACTLY ONE of `q` / `path` per call — a rule the ROUTE owns, not the plugin.
- * Both arms stay optional here so the agent's mistake travels intact and is
- * refused by name; a local both/neither check would have to invent its own
- * message, which would then differ from the one the agent actually acts on. */
-export type DomainFindParams = {
-  /** DISCOVERY: the buyer's ask, matched against each domain's path text AND its
-   * guide — the only mode that can surface a standing path the agent had no name
-   * for. `matches: []` here is the mint signal. */
-  q?: string;
-  /** PROBE: one exact ltree path. It answers about that path alone, so it can
-   * SHAPE a mint (which keys are already inherited) but never license one. */
-  path?: string;
-};
-
 /**
- * The outcome of `/catalog/search` AND `/catalog/lookup` — ONE union, because the
- * two routes answer with the same object by contract. `unauthorized` is the sole
- * refresh trigger; `forbidden` is terminal (a refresh cannot provision a user).
- * There is no 422 arm: no v0 route emits one.
+ * One shopping route, as the tool table declares it. A `:name` segment in `path` is
+ * filled from the argument of that name and URL-encoded; on a GET, `query` names the
+ * arguments that ride the querystring and everything else stays home.
  */
-export type CatalogResultOutcome =
-  | { kind: "ok"; result: SearchResponse }
-  | { kind: "unauthorized" }
-  | { kind: "forbidden"; reason: string }
-  | { kind: "invalid_request"; error: string; message: string }
-  | { kind: "retryable"; source?: string; detail?: string };
+export interface ShoppingRoute {
+  readonly method: "GET" | "POST";
+  readonly path: string;
+  readonly query?: readonly string[];
+}
 
-/** `/catalog/stores`, plus the one status only it can produce: a well-formed ref
- * that resolves to nothing is a 404, never a 200 with an empty `stores` list
- * (which would read as "nobody sells this" — a lie by omission). */
-export type StoresOutcome =
-  | { kind: "ok"; stores: StoresResponse }
+/**
+ * The outcome of any shopping call — ONE union for all seven, because they share one
+ * origin, one Bearer, one auth plugin and the contract's one error vocabulary (§4).
+ *
+ * `ok` carries the API's own 200 body, unread and unreshaped. `unauthorized` is the
+ * sole refresh trigger; `forbidden` is terminal (a refresh cannot provision a user).
+ */
+export type ShoppingOutcome =
+  | { kind: "ok"; body: Record<string, unknown> }
   | { kind: "unauthorized" }
   | { kind: "forbidden"; reason: string }
-  | { kind: "invalid_request"; error: string; message: string }
+  | { kind: "invalid_request"; message: string }
   | { kind: "not_found"; message: string }
-  | { kind: "retryable"; source?: string; detail?: string };
-
-/** `/catalog/domains`, plus the one status only it can produce: `already_exists`
- * is the 409, and it is NOT a failure — the category is already there, so the
- * vocabulary is usable and the agent re-issues the search on the SAME path. */
-export type MintOutcome =
-  | { kind: "ok"; domain: DomainMintResult }
-  | { kind: "unauthorized" }
-  | { kind: "forbidden"; reason: string }
-  | { kind: "invalid_request"; error: string; message: string }
-  | { kind: "already_exists"; path: string; message: string }
-  | { kind: "retryable"; source?: string; detail?: string };
-
-/** `GET /catalog/domains` — the mint's own path read instead of written. It
- * restates the four shared arms rather than reusing {@link CatalogResultOutcome}
- * (whose `ok` carries a `SearchResponse`), and it adds NOTHING: there is no 404
- * (a path with no row is a 200 stating `exists: false`) and no 409 (a read
- * collides with nothing). Three similar unions beat a premature helper. */
-export type DomainFindOutcome =
-  | { kind: "ok"; found: DomainFindResponse }
-  | { kind: "unauthorized" }
-  | { kind: "forbidden"; reason: string }
-  | { kind: "invalid_request"; error: string; message: string }
+  | { kind: "already_exists"; message: string }
   | { kind: "retryable"; source?: string; detail?: string };
 
 /**
- * Classify a `/catalog/search` OR `/catalog/lookup` response. One classifier for
- * both: the two routes answer with the same object by contract, so a second one
- * could only drift.
+ * Classify a shopping response. One classifier for all seven routes — the contract
+ * gives them one error vocabulary, so a second one could only drift.
  *
- * The 200 gate is ALL FOUR top-level keys plus the four load-bearing per-result
- * fields, and it is the anti-false-green guard. Gating only `results` would admit
- * a body carrying no `predicates` — which reads as a clean success while silently
- * disarming the agent's veto, the worst failure available on this wire. A gate
- * failure is `retryable`, never `ok`.
- *
- * PRESENCE, never length: `results: []` with a well-formed envelope is a genuine
- * empty answer and a SUCCESS.
+ * The 200 gate is the whole of what the plugin owns: a plain object stating
+ * `status: "ok"`. Every 200 the API means as an answer says so, and a 200 that does
+ * not is a broken contract rather than a degraded answer — `retryable`, never `ok`.
+ * Nothing below the top level is inspected: the response artifact is the shape's one
+ * source, and a second opinion here would be the copy that drifts from it.
  *
  * Pure and exported — unit-tested in isolation.
  */
-export function classifyResultResponse(status: number, body: unknown): CatalogResultOutcome {
-  if (status === 400) return { kind: "invalid_request", ...extractApiError(body) };
-  if (status === 401) return { kind: "unauthorized" };
-  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
-  if (status !== 200) return retryableFromBody(body);
-
-  const result = gateResultResponse(body);
-  return result === null ? { kind: "retryable" } : { kind: "ok", result };
-}
-
-/**
- * Classify a `/catalog/stores` response. Adds the 404 arm — terminal but NOT
- * fatal: sil holds no such ref, which no retry and no re-registration can change.
- *
- * The 200 gate covers the envelope plus, per entry, the two fields the whole
- * route exists to deliver: `serviceability` (one of exactly three) and a complete
- * `handoff`. An entry that cannot say which of the three states it is in, or
- * where the buyer goes, is not a degraded answer — it is an unusable one.
- */
-export function classifyStoresResponse(status: number, body: unknown): StoresOutcome {
-  if (status === 400) return { kind: "invalid_request", ...extractApiError(body) };
+export function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcome {
+  if (status === 400) return { kind: "invalid_request", message: extractApiError(body).message };
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
   if (status === 404) return { kind: "not_found", message: extractApiError(body).message };
+  if (status === 409) return { kind: "already_exists", message: extractApiError(body).message };
   if (status !== 200) return retryableFromBody(body);
 
-  const stores = gateStoresResponse(body);
-  return stores === null ? { kind: "retryable" } : { kind: "ok", stores };
-}
-
-/**
- * Classify a `/catalog/domains` response. `path` is the SUBMITTED path: the 409
- * body carries only `{ error, message }`, and the agent's next move is to search
- * that exact path — so the outcome has to carry it or the recovery is unstated.
- *
- * The 200 gate requires `validated_at` to be exactly `null`. That is not
- * defensive noise: a fresh mint is FENCED, and the fence is what tells the agent
- * its first results will come from the web while the catalog catches up.
- */
-export function classifyMintResponse(status: number, body: unknown, path: string): MintOutcome {
-  if (status === 400) return { kind: "invalid_request", ...extractApiError(body) };
-  if (status === 401) return { kind: "unauthorized" };
-  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
-  if (status === 409) return { kind: "already_exists", path, message: extractApiError(body).message };
-  if (status !== 200) return retryableFromBody(body);
-
-  const domain = gateMintResult(body);
-  return domain === null ? { kind: "retryable" } : { kind: "ok", domain };
-}
-
-/**
- * Classify a `GET /catalog/domains` response — the read before the mint.
- *
- * PRESENCE, never length: `matches: []` on a well-formed envelope is a genuine
- * empty answer and a SUCCESS. It is also the one answer that licenses a permanent
- * global write, so mapping it to a failure (or to a `not_found` this route cannot
- * even produce) would rebuild the empty-shelf-straight-to-the-mint behaviour the
- * read exists to delete.
- *
- * Pure and exported — unit-tested in isolation.
- */
-export function classifyDomainFindResponse(status: number, body: unknown): DomainFindOutcome {
-  if (status === 400) return { kind: "invalid_request", ...extractApiError(body) };
-  if (status === 401) return { kind: "unauthorized" };
-  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
-  if (status !== 200) return retryableFromBody(body);
-
-  const found = gateDomainFindResponse(body);
-  return found === null ? { kind: "retryable" } : { kind: "ok", found };
+  const envelope = asRecord(body);
+  if (envelope === null || envelope["status"] !== "ok") return { kind: "retryable" };
+  return { kind: "ok", body: envelope };
 }
 
 /**
@@ -813,121 +363,57 @@ export async function fetchIdentity(
 }
 
 /**
- * `POST /catalog/search` — sil's catalog, in ONE registry domain, before any
- * client-side opinion is applied. `params` go on the wire as given: the plugin
- * fills no default, clamps no bound and re-validates nothing, because every v0
- * route refuses before it spends and names the offender in its message. A second
- * validator here would buy nothing and drift.
+ * Call one shopping route. `args` are the host-validated tool arguments, forwarded AS
+ * GIVEN: the plugin fills no default, clamps no bound and re-validates nothing, because
+ * the route refuses before it spends and names the offender in its own message — a
+ * second validator here would buy nothing and drift from the artifact that already
+ * bounds the input.
  *
  * The Bearer header is built HERE and never logged; the token travels only in the
  * outbound request, never into the returned union.
  */
-export async function searchCatalog(
+export async function callShopping(
   silApiUrl: string,
   token: string,
-  params: SearchParams,
-): Promise<CatalogResultOutcome> {
-  const url = `${stripTrailingSlash(silApiUrl)}/catalog/search`;
+  route: ShoppingRoute,
+  args: Record<string, unknown>,
+): Promise<ShoppingOutcome> {
+  const url = `${stripTrailingSlash(silApiUrl)}${routePath(route, args)}`;
   let res: Response;
   try {
-    res = await postJson(url, params, { authorization: `Bearer ${token}` });
+    res =
+      route.method === "GET"
+        ? await getJson(url, { authorization: `Bearer ${token}` })
+        : await postJson(url, args, { authorization: `Bearer ${token}` });
   } catch {
     return { kind: "retryable" };
   }
-  return classifyResultResponse(res.status, await readJsonBody(res));
+  return classifyShoppingResponse(res.status, await readJsonBody(res));
 }
 
 /**
- * `POST /catalog/lookup` — re-read refs the agent already holds, with the top
- * offers' prices refreshed live. The refs are forwarded AS GIVEN: no dedupe (that
- * would mask a server-side regression) and no pre-trim (the ≤5 cap is the tool
- * schema's, enforced by the host before `execute()` runs).
- */
-export async function lookupCatalog(
-  silApiUrl: string,
-  token: string,
-  refs: string[],
-): Promise<CatalogResultOutcome> {
-  const url = `${stripTrailingSlash(silApiUrl)}/catalog/lookup`;
-  let res: Response;
-  try {
-    res = await postJson(url, { refs }, { authorization: `Bearer ${token}` });
-  } catch {
-    return { kind: "retryable" };
-  }
-  return classifyResultResponse(res.status, await readJsonBody(res));
-}
-
-/**
- * `POST /catalog/stores` — every seller of ONE pick, its serviceability state and
- * its handoff. Not a batch: `serviceability` is relative to a single pick.
- */
-export async function readStores(
-  silApiUrl: string,
-  token: string,
-  params: StoresParams,
-): Promise<StoresOutcome> {
-  const url = `${stripTrailingSlash(silApiUrl)}/catalog/stores`;
-  let res: Response;
-  try {
-    res = await postJson(url, params, { authorization: `Bearer ${token}` });
-  } catch {
-    return { kind: "retryable" };
-  }
-  return classifyStoresResponse(res.status, await readJsonBody(res));
-}
-
-/**
- * `POST /catalog/domains` — the one registry write path in v0. Permanent and
- * un-upsertable: there is no delete route and a colliding path is refused, so the
- * 409 is carried back with the submitted path rather than swallowed.
- */
-export async function mintDomain(
-  silApiUrl: string,
-  token: string,
-  params: DomainMintParams,
-): Promise<MintOutcome> {
-  const url = `${stripTrailingSlash(silApiUrl)}/catalog/domains`;
-  let res: Response;
-  try {
-    res = await postJson(url, params, { authorization: `Bearer ${token}` });
-  } catch {
-    return { kind: "retryable" };
-  }
-  return classifyMintResponse(res.status, await readJsonBody(res), params.path);
-}
-
-/**
- * `GET /catalog/domains` — the registry read that precedes the mint. Same path as
- * {@link mintDomain}, opposite verb: a bodyless GET, so a wrong method here would
- * turn a discovery call into the one write the product cannot undo.
+ * The route's path with its `:name` segment filled and its querystring built.
  *
- * The querystring is built with `URLSearchParams` and carries ONLY the keys the
- * agent actually sent. An empty `q=` is a DIFFERENT request from an omitted `q` —
- * the route answers "`q` must NOT have fewer than 1 characters" for the first and
- * "you sent neither" for the second, and each message is the agent's whole
- * recourse. Nothing is filled in, nothing is dropped, and nothing is
- * string-concatenated (an unencoded value could inject a second parameter).
+ * Both halves are encoded, never concatenated: a dotted registry path is one PATH
+ * SEGMENT (a stray `/` in it would re-route the call), and an unencoded query value
+ * could inject a second parameter. Only the keys the agent actually sent travel — an
+ * empty `q=` is a DIFFERENT request from an omitted `q`, and each gets its own refusal
+ * message, which is the agent's whole recourse.
  */
-export async function findDomains(
-  silApiUrl: string,
-  token: string,
-  params: DomainFindParams,
-): Promise<DomainFindOutcome> {
+function routePath(route: ShoppingRoute, args: Record<string, unknown>): string {
+  const path = route.path.replace(/:([a-z_]+)/g, (_match, name: string) =>
+    encodeURIComponent(String(args[name] ?? "")),
+  );
+  if (route.method !== "GET") return path;
   const query = new URLSearchParams();
-  if (params.q !== undefined) query.set("q", params.q);
-  if (params.path !== undefined) query.set("path", params.path);
-  const search = query.toString();
-  const url =
-    `${stripTrailingSlash(silApiUrl)}/catalog/domains${search === "" ? "" : `?${search}`}`;
-  let res: Response;
-  try {
-    res = await getJson(url, { authorization: `Bearer ${token}` });
-  } catch {
-    return { kind: "retryable" };
+  for (const key of route.query ?? []) {
+    const value = args[key];
+    if (typeof value === "string") query.set(key, value);
   }
-  return classifyDomainFindResponse(res.status, await readJsonBody(res));
+  const search = query.toString();
+  return search === "" ? path : `${path}?${search}`;
 }
+
 
 /** Result of the high-level refresh orchestration (read → refresh → rotate). */
 export type RefreshStoredResult =
@@ -969,7 +455,7 @@ export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
 /**
  * The discriminant {@link refreshAndRetryOnce} returns for the caller to map to
  * its own agent-facing envelope. Generic over the caller's outcome union `O`
- * (`CatalogResultOutcome` / `StoresOutcome` / `MintOutcome` / `IdentityOutcome`) —
+ * (`ShoppingOutcome` / `IdentityOutcome`) —
  * the helper only ever surfaces an `O` produced by the first call or the retry,
  * never one it fabricates, so `O` stays parametric (no `any`, no cast).
  *
@@ -1001,7 +487,7 @@ export type RefreshRetryResult<O> =
 
 /**
  * THE single 401 refresh-and-retry-once choreography, shared by every
- * sil-api-calling tool (`sil_search`, `sil_product_get`, `sil_whoami`) so the 401
+ * sil-api-calling tool (every `shopping_*` call and `sil_whoami`) so the 401
  * behaviour cannot drift apart between them (FLAG-10). The control flow IS the
  * contract — straight-line, AT MOST one refresh + AT MOST one retry, no loop:
  *
@@ -1105,142 +591,6 @@ function extractIdentity(body: unknown): Identity | null {
   return { name, addresses };
 }
 
-/**
- * The two keys the plugin's OWN tool envelope owns: `status` is the taxonomy the
- * agent dispatches on, `advisories` is the wiring channel. The tool spreads the
- * payload over that envelope verbatim, so a body declaring either would decide
- * the agent's control flow with a sil-services value that has no recovery arm, or
- * lose its own field to ours. Neither is actionable — refuse it like any other
- * gate failure (→ `retryable`), never `ok`.
- *
- * WHY IT LIVES HERE and not at the spread: there are FOUR spread sites, not the
- * three a reader finds by grepping `jsonResult` — `catalog.ts:204` also buffers
- * `{status:"ok", ...result}` for the `sil.search_results` pull. Reserving at the
- * gate covers that one, and the next one anybody adds, for free. The asymmetry:
- * a new SPREAD SITE inherits this silently; a new ENVELOPE KEY does not — add it
- * below by hand. `Object.hasOwn`, not truthiness: a spread copies `status: null`
- * as hard as `"partial"`. Two names, never a whitelist — widening this to reject
- * undeclared keys reinstates the projector this contract deletes.
- */
-function declaresEnvelopeKey(envelope: Record<string, unknown>): boolean {
-  return Object.hasOwn(envelope, "status") || Object.hasOwn(envelope, "advisories");
-}
-
-/**
- * The 200 gate for `/catalog/search` and `/catalog/lookup`, and the ONLY place
- * the result body is inspected.
- *
- * It checks presence and type of the four top-level keys plus, per result, the
- * four fields the agent's veto is computed from. On success it returns the
- * ORIGINAL object — not a copy, not a projection — so every field sil-services
- * sends, including ones this file does not declare, reaches the agent verbatim.
- *
- * What it deliberately does NOT do: descend into `values`, `offers`, `pairs` or
- * `sources`. Rejecting an unknown field would break the first time sil-services
- * adds one, and re-validating a known one would put a second, drifting copy of
- * the contract here.
- */
-function gateResultResponse(body: unknown): SearchResponse | null {
-  const envelope = asRecord(body);
-  if (envelope === null) return null;
-  if (declaresEnvelopeKey(envelope)) return null;
-  if (!Array.isArray(envelope["results"])) return null;
-  if (asRecord(envelope["sources"]) === null) return null;
-  if (!Array.isArray(envelope["predicates"])) return null;
-  if (asRecord(envelope["report"]) === null) return null;
-
-  for (const raw of envelope["results"]) {
-    const result = asRecord(raw);
-    if (result === null) return null;
-    if (typeof result["ref"] !== "string") return null;
-    if (result["maturity"] !== "catalog" && result["maturity"] !== "web") return null;
-    if (asRecord(result["values"]) === null) return null;
-    if (!Array.isArray(result["offers"])) return null;
-  }
-  return envelope as unknown as SearchResponse;
-}
-
-/** The 200 gate for `/catalog/stores`. Per entry it checks the two fields the
- * route exists to deliver — which of the three states this seller is in, and
- * where the buyer goes — and nothing below them. */
-function gateStoresResponse(body: unknown): StoresResponse | null {
-  const envelope = asRecord(body);
-  if (envelope === null) return null;
-  if (declaresEnvelopeKey(envelope)) return null;
-  if (typeof envelope["destination"] !== "string") return null;
-  if (!Array.isArray(envelope["stores"])) return null;
-  if (asRecord(envelope["sources"]) === null) return null;
-
-  for (const raw of envelope["stores"]) {
-    const entry = asRecord(raw);
-    if (entry === null) return null;
-    const state = entry["serviceability"];
-    if (state !== "serviceable" && state !== "not_serviceable" && state !== "unknown") return null;
-    const handoff = asRecord(entry["handoff"]);
-    if (handoff === null) return null;
-    if (typeof handoff["url"] !== "string") return null;
-    if (handoff["source"] !== "buy_url" && handoff["source"] !== "url") return null;
-  }
-  return envelope as unknown as StoresResponse;
-}
-
-/** The 200 gate for `/catalog/domains`. `validated_at` must be exactly `null`:
- * the fence is the mint's headline fact, and a body that cannot state it is not
- * a mint result the agent can act on. */
-function gateMintResult(body: unknown): DomainMintResult | null {
-  const envelope = asRecord(body);
-  if (envelope === null) return null;
-  if (declaresEnvelopeKey(envelope)) return null;
-  if (typeof envelope["path"] !== "string") return null;
-  if (envelope["validated_at"] !== null) return null;
-  const specs = envelope["specs"];
-  if (!Array.isArray(specs) || !specs.every((s) => typeof s === "string")) return null;
-  return envelope as unknown as DomainMintResult;
-}
-
-/**
- * The 200 gate for `GET /catalog/domains`. It covers the fields the agent's
- * adopt / descend / mint / narrow verdict is computed from, and nothing below
- * them: `capped` and, per match, `exists`, `guide`, `validated_at`, `path`.
- *
- * `typeof capped === "boolean"`, never truthiness — `capped: false` is falsy and
- * is also the ONLY value that licenses a mint, so a truthy test would silently
- * turn "the answer was complete" into "the field is missing". `exists` and
- * `guide` are gated for the same reason they are on the wire: `exists` is stated
- * rather than inferred, and `guide` is the sole basis for judging fit, so a body
- * that cannot carry them is unusable rather than degraded → `retryable`.
- *
- * `specs[]` is checked for being an array and then left alone — its elements are
- * what a valid first predicate is formed from, and re-validating them here would
- * put a second, drifting copy of the vocabulary contract in the plugin. On
- * success the ORIGINAL object is returned: no projection, no rename, no default.
- */
-function gateDomainFindResponse(body: unknown): DomainFindResponse | null {
-  const envelope = asRecord(body);
-  if (envelope === null) return null;
-  if (declaresEnvelopeKey(envelope)) return null;
-  if (typeof envelope["capped"] !== "boolean") return null;
-  if (!Array.isArray(envelope["matches"])) return null;
-
-  for (const raw of envelope["matches"]) {
-    const match = asRecord(raw);
-    if (match === null) return null;
-    if (typeof match["path"] !== "string") return null;
-    if (typeof match["exists"] !== "boolean") return null;
-    if (!isStringOrNull(match["validated_at"])) return null;
-    if (!isStringOrNull(match["guide"])) return null;
-    if (!Array.isArray(match["specs"])) return null;
-  }
-  return envelope as unknown as DomainFindResponse;
-}
-
-/** A nullable wire string: present and a string, or present and exactly `null`.
- * `undefined` fails — on this wire an absent key is a serialization bug, not an
- * absent value. */
-function isStringOrNull(value: unknown): boolean {
-  return typeof value === "string" || value === null;
-}
-
 /** Pull the actionable reason out of a 403 body (`user_not_provisioned` /
  * `principal_mismatch`), defaulting to a generic marker when the shape is
  * unexpected — the tool surfaces this to drive the right recovery hint. */
@@ -1258,8 +608,8 @@ function extractForbiddenReason(body: unknown): string {
  *
  * This is the seam where outcome (a) (sil/network down → bare retryable, generic
  * copy) and outcome (b) (a named source down → source-named retryable) become
- * distinguishable — see {@link CatalogResultOutcome} (and its `StoresOutcome` /
- * `MintOutcome` twins, which carry the same arm). The gate is the PRESENCE of a real
+ * distinguishable — see {@link ShoppingOutcome}'s `retryable` arm. The gate is the
+ * PRESENCE of a real
  * non-empty-string `source` field on the body, NEVER the `message` prose: a
  * sil-internal 5xx (no `source`), a bodyless/garbage non-200, or a `source` that is
  * null/number/empty/object/array all fall back to the bare sourceless retryable.
@@ -1319,8 +669,7 @@ function extractUser(raw: unknown): ClaimedUser {
 }
 
 /** A non-null plain object, or null for anything else (incl. arrays/primitives).
- * The array exclusion is load-bearing for the catalog gates: `sources`, `report`
- * and `values` are objects on the wire, and an array passed as one of them is a
+ * The array exclusion is load-bearing: a JSON array reaching the 200 gate is a
  * malformed body, not a usable empty. */
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)

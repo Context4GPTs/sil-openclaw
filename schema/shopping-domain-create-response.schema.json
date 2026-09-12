@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-domain-create-response.schema.json",
+  "title": "sil shopping_domain_create — response",
+  "type": "object",
+  "required": [
+    "status",
+    "path",
+    "specs"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "path": {
+      "type": "string",
+      "description": "Searches it."
+    },
+    "specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Uses this key in the Brief and in `shopping_search`."
+          },
+          "variant_spec": {
+            "type": "boolean",
+            "const": true,
+            "description": "Knows it must settle this key for a variant."
+          },
+          "product_spec": {
+            "type": "boolean",
+            "const": true,
+            "description": "Knows this key tells one product from the next."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Reads back the keys the registry accepted, as it accepted them."
+    }
+  },
+  "additionalProperties": false
+}

@@ -29,13 +29,11 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals the TWELVE v0 tools (AC G1): the five catalog tools
- *     1:1 with the sil-services catalog routes, the four `sil_doc_*` document
- *     tools, the two identity tools and the doctor. 13 → 12: the eight-beat
- *     card REPLACES `registerProfileTools`' five verbs with
- *     `registerDocTools`' four, which is a GROUP SWAP — CLAUDE.md step 4 —
- *     so `codeRegisteredNames()` below had to be rewired or it would have
- *     silently narrowed instead of going red.
+ *     both sides equals the FOURTEEN tools: the seven `shopping_*` catalog tools
+ *     1:1 with the sil-api routes, the four `shopping_doc_*` document tools, and
+ *     the three account tools that keep the `sil_` name. A GROUP swap is not
+ *     picked up for free — `codeRegisteredNames()` below has to be rewired or it
+ *     silently narrows instead of going red.
  */
 
 import { describe, it, expect } from "vitest";
@@ -127,24 +125,25 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(sorted(codeRegisteredNames())).toEqual(sorted(manifestToolNames()));
   });
 
-  it("AC G1 — both sides equal exactly the TWELVE v0 tools, and the four sil_doc_* are among them", () => {
-    // The card's spine, pinned by literal so a re-introduction on EITHER side flips
-    // RED rather than merely staying symmetric. 13 → 12: the eight-beat card swaps
-    // `registerProfileTools`' five verbs for `registerDocTools`' four. A GROUP swap,
-    // so the code side is NOT picked up for free — `codeRegisteredNames()` had to be
-    // rewired, and had it not been, this guard would have silently narrowed.
+  it("both sides equal exactly the FOURTEEN tools of the agent contract", () => {
+    // The spine, pinned by literal so a re-introduction on EITHER side flips RED rather
+    // than merely staying symmetric. A GROUP swap is not picked up for free: the code
+    // side reads `codeRegisteredNames()`, which must be rewired when a group moves, and
+    // had that been missed this guard would have silently narrowed.
     const expected = [
-      "sil_doc_find",
-      "sil_doc_read",
-      "sil_doc_remove",
-      "sil_doc_write",
+      "shopping_doc_find",
+      "shopping_doc_read",
+      "shopping_doc_remove",
+      "shopping_doc_write",
+      "shopping_domain_create",
+      "shopping_domain_get",
+      "shopping_domain_search",
+      "shopping_offers",
+      "shopping_product_get",
+      "shopping_search",
+      "shopping_seller_get",
       "sil_doctor",
-      "sil_domain_create",
-      "sil_domain_find",
-      "sil_product_get",
       "sil_register",
-      "sil_search",
-      "sil_stores",
       "sil_whoami",
     ];
     expect(sorted(codeRegisteredNames())).toEqual(expected);
@@ -170,6 +169,16 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
       "sil_profile_search",
       "sil_profile_get",
       "sil_profile_remove",
+      "sil_search", // ↓ the wire the agent contract replaced: renamed, never aliased
+      "sil_product_get",
+      "sil_stores",
+      "sil_lookup",
+      "sil_domain_find",
+      "sil_domain_create",
+      "sil_doc_find",
+      "sil_doc_read",
+      "sil_doc_write",
+      "sil_doc_remove",
     ];
     const code = codeRegisteredNames();
     const manifest = manifestToolNames();
@@ -177,46 +186,22 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(RETIRED.filter((n) => manifest.has(n))).toEqual([]);
   });
 
-  it("sil_doctor is BOTH registered by register() and declared in contracts.tools", () => {
-    // The doctor's self-enforcing-registration criterion, pinned by name. Unlike
-    // a tool joining an existing group, sil_doctor arrives in a NEW group — so it
-    // reaches this guard only once registerDoctorTools is wired into register()
-    // in src/index.ts AND into codeRegisteredNames above.
-    // Both sides must name it: registered by registerDoctorTools AND listed in
-    // openclaw.plugin.json#contracts.tools.
-    expect(codeRegisteredNames().has("sil_doctor")).toBe(true);
-    expect(manifestToolNames().has("sil_doctor")).toBe(true);
-  });
-
-  it("sil_search is BOTH registered by register() and declared in contracts.tools", () => {
-    // The card's self-enforcing-registration criterion, pinned by name: the new
-    // catalog tool must appear on BOTH sides of the equal set — registered by
-    // registerCatalogTools (now wired into codeRegisteredNames) AND listed in
-    // openclaw.plugin.json#contracts.tools.
-    expect(codeRegisteredNames().has("sil_search")).toBe(true);
-    expect(manifestToolNames().has("sil_search")).toBe(true);
-  });
-
-  it("sil_product_get is BOTH registered by register() and declared in contracts.tools", () => {
-    // The sibling lookup tool's self-enforcing-registration criterion, pinned by
-    // name. registerCatalogTools is ALREADY wired into codeRegisteredNames (search
-    // added the call), so adding sil_product_get as a second tool in that group is
-    // picked up automatically — it must appear on BOTH sides of the equal set:
-    // registered by registerCatalogTools AND listed in
-    // openclaw.plugin.json#contracts.tools.
-    expect(codeRegisteredNames().has("sil_product_get")).toBe(true);
-    expect(manifestToolNames().has("sil_product_get")).toBe(true);
-  });
-
-  it("sil_domain_find is BOTH registered by register() and declared in contracts.tools", () => {
-    // The read-before-mint card's fifth catalog tool — `GET /catalog/domains`,
-    // the verb twin of the mint's POST. It joins the EXISTING
-    // `registerCatalogTools` group, which `codeRegisteredNames()` already calls,
-    // so the code side is picked up dynamically; step 3 (the manifest entry) is
-    // the half that is not, and forgetting it flips the set-equality RED here
-    // before merge. That asymmetry is the whole point of this guard.
-    expect(codeRegisteredNames().has("sil_domain_find")).toBe(true);
-    expect(manifestToolNames().has("sil_domain_find")).toBe(true);
+  it.each([
+    "shopping_domain_search",
+    "shopping_domain_get",
+    "shopping_domain_create",
+    "shopping_search",
+    "shopping_product_get",
+    "shopping_offers",
+    "shopping_seller_get",
+    "sil_doctor",
+  ])("%s is BOTH registered by register() and declared in contracts.tools", (tool) => {
+    // The self-enforcing-registration criterion. A tool joining an EXISTING group is
+    // picked up on the code side for free; the manifest entry is the half that is not,
+    // and forgetting it flips the set-equality above RED before merge. That asymmetry is
+    // the whole point of this guard, and this table is where the next tool lands.
+    expect(codeRegisteredNames().has(tool)).toBe(true);
+    expect(manifestToolNames().has(tool)).toBe(true);
   });
 });
 
@@ -244,18 +229,18 @@ describe("the drift guard actually bites (failure-direction proof)", () => {
   });
 
   // The same proof aimed at THE tool this card adds, in both directions. These
-  // are non-vacuous by construction: if `sil_domain_find` were missing from both
+  // are non-vacuous by construction: if `shopping_domain_search` were missing from both
   // sides, each `delete` would be a no-op, the two sets would still be equal, and
   // the `not.toEqual` below would FAIL. So they cannot pass by the tool's absence.
-  it("FAILS if `sil_domain_find` is dropped from the manifest side", () => {
+  it("FAILS if `shopping_domain_search` is dropped from the manifest side", () => {
     const manifestMinus = new Set(manifestToolNames());
-    manifestMinus.delete("sil_domain_find");
+    manifestMinus.delete("shopping_domain_search");
     expect(sorted(manifestMinus)).not.toEqual(sorted(codeRegisteredNames()));
   });
 
-  it("FAILS if `sil_domain_find` is dropped from the code side", () => {
+  it("FAILS if `shopping_domain_search` is dropped from the code side", () => {
     const codeMinus = new Set(codeRegisteredNames());
-    codeMinus.delete("sil_domain_find");
+    codeMinus.delete("shopping_domain_search");
     expect(sorted(codeMinus)).not.toEqual(sorted(manifestToolNames()));
   });
 });

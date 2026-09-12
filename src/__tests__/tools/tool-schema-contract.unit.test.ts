@@ -44,6 +44,11 @@ import {
 } from "../helpers/mock-plugin-api.js";
 import { perNicheExpertOffenders } from "../helpers/per-niche-expert.js";
 import {
+  SHOPPING_TOOLS,
+  artifact,
+  artifactParameters,
+} from "../helpers/shopping-wire.js";
+import {
   honestyExclusionOffenders,
   notFoundLicenceOffenders,
   overPromiseOffenders,
@@ -185,7 +190,7 @@ describe("TypeBox introspection metadata never leaks into the agent-visible sche
  * `\bexperts?\b` + 28-char retro-allowance check (`perNicheExpertOffenders`, the
  * very check the skill-prose guard uses, so the discipline can never drift) over
  * EVERY registered tool description — the four pivot-untouched tools and the four
- * `sil_doc_*` document verbs. Green on the current tree; a future `expert`
+ * `shopping_doc_*` document verbs. Green on the current tree; a future `expert`
  * reintroduction into any description turns it RED.
  *
  * This is a VOCABULARY guard, DISTINCT from the exact-tool-SET guards (the identity
@@ -225,41 +230,16 @@ describe("registered tool descriptions carry NO per-niche-expert vocabulary (who
   });
 });
 
-/* ---------------------------------------------------------------------------
- * THE v0 AGENT-FACING SURFACE — the cross-cutting scans (card: the four v0
- * tools). Everything here runs over EVERY registered tool description AND every
- * parameter description, because an agent reads both and a rule enforced on one
- * is not enforced.
- *
- * The scanners live in `helpers/honesty-vocabulary.ts`, imported by BOTH this
- * file and `skill-bundle-contract.integration.test.ts` — one module, so the
- * tool-description guard and the skill-prose guard can never drift apart. Their
- * bite (and their allowance for the sentence the product NEEDS) is proved in
- * `lib/honesty-vocabulary.test.ts`.
- * ------------------------------------------------------------------------- */
-
 /**
- * The v0 catalog tools, by SC6's own names — verbatim, not renamed.
+ * THE SHOPPING SURFACE — the registered contract, and the cross-cutting scans over every
+ * agent-facing string (the tool description AND every parameter description, because an
+ * agent reads both and a rule enforced on one is not enforced).
  *
- * FIVE, not four. SC6 says "four tools" and that wording is now literally false:
- * the design rule is 1:1 with the routes and never flags on one another, and
- * `/catalog/domains` is served by TWO verbs — `GET` reads the registry, `POST`
- * performs the one write nothing can undo. Shrinking the tool count to preserve
- * SC6's sentence would put the read behind a `mode` flag on the write, which is
- * the exact shape the rule forbids.
- *
- * This list is HAND-MAINTAINED and it drives three `it.each` guards below (the
- * no-flags rule, the retired-parameter scan, and the discipline clause). It bites
- * nothing when a tool is omitted — the registration check below is a SUBSET test —
- * so an omission here silently narrows all three rather than going RED.
+ * The scanners live in `helpers/honesty-vocabulary.ts`, imported by BOTH this file and
+ * `skill-bundle-contract.integration.test.ts` — one module, so the tool-description guard
+ * and the skill-prose guard can never drift apart. Their bite (and their allowance for
+ * the sentence the product NEEDS) is proved in `lib/honesty-vocabulary.test.ts`.
  */
-const V0_TOOLS = [
-  "sil_search",
-  "sil_product_get",
-  "sil_stores",
-  "sil_domain_find",
-  "sil_domain_create",
-] as const;
 
 /** A tool's description plus every one of its parameter descriptions. */
 function agentFacingText(api: MockPluginAPI, name: string): string {
@@ -270,8 +250,8 @@ function agentFacingText(api: MockPluginAPI, name: string): string {
   return [
     tool.description ?? "",
     ...Object.values(props).map((p) => (p["description"] as string | undefined) ?? ""),
-    // Nested parameter descriptions (a predicate's `key`, a spec's `unit`) are
-    // agent-facing too and would otherwise escape every scan below.
+    // Nested parameter descriptions (a spec's `op`, a key's `unit`) are agent-facing too
+    // and would otherwise escape every scan below.
     ...nested.map((raw) => JSON.parse(`{${raw}}`).description as string),
   ].join("\n");
 }
@@ -281,104 +261,80 @@ function wholeSurface(api: MockPluginAPI): [string, string][] {
   return [...api._tools.keys()].map((name) => [name, agentFacingText(api, name)]);
 }
 
-describe("v0 — the tools are registered under SC6's names, 1:1 with the routes", () => {
-  it("all five exist, spelled exactly as the goal names them", () => {
-    const names = registeredToolNames(allRegisteredTools());
-    expect(V0_TOOLS.filter((t) => !names.has(t))).toEqual([]);
-  });
+describe("the shopping tools' parameters ARE the committed request artifacts", () => {
+  it.each(SHOPPING_TOOLS)(
+    "%s publishes its artifact verbatim, minus the three FILE annotations",
+    (tool) => {
+      // The one bar that makes "the plugin adds no shape of its own" checkable. A
+      // hand-written schema here would be a second copy of the request contract and the
+      // first thing to drift from it; deep-equality against the committed bytes is what
+      // makes that impossible rather than merely discouraged.
+      const registered = getTool(allRegisteredTools(), tool).parameters as unknown as Record<
+        string,
+        unknown
+      >;
+      expect(registered).toEqual(artifactParameters(tool));
+    },
+  );
 
-  it("`sil_lookup` does not exist — `sil_product_get` reads /catalog/lookup", () => {
-    expect([...registeredToolNames(allRegisteredTools())]).not.toContain("sil_lookup");
-  });
-});
-
-describe("v0 — R6.4: never flags on one another", () => {
-  /**
-   * A model picks a tool BY NAME at the moment of use. A flag hides the intention
-   * inside a parameter it will not read — and a flag that triggers a global
-   * registry write hides it inside the one write the product cannot undo.
-   */
-  const FORBIDDEN_PARAM = /^(mode|action|op|operation|refresh|include_.*|create_.*|with_.*|also_.*|and_.*)$/;
-
-  it.each(V0_TOOLS)("%s exposes no mode / action / op / include_* / refresh / create_* parameter", (name) => {
-    const api = allRegisteredTools();
-    const schema = getTool(api, name).parameters as unknown as Record<string, unknown>;
-    const props = Object.keys((schema["properties"] ?? {}) as object);
-    expect(props.filter((p) => FORBIDDEN_PARAM.test(p))).toEqual([]);
-  });
-
-  it("no v0 tool's parameters could select another's route", () => {
-    // The concrete forbidden shapes: sil_search(refresh) standing in for
-    // sil_product_get, sil_product_get(include_stores) for sil_stores,
-    // sil_search(create_domain_if_missing) for sil_domain_create.
-    const api = allRegisteredTools();
-    const offenders: string[] = [];
-    for (const name of V0_TOOLS) {
-      const schema = getTool(api, name).parameters as unknown as Record<string, unknown>;
-      const serialized = JSON.stringify(Object.keys((schema["properties"] ?? {}) as object));
-      for (const other of V0_TOOLS) {
-        if (other === name) continue;
-        // A parameter naming ANOTHER tool's job (`stores`, `domain_create`,
-        // `lookup`) is the flag this rule forbids.
-        const verb = other.replace(/^sil_/, "");
-        if (serialized.includes(`"${verb}"`) || serialized.includes(`"include_${verb}"`)) {
-          offenders.push(`${name} → ${verb}`);
-        }
-      }
+  it.each(SHOPPING_TOOLS)("%s strips `$schema` / `$id` / `title` before the host sees it", (tool) => {
+    // They describe the FILE, not the argument the model has to build, and a `$id` on a
+    // tool input invites a host to resolve a URL nobody serves.
+    const registered = getTool(allRegisteredTools(), tool).parameters as unknown as Record<
+      string,
+      unknown
+    >;
+    for (const annotation of ["$schema", "$id", "title"]) {
+      expect(registered).not.toHaveProperty(annotation);
     }
-    expect(offenders).toEqual([]);
-  });
-});
-
-describe("v0 — the retired parameter vocabulary is STRUCTURALLY gone", () => {
-  /**
-   * The pre-v0 request surface, by parameter name. Guarded off the SCHEMA rather
-   * than by scanning prose: `category` / `condition` / `cursor` are innocent
-   * English words the v0 descriptions legitimately use ("research how the
-   * category is bought"), so a text forbid would fail the card against itself.
-   * The schema assertion is exact, cannot be satisfied by rewording, and is what
-   * actually breaks if a pre-v0 parameter is resurrected.
-   */
-  const RETIRED_PARAMS = [
-    "category", "categories", "condition", "cursor", "limit", "available",
-    "ship_to", "price_min", "price_max", "local_merchants", "filters",
-    "pagination", "ids", "ns", "on_behalf_of", "k", "top_k",
-  ];
-
-  /**
-   * `specs` is retired as a SEARCH parameter (the pre-v0 `filters.specs`
-   * predicate array — its v0 replacement is `predicates`) and simultaneously
-   * LIVE as the mint's third field (`{ path, guide, specs }`). One name, two
-   * meanings, so the blacklist is scoped rather than global — a flat forbid
-   * would fail the mint against the route it mirrors. `sil_domain_create`'s
-   * exact property set is pinned in `tools/domain-create.test.ts`, which is the
-   * stronger guard anyway.
-   */
-  const RETIRED_ELSEWHERE: Record<string, string[]> = {
-    sil_search: ["specs"],
-    sil_product_get: ["specs"],
-    sil_stores: ["specs"],
-  };
-
-  it.each(V0_TOOLS)("%s declares none of the pre-v0 parameters", (name) => {
-    const api = allRegisteredTools();
-    const schema = getTool(api, name).parameters as unknown as Record<string, unknown>;
-    const declared = Object.keys((schema["properties"] ?? {}) as object);
-    const retired = [...RETIRED_PARAMS, ...(RETIRED_ELSEWHERE[name] ?? [])];
-    expect(declared.filter((p) => retired.includes(p))).toEqual([]);
-  });
-
-  it("guard-of-the-guard: each v0 tool declares SOME parameter (an empty schema passes vacuously)", () => {
-    const api = allRegisteredTools();
-    for (const name of V0_TOOLS) {
-      const schema = getTool(api, name).parameters as unknown as Record<string, unknown>;
-      expect(Object.keys((schema["properties"] ?? {}) as object).length).toBeGreaterThan(0);
+    // Guard-of-the-guard: the artifact really carries all three, so the strip is doing
+    // work rather than agreeing with an empty file.
+    for (const annotation of ["$schema", "$id", "title"]) {
+      expect(artifact(tool, "request")).toHaveProperty(annotation);
     }
   });
+
+  it.each(SHOPPING_TOOLS)("%s's description is bounded — enough to act on, short enough to read", (tool) => {
+    // An agent reads this at pick-time under context pressure; the clause that survives
+    // is the short one. The ceiling is generous — it fails a parameter tutorial, not
+    // tight prose — and the floor fails a one-liner that teaches nothing.
+    const description = getTool(allRegisteredTools(), tool).description ?? "";
+    expect(description.length).toBeGreaterThan(150);
+    expect(description.length).toBeLessThanOrEqual(1400);
+  });
 });
 
-describe("v0 — the retired VOCABULARY is gone from every agent-facing string", () => {
-  it("no registered description names a field the v0 wire does not have", () => {
+describe("the retired tool NAMES cannot come back", () => {
+  it("no registered tool is named for the wire the contract replaced", () => {
+    // Proved by BITE, not by a literal list: every registered name is run through the
+    // shape the old wire used, so a resurrected `sil_search` or a stray `sil_doc_*` is
+    // caught whether or not anybody remembered to enumerate it here.
+    const retired = /^sil_(search|product_get|stores|lookup|domain_find|domain_create|doc_[a-z]+)$/;
+    const names = [...registeredToolNames(allRegisteredTools())];
+    expect(names.filter((n) => retired.test(n))).toEqual([]);
+    // Guard-of-the-guard: the pattern bites the names it is written for.
+    expect(
+      ["sil_search", "sil_product_get", "sil_stores", "sil_domain_find", "sil_doc_write"].filter(
+        (n) => !retired.test(n),
+      ),
+    ).toEqual([]);
+  });
+
+  it("the loop's tools are all named `shopping_*` — only the account tools keep `sil_`", () => {
+    // The contract's own rule: every tool the loop calls is named for what it does for
+    // the shopper. A loop tool left under `sil_` is one the agent cannot find by name.
+    const names = [...registeredToolNames(allRegisteredTools())].sort();
+    expect(names.filter((n) => n.startsWith("sil_")).sort()).toEqual([
+      "sil_doctor",
+      "sil_register",
+      "sil_whoami",
+    ]);
+    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(11);
+  });
+});
+
+describe("the retired VOCABULARY is gone from every agent-facing string", () => {
+  it("no registered description names a field the wire does not have", () => {
     const offenders: string[] = [];
     for (const [name, text] of wholeSurface(allRegisteredTools())) {
       for (const token of retiredV0Offenders(text)) offenders.push(`${name} → ${token}`);
@@ -391,12 +347,12 @@ describe("v0 — the retired VOCABULARY is gone from every agent-facing string",
   });
 });
 
-describe("v0 — no honesty field is ever framed as an exclusion (R6.2.2)", () => {
-  it("NO registered tool teaches dropping / filtering / hiding on unknown, unset, applied:false or maturity:web", () => {
-    // The named prior failure: `sil_stores` leading the agent to drop `unknown`
-    // sellers undoes the route's fail-closed design one layer up. The scan runs
-    // over the WHOLE surface, not just the catalog four — a profile tool that
-    // learned the habit would be just as wrong.
+describe("no honesty field is ever framed as an exclusion", () => {
+  it("NO registered tool teaches dropping / filtering / hiding on `unknown`, an absent `fit` key, an empty `variants` or `webpage_info`", () => {
+    // The named prior failure: a seller tool leading the agent to drop `unknown` sellers
+    // undoes the route's fail-closed design one layer up, and the shortlist collapses
+    // while looking like it filtered. The scan runs over the WHOLE surface — a document
+    // tool that learned the habit would be just as wrong.
     const offenders: string[] = [];
     for (const [name, text] of wholeSurface(allRegisteredTools())) {
       for (const sentence of honestyExclusionOffenders(text)) {
@@ -414,8 +370,8 @@ describe("v0 — no honesty field is ever framed as an exclusion (R6.2.2)", () =
   });
 });
 
-describe("v0 — no description out-promises its route (R6.2.3)", () => {
-  it("no 'current price' where `observed` can be `stored`, no 'ships to you' where the state can be `unknown`", () => {
+describe("no description out-promises its route", () => {
+  it("no 'current price' where an offer is dated, no 'ships to you' where `ships` can be `unknown`", () => {
     const offenders: string[] = [];
     for (const [name, text] of wholeSurface(allRegisteredTools())) {
       for (const sentence of overPromiseOffenders(text)) offenders.push(`${name}: ${sentence}`);
@@ -424,7 +380,7 @@ describe("v0 — no description out-promises its route (R6.2.3)", () => {
   });
 });
 
-describe("v0 — no over-trigger: a description states when THIS tool applies (R6.2.5)", () => {
+describe("no over-trigger: a description states when THIS tool applies", () => {
   it("no registered tool claims the general category ('search the web', 'find anything')", () => {
     const offenders: string[] = [];
     for (const [name, text] of wholeSurface(allRegisteredTools())) {
@@ -434,71 +390,64 @@ describe("v0 — no over-trigger: a description states when THIS tool applies (R
   });
 });
 
-describe("v0 — each of the four carries its discipline clause (R6.2.1)", () => {
+describe("each shopping tool carries its discipline clause", () => {
   /**
-   * Pinned on the clause's LOAD-BEARING tokens, not on the wording. The card is
-   * explicit that R6.3's drafts are "binding on the clauses, editable on the
-   * wording" — and this repo already deleted a 1341-line prose test that pinned
-   * wording and stayed green through a live behavioural bug.
+   * Pinned on the clause's LOAD-BEARING tokens, never on the wording — this repo already
+   * deleted a 1341-line prose test that pinned wording and stayed green through a live
+   * behavioural bug. Each entry is the one thing an agent that loses it gets wrong.
    */
-  const DISCIPLINE: Record<(typeof V0_TOOLS)[number], RegExp[]> = {
-    sil_search: [/\b4\b|\bfour\b/, /widen/i, /hard[^.]*never relaxed|never relax/i],
-    sil_product_get: [/shortlist/i, /live/i, /top-?k|top offers/i],
-    sil_stores: [/three states/i, /unknown/i, /serviceab/i],
-    sil_domain_create: [/\bNEW\b/, /research|read(ing)? up/i, /never[^.]*change|not to change/i],
-    // The read's discipline is a BUDGET and a mode rule: the two doors answer
-    // different questions, and a cold category is settled in at most two
-    // discovery reads plus one probe of the exact path about to be coined. An
-    // agent left to infer whether the probe counts against the bound either
-    // forfeits it (forking the vocabulary) or takes a third discovery read.
-    sil_domain_find: [/\b(2|two)\b/, /probe/i, /never both|exactly one of/i],
+  const DISCIPLINE: Record<(typeof SHOPPING_TOOLS)[number], RegExp[]> = {
+    // The read that licenses the mint, and the bound on how often it is taken.
+    shopping_domain_search: [/matches: \[\]/, /licens/i, /\b(2|two)\b/],
+    // What the keys are for, and which of them identify a purchasable option.
+    shopping_domain_get: [/variant_spec/, /product_spec/, /operators?/i],
+    // The write nothing can undo, and the two things that must hold first.
+    shopping_domain_create: [/\bNEW\b/, /research|read(ing)? up/i, /undo|permanent/i],
+    // The honesty the whole answer turns on, and the fan-out bound.
+    shopping_search: [/\b4\b|\bfour\b/, /widen/i, /hard row is never relaxed/i, /webpage_info/, /gap/i],
+    // What the dossier adds over the shortlist, and that a miss is an absence.
+    shopping_product_get: [/sources/, /absent/i, /opaque/i],
+    // What dates a price, and why the spread is the answer.
+    shopping_offers: [/observed_at/, /spread/i, /convert/i],
+    // The three states, and that the third one keeps its seller.
+    shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i],
   };
 
-  it.each(V0_TOOLS)("%s's description carries every load-bearing token of its clause", (name) => {
-    const description = getTool(allRegisteredTools(), name).description ?? "";
-    const missing = DISCIPLINE[name].filter((re) => !re.test(description)).map((re) => re.source);
+  it.each(SHOPPING_TOOLS)("%s's description carries every load-bearing token of its clause", (tool) => {
+    const description = getTool(allRegisteredTools(), tool).description ?? "";
+    const missing = DISCIPLINE[tool].filter((re) => !re.test(description)).map((re) => re.source);
     expect(missing).toEqual([]);
-  });
-
-  it.each(V0_TOOLS)("%s's description is BOUNDED — the pre-v0 2000-char parameter tutorials are gone", (name) => {
-    // R6.2.4: what survives per tool is what it does, the discipline clause, the
-    // honesty clause and the recovery pointer. An agent reads this at pick-time
-    // under context pressure; the clause that survives is the short one. The
-    // ceiling is generous — it fails the 2000-char tutorials, not tight prose.
-    const description = getTool(allRegisteredTools(), name).description ?? "";
-    expect(description.length).toBeGreaterThan(150);
-    expect(description.length).toBeLessThanOrEqual(1400);
   });
 });
 
 /**
- * AC G8 — the four DOCUMENT tools' discipline clauses, verbatim from
+ * The four DOCUMENT tools' discipline clauses, verbatim from
  * `SIL-DOMAINS-AND-SPECS.md` §8 ("the plugin implements them verbatim"). Same shape
  * and same reason as the V0_TOOLS map above: pinned on the clause's LOAD-BEARING
  * tokens, never on the wording.
  *
  * Why a clause at all — a model picks tools at the moment of use, and the clause is
- * what survives context pressure. `sil_doc_write`'s is the one that costs data if it
+ * what survives context pressure. `shopping_doc_write`'s is the one that costs data if it
  * is lost: an agent that does not know `body` is the WHOLE reconciled markdown sends
  * a fragment, and the rest of the person is gone in one call.
  */
-const DOC_TOOLS = ["sil_doc_find", "sil_doc_read", "sil_doc_write", "sil_doc_remove"] as const;
+const DOC_TOOLS = ["shopping_doc_find", "shopping_doc_read", "shopping_doc_write", "shopping_doc_remove"] as const;
 
 const DOC_DISCIPLINE: Record<(typeof DOC_TOOLS)[number], RegExp[]> = {
-  // coordinates only — bodies come from sil_doc_read
-  sil_doc_find: [/coordinates only/i, /sil_doc_read/],
+  // coordinates only — bodies come from shopping_doc_read
+  shopping_doc_find: [/coordinates only/i, /shopping_doc_read/],
   // one whole body; unreadable is never re-minted over
-  sil_doc_read: [/whole (document )?body|one whole/i, /unreadable/i, /never (write|re-?mint)/i],
+  shopping_doc_read: [/whole (document )?body|one whole/i, /unreadable/i, /never (write|re-?mint)/i],
   // the WHOLE reconciled markdown — never append, never patch a section; create
   // fails if the ref exists, replace fails if it does not
-  sil_doc_write: [
+  shopping_doc_write: [
     /whole reconciled/i,
     /no append|never append/i,
     /create fails/i,
     /replace fails/i,
   ],
   // one document, never a cascade
-  sil_doc_remove: [/one document/i, /never a cascade|no cascade/i],
+  shopping_doc_remove: [/one document/i, /never a cascade|no cascade/i],
 };
 
 describe("AC G8 — each document tool carries its DOMAINS §8 discipline clause", () => {
@@ -548,12 +497,12 @@ describe("AC15 — `not_found` is stated as a claim sil can only make from a lis
     const qualified = wholeSurface(api)
       .filter(([, text]) => statesQualifiedNotFound(text))
       .map(([name]) => name);
-    expect(qualified).toEqual(expect.arrayContaining(["sil_doc_read", "sil_doc_remove"]));
+    expect(qualified).toEqual(expect.arrayContaining(["shopping_doc_read", "shopping_doc_remove"]));
   });
 });
 
-describe("v0 — no agent-facing string points at a tool that does not exist", () => {
-  it("every `sil_*` token in a description names a REGISTERED tool", () => {
+describe("no agent-facing string points at a tool that does not exist", () => {
+  it("every `sil_*` / `shopping_*` token in a description names a REGISTERED tool", () => {
     // The general form of a defect this card creates by existing: `sil_domain_create`
     // is new, so any older prose that named a mint by some other spelling now
     // competes with a real tool for the same intention. A dangling pointer is
@@ -566,18 +515,20 @@ describe("v0 — no agent-facing string points at a tool that does not exist", (
     const registered = registeredToolNames(api);
     const offenders: string[] = [];
     for (const [name, text] of wholeSurface(api)) {
-      for (const match of text.match(/\bsil_[a-z0-9_]+/g) ?? []) {
+      for (const match of text.match(/\b(?:sil|shopping)_[a-z0-9_]+/g) ?? []) {
         if (!registered.has(match)) offenders.push(`${name} → ${match}`);
       }
     }
     expect(offenders).toEqual([]);
   });
 
-  it("guard-of-the-guard: the scan finds `sil_*` tokens at all", () => {
+  it("guard-of-the-guard: the scan finds tool tokens at all", () => {
     // A regex that matched nothing would pass forever. The descriptions really do
     // cross-reference each other — that is the point of the recovery pointers.
     const api = allRegisteredTools();
-    const found = wholeSurface(api).flatMap(([, text]) => text.match(/\bsil_[a-z0-9_]+/g) ?? []);
+    const found = wholeSurface(api).flatMap(
+      ([, text]) => text.match(/\b(?:sil|shopping)_[a-z0-9_]+/g) ?? [],
+    );
     expect(new Set(found).size).toBeGreaterThan(3);
   });
 });

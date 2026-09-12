@@ -1,6 +1,6 @@
 /**
  * `sil.search_results` — the plugin-owned gateway method a paired client calls
- * to pull a `sil_search` page by the `callId` it already saw on the tool
+ * to pull a `shopping_search` page by the `callId` it already saw on the tool
  * identity frames.
  *
  * NOT a tool, which is why it lives outside `src/tools/`: it never reaches the
@@ -37,7 +37,7 @@ export const SEARCH_RESULTS_METHOD = "sil.search_results";
 
 /** The ONE failure body: unknown ≡ expired ≡ wrong-principal ≡ no live session.
  * A client must be able to tell this apart from a genuine empty match (which is
- * `{status:"ok", results:[]}`), or it renders a silent empty grid for what is
+ * `{status:"ok", products:[]}`), or it renders a silent empty grid for what is
  * actually a delivery failure. */
 const NOT_FOUND = {
   status: "not_found",
@@ -106,7 +106,7 @@ function resolve(
     return;
   }
 
-  api.logger.info("sil_search_results_hit", { found: true, count: page.results.length });
+  api.logger.info("sil_search_results_hit", { found: true, count: page.products.length });
   // Handed over BY REFERENCE, aliasing the array the agent envelope already
   // serialized. Deliberate: both paths JSON-serialize immediately and neither
   // mutates, so a defensive clone would copy ~50 KB per resolve for nothing.

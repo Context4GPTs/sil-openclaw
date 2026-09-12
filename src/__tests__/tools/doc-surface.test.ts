@@ -8,10 +8,10 @@
  * them rather than ported. What survives is the harness shape, which was right.
  *
  * The surface is FOUR operations over ONE ref scheme (`shopper` | `brief:<slug>`):
- *   sil_doc_find    coordinates only — bodies come from sil_doc_read
- *   sil_doc_read    one whole body; unreadable is never re-minted over
- *   sil_doc_write   the WHOLE reconciled markdown; create/replace, both fail-closed
- *   sil_doc_remove  one document, never a cascade
+ *   shopping_doc_find    coordinates only — bodies come from shopping_doc_read
+ *   shopping_doc_read    one whole body; unreadable is never re-minted over
+ *   shopping_doc_write   the WHOLE reconciled markdown; create/replace, both fail-closed
+ *   shopping_doc_remove  one document, never a cascade
  *
  * Nothing is stubbed but the registration-capture api: these tools are LOCAL (no
  * bearer, no network), so a double would only be testing itself.
@@ -32,10 +32,10 @@ import {
   type MockPluginAPI,
 } from "../helpers/mock-plugin-api.js";
 
-const READ = "sil_doc_read";
-const WRITE = "sil_doc_write";
-const REMOVE = "sil_doc_remove";
-const FIND = "sil_doc_find";
+const READ = "shopping_doc_read";
+const WRITE = "shopping_doc_write";
+const REMOVE = "shopping_doc_remove";
+const FIND = "shopping_doc_find";
 
 let dataDir: string;
 let priorSilDataDir: string | undefined;
@@ -98,7 +98,7 @@ afterEach(() => {
 // `index` / `plugin-load` red on top of that. Duplicate coverage is cost, not safety —
 // and a sixth tool-set mirror is one more place to forget to bump.
 
-describe("G2 — sil_doc_write: whole-body writes, and mode is load-bearing in BOTH directions", () => {
+describe("G2 — shopping_doc_write: whole-body writes, and mode is load-bearing in BOTH directions", () => {
   it("G2 — `body` is the WHOLE reconciled markdown: a replace REPLACES, it never appends", async () => {
     // The stacking failure the whole surface is shaped around. With no append and no
     // section patch, a correction cannot leave the contradicted row sitting above it.
@@ -143,7 +143,7 @@ describe("G2 — sil_doc_write: whole-body writes, and mode is load-bearing in B
   });
 });
 
-describe("G3 — sil_doc_find: coordinates only, composing filters, and unreadable is surfaced", () => {
+describe("G3 — shopping_doc_find: coordinates only, composing filters, and unreadable is surfaced", () => {
   it("G3 — returns COORDINATES and never a body; filters compose; a malformed document surfaces in `unreadable`", async () => {
     await seed();
     // A second Brief, done and in a domain, so `status` and `domain` have something
@@ -166,7 +166,7 @@ describe("G3 — sil_doc_find: coordinates only, composing filters, and unreadab
     const all = await call(FIND, {});
     const briefs = all["briefs"] as Array<Record<string, unknown>>;
     // COORDINATES ONLY. A body reaching the index makes the index the read, and the
-    // agent stops calling sil_doc_read — every listing then costs a whole store.
+    // agent stops calling shopping_doc_read — every listing then costs a whole store.
     expect(JSON.stringify(all)).not.toContain("won't blister");
     expect(briefs.every((b) => !("body" in b))).toBe(true);
     expect(briefs.map((b) => b["slug"]).sort()).toEqual(["chamonix-feb", "office-chair"]);
@@ -196,7 +196,7 @@ describe("G3 — sil_doc_find: coordinates only, composing filters, and unreadab
   });
 });
 
-describe("G4 — sil_doc_read: unreadable is NOT not_found", () => {
+describe("G4 — shopping_doc_read: unreadable is NOT not_found", () => {
   it("G4 — a present-but-corrupt document answers `unreadable` and steers to inspect, never to re-mint", async () => {
     // The distinction is the whole point: an agent that reads "absent" over a corrupt
     // document writes a fresh one, and the buyer's own words are gone. Both halves —
@@ -250,7 +250,7 @@ describe("G5 — a bad slug is rejected BEFORE any path join", () => {
   });
 });
 
-describe("sil_doc_remove — one document, never a cascade", () => {
+describe("shopping_doc_remove — one document, never a cascade", () => {
   it("removes one Brief, leaves every sibling and the shopper alone, and refuses to remove the person", async () => {
     // The cascade failure has no other home on this surface, and it is silent: a
     // removal that also took the shopper document would look like a clean success.

@@ -8,14 +8,23 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, posix } from "node:path";
 import { REPO_ROOT } from "./skill-bundle.js";
 
-// Tokens retired by the single-shopper + SDS-redesign pivots. Matched
-// CASE-INSENSITIVELY (each body is lowered, not the needle), so entries MUST be
-// lower-case — pinned by a guard-of-the-guard in the bundle contract test.
+// Tokens retired by the single-shopper pivot, the SDS redesign, and the agent contract
+// that renamed the loop's tools `shopping_*`. Matched CASE-INSENSITIVELY (each body is
+// lowered, not the needle), so entries MUST be lower-case — pinned by a
+// guard-of-the-guard in the bundle contract test.
+//
+// The second block is the OLD WIRE's words. They are the ones a rushed rename leaves
+// behind: prose that still drives the shopper at `sil_search`, or reads a `maturity` the
+// wire no longer carries, is prose that fails silently at the one moment it is read.
 export const RETIRED_TOKENS = [
   "profile.json", "domain_spec", "intent_spec", "playbook", "sil_remember",
   "sil_ping", "sil_echo", "rubric", "manage_domains",
   "refine_shopper", "sil_specs", "canonical",
   "sil_profile", "sil_learn", "method.md", "prd", "domainslug", "six-beat",
+  "sil_search", "sil_product_get", "sil_stores", "sil_domain_find", "sil_domain_create",
+  "sil_doc_", "maturity", "unset", "predicates", "applied", "option_set",
+  "charged_currency", "handoff", "data_type", "level:", "axis:", "capped",
+  "validated_at", "value_set",
 ];
 
 /** The bundle rule: a blanket forbid, no allowance, every needle. */
@@ -27,7 +36,20 @@ export const retiredTokenOffenders = (body: string): string[] => {
 /** Pin 2 — the RECORDED exclusion set. The derivation below subtracts silently,
  * so without this literal a new live identifier containing a needle switches it
  * off across all of `docs/` with no red. */
-export const DOCS_EXCLUDED_NEEDLES = ["canonical", "method.md", "prd", "domainslug"];
+export const DOCS_EXCLUDED_NEEDLES = [
+  "canonical",
+  "method.md",
+  "prd",
+  "domainslug",
+  // The agent contract's retirements whose STRING survives in live source for an
+  // unrelated reason: `appliedAction` on a finding, `capped` in the store's eviction
+  // prose, `unset` in the document store's, and the `sil_search_results_*` markers of
+  // the `sil.search_results` gateway method. The BUNDLE still forbids all four.
+  "applied",
+  "capped",
+  "unset",
+  "sil_search",
+];
 
 /** The retirement verbs the corpus already uses, FROZEN. Residue is cleared by a
  * named exemption, never by another word here — a vocabulary tuned until the

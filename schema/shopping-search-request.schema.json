@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-search-request.schema.json",
+  "title": "sil shopping_search — request",
+  "type": "object",
+  "required": [
+    "domain",
+    "query",
+    "n"
+  ],
+  "properties": {
+    "domain": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+      "maxLength": 255,
+      "description": "Sends the path the domain read returned."
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "Sends the buyer's words."
+    },
+    "n": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "description": "Asks for this many products."
+    },
+    "specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "op",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Names the key from the domain read; `price` is a key every domain has."
+          },
+          "op": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "eq"
+              },
+              {
+                "type": "string",
+                "const": "neq"
+              },
+              {
+                "type": "string",
+                "const": "gte"
+              },
+              {
+                "type": "string",
+                "const": "lte"
+              },
+              {
+                "type": "string",
+                "const": "in"
+              },
+              {
+                "type": "string",
+                "const": "nin"
+              }
+            ],
+            "description": "Sends the operator the domain read listed for this key."
+          },
+          "value": {
+            "description": "Sends the desired value, typed by the key's type."
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "description": "Required on money: sil holds no exchange rate, so the bound is tested against offers in this currency only."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 32,
+      "description": "Sends the desired spec values, one per hard row or preference."
+    }
+  },
+  "additionalProperties": false
+}

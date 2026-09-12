@@ -1,7 +1,7 @@
 /**
  * INTEGRATION — the ONE-HOP store migration off the legacy `domains/<slug>/` layout
  * (card acceptance G6). Real filesystem, real store, driven through the registered
- * `sil_doc_*` tools — the migration runs on first TOUCH of the document surface, so
+ * `shopping_doc_*` tools — the migration runs on first TOUCH of the document surface, so
  * driving the store function directly would test a path production never takes.
  *
  * WHY THIS TEST EXISTS AT ALL. `0.3.7 → 0.4.0` changed the store's shape and shipped
@@ -135,12 +135,12 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
 
     // FIRST TOUCH — any doc verb. The migration is not a separate command an operator
     // has to know about; a store that only ever gets read must still come across.
-    const found = await call("sil_doc_find");
+    const found = await call("shopping_doc_find");
     expect(found["status"]).toBe("ok");
 
     // TRANSFORM, half 1 — each method becomes a `## Shopping` `### <domain>` section
     // on the shopper document, and the person's own sections survive beside it.
-    const shopper = await call("sil_doc_read", { ref: "shopper" });
+    const shopper = await call("shopping_doc_read", { ref: "shopper" });
     expect(shopper["status"]).toBe("ok");
     const body = String(shopper["body"]);
     // SCOPED: G6 puts each method UNDER `## Shopping`, so a heading loose in the
@@ -160,7 +160,7 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
     // Not "a Brief exists": the row is the Brief's whole scope mechanism, and a PRD
     // that arrives with an empty table is a job the loop cannot fan out.
     const briefs = (found["briefs"] ?? []) as Array<Record<string, unknown>>;
-    const migrated = (await call("sil_doc_find", { query: "boots" }))["briefs"] as Array<
+    const migrated = (await call("shopping_doc_find", { query: "boots" }))["briefs"] as Array<
       Record<string, unknown>
     >;
     expect(migrated).toHaveLength(1);
@@ -168,7 +168,7 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
     const items = migrated[0]!["items"] as Array<Record<string, string>>;
     expect(items).toHaveLength(1);
     expect(items[0]!["item"]).toBe("boots");
-    const brief = await call("sil_doc_read", { ref: String(migrated[0]!["ref"]) });
+    const brief = await call("shopping_doc_read", { ref: String(migrated[0]!["ref"]) });
     expect(String(brief["body"])).toContain("Boots that won't blister");
 
     // VERIFY + drop — the legacy source is gone only because its replacement read
@@ -187,12 +187,12 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
     // …and NOTHING afterwards re-creates a legacy path. A normal write cycle over the
     // migrated store must add no `method.md`, no `prds/`, no new `domains/` leaf.
     expect(
-      (await call("sil_doc_write", { ref: "brief:new-job", mode: "create", title: "New", body: "## Items\n" }))[
+      (await call("shopping_doc_write", { ref: "brief:new-job", mode: "create", title: "New", body: "## Items\n" }))[
         "status"
       ],
     ).toBe("ok");
     expect(
-      (await call("sil_doc_write", { ref: "shopper", mode: "replace", body: `${body}\n## Fit\n| a | b | c |\n` }))[
+      (await call("shopping_doc_write", { ref: "shopper", mode: "replace", body: `${body}\n## Fit\n| a | b | c |\n` }))[
         "status"
       ],
     ).toBe("ok");
@@ -216,7 +216,7 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
     // only completion marker there is, so this is what proves it works.
     expect(
       (
-        await call("sil_doc_write", {
+        await call("shopping_doc_write", {
           ref: "shopper",
           mode: "create",
           name: "Ioannis",
@@ -225,7 +225,7 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
       )["status"],
     ).toBe("ok");
     expect(
-      (await call("sil_doc_write", { ref: "brief:chamonix", mode: "create", title: "Chamonix", body: "## Items\n" }))[
+      (await call("shopping_doc_write", { ref: "brief:chamonix", mode: "create", title: "Chamonix", body: "## Items\n" }))[
         "status"
       ],
     ).toBe("ok");
@@ -236,9 +236,9 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
     });
 
     // Three more touches, one per remaining verb.
-    await call("sil_doc_find");
-    await call("sil_doc_read", { ref: "shopper" });
-    await call("sil_doc_read", { ref: "brief:chamonix" });
+    await call("shopping_doc_find");
+    await call("shopping_doc_read", { ref: "shopper" });
+    await call("shopping_doc_read", { ref: "brief:chamonix" });
 
     // Byte-identical: not one document rewritten, none added, none removed.
     expect(
@@ -251,7 +251,7 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
     expect(
       vi
         .mocked(api.logger.info)
-        .mock.calls.filter(([marker]) => marker === "sil_doc_store_migrated"),
+        .mock.calls.filter(([marker]) => marker === "shopping_doc_store_migrated"),
     ).toEqual([]);
   });
 
@@ -280,9 +280,9 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
       artefact({ domain: "ski", name: "Ski" }, "Prefers last-year models. Never a narrow last.\n"),
     );
 
-    expect((await call("sil_doc_find"))["status"]).toBe("ok");
+    expect((await call("shopping_doc_find"))["status"]).toBe("ok");
 
-    const body = String((await call("sil_doc_read", { ref: "shopper" }))["body"]);
+    const body = String((await call("shopping_doc_read", { ref: "shopper" }))["body"]);
     // The section landed where G6 puts it — scoped, because placement is the claim.
     expect(section(body, "## Shopping")).toMatch(/^### ski$/m);
     // …carrying the taste. Unscoped: this one is the data-loss assertion.
@@ -309,16 +309,16 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
       artefact({ domain: "ski", name: "Ski" }, "Prefers last-year models. Never a narrow last.\n"),
     );
 
-    expect((await call("sil_doc_find"))["status"]).toBe("ok");
+    expect((await call("shopping_doc_find"))["status"]).toBe("ok");
 
-    const shopping = section(String((await call("sil_doc_read", { ref: "shopper" }))["body"]), "## Shopping");
+    const shopping = section(String((await call("shopping_doc_read", { ref: "shopper" }))["body"]), "## Shopping");
     expect(shopping).toContain("Never a narrow last"); // the legacy taste came across
     expect(shopping).toContain("Whatever the shop recommends"); // …beside the buyer's own
   });
 
   it("G6 — a legacy directory name carrying a regex metacharacter migrates through a structural probe, and never throws across the tool boundary", async () => {
     // A slug interpolated into `new RegExp(...)` is a SyntaxError waiting on a live
-    // disk: `foo(bar` makes every `sil_doc_*` call throw for that store, forever, against
+    // disk: `foo(bar` makes every `shopping_doc_*` call throw for that store, forever, against
     // `doc-store.ts`'s standing invariant that the store never throws across the tool
     // boundary. A line-equality probe cannot throw and needs no escaping.
     write(join(shopperDir(), "user_spec.md"), artefact({ name: "Ioannis" }, "## Who\nBuys once.\n"));
@@ -327,9 +327,9 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
       artefact({ domain: "foo(bar" }, "Only the wide last fits.\n"),
     );
 
-    expect((await call("sil_doc_find"))["status"]).toBe("ok");
+    expect((await call("shopping_doc_find"))["status"]).toBe("ok");
 
-    const body = String((await call("sil_doc_read", { ref: "shopper" }))["body"]);
+    const body = String((await call("shopping_doc_read", { ref: "shopper" }))["body"]);
     expect(section(body, "## Shopping")).toMatch(/^### foo\(bar$/m);
     expect(body).toContain("Only the wide last fits");
   });
@@ -348,9 +348,9 @@ describe("G6 — the one-hop migration off `domains/<slug>/{method.md, prds/*.md
       artefact({ domain: "ski", name: "Ski" }, "Prefers last-year models.\n"),
     );
 
-    expect((await call("sil_doc_find"))["status"]).toBe("ok");
+    expect((await call("shopping_doc_find"))["status"]).toBe("ok");
 
-    const body = String((await call("sil_doc_read", { ref: "shopper" }))["body"]);
+    const body = String((await call("shopping_doc_read", { ref: "shopper" }))["body"]);
     expect(body.split(/\r?\n/).filter((l) => l.trim() === "### ski")).toHaveLength(1);
     // …and the hop still COMPLETES: recognising the section is not a reason to leave
     // the legacy tree behind, which would re-run the migration on every call forever.

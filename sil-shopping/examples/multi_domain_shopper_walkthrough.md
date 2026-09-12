@@ -19,7 +19,7 @@ so it lives in the shopper document's `## Constraints`.
 
 ### Beat 1 — BRIEF (once per job)
 
-`sil_doc_find { kind: "brief", query: "chamonix ski" }` → nothing open. Open one Brief,
+`shopping_doc_find { kind: "brief", query: "chamonix ski" }` → nothing open. Open one Brief,
 `brief:chamonix-feb`, and write **scope only**:
 
 ```
@@ -41,22 +41,24 @@ item is a legal, writable state. Beat 1 does not run again for this job.
 
 ### Beat 2 — DOMAIN (twice: once per item)
 
-- **boots** — `sil_domain_find { q: "boots that won't blister, resort skiing" }` returns a
-  guide describing ski boots ⇒ **adopt** that path verbatim, copy its guide into the Brief's
-  `## Buying guide`, write the path into the boots row, and announce it. The
-  exact-by-domain `sil_doc_find` in that domain returns nothing done, so **no verdict ask**.
+- **boots** — `shopping_domain_search { q: "boots that won't blister, resort skiing" }`
+  names a path whose `about` describes ski boots ⇒ **adopt** it verbatim, read it with
+  `shopping_domain_get`, copy its guide into the Brief's `## Buying guide`, write the path
+  into the boots row, and announce it. The
+  exact-by-domain `shopping_doc_find` in that domain returns nothing done, so **no verdict ask**.
 - **shell** — a second, independent read. Its guide is about outerwear; nothing about the
   boots resolution carried across. Adopted, written into the shell row, announced.
 
-The guide names `liner_type` as decisive for boots, and the resolved vocabulary has no key
-for the *instep volume* the buyer described — so that travels as an **unapplied predicate**
-plus a `## Notes / open` row, and is never coined into the shared registry.
+The guide names `liner_type` as decisive for boots, and the domain read returned no key
+for the *instep volume* the buyer described — so that travels as a spec row whose key comes
+back absent from `fit`, a **named gap**, plus a `## Notes / open` row. It is never coined
+into the shared registry.
 
 ### Beat 3 — FILL (per item)
 
 The shopper document is read first: the wool exclusion becomes `fibre_wool_pct eq 0` in
 `## Hard constraints` (it reaches **both** items — it is scoped at the root), and the
-recorded foot width becomes `last_width_mm gte 102` on the boots only. Neither sentence
+recorded foot width becomes `last_width gte 102` on the boots only. Neither sentence
 appears in either source; the guide did the translation. Each item gets its `applies:`
 line. Fill asks nothing.
 
@@ -71,16 +73,19 @@ buyer answers the first and skips the second: the shell's dimension is written t
 ### Beat 5 — SEARCH (per item, ≤ 4 calls each)
 
 Two independent fan-outs, issued concurrently. Each starts with its tightest projection —
-the ancestor-scoped rows as `predicates`, the item's own subsection prose as `query` — then
+the ancestor-scoped rows as `specs`, the item's own subsection prose as `query` — then
 widens **soft** rows only. The boots' four calls do not spend the shell's budget.
 
 ### Beat 6 — REFLECT (per item)
 
-The veto runs first on three states. Two boot results come back `maturity: web` with their
-widths honestly `unset` ⇒ **NOT VERIFIED**, kept and flagged with the missing key named.
-One is `applied: true, state: "set"` at 98 mm ⇒ **VIOLATED**, out. The job's stated ceiling
-is summed across both picks here, not turned into a predicate. A hero plus one alternative,
-each with a why.
+The veto runs first on three states. Two boot products come back carrying `webpage_info`
+and an empty `fit` ⇒ **NOT VERIFIED**, kept and flagged with the missing key named. A third
+carries `fit: { last_width: 98 }` ⇒ **VIOLATED**, out. A fourth is in budget but its price
+is in dollars against a euro row — a bound sil could not test, said out loud. The job's
+stated ceiling is summed across both picks here, never turned into a spec row.
+`shopping_product_get` opens the two survivors, `shopping_offers` dates their prices per
+seller and `shopping_seller_get` says which of those sellers reaches Berlin. A hero plus
+one alternative, each with a why.
 
 ### Beat 7 — FEEDBACK (per item)
 
@@ -95,7 +100,7 @@ The buyer opens a new boots job. Beat 2's exact-by-domain recall finds `brief:ch
 `done` with a pick carrying no `## Past purchases` row, so the session opens with one plain
 question naming the thing: *"before we shop boots again — how did they work out?"*
 
-*"Bad — heels blistered by day three."* One `sil_doc_write { ref: "shopper", mode:
+*"Bad — heels blistered by day three."* One `shopping_doc_write { ref: "shopper", mode:
 "replace" }` writes three things: the `## Past purchases` row (what · when · verdict ·
 **why**, in the buyer's own words), a `## Fit` row because the shell size taught something,
 and the `## Shopping` section that said *"runs a snug last"* — **re-derived whole**, not
@@ -107,5 +112,5 @@ and the new job would run unaffected.
 ## The singleton edge
 
 "Set me up a second shopper" → the engine refuses: **a shopper already exists**. Steer to
-opening a new Brief, or correcting the current one with `sil_doc_write` — never a second
+opening a new Brief, or correcting the current one with `shopping_doc_write` — never a second
 shopper.

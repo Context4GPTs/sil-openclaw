@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-search-response.schema.json",
+  "title": "sil shopping_search — response",
+  "type": "object",
+  "required": [
+    "status",
+    "products"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "fit",
+          "price",
+          "variants"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Writes it into the Brief as the pick, so the next session names the same product."
+          },
+          "title": {
+            "type": "string",
+            "description": "Draws the card with it."
+          },
+          "brand": {
+            "type": "string",
+            "description": "Names the maker to the buyer."
+          },
+          "image": {
+            "type": "string",
+            "description": "Shows it on the card."
+          },
+          "fit": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "description": "Compares each requested product-level key with what it asked; a key absent here is a gap, never a miss."
+          },
+          "price": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "from",
+                "to",
+                "currency"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                  "description": "Quotes the low end of what the product costs in this currency."
+                },
+                "to": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                  "description": "Quotes the high end."
+                },
+                "currency": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3,
+                  "description": "Reads which currency the range is in; sil converts nothing."
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Quotes the range; a currency other than the ask's is a bound sil could not test."
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Passes it to `shopping_product_get` and `shopping_offers`."
+                }
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "description": "A variant that fits, and every option value that identifies it."
+            },
+            "description": "Passes an `id` on to the dossier and the offers; names the option to the buyer. Empty means no listed option fits."
+          },
+          "webpage_info": {
+            "type": "object",
+            "required": [
+              "url",
+              "text"
+            ],
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Links the page it read the words off."
+              },
+              "text": {
+                "type": "string",
+                "description": "Reads the page's own words for a provisional pick, never as verified; cut at 1500 characters on the search, whole on the dossier."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Reads a page sil has not read yet, in the page's own words."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Shows the shortlist in this order, and never re-ranks it."
+    }
+  },
+  "additionalProperties": false
+}

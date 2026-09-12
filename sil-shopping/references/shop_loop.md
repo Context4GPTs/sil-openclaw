@@ -12,7 +12,7 @@ difference. The loop has **eight beats**, and they do not all run at the same ra
 |---|---|---|---|
 | 1 | **BRIEF** — scope the job in the buyer's words | **once per job** | here |
 | 2 | **DOMAIN** — resolve the item's category, adopt its guide | **per item** | [`domain_and_brief.md`](domain_and_brief.md) |
-| 3 | **FILL** — resolve the predicates from what you already hold | **per item** | [`fill_and_feedback.md`](fill_and_feedback.md) |
+| 3 | **FILL** — resolve the spec rows from what you already hold | **per item** | [`fill_and_feedback.md`](fill_and_feedback.md) |
 | 4 | **ASK** — the one gate for what is still open and load-bearing | **per item** | [`fill_and_feedback.md`](fill_and_feedback.md) |
 | 5 | **SEARCH** — the bounded fan-out | **per item** | here |
 | 6 | **REFLECT** — veto on three states, then judge | **per item** | here |
@@ -28,11 +28,11 @@ This file owns Beats 1, 5 and 6.
 
 ## Beat 1 — BRIEF: scope the job, in the buyer's words, before any domain
 
-**Recall first** — `sil_doc_find { kind: "brief", query: <the buyer's own words> }` is a
-**text** recall, and when an open Brief already covers this job you **reuse it** rather
-than open a second Brief for one job. This is the first of two recalls and it does not
-replace the second: Beat 2 runs an **exact-by-domain** recall over a different question,
-and neither subsumes the other.
+**Recall first** — `shopping_doc_find { kind: "brief", query: <the buyer's own words> }`
+is a **text** recall, and when an open Brief already covers this job you **reuse it**
+rather than open a second Brief for one job. This is the first of two recalls and it does
+not replace the second: Beat 2 runs an **exact-by-domain** recall over a different
+question, and neither subsumes the other.
 
 **Then decide scope, and only scope.** The Brief gets an `## Items` table with **one row
 per thing being bought**, and one **prose subsection per row** carrying that thing in the
@@ -45,7 +45,7 @@ buyer's own words. **No domains yet** — classification is Beat 2's job, per it
 - **`## Context` is job-level background** — the trip, the occasion, the total budget.
   It is reasoned over; it is never sent as a search query.
 
-Write it with `sil_doc_write { ref: "brief:<slug>", mode: "create", title, status:
+Write it with `shopping_doc_write { ref: "brief:<slug>", mode: "create", title, status:
 "active" }`, body = the whole markdown. The document model, section by section, is in
 [`domain_and_brief.md`](domain_and_brief.md).
 
@@ -58,18 +58,18 @@ asked for.
 
 Beat 5 **projects** what Beats 3–4 resolved; it never re-derives it. For **each item**:
 
-- **`predicates`** — every `## Hard constraints` and `## Preferences` row whose `domain`
-  is **ancestor-or-self** of that item's domain, sent as `{ key, op, value, currency? }`.
+- **`specs`** — every `## Hard constraints` and `## Preferences` row whose `domain` is
+  **ancestor-or-self** of that item's domain, sent as `{ key, op, value, currency? }`.
   `product.fibre_wool_pct = 0` reaches every item; a boots-scoped row reaches the boots
-  only. `currency` is **required** on a money predicate (sil holds no exchange rate).
-  Hardness is the row's **section**, not a wire field — it is Beat 6 that enforces it.
+  only. `price` is a key every domain has without the read listing it, and its
+  `currency` is **required** — sil holds no exchange rate. Hardness is the row's
+  **section**, not a wire field — it is Beat 6 that enforces it.
 - **`query`** — that item's own subsection prose, which **you author**. The plugin is pure
-  transport and never folds a predicate into `query`.
-- **`destination`** — leave empty; the server resolves the buyer's registered country.
+  transport and never folds a spec row into `query`.
 - **`n`** is a spend knob (the web leg fetches candidates to fill it) — choose it for the
   actual need rather than always asking for the ceiling.
 
-**The bound is ≤ 4 priority-ordered `sil_search` calls PER ITEM.** It is never spent
+**The bound is ≤ 4 priority-ordered `shopping_search` calls PER ITEM.** It is never spent
 across the whole job: each item gets its own fan-out, and halving one item's budget
 because another item spent it is not the bound, it is a bug.
 
@@ -77,40 +77,46 @@ because another item spent it is not the bound, it is a bug.
   least load-bearing **soft** row, an adjacent phrasing that lifts recall, or an explicit
   either/or branch. **A hard row is never relaxed.**
 - **Merge = dedup + concatenate in issue order — never a re-rank.** Issue order *is*
-  priority order: the engine owns order within a call, the fan-out across calls.
+  priority order: the server owns order within a call, the fan-out across calls.
 - **Items are searched concurrently** — they are independent, and the server's own
   per-host and per-principal ceilings bound the blast radius.
-- **Then read `predicates[]`, per row.** Each says `applied: true` / `"partial"` /
-  `false`. `false` means sil had nothing to evaluate it against — a named gap, and never
-  a reason to drop a result. It is what Beat 6 reads.
+- **Then read each product's `fit`, row by row.** It carries the value sil holds for
+  every product-level key the ask named, and nothing else. A key absent from it is a
+  named gap — sil holds no value for it — and never a reason to drop a product. It is
+  what Beat 6 reads.
 
-**Beat 5's reads are three, and only three:** `sil_search`, `sil_product_get` (the
-shortlist re-read, live prices) and `sil_stores` (the pick's serviceability, capability,
-fulfillment and returns check). There is no review read in this version and none is
-named; do not invent one, and do not substitute the open web.
+**Beat 5's reads are four, and only four:** `shopping_search`, `shopping_product_get`
+(the whole dossier on a shortlisted variant), `shopping_offers` (dated prices per seller,
+read live) and `shopping_seller_get` (whether that seller ships to the buyer, and on what
+terms). There is no review read in this version and none is named; do not invent one, and
+do not substitute the open web.
 
 ## Beat 6 — REFLECT: veto first, on three states, then judge
 
-Take Beat 5's merged issue-order list and its per-call `predicates[]`. Run
-**veto → ask-or-judge → branch**, and **never re-rank**: the engine owns order, you own
+Take Beat 5's merged issue-order list and each product's `fit`. Run
+**veto → ask-or-judge → branch**, and **never re-rank**: the server owns order, you own
 the verdict.
 
 **1 — The veto, first.** Sort every survivor against each *hard* row into exactly one of
-three buckets, from three inputs sil hands you — `predicates[].applied`, that result's
-`values[key].state`, and its `maturity`:
+three buckets, from what sil actually handed you — the value under that key in `fit`, the
+`variants` that came back, and the currency each price is in:
 
-- **VIOLATED** — `applied: true` **and** `state: "set"` **and** the held value fails the
-  hard row. Out; it never becomes the pick.
-- **NOT VERIFIED** — `applied` is `false` or `"partial"`, **or** `state: "unset"`. It
-  stays in, **flagged**, with the missing key named. Never silently passed and never
-  silently dropped.
-- **VERIFIED** — `applied: true`, `state: "set"`, value passes.
+- **VIOLATED** — `fit` carries the key **and** the value sil holds fails the hard row.
+  Out; it never becomes the pick. A requested variant spec is failed the same way: an
+  empty `variants` says no listed option fits.
+- **NOT VERIFIED** — the key is **absent from `fit`**, so sil holds no value for it, or
+  the only evidence is `webpage_info` (the page's own words, which sil has not read yet),
+  or the price is in a currency the buyer's bound could not be tested against. It stays
+  in, **flagged**, with the missing key named. Never silently passed and never silently
+  dropped.
+- **VERIFIED** — `fit` carries the key and the value passes.
 
-`maturity` never vetoes on its own: a `web` result is a real listing whose values are
-honestly `unset`, so it lands in NOT VERIFIED, never in VIOLATED.
+`webpage_info` never vetoes on its own: a product carrying it is a real listing whose
+values sil has not read yet, so it lands in NOT VERIFIED, never in VIOLATED. The
+**absence** of `webpage_info` is the positive signal — those values were verified.
 
 **Job arithmetic runs here too** — a total budget stated in `## Context` is summed across
-the job's picks at pick time, never turned into a predicate row.
+the job's picks at pick time, never turned into a spec row.
 
 **2 — Re-enter ASK when the set cannot answer.** When **not-verified dominates** the
 surviving set, or the guide marks the risk **unrecoverable after purchase**, go back to
@@ -118,7 +124,10 @@ surviving set, or the guide marks the risk **unrecoverable after purchase**, go 
 
 **3 — Judge, then branch.** Weigh the best surviving candidate against the Brief and the
 guide. Satisfies-or-falls-short is a **judgment**, not a threshold and not a mechanical
-any-unmet-row rule — read the whole set.
+any-unmet-row rule — read the whole set. Before you recommend, open the pick:
+`shopping_product_get` for the whole dossier and where each reading came from,
+`shopping_offers` for who sells it and at what dated price, `shopping_seller_get` for
+whether that seller reaches the buyer.
 
 - **Satisfies → a hero + 1–2 justified alternatives.** Lead with **one** recommendation
   carrying the *why* (a met row, a guide mechanic, a stored fact reused without
@@ -128,7 +137,7 @@ any-unmet-row rule — read the whole set.
   closest survivors, **propose** the specific change that would widen it, then **wait**.
   No silent re-search, no silent auto-widen; the buyer can redirect instead.
 
-A **non-`ok`** status is not an empty match — do not relax params; follow that tool's own
+A **non-`ok`** status is not an empty match — do not relax the ask; follow that tool's own
 **`recovery`** exactly.
 
 **Then Beat 7.** The buyer's reaction is what Beat 7 captures —

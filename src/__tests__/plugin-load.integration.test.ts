@@ -162,22 +162,24 @@ describe("plugin load — data dir is created by the FULL real register() (card 
     expect(markerCalls).toHaveLength(1);
     // The full real tool set — the data-dir creation does not add/drop a tool.
     // 12 tools: the eight-beat card REPLACES the five profile verbs with the four
-    // `sil_doc_*` document tools (13 → 12, a group swap in src/index.ts). The set is
+    // `shopping_doc_*` document tools (13 → 12, a group swap in src/index.ts). The set is
     // exact in BOTH directions on purpose — loosening it to `toContain` stops it
     // catching a silent removal, which is how a shipped tool disappears under a
     // green suite.
     expect([...api._tools.keys()].sort()).toEqual([
-      "sil_doc_find",
-      "sil_doc_read",
-      "sil_doc_remove",
-      "sil_doc_write",
+      "shopping_doc_find",
+      "shopping_doc_read",
+      "shopping_doc_remove",
+      "shopping_doc_write",
+      "shopping_domain_create",
+      "shopping_domain_get",
+      "shopping_domain_search",
+      "shopping_offers",
+      "shopping_product_get",
+      "shopping_search",
+      "shopping_seller_get",
       "sil_doctor",
-      "sil_domain_create",
-      "sil_domain_find",
-      "sil_product_get",
       "sil_register",
-      "sil_search",
-      "sil_stores",
       "sil_whoami",
     ]);
   });

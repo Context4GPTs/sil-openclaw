@@ -39,7 +39,7 @@ export function registerDocTools(api: PluginAPI): void {
 function migrateOnTouch(api: PluginAPI): void {
   const summary = migrateLegacyStore();
   if (summary === null) return;
-  api.logger.info("sil_doc_store_migrated", {
+  api.logger.info("shopping_doc_store_migrated", {
     shopping_sections: summary.shoppingSections,
     briefs: summary.briefs,
     failed_count: summary.failed.length,
@@ -49,13 +49,13 @@ function migrateOnTouch(api: PluginAPI): void {
 
 function registerFind(api: PluginAPI): void {
   api.registerTool({
-    name: "sil_doc_find",
+    name: "shopping_doc_find",
     label: "List the sil shopper's documents",
     description:
       "The index over the sil shopper's own documents on this machine — the shopper"
       + " document (who the buyer is) and their Briefs (one shopping job each, with an"
       + " `## Items` row per thing being bought). COORDINATES ONLY: a ref, a title, a"
-      + " status and the item rows — bodies come from sil_doc_read. All filters are"
+      + " status and the item rows — bodies come from shopping_doc_read. All filters are"
       + " optional and compose; the bare call answers \"what does this shopper have?\"."
       + " `domain` is a path prefix matched against each Brief's item domains, so"
       + " `product` reaches every item under it. A document with malformed frontmatter"
@@ -83,8 +83,8 @@ function registerFind(api: PluginAPI): void {
         status: optString(params["status"]),
         query: optString(params["query"]),
       });
-      if (!result.ok) return mapFailure(api, "sil_doc_find", result);
-      api.logger.info("sil_doc_found", {
+      if (!result.ok) return mapFailure(api, "shopping_doc_find", result);
+      api.logger.info("shopping_doc_found", {
         brief_count: result.briefs.length,
         has_shopper: result.shopper !== undefined,
         unreadable_count: result.unreadable.length,
@@ -102,14 +102,14 @@ function registerFind(api: PluginAPI): void {
 
 function registerRead(api: PluginAPI): void {
   api.registerTool({
-    name: "sil_doc_read",
+    name: "shopping_doc_read",
     label: "Read one sil shopper document",
     description:
       "Read ONE whole document body plus its frontmatter from the sil shopper's store."
       + " `ref` is \"shopper\" (the person — their body facts, fit, shopping taste,"
       + " constraints and past purchases) or \"brief:<slug>\" (one shopping job — its"
       + " items, buying guide, hard constraints, preferences and open questions)."
-      + " Discover refs with sil_doc_find. not_found is reported ONLY when sil could"
+      + " Discover refs with shopping_doc_find. not_found is reported ONLY when sil could"
       + " list the directory that would hold the document and it was not in it — a"
       + " directory sil could not list answers unreadable instead, as does a present but"
       + " corrupt document: inspect and repair it, never write a fresh document over it,"
@@ -124,15 +124,14 @@ function registerRead(api: PluginAPI): void {
     async execute(_callId, params) {
       migrateOnTouch(api);
       const result = readDocument(params["ref"]);
-      if (!result.ok) return mapFailure(api, "sil_doc_read", result);
-      api.logger.info("sil_doc_read", { doc_kind: result.kind });
+      if (!result.ok) return mapFailure(api, "shopping_doc_read", result);
+      api.logger.info("shopping_doc_read", { doc_kind: result.kind });
       return jsonResult({
         status: "ok",
         ref: result.ref,
         kind: result.kind,
         fields: result.fields,
         body: result.body,
-        path: result.path,
         ...wiringAdvisories(api),
       });
     },
@@ -141,12 +140,12 @@ function registerRead(api: PluginAPI): void {
 
 function registerWrite(api: PluginAPI): void {
   api.registerTool({
-    name: "sil_doc_write",
+    name: "shopping_doc_write",
     label: "Write one sil shopper document",
     description:
       "Write ONE document in the sil shopper's store. `body` is always the WHOLE"
       + " reconciled markdown — there is no append and no section patch, so read the"
-      + " current document with sil_doc_read, reconcile it in context carrying every"
+      + " current document with shopping_doc_read, reconcile it in context carrying every"
       + " buyer line forward, and write the whole thing back; that is what stops a"
       + " correction stacking a row that contradicts the one above it. `mode` is"
       + " load-bearing in both directions: create fails if the ref already exists, and"
@@ -184,15 +183,14 @@ function registerWrite(api: PluginAPI): void {
         status: optString(params["status"]),
         name: optString(params["name"]),
       });
-      if (!result.ok) return mapFailure(api, "sil_doc_write", result);
+      if (!result.ok) return mapFailure(api, "shopping_doc_write", result);
       // Non-PII markers only — no document body ever reaches a log line.
-      api.logger.info("sil_doc_written", { doc_kind: result.kind, mode: result.mode });
+      api.logger.info("shopping_doc_written", { doc_kind: result.kind, mode: result.mode });
       return jsonResult({
         status: "ok",
         ref: result.ref,
         kind: result.kind,
         mode: result.mode,
-        path: result.path,
         ...wiringAdvisories(api),
       });
     },
@@ -201,7 +199,7 @@ function registerWrite(api: PluginAPI): void {
 
 function registerRemove(api: PluginAPI): void {
   api.registerTool({
-    name: "sil_doc_remove",
+    name: "shopping_doc_remove",
     label: "Remove one sil shopper document",
     description:
       "Remove ONE document from the sil shopper's store — never a cascade: nothing"
@@ -209,7 +207,7 @@ function registerRemove(api: PluginAPI): void {
       + " by sil_doctor rather than followed. Destructive, so confirm with the buyer"
       + " first. Only a Brief is removable; the shopper document is the person every"
       + " Brief was written from, so it answers invalid_request — correct it with"
-      + " sil_doc_write (mode: replace) instead. not_found is reported ONLY when sil"
+      + " shopping_doc_write (mode: replace) instead. not_found is reported ONLY when sil"
       + " could list the directory that would hold the document and it was not in it;"
       + " a directory sil could not list answers unreadable instead, and is never proof"
       + " that the delete landed. Local-only, no network.",
@@ -221,8 +219,8 @@ function registerRemove(api: PluginAPI): void {
     async execute(_callId, params) {
       migrateOnTouch(api);
       const result = removeDocument(params["ref"]);
-      if (!result.ok) return mapFailure(api, "sil_doc_remove", result);
-      api.logger.info("sil_doc_removed", { doc_kind: result.kind });
+      if (!result.ok) return mapFailure(api, "shopping_doc_remove", result);
+      api.logger.info("shopping_doc_removed", { doc_kind: result.kind });
       return jsonResult({
         status: "removed",
         ref: result.ref,

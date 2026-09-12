@@ -610,12 +610,12 @@ describe("created — one valid run wires every surface and returns the identity
     // the mechanics live in the attached skill). Tolerant markers, not whole sentences:
     // its heading, the `explore first` mantra, memory via the shopper's own documents,
     // and the one distinction that matters — the catalog is where you buy, the web is
-    // where you learn. The memory marker moved `sil_learn` → `sil_doc_read`: a creed
+    // where you learn. The memory marker moved `sil_learn` → `shopping_doc_read`: a creed
     // that names a deleted tool teaches the shopper an unreachable move at identity
     // level, which is the loudest possible place to be wrong.
     expect(soulText).toContain("## The sil way");
     expect(soulText).toMatch(/explore first/i);
-    expect(soulText).toContain("sil_doc_read");
+    expect(soulText).toContain("shopping_doc_read");
     expect(soulText).not.toContain("sil_learn");
     expect(soulText).toMatch(/catalog is where you buy/i);
     // The persona + creed live in exactly one place — never a sil persona.md.

@@ -102,6 +102,18 @@ describe("package.json — OpenClaw ESM plugin shape", () => {
     expect(pkg.files).toContain("openclaw.plugin.json");
   });
 
+  it("ships `schema/` — every shopping tool reads its request artifact at REGISTRATION", () => {
+    // Harder than a discovery failure: `registerCatalogTools` parses the artifact to
+    // build each tool's `parameters`, so a packed artifact without `schema/` throws
+    // inside `register()` and the whole plugin fails to load. Green here, a dead
+    // install there.
+    expect(pkg.files).toContain("schema");
+    const artifacts = readdirSync(join(REPO_ROOT, "schema")).filter((f) =>
+      f.endsWith(".schema.json"),
+    );
+    expect(artifacts).toHaveLength(14);
+  });
+
   it("declares build and test scripts", () => {
     expect(pkg.scripts).toBeTypeOf("object");
     expect(typeof pkg.scripts!["build"]).toBe("string");

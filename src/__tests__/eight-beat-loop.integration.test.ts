@@ -124,10 +124,10 @@ describe("A — BRIEF and the cadence", () => {
     // open a second Brief" are two sentences by design, and forcing them into one
     // would be pinning a sentence rather than locating a decision.
     const first = beatBody(1);
-    expect(first).toContain("sil_doc_find");
+    expect(first).toContain("shopping_doc_find");
     expect(first).toMatch(/\breuse\b/i);
     expect(first).toMatch(/second brief|a second|not a second|never a second/i);
-    expect(beatBody(2)).toContain("sil_doc_find");
+    expect(beatBody(2)).toContain("shopping_doc_find");
 
     // …and the bundle says the two reads are two, so neither is optimised away.
     const bothReads = statements().filter((s) => /recall/i.test(s));
@@ -219,14 +219,14 @@ describe("B — DOMAIN", () => {
 });
 
 describe("C — ASK is a beat, so `## Notes / open` is a surface", () => {
-  it("C1 — ASK runs BEFORE that item's first `sil_search`", () => {
+  it("C1 — ASK runs BEFORE that item's first `shopping_search`", () => {
     // Beat ordering alone (A3) says ASK precedes SEARCH; this says the bundle states
     // the CONSEQUENCE — no search is issued for an item whose load-bearing dimension
     // is still open until the ask has run.
     const units = beatStatements(4);
     expect(units.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(units, (s) => /\bbefore\b/i.test(s) && /sil_search|\bsearch\b/i.test(s)),
+      unsatisfied(units, (s) => /\bbefore\b/i.test(s) && /shopping_search|\bsearch\b/i.test(s)),
     ).toEqual([]);
   });
 
@@ -344,25 +344,31 @@ describe("C — ASK is a beat, so `## Notes / open` is a surface", () => {
   });
 });
 
-describe("D — SEARCH at the v0 narrowing", () => {
-  it("D1 — beat 5 reads ONLY sil_search / sil_product_get / sil_stores; no review read exists and none is named", () => {
+describe("D — SEARCH, as the contract narrows it", () => {
+  it("D1 — beat 5 reads ONLY the four shopping reads; no review read exists and none is named", () => {
     const body = beatBody(5);
-    const missing = ["sil_search", "sil_product_get", "sil_stores"].filter(
-      (t) => !body.includes(t),
-    );
+    const missing = [
+      "shopping_search",
+      "shopping_product_get",
+      "shopping_offers",
+      "shopping_seller_get",
+    ].filter((t) => !body.includes(t));
     expect(missing).toEqual([]);
-    // `sil_reviews` is a V1 tool. Naming a tool the plugin does not register hands
-    // the agent a dangling pointer: it tries it, fails, and has no recovery.
-    expect(bundleFiles().filter((rel) => read(rel).includes("sil_reviews"))).toEqual([]);
+    // A review read is a V1 tool. Naming a tool the plugin does not register hands the
+    // agent a dangling pointer: it tries it, fails, and has no recovery.
+    const dangling = bundleFiles().filter(
+      (rel) => read(rel).includes("sil_reviews") || read(rel).includes("shopping_reviews"),
+    );
+    expect(dangling).toEqual([]);
   });
 
   it("D2 — the ≤4 priority-ordered call bound is PER ITEM, never per request and never per job", () => {
-    // `SKILL.md` said "per request". On a two-item job that either halves the second
+    // `SKILL.md` once said "per request". On a two-item job that either halves the second
     // item's budget or blows the bound, and neither is visible from any other bar.
     const bounded = statements().filter(
       (s) =>
         /(≤\s*4|\b4\b|\bfour\b)[^.]{0,80}\bcalls?\b|\bcalls?\b[^.]{0,80}(≤\s*4|\bfour\b)/i.test(s)
-        && /sil_search|\bsearch\b/i.test(s),
+        && /shopping_search|\bsearch\b/i.test(s),
     );
     expect(bounded.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(unsatisfied(bounded, (s) => /per item|each item/i.test(s))).toEqual([]);
@@ -376,33 +382,34 @@ describe("D — SEARCH at the v0 narrowing", () => {
   });
 });
 
-describe("E — REFLECT keeps its shipped three-state veto (no-regression)", () => {
-  // The card is explicit that the veto is NOT a gap: it ships, and this rewrite must
-  // not cost it. Nothing guarded it before — the prose test that would have was
-  // deleted — so these three are the first bars it has ever had.
+describe("E — REFLECT keeps its three-state veto, re-derived onto the contract's honesty", () => {
+  // The veto ships and this rewrite must not cost it. What changed is its INPUTS: the
+  // contract retired the per-value state, the per-row report and the maturity flag, and
+  // put the whole of what sil verified in one place — `fit`. The three buckets are the
+  // same three; what fills them is read off the new wire.
 
-  it("E1 (no-regression) — VIOLATED is `applied: true` + `state: \"set\"` + a held value that fails the hard row: out, always", () => {
+  it("E1 — VIOLATED is a key `fit` CARRIES whose value fails the hard row: out, always", () => {
     const body = beatBody(6);
     expect(body).toMatch(/\bVIOLATED\b/);
     const violated = splitStatements(body).filter((s) => /\bVIOLATED\b/.test(s));
     expect(violated.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(
-        violated,
-        (s) => /applied/i.test(s) && /\bstate\b/i.test(s) && /fail/i.test(s),
-      ),
+      unsatisfied(violated, (s) => /\bfit\b/i.test(s) && /fail/i.test(s)),
     ).toEqual([]);
     expect(body).toMatch(/\bout\b|never (becomes )?the pick|never the pick/i);
   });
 
-  it("E2 (no-regression) — NOT VERIFIED is kept and FLAGGED with the missing key named — never silently passed, never silently dropped", () => {
+  it("E2 — NOT VERIFIED is kept and FLAGGED with the missing key named — never silently passed, never silently dropped", () => {
+    // The bucket the whole honesty turns on, and the one with three ways in now: a key
+    // absent from `fit`, a page sil has not read, and a bound in a currency it could not
+    // test. All three keep their product.
     const body = beatBody(6);
     const notVerified = splitStatements(body).filter((s) => /NOT[ -]VERIFIED/i.test(s));
     expect(notVerified.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
       unsatisfied(
         notVerified,
-        (s) => /applied/i.test(s) && /(false|partial)/i.test(s) && /unset/i.test(s),
+        (s) => /absent from `?fit`?/i.test(s) && /webpage_info/i.test(s) && /currency/i.test(s),
       ),
     ).toEqual([]);
     expect(body).toMatch(/flag/i);
@@ -410,15 +417,26 @@ describe("E — REFLECT keeps its shipped three-state veto (no-regression)", () 
     expect(body).toMatch(/silently/i);
   });
 
-  it("E3 (no-regression) — `maturity` never vetoes on its own: a `web` result lands in NOT VERIFIED, never in VIOLATED", () => {
-    const maturity = splitStatements(beatBody(6)).filter((s) => /maturity/i.test(s));
-    expect(maturity.length).toBeGreaterThan(0); // guard-of-the-guard
+  it("E3 — `webpage_info` never vetoes on its own: it lands in NOT VERIFIED, never in VIOLATED", () => {
+    // A page sil has not read yet is a REAL listing at a real price. Reading its
+    // presence as a failure empties the cold shortlist, which is every shortlist in a
+    // category minted a minute ago.
+    const info = splitStatements(beatBody(6)).filter((s) => /webpage_info/i.test(s));
+    expect(info.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(maturity, (s) => /never vetoes|never veto|not (a )?veto|on its own/i.test(s)),
+      unsatisfied(info, (s) => /never vetoes|never veto|not (a )?veto|on its own/i.test(s)),
     ).toEqual([]);
     expect(
-      unsatisfied(maturity, (s) => /NOT[ -]VERIFIED/i.test(s) && /\bVIOLATED\b/.test(s)),
+      unsatisfied(info, (s) => /NOT[ -]VERIFIED/i.test(s) && /\bVIOLATED\b/.test(s)),
     ).toEqual([]);
+  });
+
+  it("E4 — the ABSENCE of `webpage_info` is the positive signal: those values were verified", () => {
+    // The half an agent silently loses first. Without it `webpage_info` reads as a
+    // warning label rather than a state, and a verified card gets hedged like an unread
+    // one — which is the same lie in the other direction.
+    const info = splitStatements(beatBody(6)).filter((s) => /webpage_info/i.test(s));
+    expect(unsatisfied(info, (s) => /absence/i.test(s) && /verified/i.test(s))).toEqual([]);
   });
 });
 
@@ -507,7 +525,7 @@ describe("F — VERDICT, the sparse falsifier", () => {
     // observe; what IS checkable is that the write target is the shopper's document
     // and that the V1 write tool is named nowhere — a dangling pointer the agent
     // would try, fail, and have no recovery from.
-    const writes = beatStatements(8).filter((s) => /sil_doc_write|\bwrit(e|es|ing)\b/i.test(s));
+    const writes = beatStatements(8).filter((s) => /shopping_doc_write|\bwrit(e|es|ing)\b/i.test(s));
     expect(writes.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
       unsatisfied(writes, (s) => /shopper|## Past purchases|own document/i.test(s)),

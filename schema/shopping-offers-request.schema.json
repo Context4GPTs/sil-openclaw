@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-offers-request.schema.json",
+  "title": "sil shopping_offers — request",
+  "type": "object",
+  "required": [
+    "ids"
+  ],
+  "properties": {
+    "ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "An id sil minted, passed back verbatim."
+      },
+      "minItems": 1,
+      "maxItems": 10,
+      "description": "Sends the variant ids it wants priced."
+    }
+  },
+  "additionalProperties": false
+}

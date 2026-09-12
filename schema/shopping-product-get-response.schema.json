@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-product-get-response.schema.json",
+  "title": "sil shopping_product_get — response",
+  "type": "object",
+  "required": [
+    "status",
+    "variants"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "variants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "images",
+          "specs",
+          "sources"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Matches the entry back to the id it asked for."
+          },
+          "title": {
+            "type": "string",
+            "description": "Tells the buyer what it is."
+          },
+          "brand": {
+            "type": "string",
+            "description": "Names the maker to the buyer."
+          },
+          "description": {
+            "type": "string",
+            "description": "Quotes the page's own product description."
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shows it to the buyer."
+          },
+          "specs": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "description": "Compares the shortlist on every key sil holds — the product's values and this variant's own — not only the asked ones."
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "host",
+                "read_at"
+              ],
+              "properties": {
+                "host": {
+                  "type": "string",
+                  "description": "Says which site sil read."
+                },
+                "read_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Says when sil read it."
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Says where and when sil read them."
+          },
+          "webpage_info": {
+            "type": "object",
+            "required": [
+              "url",
+              "text"
+            ],
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Links the page it read the words off."
+              },
+              "text": {
+                "type": "string",
+                "description": "Reads the page's own words for a provisional pick, never as verified; cut at 1500 characters on the search, whole on the dossier."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Reads a page sil has not read yet, in the page's own words."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Reads the whole of what sil knows before recommending."
+    }
+  },
+  "additionalProperties": false
+}
