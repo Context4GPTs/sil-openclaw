@@ -693,9 +693,18 @@ function extractUser(raw: unknown): ClaimedUser {
   };
 }
 
-/** A non-null plain object, or null for anything else (incl. arrays/primitives).
- * The array exclusion is load-bearing: a JSON array reaching the 200 gate is a
- * malformed body, not a usable empty. */
+/**
+ * A non-null plain object, or null for anything else (incl. arrays/primitives).
+ *
+ * THE ARRAY ARM CHANGES NO OUTCOME TODAY, and that is measured rather than assumed:
+ * every caller reads a NAMED key, and a parsed JSON array has none, so an array already
+ * falls to the same branch `null` does at all seven call sites — the 200 gate included
+ * (`[{status:"ok"}]` has no `status` of its own). It stays because the function's whole
+ * contract is its name: hand a caller an array typed `Record<string, unknown>` and the
+ * first one to spread it, count its keys, or `Object.entries` it is wrong in a way none
+ * of these branches would catch. Do not add a test claiming to cover it — there is no
+ * input that discriminates, so such a test passes with the arm deleted.
+ */
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)

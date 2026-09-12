@@ -294,4 +294,31 @@ describe("no disk path reaches the agent, on any verb", () => {
     expect(leaks).toEqual([]);
     for (const payload of payloads) expect(payload).not.toHaveProperty("path");
   });
+
+  it("no REFUSAL carries it either — a failure message names the ref, not the file", async () => {
+    // The half a success-only scan is blind to, and the likelier leak: the store builds
+    // its refusals from the resolved target, so `"/tmp/…/briefs/x.md: the document is
+    // present but corrupt"` reads as a perfectly good message right up until an agent
+    // repeats it. Node's own errno strings carry the path too, which is why the cause
+    // reaches the agent as a CODE and the whole of it stays in the log.
+    await seed();
+    plant(briefPath("corrupt"), CORRUPT);
+    const payloads = [
+      await call(FIND, {}), // the corrupt Brief rides `unreadable[]`
+      await call(READ, { ref: "brief:corrupt" }),
+      await call(WRITE, { ref: "brief:corrupt", mode: "replace", title: "T", body: BRIEF_BODY }),
+      await call(READ, { ref: "brief:nothing-here" }),
+      await call(READ, { ref: "brief:Not A Slug" }),
+    ];
+    // Guard-of-the-guard: four real refusals plus a find whose `unreadable[]` is
+    // non-empty — nothing here is a success scanning clean.
+    expect(payloads.slice(1).map((p) => p["status"])).toEqual([
+      "unreadable",
+      "unreadable",
+      "not_found",
+      "invalid_request",
+    ]);
+    expect(payloads[0]!["unreadable"]).not.toEqual([]);
+    expect(payloads.filter((p) => JSON.stringify(p).includes(dataDir))).toEqual([]);
+  });
 });

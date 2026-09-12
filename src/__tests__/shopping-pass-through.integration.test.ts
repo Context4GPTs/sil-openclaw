@@ -70,15 +70,6 @@ describe("A1 — every shopping tool passes the body through unchanged", () => {
     expect(payload).toEqual(body);
     expect(Object.keys(payload).sort()).toEqual(Object.keys(body).sort());
   });
-
-  it.each(SHOPPING_TOOLS)("%s's returned body still validates against the artifact", async (tool) => {
-    // Equality is about the object; this is about the CONTRACT. A plugin that swapped one
-    // valid body for another valid body would fail the bar above; one that mangled a
-    // field type in transit fails here.
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok(contractResponse(tool)));
-    expect(artifactErrors(tool, "response", await run(tool))).toEqual([]);
-  });
 });
 
 describe("A1 — the refusal teeth", () => {

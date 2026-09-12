@@ -75,7 +75,8 @@ interface Unreadable {
   ok: false;
   kind: "unreadable";
   /** "<path>: <cause>" — what the log line needs to tell a chmod fault from a parse
-   * failure. Internal: the agent-facing envelope carries `message`. */
+   * failure. INTERNAL: the agent-facing envelope carries `message`, and `message` names
+   * the ref, never the path. */
   detail: string;
   message: string;
 }
@@ -83,8 +84,10 @@ interface Unreadable {
 interface PersistenceFailed {
   ok: false;
   kind: "persistence_failed";
-  /** "<path>: <cause>" so recovery is actionable (never a token/PII). */
+  /** The errno CODE alone — the one part of the cause the agent can act on. */
   error: string;
+  /** "<path>: <cause>" — internal, for the log line only. */
+  detail: string;
   message: string;
   recovery: "fix_data_dir";
 }
@@ -99,14 +102,19 @@ function notFound(message: string): NotFound {
   return { ok: false, kind: "not_found", message };
 }
 
-function unreadable(path: string): Unreadable {
+/**
+ * A document that will not parse. The message names the REF, never the path: where the
+ * store keeps its bytes is an internal, and an agent handed one quotes it to the buyer or
+ * pastes it into a shell. The path rides `detail`, which only the log reads.
+ */
+function unreadable(ref: string, path: string): Unreadable {
   return {
     ok: false,
     kind: "unreadable",
     detail: path + ": malformed or absent frontmatter",
     message:
-      path + ": the document is present but corrupt (malformed or absent frontmatter)"
-        + " — inspect / repair, do NOT overwrite (it may still be recoverable).",
+      JSON.stringify(ref) + " is present but corrupt (malformed or absent frontmatter)"
+        + " — inspect / repair it, do NOT overwrite it (it may still be recoverable).",
   };
 }
 
@@ -114,7 +122,8 @@ function persistenceFailed(path: string, err: unknown): PersistenceFailed {
   return {
     ok: false,
     kind: "persistence_failed",
-    error: path + ": " + errCause(err),
+    error: errCode(err),
+    detail: path + ": " + errCause(err),
     message:
       "The shopper's documents could NOT be written to the sil data directory, so the"
       + " change did not stick. Fix the data directory (it must be writable — check"
@@ -131,6 +140,17 @@ function errCause(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * The errno CODE alone — `EACCES`, `ENOTDIR`. Node's errno MESSAGE embeds the absolute
+ * path it was working on, so the message is a store internal by construction: every
+ * agent-facing string derives from this, and the whole cause stays on `detail` and in
+ * the log.
+ */
+function errCode(err: unknown): string {
+  const code = (err as NodeJS.ErrnoException | null)?.code;
+  return typeof code === "string" && code.length > 0 ? code : "unknown";
+}
+
 /** `readdirSync` throws where the probe already settled presence — EACCES, or a
  * directory present as a FILE (the read is ENOTDIR). Every listing goes through here
  * so a broken tree is REPORTED, never thrown at a tool. */
@@ -138,7 +158,7 @@ function listDir(dir: string): { entries: Dirent[]; error: string | null } {
   try {
     return { entries: readdirSync(dir, { withFileTypes: true }), error: null };
   } catch (err) {
-    return { entries: [], error: errCause(err) };
+    return { entries: [], error: errCode(err) };
   }
 }
 
@@ -165,7 +185,7 @@ function probe(path: string): Presence {
     // is NOT the classifier: it also swallows ENOTDIR, which is a broken tree.
     return (err as NodeJS.ErrnoException).code === "ENOENT"
       ? { state: "absent" }
-      : { state: "unknown", error: errCause(err) };
+      : { state: "unknown", error: errCode(err) };
   }
 }
 
@@ -174,13 +194,14 @@ function presenceError(cause: string): string {
     + " — repair it by hand (it may be unreadable, or a file where a directory belongs)";
 }
 
-/** An unsettled presence as a verb-facing variant — `unreadable`, never `not_found`. */
-function presenceUnreadable(path: string, cause: string): Unreadable {
+/** An unsettled presence as a verb-facing variant — `unreadable`, never `not_found`.
+ * The message names the ref; the path stays on `detail`. */
+function presenceUnreadable(ref: string, path: string, cause: string): Unreadable {
   return {
     ok: false,
     kind: "unreadable",
     detail: path + ": " + cause,
-    message: path + ": " + presenceError(cause)
+    message: JSON.stringify(ref) + ": " + presenceError(cause)
       + ". The document may still be on disk, so do NOT mint a fresh one over it.",
   };
 }
@@ -558,7 +579,7 @@ export function readDocument(ref: unknown): ReadDocResult {
   const target = resolveRef(ref);
   if ("ok" in target) return target;
   const at = probe(target.path);
-  if (at.state === "unknown") return presenceUnreadable(target.path, at.error);
+  if (at.state === "unknown") return presenceUnreadable(target.ref, target.path, at.error);
   if (at.state === "absent") {
     return notFound(
       "No document at " + JSON.stringify(target.ref) + " — list what exists with"
@@ -566,7 +587,7 @@ export function readDocument(ref: unknown): ReadDocResult {
     );
   }
   const parsed = readArtefactFile(target.path);
-  if (parsed === null) return unreadable(target.path);
+  if (parsed === null) return unreadable(target.ref, target.path);
   return {
     ok: true,
     ref: target.ref,
@@ -639,7 +660,7 @@ function preflightMode(
   mode: WriteMode,
 ): { ok: true; existing: Artefact | null } | InvalidRequest | NotFound | Unreadable {
   const at = probe(target.path);
-  if (at.state === "unknown") return presenceUnreadable(target.path, at.error);
+  if (at.state === "unknown") return presenceUnreadable(target.ref, target.path, at.error);
   const present = at.state === "present";
   if (mode === "create") {
     if (!present) return { ok: true, existing: null };
@@ -657,7 +678,7 @@ function preflightMode(
     );
   }
   const existing = readArtefactFile(target.path);
-  if (existing === null) return unreadable(target.path);
+  if (existing === null) return unreadable(target.ref, target.path);
   return { ok: true, existing };
 }
 
@@ -706,7 +727,7 @@ export function removeDocument(ref: unknown): RemoveDocResult {
     );
   }
   const at = probe(target.path);
-  if (at.state === "unknown") return presenceUnreadable(target.path, at.error);
+  if (at.state === "unknown") return presenceUnreadable(target.ref, target.path, at.error);
   if (at.state === "absent") {
     return notFound("No document at " + JSON.stringify(target.ref) + " to remove (already gone).");
   }

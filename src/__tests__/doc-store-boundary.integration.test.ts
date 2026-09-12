@@ -470,11 +470,15 @@ describe("the CONTAINING directory — an unlistable `briefs/` is UNREADABLE, ne
 
     expect(read["status"]).toBe("unreadable");
     expect(read["recovery"]).toBe("inspect_document");
-    // …and it says WHERE it could not look. The store's OTHER `unreadable` reads
-    // "malformed or absent frontmatter", which is nonsense for a chmod fault and
-    // steers the repair at a file that is perfectly fine.
-    expect(String(read["message"])).toContain("briefs");
+    // …and it says WHAT it could not settle, about WHICH document. The store's OTHER
+    // `unreadable` reads "malformed or absent frontmatter", which is nonsense for a
+    // chmod fault and steers the repair at a file that is perfectly fine.
+    expect(String(read["message"])).toContain("brief:chamonix");
+    expect(String(read["message"])).toMatch(/presence could not be determined/i);
     expect(String(read["message"])).not.toMatch(/malformed/i);
+    // The ref, never the file: where the store keeps its bytes is an internal, and the
+    // errno MESSAGE embeds it, which is why the cause reaches the agent as a code.
+    expect(String(read["message"])).not.toContain(dataDir);
   });
 
   it.skipIf(AS_ROOT)("AC2 — shopping_doc_write {mode: replace} answers `unreadable`, never \"mint it with mode: create first\"", async () => {

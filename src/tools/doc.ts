@@ -248,7 +248,9 @@ function mapFailure(api: PluginAPI, tool: string, result: StoreFailure) {
     api.logger.warn(tool + "_unreadable", { detail: result.detail });
     return jsonResult({ status: "unreadable", message: result.message, recovery: "inspect_document" });
   }
-  api.logger.error(tool + "_persistence_failed", { error: result.error });
+  // `detail` carries the path Node named and stays in the log; the agent gets the errno
+  // CODE, which is the part it can act on and the part that is not a store internal.
+  api.logger.error(tool + "_persistence_failed", { detail: result.detail });
   return jsonResult({
     status: "persistence_failed",
     error: result.error,
