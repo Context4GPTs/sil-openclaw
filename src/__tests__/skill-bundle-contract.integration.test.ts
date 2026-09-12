@@ -215,12 +215,10 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     for (const rel of bundleFiles()) {
       const body = read(rel);
       for (const t of retiredTokenOffenders(body)) offenders.push(`${rel} → ${t}`);
-      // The pre-v0 CATALOG vocabulary joins on the four-v0-tools card. This scan
-      // is ONE-DIRECTIONAL — deleting the tools does not turn stale prose red;
-      // only listing the token does. Without these entries the bundle ships
-      // driving the shopper at `checkout_url`, a field the v0 wire does not
-      // have, under a fully green suite. That is the exact failure the
-      // sil_specs retirement documented.
+      // The retired REQUEST vocabulary rides the same scan. It is ONE-DIRECTIONAL —
+      // deleting a tool does not turn stale prose red; only listing the token does.
+      // Without these entries the bundle ships driving the shopper at `checkout_url`,
+      // a field the wire does not have, under a fully green suite.
       for (const t of retiredV0Offenders(body)) offenders.push(`${rel} → ${t}`);
       for (const ctx of perNicheExpertOffenders(body)) offenders.push(`${rel}: …${ctx}…`);
     }
@@ -257,11 +255,11 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
   });
 
   it("the Beat-2 naming discipline survives the registry read's rename", () => {
-    // The removal's collateral-damage guard (retire-the-dead-sil-specs-tool). What
-    // died is the registry ROUND TRIP, not the vocabulary hygiene: Beat 4 still
-    // sends these coined names verbatim as sil_search.filters.specs, so a synonym
-    // splits one concept into two predicates that never meet. Over-excising the two
-    // surviving rules turns nothing RED — the shopper just quietly gets worse.
+    // The removal's collateral-damage guard. What died is the registry ROUND TRIP, not
+    // the vocabulary hygiene: beat 5 still sends these coined names verbatim as
+    // `shopping_search` spec keys, so a synonym splits one concept into two rows that
+    // never meet. Over-excising the two surviving rules turns nothing RED — the shopper
+    // just quietly gets worse.
     // TWO tokens, deliberately not a re-pinning of the wording (the 1 341-line
     // prose test was deleted for a reason).
     //

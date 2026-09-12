@@ -390,20 +390,21 @@ export interface FindQuery {
   query?: string;
 }
 
+/** A coordinate the agent acts on. NO disk path on any of these: the agent addresses a
+ * document by `ref` and nothing else, so a path here would be an internal it could quote
+ * to the buyer, paste into a shell, or come to depend on. Contract §5. */
 export interface BriefCoord {
   ref: string;
   slug: string;
   title: string;
   status: string;
   items: ItemRow[];
-  path: string;
   updated_at: string;
 }
 
 export interface ShopperCoord {
   ref: "shopper";
   name: string;
-  path: string;
 }
 
 export interface FindResult {
@@ -492,7 +493,7 @@ function findShopper(filters: FindFilters, unreadable: UnreadableDocs): ShopperC
   if (filters.q !== undefined && !("shopper " + name).toLowerCase().includes(filters.q)) {
     return undefined;
   }
-  return { ref: "shopper", name, path };
+  return { ref: "shopper", name };
 }
 
 function findBriefs(filters: FindFilters, unreadable: UnreadableDocs): BriefCoord[] {
@@ -523,7 +524,6 @@ function findBriefs(filters: FindFilters, unreadable: UnreadableDocs): BriefCoor
       title: parsed.fields["title"] ?? slug,
       status: parsed.fields["status"] ?? "",
       items: parseItems(parsed.body),
-      path,
       updated_at: parsed.fields["updated_at"] ?? "",
     };
     if (admits(filters, coord)) briefs.push(coord);
@@ -549,7 +549,6 @@ export type ReadDocResult =
       kind: DocKind;
       fields: Record<string, string>;
       body: string;
-      path: string;
     }
   | InvalidRequest
   | NotFound
@@ -574,7 +573,6 @@ export function readDocument(ref: unknown): ReadDocResult {
     kind: target.kind,
     fields: parsed.fields,
     body: parsed.body,
-    path: target.path,
   };
 }
 
@@ -595,7 +593,7 @@ export interface WriteSpec {
 }
 
 export type WriteDocResult =
-  | { ok: true; ref: string; kind: DocKind; mode: WriteMode; path: string }
+  | { ok: true; ref: string; kind: DocKind; mode: WriteMode }
   | InvalidRequest
   | NotFound
   | Unreadable
@@ -629,7 +627,7 @@ export function writeDocument(spec: WriteSpec): WriteDocResult {
   } catch (err) {
     return persistenceFailed(target.path, err);
   }
-  return { ok: true, ref: target.ref, kind: target.kind, mode, path: target.path };
+  return { ok: true, ref: target.ref, kind: target.kind, mode };
 }
 
 /** The mode gate, and the only read of what is already on disk: create fails if the
@@ -689,7 +687,7 @@ function briefFields(spec: WriteSpec, existing: Artefact | null, slug: string): 
 // ===========================================================================
 
 export type RemoveDocResult =
-  | { ok: true; ref: string; kind: DocKind; path: string }
+  | { ok: true; ref: string; kind: DocKind }
   | InvalidRequest
   | NotFound
   | Unreadable
@@ -717,7 +715,7 @@ export function removeDocument(ref: unknown): RemoveDocResult {
   } catch (err) {
     return persistenceFailed(target.path, err);
   }
-  return { ok: true, ref: target.ref, kind: target.kind, path: target.path };
+  return { ok: true, ref: target.ref, kind: target.kind };
 }
 
 // ===========================================================================

@@ -50,6 +50,25 @@ describe("shopping_domain_get — the path is a segment, not a query", () => {
     expect(router.other).toEqual([]);
   });
 
+  it.each([
+    ["absent", {}],
+    ["not a string", { path: 42 }],
+    ["empty", { path: "" }],
+    ["null", { path: null }],
+  ])("refuses locally when `path` is %s — zero network, and the field is named", async (_label, params) => {
+    // THE bar the whole local refusal exists for. The host does NOT validate a plugin
+    // tool's arguments against its `parameters` (openclaw 2026.9.3 runs one `Value.Check`,
+    // and it is inside `eraseSessionFileTool`), so nothing upstream stops an empty
+    // segment. Sent, it becomes a GET of `/catalog/domains` — the REGISTRY SEARCH — and
+    // the agent reads an answer about a different route as an answer about its own.
+    seedTokens(ACCESS, REFRESH);
+    const router = installRouter(() => ok(contractResponse(TOOL)));
+    const payload = await run(params as Record<string, unknown>);
+    expect(payload["status"]).toBe("invalid_request");
+    expect(payload["message"]).toContain("`path`");
+    expect(router.all).toEqual([]);
+  });
+
   it("a `/` in the path is ENCODED — it can never split the segment and re-route the call", async () => {
     // The host validates `path` against the artifact's pattern, so this shape cannot
     // arrive in production. That is exactly why it is driven here: the encode is the

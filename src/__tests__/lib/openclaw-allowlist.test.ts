@@ -54,8 +54,8 @@ import {
 // unit core takes them as an argument so the test pins behaviour, not wiring).
 const SIL: SilAllowlistFacts = {
   id: "sil",
-  // The real 12-tool set — the five v0 catalog tools, the four `shopping_doc_*`
-  // document tools, the two identity tools and the doctor.
+  // The real fourteen-tool set — the seven `shopping_*` catalog tools, the four
+  // `shopping_doc_*` document tools, and the three account tools.
   //
   // THIS CARRIER IS THE SILENT ONE, and it has gone stale before. Nothing here goes RED
   // on a stale entry — the loop below only asserts each name is ABSENT from a fresh

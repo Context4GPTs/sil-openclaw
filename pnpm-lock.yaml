@@ -16,10 +16,10 @@ importers:
         specifier: 22.15.3
         version: 22.15.3
       ajv:
-        specifier: ^8.20.0
+        specifier: 8.20.0
         version: 8.20.0
       ajv-formats:
-        specifier: ^3.0.1
+        specifier: 3.0.1
         version: 3.0.1(ajv@8.20.0)
       typescript:
         specifier: 5.8.3

@@ -10,14 +10,17 @@
  * register time — `register()` is strictly synchronous and opens nothing.
  *
  * `register()` MUST stay synchronous and side-effect-free beyond
- * registering tools, ensuring the data dir, and logging. The reference
- * adapter (`klodi-plugin/adapters/openclaw`) carries a smoke gate
- * precisely because an eager connection opened in `register()` once held
- * the host's install subprocess event loop open and blocked gateway
- * startup. Keep it that way: all I/O lives inside a tool's `execute()` —
- * no timers, no sockets, no unawaited promises here. The one synchronous
- * `mkdirSync` (via `ensureDataDir()`) is exempt: it returns immediately
- * and holds no resource open.
+ * registering tools, ensuring the data dir, reading the shopping
+ * artifacts, and logging. The reference adapter
+ * (`klodi-plugin/adapters/openclaw`) carries a smoke gate precisely
+ * because an eager connection opened in `register()` once held the host's
+ * install subprocess event loop open and blocked gateway startup. Keep it
+ * that way: all NETWORK I/O lives inside a tool's `execute()` — no timers,
+ * no sockets, no unawaited promises here. Two synchronous filesystem reads
+ * are exempt because they return immediately and hold no resource open:
+ * `ensureDataDir()`'s `mkdirSync`, and the seven `readFileSync`s
+ * `registerCatalogTools` makes to publish each tool's request artifact as
+ * its `parameters`.
  *
  * To add a tool, see `src/tools/identity.ts` (the reference group — it
  * sets the `jsonResult` success shape and structured-error envelope every

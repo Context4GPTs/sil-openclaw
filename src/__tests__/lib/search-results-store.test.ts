@@ -70,9 +70,9 @@ describe("retention + capacity are declared bounds (D1, D2)", () => {
   it("RETENTION_MS is FIFTEEN MINUTES — the product decision, not an arbitrary TTL", () => {
     // D1 is a product bound with a stated reason: long enough for the settle
     // edge, a client reload, a reconnect and a short step-away; short enough that
-    // a shopper is never rendered a grid of prices that are no longer true
-    // (price / availability / checkout_url are exactly the fields sil_product_get's
-    // own contract says to re-fetch before buying). Changing this number is a
+    // a shopper is never rendered a grid of prices that are no longer true (a card's
+    // range carries no date at all, which is why `shopping_offers` re-reads it live
+    // before a buy). Changing this number is a
     // PRODUCT decision — it does not get quietly tuned to make a test pass.
     expect(RETENTION_MS).toBe(15 * 60_000);
   });
@@ -258,10 +258,10 @@ describe("principal scoping (C3, C4, C6)", () => {
     const stored = page("a");
     putSearchResult("call_1", stored, PRINCIPAL);
 
-    const foreign = getSearchResult("call_1", "user-99");
-    expect(foreign).toBeNull();
-    expect(JSON.stringify(foreign)).not.toContain("gid://product/a");
-    expect(JSON.stringify(foreign)).not.toContain("checkout_url");
+    // `null`, not a redaction: the two "and it leaked no field either" lines that used
+    // to sit here scanned a page that no longer carries those fields, so they asserted
+    // nothing. A miss is the whole answer.
+    expect(getSearchResult("call_1", "user-99")).toBeNull();
   });
 
   it("the SAME principal resolves — a second paired device of one shopper is not locked out", () => {

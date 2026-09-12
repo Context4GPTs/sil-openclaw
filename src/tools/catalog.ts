@@ -1,27 +1,10 @@
 /**
- * The seven `shopping_*` tools, 1:1 with the seven sil-api catalog routes and 1:1 with
- * the agent contract's §3.1–§3.7.
+ * The seven `shopping_*` tools, 1:1 with the sil-api catalog routes.
  *
- * ONE TABLE DRIVES ALL OF IT. Each tool's `parameters` IS its committed request
- * artifact (`schema/shopping-*-request.schema.json`) and each `ok` result IS the API's
- * 200 body, handed over VERBATIM. The plugin adds no shape of its own in either
- * direction: a hand-written schema here would be a second copy of the request contract,
- * and a projection on the way back would drop exactly the fields the agent's honesty
- * reading is computed from (`fit`, `variants`, `webpage_info`) while looking healthy.
- *
- * SEVEN INTENTIONS, SEVEN TOOLS, NEVER FLAGS ON ONE ANOTHER. A model picks a tool by
- * name at the moment of use; a flag hides the intention inside a parameter it will not
- * read — and one of these seven performs a GLOBAL registry write that nothing in the
- * product can undo. That write and the read that licenses it share no path and no verb.
- *
- * ONE GROUP, ONE FILE. All seven share one origin, one Bearer, one 401 choreography and
- * one error envelope, and a new `registerXTools` group has to be hand-wired into three
- * guards or it silently NARROWS them (CLAUDE.md).
- *
- * There is NO client-side request validation: the host already validated the arguments
- * against the artifact, and the route refuses before it spends and names the offender.
- * `register()` opens nothing beyond reading the seven artifacts; the session token and
- * Bearer header never reach a log line or a result.
+ * A projection on the way back would drop exactly the fields the agent's honesty reading
+ * is computed from (`fit`, `variants`, `webpage_info`) while looking healthy, so the body
+ * crosses verbatim. A new `registerXTools` group has to be hand-wired into three guards
+ * or it silently NARROWS them (CLAUDE.md), which is why all seven live in one group.
  */
 
 import { readFileSync } from "node:fs";
@@ -55,7 +38,7 @@ interface ShoppingTool extends ShoppingRoute {
 /** The tool whose page a paired client can pull back by `callId`. */
 const SEARCH_TOOL = "shopping_search";
 
-export const SHOPPING_TOOLS: readonly ShoppingTool[] = [
+export const SHOPPING_TOOLS = [
   {
     name: "shopping_domain_search",
     method: "GET",
@@ -183,8 +166,21 @@ export const SHOPPING_TOOLS: readonly ShoppingTool[] = [
       + " zero and never free. A `policy_url` of null means the terms were read off a"
       + " product page and sil holds no policy page.",
   },
-];
+] as const satisfies readonly ShoppingTool[];
 
+/** The seven names, as a literal union — so a table of one-per-tool anything is forced
+ * to cover them all rather than quietly covering six. */
+export type ShoppingToolName = (typeof SHOPPING_TOOLS)[number]["name"];
+
+/**
+ * Registers the seven, reading each one's request artifact off disk as it goes.
+ *
+ * That read is the ONE exception to "register() opens nothing": seven synchronous
+ * `readFileSync`s that return immediately and hold no resource open, exactly as
+ * `ensureDataDir`'s `mkdirSync` does. It is deliberately eager — an unreadable artifact
+ * is a broken build, and failing loud at load beats a tool whose `parameters` the host
+ * has already published by the time anyone finds out.
+ */
 export function registerCatalogTools(api: PluginAPI): void {
   for (const tool of SHOPPING_TOOLS) api.registerTool(defineTool(api, tool));
 }

@@ -268,8 +268,8 @@ export function wiringAdvisories(api: PluginAPI): { advisories?: Finding[] } {
  * one or teach a consumer to expect a field sil-services never sends.
  */
 export function wiringAdvisoryBlocks(api: PluginAPI): [{ advisories: Finding[] }] | [] {
-  const drift = detectWiringDrift(api.config, readSilWiringFacts());
-  return drift.length === 0 ? [] : [{ advisories: drift }];
+  const { advisories } = wiringAdvisories(api);
+  return advisories === undefined ? [] : [{ advisories }];
 }
 
 function buildSkillMisattachedFinding(

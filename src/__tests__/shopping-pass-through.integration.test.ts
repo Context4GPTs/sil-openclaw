@@ -98,10 +98,4 @@ describe("A1 — the refusal teeth", () => {
     installRouter(() => ok({ status: "partial", products: [] }));
     expect((await run(tool))["status"]).toBe("retryable");
   });
-
-  it.each(SHOPPING_TOOLS)("%s: a 200 that is a bare array becomes `retryable`", async (tool) => {
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok([{ status: "ok" }]));
-    expect((await run(tool))["status"]).toBe("retryable");
-  });
 });

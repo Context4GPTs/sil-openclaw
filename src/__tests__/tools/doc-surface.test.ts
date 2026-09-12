@@ -271,3 +271,27 @@ describe("shopping_doc_remove — one document, never a cascade", () => {
     expect((await call(READ, { ref: "shopper" }))["status"]).toBe("ok");
   });
 });
+
+describe("no disk path reaches the agent, on any verb", () => {
+  it("no successful payload carries the store's location, under `path` or any other key", async () => {
+    // Contract §5 retires `path` from the document tools. Asserted on the BYTES rather
+    // than on a key name: the store knows every document's absolute path and every one
+    // of these results is built from a resolved target, so the way it comes back is
+    // whichever field somebody re-spreads next — a `path`, a `file`, a whole target
+    // object. An agent that reads one quotes it to the buyer, or pastes it into a shell.
+    await seed();
+    const payloads = [
+      await call(FIND, {}),
+      await call(READ, { ref: "shopper" }),
+      await call(READ, { ref: "brief:chamonix-feb" }),
+      await call(WRITE, { ref: "brief:chamonix-feb", mode: "replace", title: "T", body: BRIEF_BODY }),
+      await call(REMOVE, { ref: "brief:chamonix-feb" }),
+    ];
+    // Guard-of-the-guard: every one of them really succeeded, so this is not five
+    // refusals scanning clean.
+    expect(payloads.map((p) => p["status"])).toEqual(["ok", "ok", "ok", "ok", "removed"]);
+    const leaks = payloads.filter((p) => JSON.stringify(p).includes(dataDir));
+    expect(leaks).toEqual([]);
+    for (const payload of payloads) expect(payload).not.toHaveProperty("path");
+  });
+});

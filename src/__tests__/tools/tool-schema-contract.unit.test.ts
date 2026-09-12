@@ -10,13 +10,12 @@
  * the card's Risks section, so an unexpected emission drift fails the
  * build rather than silently reaching an agent.
  *
- * Scope: the identity surface (`sil_register`, `sil_whoami`) — both
- * no-argument tools whose `parameters` is `Type.Object({})`. The catalog
- * tools' schemas (`sil_search`, `sil_product_get`) carry structure and are
- * independently owned by `search.test.ts` / `product-get.test.ts`; they are
- * deliberately NOT re-asserted here. This file deep-equals the WHOLE schema
- * (order-insensitive) so the empty-object shape cannot silently grow a
- * spurious `required` or property during the dependency bump.
+ * Scope of THIS block: the account surface (`sil_register`, `sil_whoami`) —
+ * both no-argument tools whose `parameters` is `Type.Object({})`. It
+ * deep-equals the WHOLE schema (order-insensitive) so the empty-object shape
+ * cannot silently grow a spurious `required` or property during a dependency
+ * bump. The shopping tools publish a committed artifact instead, and are
+ * deep-equalled against it further down.
  *
  * CONTRACT NOTE (architect Risk — load-bearing for these assertions):
  * TypeBox 1.x reorders JSON-schema keys vs 0.34 (e.g. `required` before
@@ -182,11 +181,10 @@ describe("TypeBox introspection metadata never leaks into the agent-visible sche
  * VOCABULARY — no registered tool DESCRIPTION frames the surface as a per-niche
  * expert (card: audit-tool-skill-surface-for-single-shopper-pivot).
  *
- * The single-shopper pivot shipped as targeted slices; the four catalog/identity
- * tools (`sil_register`, `sil_whoami`, `sil_search`, `sil_product_get`) were never
- * opened, so their descriptions could regress to implicit per-niche-expert framing
- * without anyone touching them — and an agent learns the model it is driving almost
- * entirely from these descriptions. This guard runs the SHARED whole-word
+ * The single-shopper pivot shipped as targeted slices, and the account tools were
+ * never opened by any of them, so their descriptions could regress to implicit
+ * per-niche-expert framing without anyone touching them — and an agent learns the
+ * model it is driving almost entirely from these descriptions. This guard runs the SHARED whole-word
  * `\bexperts?\b` + 28-char retro-allowance check (`perNicheExpertOffenders`, the
  * very check the skill-prose guard uses, so the discipline can never drift) over
  * EVERY registered tool description — the four pivot-untouched tools and the four

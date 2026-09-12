@@ -16,23 +16,23 @@ import { fileURLToPath } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
+import {
+  SHOPPING_TOOLS as SHOPPING_ROUTES,
+  type ShoppingToolName,
+} from "../../tools/catalog.js";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCHEMA_DIR = join(HERE, "..", "..", "..", "schema");
 const EXAMPLES = join(HERE, "..", "fixtures", "contract-examples.json");
 
-/** The seven, in the contract's own order (§3.1–§3.7). */
-export const SHOPPING_TOOLS = [
-  "shopping_domain_search",
-  "shopping_domain_get",
-  "shopping_domain_create",
-  "shopping_search",
-  "shopping_product_get",
-  "shopping_offers",
-  "shopping_seller_get",
-] as const;
+/**
+ * The seven names, in the contract's own order — DERIVED from the production route
+ * table, never restated. A second list here is a list that quietly covers six.
+ */
+export const SHOPPING_TOOLS: readonly ShoppingToolName[] = SHOPPING_ROUTES.map((t) => t.name);
 
-export type ShoppingToolName = (typeof SHOPPING_TOOLS)[number];
-export type SchemaSide = "request" | "response";
+export type { ShoppingToolName };
+type SchemaSide = "request" | "response";
 
 interface ContractExample {
   response: Record<string, unknown>;

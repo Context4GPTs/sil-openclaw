@@ -46,7 +46,7 @@ export const SIL_API = "https://sil-api.test.example.com";
  * name→path map, which is exactly why the two GETs are NOT in it: `/catalog/domains` is
  * a path root carrying three kinds, and one map key cannot hold them.
  */
-export const ROUTE_PATH = {
+const ROUTE_PATH = {
   search: "/catalog/search",
   product: "/catalog/product",
   offers: "/catalog/offers",
@@ -57,11 +57,11 @@ export const ROUTE_PATH = {
 /** `GET /catalog/domains` — the registry search, sharing the mint's path. Kept as its
  * own constant beside `ROUTE_PATH` rather than inside it so the search and the mint can
  * never collapse into one bucket by a careless map edit. */
-export const DOMAIN_SEARCH_ROUTE = { method: "GET", path: "/catalog/domains" } as const;
+const DOMAIN_SEARCH_ROUTE = { method: "GET", path: "/catalog/domains" } as const;
 
 /** `GET /catalog/domains/<path>` — the guide read. The segment after the root is the
  * URL-ENCODED registry path, which is what tells it from the search. */
-export const DOMAIN_GET_PREFIX = "/catalog/domains/";
+const DOMAIN_GET_PREFIX = "/catalog/domains/";
 
 export type RouteKind =
   | keyof typeof ROUTE_PATH

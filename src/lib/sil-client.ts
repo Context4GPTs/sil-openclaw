@@ -181,10 +181,8 @@ export type ShoppingOutcome =
  * not is a broken contract rather than a degraded answer — `retryable`, never `ok`.
  * Nothing below the top level is inspected: the response artifact is the shape's one
  * source, and a second opinion here would be the copy that drifts from it.
- *
- * Pure and exported — unit-tested in isolation.
  */
-export function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcome {
+function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcome {
   if (status === 400) return { kind: "invalid_request", message: extractApiError(body).message };
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
@@ -378,7 +376,18 @@ export async function callShopping(
   route: ShoppingRoute,
   args: Record<string, unknown>,
 ): Promise<ShoppingOutcome> {
-  const url = `${stripTrailingSlash(silApiUrl)}${routePath(route, args)}`;
+  const path = routePath(route, args);
+  if (typeof path !== "string") {
+    return {
+      kind: "invalid_request",
+      message:
+        `\`${path.missing}\` is required and must be a string. Nothing was sent to sil:`
+        + ` it names a path SEGMENT, so an empty one would call a different route and`
+        + ` sil would answer about that route instead of about your request.`,
+    };
+  }
+
+  const url = `${stripTrailingSlash(silApiUrl)}${path}`;
   let res: Response;
   try {
     res =
@@ -392,7 +401,13 @@ export async function callShopping(
 }
 
 /**
- * The route's path with its `:name` segment filled and its querystring built.
+ * The route's path with its `:name` segment filled and its querystring built — or the
+ * name of the segment the arguments could not fill.
+ *
+ * THE SEGMENT IS THE ONE THING REFUSED LOCALLY, and it is not a second validator: an
+ * absent one does not make a bad request, it makes a request to a DIFFERENT ROUTE, and
+ * sil then answers truthfully about that route while the agent reads the answer as being
+ * about its own. Everything else travels as sent, because the route names the offender.
  *
  * Both halves are encoded, never concatenated: a dotted registry path is one PATH
  * SEGMENT (a stray `/` in it would re-route the call), and an unencoded query value
@@ -400,10 +415,20 @@ export async function callShopping(
  * empty `q=` is a DIFFERENT request from an omitted `q`, and each gets its own refusal
  * message, which is the agent's whole recourse.
  */
-function routePath(route: ShoppingRoute, args: Record<string, unknown>): string {
-  const path = route.path.replace(/:([a-z_]+)/g, (_match, name: string) =>
-    encodeURIComponent(String(args[name] ?? "")),
-  );
+function routePath(
+  route: ShoppingRoute,
+  args: Record<string, unknown>,
+): string | { missing: string } {
+  let missing: string | undefined;
+  const path = route.path.replace(/:([a-z_]+)/g, (_match, name: string) => {
+    const value = args[name];
+    if (typeof value !== "string" || value.length === 0) {
+      missing ??= name;
+      return "";
+    }
+    return encodeURIComponent(value);
+  });
+  if (missing !== undefined) return { missing };
   if (route.method !== "GET") return path;
   const query = new URLSearchParams();
   for (const key of route.query ?? []) {
