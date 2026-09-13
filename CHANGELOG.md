@@ -37,11 +37,13 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   registry does not hold travels as written.
 - **`ship_to` is the LABEL of an address the buyer has on file**, as `sil_whoami` lists
   them — never a country. It localizes a search to that address and is what
-  `shopping_offers` and `shopping_seller_get` read `ships` against; absent, sil uses the
-  buyer's default address.
-- **Seller terms are asked and answered per OFFER.** `shopping_offers` takes
-  `seller_specs` — keys of the domain read's own `seller_specs`, which
-  `shopping_domain_create` can coin for a new category — and answers `seller_fit` on each
+  `shopping_offers` reads `ships` against; absent, sil uses the buyer's default address.
+  `shopping_seller_get` takes `ids` and nothing else — its `ships` answers for that
+  default address.
+- **Seller terms are asked and answered per OFFER, and never coined by the agent.**
+  `shopping_offers` takes `seller_specs` — keys of the domain read's own `seller_specs`,
+  which are sil's base plus whatever branch research has coined — and answers
+  `seller_fit` on each
   offer: `ships` always (serviceable, not_serviceable or unknown for that address), plus
   each requested key with that seller's value where sil holds one. `shopping_seller_get`
   is the details read beside it, carrying every seller key sil holds as `specs`.
@@ -49,9 +51,11 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   well-formed key, answers the products it found and leaves that key absent from `fit`,
   writing the ask on the search row so research can coin what buyers need. The skill sends
   it and also keeps it as a `## Notes / open` row, judged at beat 6 from what pages print.
-- **`shopping_domain_create` marks a key `variant_spec` or `product_spec`** — what
-  identifies a purchasable variant, and what tells one product from the next. The
-  registry derives each key's operators from its `type`.
+- **`shopping_domain_create` coins PRODUCT keys, marked `variant_spec` or
+  `product_spec`** — what identifies a purchasable variant, and what tells one product
+  from the next. The registry derives each key's operators from its `type`. A key an
+  ancestor already defines with the same type and unit is not coined again: the mint
+  answers `ok` and reports it `inherited: true`, so the agent may filter on it.
 - **The shopper's documents, four operations over one ref scheme.** `ref` is `"shopper"`
   (the person) or `"brief:<slug>"` (one shopping job, many items, many domains). `find`
   returns coordinates only, never bodies. `write` takes the WHOLE reconciled markdown —

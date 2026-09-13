@@ -67,12 +67,13 @@ things.
   What is never permitted is coining it from a session: `shopping_domain_create` is for a
   category sil does not have, never for a key an existing one is missing.
 - **Coining is `shopping_domain_create`'s job, once, for a NEW category** — its `specs`
-  are the first keys of a path sil did not have, and its `seller_specs` are the seller
-  terms **that category** is bought with (a fitting service, a certification), coined at
-  the mirrored path under `seller`. Returns, restocking and the shipping terms are the
-  base every category already inherits — never re-coin them. Research **how the category
-  is bought** on the web first (never products), and coin only the keys the path does not
-  already inherit: a key an ancestor already defines is refused by name, as `price` is.
+  are the first keys of a path sil did not have, and they are **product keys only**. A
+  category's seller terms are never yours to coin: the base is sil's and a branch key is
+  coined by research, so take them from `shopping_domain_get`'s `seller_specs` and write
+  them as seller rows. Research **how the category is bought** on the web first (never
+  products). A key an ancestor already defines with the same type and unit is not coined
+  again — the mint answers `ok` and carries it back as `inherited: true`, usable in the
+  Brief and in the search exactly like a key you minted.
   Mark `variant_spec: true` on a key that identifies a purchasable option — a boot's
   size, a colour — and `product_spec: true` on one that tells one product from the next, a
   model year or an edition; the registry derives each key's operators from its `type`. An
