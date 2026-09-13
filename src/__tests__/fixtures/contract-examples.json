@@ -206,6 +206,10 @@
         },
         {
           "key": "discipline"
+        },
+        {
+          "key": "weight",
+          "inherited": true
         }
       ]
     },
@@ -254,6 +258,13 @@
             "touring",
             "freeride-touring"
           ]
+        },
+        {
+          "key": "weight",
+          "display_name": "Weight",
+          "type": "number",
+          "unit": "kg",
+          "description": "Mass of the boot as sold."
         }
       ]
     }

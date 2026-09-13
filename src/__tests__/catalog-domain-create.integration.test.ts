@@ -36,6 +36,10 @@ const harness = useShoppingHarness("domain-create");
 const run = async (params: Record<string, unknown> = contractRequest(TOOL)) =>
   payloadOf(await getTool(harness.api, TOOL).execute("call-1", params));
 
+/** The keys a mint reply reports as an ancestor's, in order. */
+const inheritedKeys = (body: Record<string, unknown>): Record<string, unknown>[] =>
+  (body["specs"] as Record<string, unknown>[]).filter((s) => s["inherited"] === true);
+
 describe("shopping_domain_create — one write, and only one", () => {
   it("POSTs the contract's own mint body to `/catalog/domains`, verbatim, exactly once", async () => {
     seedTokens(ACCESS, REFRESH);
@@ -94,15 +98,15 @@ describe("shopping_domain_create — what the answer means", () => {
     expect(await run()).toEqual(contractResponse(TOOL));
   });
 
-  it("a key the registry answers `inherited: true` reaches the agent untouched", async () => {
-    // The agent filters on an inherited key without having minted it, so the mark has to
-    // survive the hop: dropped, that key reads as one the mint never accepted.
+  it("a key the registry answers `inherited: true` reaches the agent carrying its mark", async () => {
+    // The agent filters on an inherited key without having minted it, so the MARK is what
+    // has to survive the hop — and the deep-equal above reads just as green over a reply
+    // that never carried one, which is why this bar names it.
     seedTokens(ACCESS, REFRESH);
-    const body = contractResponse(TOOL);
-    (body["specs"] as Record<string, unknown>[]).push({ key: "price", inherited: true });
-    expect(artifactErrors(TOOL, "response", body)).toEqual([]);
-    installRouter((kind) => (kind === "domains" ? ok(body) : ok({})));
-    expect(await run()).toEqual(body);
+    const example = contractResponse(TOOL);
+    expect(inheritedKeys(example).length).toBeGreaterThan(0); // guard-of-the-guard
+    installRouter((kind) => (kind === "domains" ? ok(example) : ok({})));
+    expect(inheritedKeys(await run())).toEqual(inheritedKeys(example));
   });
 
   it("a colliding path is `already_exists`, and the recovery is to SEARCH that same path", async () => {
