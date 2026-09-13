@@ -189,12 +189,18 @@ describe("B — DOMAIN", () => {
     // sil-api's `assertFilters` throws on a key the domain does not list, so sending
     // the gap as a spec row costs the whole search. The bundle said the opposite until
     // this iteration — prose the agent obeys, against a wire that refuses it.
-    const sending = splitStatements(body).filter(
-      (s) => /\bspec row\b/i.test(s) && /\bdomain\b/i.test(s),
-    );
-    expect(sending.length).toBeGreaterThan(0); // guard-of-the-guard
+    //
+    // Pinned POSITIVELY, on the refusal. Scanning the spec-row statements for a
+    // negation instead reads GREEN on the old two-ways wording: that bullet opens
+    // "never a coin", and the whole thing is ONE statement, so the `never` clears a
+    // clause it has nothing to do with. Measured — the mutant passed.
+    const refusal = splitStatements(body).filter((s) => /\brefus(?:e|es|al)\b/i.test(s));
+    expect(refusal.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(sending, (s) => /\bnever\b|\brefuses?\b|\brefused\b/i.test(s)),
+      unsatisfied(
+        refusal,
+        (s) => /\bspec row\b/i.test(s) && /\bkey\b/i.test(s) && /\bdomain\b/i.test(s),
+      ),
     ).toEqual([]);
 
     const coining = splitStatements(body).filter((s) => /\bcoin/i.test(s));

@@ -490,11 +490,16 @@ describe("SC4 — no path in the bundle asks for a created shopper", () => {
     expect(ceremonyOffenders("Ask them to create your shopper before searching.")).not.toEqual([]);
   });
 
-  it("the bundle states where the document comes from instead: `create` on the first saved fact", () => {
+  it("SKILL.md states where the document comes from instead: `create` on the first saved fact", () => {
     // The positive half — without it the scan above passes vacuously over prose that
     // simply deleted the subject, and the agent is left with no instruction at all for
     // an empty disk. ONE statement, because an agent reads the sentence on its own.
-    const minting = statements().filter(
+    //
+    // Scoped to `SKILL.md`, not the corpus, for the same reason `CORE_TOOLS` is: this is
+    // what the agent must know BEFORE it loads anything. Corpus-scoped, the walkthrough
+    // satisfied it alone — measured, by deleting this paragraph from SKILL.md and
+    // watching the bar stay green over an example the agent may never open.
+    const minting = splitStatements(skillSrc()).filter(
       (s) =>
         s.includes('ref: "shopper"')
         && s.includes('mode: "create"')
@@ -503,10 +508,10 @@ describe("SC4 — no path in the bundle asks for a created shopper", () => {
     expect(minting.length).toBeGreaterThan(0);
   });
 
-  it("the `name` at that mint is the buyer's own, and never a placeholder", () => {
+  it("SKILL.md says the `name` at that mint is the buyer's own, and never a placeholder", () => {
     // `shopping_doc_write` REQUIRES `name` on a shopper create, so prose that leaves it
     // unsaid invites an invented one — which lands on disk as the person's identity.
-    const named = statements().filter(
+    const named = splitStatements(skillSrc()).filter(
       (s) => s.includes("sil_whoami") && /never a placeholder/i.test(s),
     );
     expect(named.length).toBeGreaterThan(0);
