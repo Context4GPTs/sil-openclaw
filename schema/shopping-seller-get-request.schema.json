@@ -18,12 +18,6 @@
       "minItems": 1,
       "maxItems": 10,
       "description": "Sends the seller ids the offers named."
-    },
-    "ship_to": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64,
-      "description": "Reads every seller's `ships` against one of the buyer's addresses on file, named by its label; the default address when absent."
     }
   },
   "additionalProperties": false

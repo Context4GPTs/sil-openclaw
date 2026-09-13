@@ -207,11 +207,6 @@
         {
           "key": "discipline"
         }
-      ],
-      "seller_specs": [
-        {
-          "key": "bootfitting_service"
-        }
       ]
     },
     "request": {
@@ -259,14 +254,6 @@
             "touring",
             "freeride-touring"
           ]
-        }
-      ],
-      "seller_specs": [
-        {
-          "key": "bootfitting_service",
-          "display_name": "Bootfitting service",
-          "type": "boolean",
-          "description": "Whether the shop fits and adjusts the boot after the sale."
         }
       ]
     }
@@ -490,7 +477,6 @@
   "shopping_seller_get": {
     "response": {
       "status": "ok",
-      "ship_to": "home",
       "sellers": [
         {
           "id": "s1",

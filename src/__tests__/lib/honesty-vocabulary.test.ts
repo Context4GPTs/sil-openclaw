@@ -192,7 +192,7 @@ describe("retiredV0Offenders — the retired request surface's dead strings", ()
     expect(retiredV0Offenders("pass `category` to narrow the search")).toEqual(["`category`"]);
   });
 
-  it("spares `ship_to` — the contract's seller read takes it as a request field", () => {
+  it("spares `ship_to` — the search and the offers take it as a request field", () => {
     // It was retired once and came back. A guard that still forbids it would fight the
     // wire it exists to protect.
     expect(retiredV0Offenders("send `ship_to` only when it is not the buyer's own country")).toEqual(

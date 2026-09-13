@@ -77,16 +77,16 @@ export const SHOPPING_TOOLS = [
       + " `matches: []`, and you have read up on the web on how the category is bought"
       + " (never on products). Mark variant_spec on a key that identifies a purchasable"
       + " option and product_spec on one that tells one product from the next; the"
-      + " registry derives each key's operators from its type. `seller_specs` coins the"
-      + " seller terms THIS category is bought with and nothing else — a fitting service,"
-      + " a certification — at the mirrored path under `seller`; returns, restocking and"
-      + " the shipping terms are the base every category already has, so leave them out."
-      + " A key an ancestor already defines is refused by name, as `price` is. An"
-      + " existing path is refused and nothing is written — that refusal means the"
-      + " vocabulary is already there, so search that same path; never coin a near-path"
-      + " variant to route around it, and"
-      + " never call this to change a category that exists. Every sil shopper sees what"
-      + " you write and nothing can undo it.",
+      + " registry derives each key's operators from its type. Only the keys a PRODUCT is"
+      + " bought by are coined here: a category's seller terms are never yours to coin —"
+      + " the base is sil's and a branch key is coined by research — and shopping_domain_get"
+      + " answers them as `seller_specs`. A key an ancestor already defines with the same"
+      + " type and unit is not coined again: the reply carries it back as"
+      + " `inherited: true`, and you may filter on it as if you had. An existing path is"
+      + " refused and nothing is written — that refusal means the vocabulary is already"
+      + " there, so search that same path; never coin a near-path variant to route around"
+      + " it, and never call this to change a category that exists. Every sil shopper sees"
+      + " what you write and nothing can undo it.",
   },
   {
     name: SEARCH_TOOL,
@@ -161,11 +161,11 @@ export const SHOPPING_TOOLS = [
     label: "Read one seller's whole terms",
     description:
       "Beat 6, one seller's WHOLE terms: send 1–10 seller ids from shopping_offers, and"
-      + " `ship_to` — the LABEL of one of the buyer's addresses as sil_whoami lists them,"
-      + " the default address when you send nothing. Each seller comes back with its"
+      + " nothing else. Each seller comes back with its"
       + " name, host and country, `specs` — every seller key sil holds a value for, base"
-      + " and branch, as the dossier's `specs` are a product's — and `ships`: serviceable"
-      + " (sil read a route covering that address), not_serviceable (sil read this"
+      + " and branch, as the dossier's `specs` are a product's — and `ships`, which"
+      + " answers for the buyer's default address: serviceable"
+      + " (sil read a route covering it), not_serviceable (sil read this"
       + " seller's policy and it excludes it), or unknown (sil has read nothing about"
       + " this seller). `unknown` is an ordinary answer that keeps the seller — say sil"
       + " could not confirm shipping, and hand the buyer the listing; an empty `specs` is"

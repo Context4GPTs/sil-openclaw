@@ -6,8 +6,7 @@
   "required": [
     "status",
     "path",
-    "specs",
-    "seller_specs"
+    "specs"
   ],
   "properties": {
     "status": {
@@ -40,28 +39,16 @@
             "type": "boolean",
             "const": true,
             "description": "Knows this key tells one product from the next."
+          },
+          "inherited": {
+            "type": "boolean",
+            "const": true,
+            "description": "Knows it may filter on this key without having minted it."
           }
         },
         "additionalProperties": false
       },
       "description": "Reads back the keys the registry accepted, as it accepted them."
-    },
-    "seller_specs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "key"
-        ],
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "Uses this key in the Brief's seller rows and in `shopping_offers`."
-          }
-        },
-        "additionalProperties": false
-      },
-      "description": "Confirms which seller terms were coined for this category."
     }
   },
   "additionalProperties": false

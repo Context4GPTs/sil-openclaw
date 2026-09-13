@@ -13,12 +13,6 @@
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
     },
-    "ship_to": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64,
-      "description": "Says which address every `ships` below is about; absent when the default address carries no label."
-    },
     "sellers": {
       "type": "array",
       "items": {

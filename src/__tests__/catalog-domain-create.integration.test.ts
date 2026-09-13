@@ -20,7 +20,12 @@ import {
   seedTokens,
   useShoppingHarness,
 } from "./helpers/shopping-harness.js";
-import { MINT_409, contractRequest, contractResponse } from "./helpers/shopping-wire.js";
+import {
+  MINT_409,
+  artifactErrors,
+  contractRequest,
+  contractResponse,
+} from "./helpers/shopping-wire.js";
 
 const TOOL = "shopping_domain_create";
 const ACCESS = "at-live-token";
@@ -66,6 +71,20 @@ describe("shopping_domain_create — one write, and only one", () => {
     expect(specs.some((s) => s["variant_spec"] === true)).toBe(true);
     expect(specs.some((s) => s["product_spec"] === true)).toBe(true);
   });
+
+  it("the request coins PRODUCT keys only — `seller_specs` is refused", () => {
+    // Seller terms are never the agent's to coin: the base is sil's, and a branch key is
+    // coined by research. The artifact is this tool's `parameters`, so a mint that tried
+    // is refused before it reaches the one write nothing can undo.
+    const body = contractRequest(TOOL);
+    expect(artifactErrors(TOOL, "request", body)).toEqual([]);
+    expect(
+      artifactErrors(TOOL, "request", {
+        ...body,
+        seller_specs: [{ key: "bootfitting_service", display_name: "Bootfitting", type: "boolean" }],
+      }),
+    ).not.toEqual([]);
+  });
 });
 
 describe("shopping_domain_create — what the answer means", () => {
@@ -73,6 +92,17 @@ describe("shopping_domain_create — what the answer means", () => {
     seedTokens(ACCESS, REFRESH);
     installRouter((kind) => (kind === "domains" ? ok(contractResponse(TOOL)) : ok({})));
     expect(await run()).toEqual(contractResponse(TOOL));
+  });
+
+  it("a key the registry answers `inherited: true` reaches the agent untouched", async () => {
+    // The agent filters on an inherited key without having minted it, so the mark has to
+    // survive the hop: dropped, that key reads as one the mint never accepted.
+    seedTokens(ACCESS, REFRESH);
+    const body = contractResponse(TOOL);
+    (body["specs"] as Record<string, unknown>[]).push({ key: "price", inherited: true });
+    expect(artifactErrors(TOOL, "response", body)).toEqual([]);
+    installRouter((kind) => (kind === "domains" ? ok(body) : ok({})));
+    expect(await run()).toEqual(body);
   });
 
   it("a colliding path is `already_exists`, and the recovery is to SEARCH that same path", async () => {

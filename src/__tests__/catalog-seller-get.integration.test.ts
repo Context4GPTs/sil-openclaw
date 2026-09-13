@@ -20,7 +20,7 @@ import {
   seedTokens,
   useShoppingHarness,
 } from "./helpers/shopping-harness.js";
-import { contractResponse } from "./helpers/shopping-wire.js";
+import { artifactErrors, contractResponse } from "./helpers/shopping-wire.js";
 
 const TOOL = "shopping_seller_get";
 const ACCESS = "at-live-token";
@@ -45,21 +45,12 @@ describe("shopping_seller_get — one route, one request", () => {
     expect(router.other).toEqual([]);
   });
 
-  it("with no address the key is OMITTED — the route fills the buyer's default", async () => {
-    // "Ship to me" is an omitted key. The plugin must not call sil_whoami to fill it,
-    // and must not send an empty string that fails the artifact's own minLength.
-    seedTokens(ACCESS, REFRESH);
-    const router = installRouter(() => ok(contractResponse(TOOL)));
-    await run({ ids: ["s1"] });
-    expect(router.sellers[0].body).toEqual({ ids: ["s1"] });
-    expect(router.all).toHaveLength(1);
-  });
-
-  it("a stated address travels as given — a LABEL, never a country", async () => {
-    seedTokens(ACCESS, REFRESH);
-    const router = installRouter(() => ok(contractResponse(TOOL)));
-    await run({ ids: ["s1"], ship_to: "home" });
-    expect(router.sellers[0].body).toEqual({ ids: ["s1"], ship_to: "home" });
+  it("the request takes `ids` and NOTHING else — an address is refused", () => {
+    // `ships` answers for the buyer's default address, so this call has no address to
+    // send. The artifact IS the tool's `parameters`, so it is what the host validates
+    // against: a re-added echo would be a field the route never agreed to.
+    expect(artifactErrors(TOOL, "request", { ids: ["s1"] })).toEqual([]);
+    expect(artifactErrors(TOOL, "request", { ids: ["s1"], ship_to: "home" })).not.toEqual([]);
   });
 });
 
