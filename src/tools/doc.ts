@@ -9,13 +9,13 @@
 import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
+import { docFailureResult } from "../lib/doc-result.js";
 import {
   findDocuments,
   migrateLegacyStore,
   readDocument,
   removeDocument,
   writeDocument,
-  type StoreFailure,
 } from "../lib/doc-store.js";
 import { wiringAdvisories } from "../lib/host-wiring.js";
 import { jsonResult } from "../lib/tool-result.js";
@@ -83,7 +83,7 @@ function registerFind(api: PluginAPI): void {
         status: optString(params["status"]),
         query: optString(params["query"]),
       });
-      if (!result.ok) return mapFailure(api, "shopping_doc_find", result);
+      if (!result.ok) return docFailureResult(api, "shopping_doc_find", result);
       api.logger.info("shopping_doc_found", {
         brief_count: result.briefs.length,
         has_shopper: result.shopper !== undefined,
@@ -124,7 +124,7 @@ function registerRead(api: PluginAPI): void {
     async execute(_callId, params) {
       migrateOnTouch(api);
       const result = readDocument(params["ref"]);
-      if (!result.ok) return mapFailure(api, "shopping_doc_read", result);
+      if (!result.ok) return docFailureResult(api, "shopping_doc_read", result);
       api.logger.info("shopping_doc_read", { doc_kind: result.kind });
       return jsonResult({
         status: "ok",
@@ -183,7 +183,7 @@ function registerWrite(api: PluginAPI): void {
         status: optString(params["status"]),
         name: optString(params["name"]),
       });
-      if (!result.ok) return mapFailure(api, "shopping_doc_write", result);
+      if (!result.ok) return docFailureResult(api, "shopping_doc_write", result);
       // Non-PII markers only — no document body ever reaches a log line.
       api.logger.info("shopping_doc_written", { doc_kind: result.kind, mode: result.mode });
       return jsonResult({
@@ -219,7 +219,7 @@ function registerRemove(api: PluginAPI): void {
     async execute(_callId, params) {
       migrateOnTouch(api);
       const result = removeDocument(params["ref"]);
-      if (!result.ok) return mapFailure(api, "shopping_doc_remove", result);
+      if (!result.ok) return docFailureResult(api, "shopping_doc_remove", result);
       api.logger.info("shopping_doc_removed", { doc_kind: result.kind });
       return jsonResult({
         status: "removed",
@@ -228,35 +228,5 @@ function registerRemove(api: PluginAPI): void {
         ...wiringAdvisories(api),
       });
     },
-  });
-}
-
-/** Map a store failure variant to the canonical structured envelope + a non-PII log.
- * Exported for `shopping_brief_compile`, which reads the same store through the same
- * verb and must answer a corrupt Brief exactly as these four do. */
-export function mapFailure(api: PluginAPI, tool: string, result: StoreFailure) {
-  if (result.kind === "invalid_request") {
-    api.logger.warn(tool + "_invalid_request", { field: result.field });
-    return jsonResult({ status: "invalid_request", field: result.field, message: result.message });
-  }
-  if (result.kind === "not_found") {
-    api.logger.info(tool + "_not_found", {});
-    return jsonResult({ status: "not_found", message: result.message });
-  }
-  if (result.kind === "unreadable") {
-    // NOT KNOWN TO BE ABSENT — presence unsettled, or a body that will not parse. Steer
-    // the agent to inspect/repair, NEVER write over it (silent loss of a recoverable
-    // document). Distinct from not_found.
-    api.logger.warn(tool + "_unreadable", { detail: result.detail });
-    return jsonResult({ status: "unreadable", message: result.message, recovery: "inspect_document" });
-  }
-  // `detail` carries the path Node named and stays in the log; the agent gets the errno
-  // CODE, which is the part it can act on and the part that is not a store internal.
-  api.logger.error(tool + "_persistence_failed", { detail: result.detail });
-  return jsonResult({
-    status: "persistence_failed",
-    error: result.error,
-    message: result.message,
-    recovery: result.recovery,
   });
 }

@@ -30,10 +30,10 @@
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
  *     both sides equals the FIFTEEN tools: the seven `shopping_*` catalog tools
- *     1:1 with the sil-api routes, the four `shopping_doc_*` document tools, and
- *     the three account tools that keep the `sil_` name. A GROUP swap is not
- *     picked up for free — `codeRegisteredNames()` below has to be rewired or it
- *     silently narrows instead of going red.
+ *     1:1 with the sil-api routes, the four `shopping_doc_*` document tools,
+ *     `shopping_brief_compile`, and the three account tools that keep the `sil_`
+ *     name. A GROUP swap is not picked up for free — `codeRegisteredNames()`
+ *     below has to be rewired or it silently narrows instead of going red.
  */
 
 import { describe, it, expect } from "vitest";

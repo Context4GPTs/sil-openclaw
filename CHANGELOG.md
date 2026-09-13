@@ -12,20 +12,43 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
-- **The eleven `shopping_*` tools, on the agent contract.** Seven catalog tools 1:1 with
+- **The twelve `shopping_*` tools, on the agent contract.** Seven catalog tools 1:1 with
   the sil-api routes — `shopping_domain_search` (read the registry in the buyer's words),
   `shopping_domain_get` (a category's buying guide and the keys it is bought by),
   `shopping_domain_create` (coin a new one), `shopping_search`, `shopping_product_get`
-  (the whole dossier on 1–10 variants), `shopping_offers` (dated prices per seller, read
-  live) and `shopping_seller_get` (whether that seller ships to the buyer, and on what
-  terms) — plus the four document verbs, renamed `shopping_doc_find` / `read` / `write` /
-  `remove`. Every tool the loop calls is named for what it does for the shopper; only
-  `sil_register`, `sil_whoami` and `sil_doctor` keep the `sil_` name.
-- **The fourteen schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
+  (the whole dossier on 1–10 variants), `shopping_offers` (dated prices and the seller
+  terms you asked for, per offer, read live) and `shopping_seller_get` (one seller's
+  whole terms) — plus the four document verbs, renamed `shopping_doc_find` / `read` / `write` /
+  `remove`, and `shopping_brief_compile`. Every tool the loop calls is named for what it
+  does for the shopper; only `sil_register`, `sil_whoami` and `sil_doctor` keep the
+  `sil_` name.
+- **The sixteen schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
   its committed request artifact, copied verbatim from `sil-services`
   (`schema/PROVENANCE.md` names the commit), and each `ok` result IS the API's 200 body,
   handed over untouched. The plugin adds no shape of its own in either direction, so
   there is nothing here for the contract to drift from.
+- **`shopping_brief_compile`, the Brief as the calls it makes.** Name a Brief and one of
+  its `## Items` rows and get that item's `domain`, its own subsection prose as `query`,
+  its `## Hard constraints` and `## Preferences` rows as `specs`, and its `seller` rows as
+  `seller_specs` — hard rows first, each value typed by the key the domain read holds. One
+  registry read, no catalog call, nothing written. `specs` goes to `shopping_search` with
+  `n` and `ship_to`; `seller_specs` goes to `shopping_offers` with the shortlisted variant
+  ids. A row the registry cannot take is refused by name before any spend; a key the
+  registry does not hold travels as written.
+- **`ship_to` is the LABEL of an address the buyer has on file**, as `sil_whoami` lists
+  them — never a country. It localizes a search to that address and is what
+  `shopping_offers` and `shopping_seller_get` read `ships` against; absent, sil uses the
+  buyer's default address.
+- **Seller terms are asked and answered per OFFER.** `shopping_offers` takes
+  `seller_specs` — keys of the domain read's own `seller_specs`, which
+  `shopping_domain_create` can coin for a new category — and answers `seller_fit` on each
+  offer: `ships` always (serviceable, not_serviceable or unknown for that address), plus
+  each requested key with that seller's value where sil holds one. `shopping_seller_get`
+  is the details read beside it, carrying every seller key sil holds as `specs`.
+- **A key the domain does not hold is recorded, never refused.** The search takes any
+  well-formed key, answers the products it found and leaves that key absent from `fit`,
+  writing the ask on the search row so research can coin what buyers need. The skill sends
+  it and also keeps it as a `## Notes / open` row, judged at beat 6 from what pages print.
 - **`shopping_domain_create` marks a key `variant_spec` or `product_spec`** — what
   identifies a purchasable variant, and what tells one product from the next. The
   registry derives each key's operators from its `type`.
@@ -106,10 +129,6 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   renamed `agents.list` (an array) to `agents.entries` (a map keyed by id), and the
   detector went blind on it — reporting a healthy install as mis-wired, or the reverse.
   It reads both shapes now.
-- **A key the domain does not hold travels ONE way, not two.** The skill told the agent to
-  send it as a spec row and read the gap back off `fit`; the search refuses a key the
-  domain does not list, so that row cost the whole call. It travels as a `## Notes / open`
-  row and is judged at beat 6 from what the pages print.
 - **A directory sil cannot list no longer reads as an absent document.** The document
   verbs decided absence with `existsSync` — a boolean over a stat that swallows every
   errno, so an unlistable `briefs/` answered `not_found` for a Brief sitting on disk. The

@@ -1,10 +1,7 @@
 /**
  * ONE authenticated call to sil-api, and the §4 envelopes every caller answers with.
- *
- * Shared because the 401 choreography must not drift between the tools that make it —
- * the registry read `shopping_brief_compile` takes is the same call the catalog tools
- * take, and a second copy of it is exactly what `cross-tool-401-parity` forbids. The
- * caller owns only what it does with an `ok` body.
+ * Shared because the 401 choreography must not drift between the tools that make it — a
+ * second copy is what `cross-tool-401-parity` forbids. The caller owns only the `ok` body.
  */
 
 import type { PluginAPI, ToolResult } from "openclaw/plugin-sdk";
@@ -18,6 +15,11 @@ import {
   type ShoppingRoute,
 } from "./sil-client.js";
 import { jsonResult } from "./tool-result.js";
+
+/** The guide read — the one route two tools take (`shopping_domain_get`, and
+ * `shopping_brief_compile` under its own name). Two spellings of one path is a route
+ * nobody owns. */
+export const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
 
 /** A route, under the NAME of the tool the agent called: every log marker and every
  * recovery hint names that tool, never the route behind it. */
@@ -79,7 +81,10 @@ function mapOutcome(api: PluginAPI, call: ShoppingCall, outcome: ShoppingOutcome
       return { kind: "refused", result: invalidRequest(outcome.message) };
     case "not_found":
       api.logger.info(`${call.name}_not_found`, {});
-      return { kind: "refused", result: refusal("not_found", outcome.message, call.refusalRecovery) };
+      return {
+        kind: "refused",
+        result: refusal("not_found", outcome.message, call.refusalRecovery),
+      };
     case "already_exists":
       api.logger.info(`${call.name}_already_exists`, {});
       return {

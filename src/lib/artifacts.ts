@@ -1,8 +1,7 @@
 /**
- * The committed artifacts under `schema/`, as the plugin uses them: a tool's
- * `parameters`, and the shape a locally-answered tool checks its own body against.
- * Never a hand-mirror — the bytes are the contract, and a second copy of a shape is
- * the first thing to drift from it.
+ * The committed artifacts under `schema/`, as the plugin uses them: a tool's `parameters`,
+ * and the shape a locally-answered tool checks its own body against. Never a hand-mirror —
+ * the bytes are the contract, and a second copy of a shape is the first to drift from it.
  */
 
 import { readFileSync } from "node:fs";

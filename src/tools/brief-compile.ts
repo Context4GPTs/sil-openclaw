@@ -1,16 +1,14 @@
 /**
  * `shopping_brief_compile` — beats 3 to 5: the Brief's own rows as the two calls they
  * make, `specs` for the search and `seller_specs` for the offers. Local reads plus ONE
- * registry read; it writes nothing and searches nothing.
- *
- * What is still open is the Brief's `## Notes / open`, written at beat 3 and read at
- * beat 4 — this tool neither reads nor restates it.
+ * registry read; it writes nothing, searches nothing, and never restates `## Notes / open`.
  */
 
 import type { PluginAPI, ToolResult } from "openclaw/plugin-sdk";
 import { Value } from "typebox/value";
 
 import { requestSchema, responseSchema } from "../lib/artifacts.js";
+import { docFailureResult } from "../lib/doc-result.js";
 import {
   domainMatches,
   itemProse,
@@ -20,12 +18,19 @@ import {
   type SpecRow,
 } from "../lib/doc-store.js";
 import { wiringAdvisoryBlocks } from "../lib/host-wiring.js";
-import { callRoute, transient, type ShoppingCall } from "../lib/shopping-call.js";
+import {
+  DOMAIN_GET_ROUTE,
+  callRoute,
+  transient,
+  type ShoppingCall,
+} from "../lib/shopping-call.js";
 import { jsonResult } from "../lib/tool-result.js";
-import { DOMAIN_GET_ROUTE } from "./catalog.js";
-import { mapFailure } from "./doc.js";
 
 const TOOL = "shopping_brief_compile";
+
+/** Read once at load, like every other artifact: an unreadable one is a broken build,
+ * and a refusal must not cost two disk reads to phrase. */
+const RESPONSE_ARTIFACT = responseSchema(TOOL);
 
 /** The registry read, under THIS tool's name: the log marker and the recovery hint name
  * the tool the agent called, never the route behind it. */
@@ -38,6 +43,10 @@ const DOMAIN_READ: ShoppingCall = {
 /** `price` is a key every domain has without the read listing it (contract §3.4):
  * money, `gte` and `lte`, and its currency is required. */
 const PRICE: RegistryKey = { type: "money", operators: ["gte", "lte"] };
+
+/** A key the registry does not hold: no type to check a cell against, so each one
+ * travels as the buyer wrote it. */
+const UNTYPED: RegistryKey = { type: "", operators: [] };
 
 const OPERATORS = ["eq", "neq", "gte", "lte", "in", "nin"];
 const DECIMAL = /^-?\d+(\.\d+)?$/;
@@ -100,13 +109,21 @@ export function registerBriefCompileTool(api: PluginAPI): void {
 async function compile(api: PluginAPI, params: Record<string, unknown>): Promise<Compiled> {
   const asked = typeof params["item"] === "string" ? params["item"].trim() : "";
   if (asked === "") {
-    return refuse(api, "invalid_request", "`item` is required — it names one `## Items` row by its label.");
+    return refuse(
+      api,
+      "invalid_request",
+      "`item` is required — it names one `## Items` row by its label.",
+    );
   }
 
   const doc = readDocument(params["ref"]);
-  if (!doc.ok) return { ok: false, result: mapFailure(api, TOOL, doc) };
+  if (!doc.ok) return { ok: false, result: docFailureResult(api, TOOL, doc) };
   if (doc.kind !== "brief") {
-    return refuse(api, "invalid_request", "Only a Brief compiles to a search — `ref` must be \"brief:<slug>\".");
+    return refuse(
+      api,
+      "invalid_request",
+      'Only a Brief compiles to a search — `ref` must be "brief:<slug>".',
+    );
   }
 
   const item = parseItems(doc.body).find((r) => r.item.toLowerCase() === asked.toLowerCase());
@@ -143,7 +160,8 @@ async function compile(api: PluginAPI, params: Record<string, unknown>): Promise
 
   const scoped = scopeRows(parseSpecRows(doc.body), item.domain);
   if ("blank" in scoped) {
-    return refuse(api, "invalid_request", rowRefusal(scoped.blank, "carries no domain, so nothing says which item it is an ask for"), "shopping_doc_write");
+    const fault = "carries no domain, so nothing says which item it is an ask for";
+    return refuse(api, "invalid_request", rowRefusal(scoped.blank, fault), "shopping_doc_write");
   }
   return await compileScoped(api, { item: item.item, domain: item.domain, query }, scoped);
 }
@@ -165,7 +183,9 @@ async function compileScoped(api: PluginAPI, head: Head, scoped: Scoped): Promis
   if (!read.ok) return read;
 
   const specs = compileRows(scoped.product, read.product);
-  if ("refusal" in specs) return refuse(api, "invalid_request", specs.refusal, "shopping_doc_write");
+  if ("refusal" in specs) {
+    return refuse(api, "invalid_request", specs.refusal, "shopping_doc_write");
+  }
   const sellerSpecs = compileRows(scoped.seller, read.seller);
   if ("refusal" in sellerSpecs) {
     return refuse(api, "invalid_request", sellerSpecs.refusal, "shopping_doc_write");
@@ -223,8 +243,17 @@ async function readVocabulary(api: PluginAPI, path: string): Promise<VocabularyR
   const sellerSpecs = read.body["seller_specs"];
   // Both lists are required of the read. A 200 missing one is a broken contract, not a
   // category with no keys: read as empty it would type every row of that side as one
-  // the registry does not hold, and send the Brief's own strings as values.
+  // the registry does not hold, and send the Brief's own strings as values. The agent
+  // gets `retryable`; the operator gets the field that was absent, which is the only
+  // part that says WHERE to look.
   if (!Array.isArray(specs) || !Array.isArray(sellerSpecs)) {
+    api.logger.warn(`${TOOL}_domain_read_incomplete`, {
+      domain: path,
+      absent: [
+        ...(Array.isArray(specs) ? [] : ["specs"]),
+        ...(Array.isArray(sellerSpecs) ? [] : ["seller_specs"]),
+      ],
+    });
     return { ok: false, result: transient(TOOL) };
   }
   return { ok: true, product: toVocabulary(specs), seller: toVocabulary(sellerSpecs) };
@@ -243,7 +272,11 @@ function toVocabulary(specs: unknown[]): Vocabulary {
       type,
       ...(typeof spec["unit"] === "string" ? { unit: spec["unit"] } : {}),
       ...(Array.isArray(spec["allowed_values"])
-        ? { allowedValues: spec["allowed_values"].filter((v): v is string => typeof v === "string") }
+        ? {
+            allowedValues: spec["allowed_values"].filter(
+              (v): v is string => typeof v === "string",
+            ),
+          }
         : {}),
       operators: operators.filter((o): o is string => typeof o === "string"),
     });
@@ -251,7 +284,10 @@ function toVocabulary(specs: unknown[]): Vocabulary {
   return keys;
 }
 
-function compileRows(rows: SpecRow[], vocabulary: Vocabulary): { rows: Spec[] } | { refusal: string } {
+function compileRows(
+  rows: SpecRow[],
+  vocabulary: Vocabulary,
+): { rows: Spec[] } | { refusal: string } {
   const specs: Spec[] = [];
   for (const row of rows) {
     const spec = compileRow(row, vocabulary);
@@ -270,9 +306,13 @@ function compileRow(row: SpecRow, vocabulary: Vocabulary): Spec | string {
   if (row.value === "") return rowRefusal(row, "states no value");
 
   const held = row.key === "price" ? PRICE : vocabulary.get(row.key);
-  // A key the registry does not hold travels EXACTLY as written: the search records it
-  // and answers it absent from `fit`, so research can coin what buyers need.
-  if (held === undefined) return { key: row.key, op: row.op, value: row.value };
+  // A key the registry does not hold travels as written — the search records it and
+  // answers it absent from `fit` — but list-ness is the OPERATOR's, not the key's, so
+  // `in`/`nin` still splits the cell. Untyped, every element is the buyer's own string.
+  if (held === undefined) {
+    const value = typedValues(row, UNTYPED);
+    return typeof value === "string" ? value : { key: row.key, op: row.op, value: value.value };
+  }
 
   if (!held.operators.includes(row.op)) {
     return rowRefusal(row, `takes ${held.operators.join(", ")}, never "${row.op}"`);
@@ -323,14 +363,17 @@ function typedValues(row: SpecRow, held: RegistryKey): { value: unknown } | stri
 function typedValue(row: SpecRow, held: RegistryKey, cell: string): { value: unknown } | string {
   switch (held.type) {
     case "number":
-      return DECIMAL.test(cell) ? { value: Number(cell) } : rowRefusal(row, `is a number, and "${cell}" is not one`);
+      if (DECIMAL.test(cell)) return { value: Number(cell) };
+      return rowRefusal(row, `is a number, and "${cell}" is not one`);
     case "money":
-      return AMOUNT.test(cell) ? { value: cell } : rowRefusal(row, `is money, and "${cell}" is not an amount`);
+      if (AMOUNT.test(cell)) return { value: cell };
+      return rowRefusal(row, `is money, and "${cell}" is not an amount`);
     case "boolean":
       if (cell === "true" || cell === "false") return { value: cell === "true" };
       return rowRefusal(row, `is a boolean, and "${cell}" is neither true nor false`);
     case "enum":
-      if (held.allowedValues === undefined || held.allowedValues.includes(cell)) return { value: cell };
+      if (held.allowedValues === undefined) return { value: cell };
+      if (held.allowedValues.includes(cell)) return { value: cell };
       return rowRefusal(row, `takes one of ${held.allowedValues.join(", ")}, never "${cell}"`);
     default:
       // A type this plugin does not know yet: the cell travels as the buyer wrote it
@@ -348,8 +391,8 @@ function rowRefusal(row: SpecRow, fault: string): string {
 /** The compiled body against its own artifact — the last gate before the agent sends
  * it. A Brief can hold more rows, or a longer query, than the wire takes. */
 function artifactErrors(body: unknown): string | null {
-  if (Value.Check(responseSchema(TOOL), body)) return null;
-  return [...Value.Errors(responseSchema(TOOL), body)]
+  if (Value.Check(RESPONSE_ARTIFACT, body)) return null;
+  return [...Value.Errors(RESPONSE_ARTIFACT, body)]
     .slice(0, 3)
     .map((e) => `${e.instancePath || "/"} ${e.message}`)
     .join("; ");

@@ -12,7 +12,7 @@
  * are the real ones, so nothing green here is green over a stub.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import { writeDocument } from "../lib/doc-store.js";
 import { getTool } from "./helpers/mock-plugin-api.js";
@@ -189,6 +189,18 @@ describe("A3 — the journey's Brief compiles to the contract's own bodies", () 
     );
   });
 
+  it("`in` on a key the domain does not hold still sends a LIST, not one long string", async () => {
+    // List-ness belongs to the OPERATOR, not to the key: `in` over a comma-separated
+    // cell is a list whether or not the registry can type its elements. Shipped as one
+    // string, `"gripwalk, alpine"` is a value no listing can ever equal — a row that
+    // silently matches nothing, which is exactly what the recorded-not-refused rule
+    // exists to avoid.
+    expect(writeDocument({ ref: REF, mode: "replace", title: "Chamonix", body: BRIEF.replace("| sole_norm | eq | gripwalk |  |", "| sole_norm | in | gripwalk, alpine |  |") }).ok).toBe(true);
+    scriptTheRegistry();
+    const specs = (await compile({ ref: REF, item: "ski boots" }))["specs"] as Record<string, unknown>[];
+    expect(specs).toContainEqual({ key: "sole_norm", op: "in", value: ["gripwalk", "alpine"] });
+  });
+
   it("the shopper's own document reaches neither body — no `ship_to`, no fact of theirs", async () => {
     // `ship_to` is the AGENT's to add from `## Constraints`, and a fact is the Brief's to
     // translate. A compile that helpfully folded either in would send an address the
@@ -258,6 +270,24 @@ describe("A3 — what the compile refuses, before any spend", () => {
     expect(noItem["status"]).toBe("not_found");
     expect(noItem["recovery"]).toBe("shopping_doc_read");
     expect(router.all).toEqual([]);
+  });
+
+  it("a domain read missing a vocabulary is `retryable`, and the absent field is LOGGED", async () => {
+    // Read as a category with no keys, a missing `seller_specs` would type every seller
+    // row as one the registry does not hold and ship the Brief's raw strings. The agent
+    // gets a status it can retry; the operator gets the field, which is the only part
+    // that says where the registry defect is.
+    installRouter((kind, _nth, req: Recorded) => {
+      if (kind !== "domainGet") return ok({});
+      const path = decodeURIComponent(req.url.split("/catalog/domains/")[1] ?? "");
+      return ok({ status: "ok", path, guide: "g", specs: REGISTRY[BOOTS]?.specs });
+    });
+    expect((await compile({ ref: REF, item: "ski boots" }))["status"]).toBe("retryable");
+    expect(
+      vi.mocked(harness.api.logger.warn).mock.calls.find(
+        (c) => c[0] === "shopping_brief_compile_domain_read_incomplete",
+      )?.[1],
+    ).toEqual({ domain: BOOTS, absent: ["seller_specs"] });
   });
 
   it("a domain that no longer stands comes back as the registry's own `not_found`", async () => {

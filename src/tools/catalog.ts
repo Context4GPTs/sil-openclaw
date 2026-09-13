@@ -13,7 +13,7 @@ import { requestSchema } from "../lib/artifacts.js";
 import { readConfig } from "../lib/credentials.js";
 import { wiringAdvisoryBlocks } from "../lib/host-wiring.js";
 import { putSearchResult, type SearchResultPage } from "../lib/search-results-store.js";
-import { callRoute, type ShoppingCall } from "../lib/shopping-call.js";
+import { DOMAIN_GET_ROUTE, callRoute, type ShoppingCall } from "../lib/shopping-call.js";
 import { jsonResult } from "../lib/tool-result.js";
 
 interface ShoppingTool extends ShoppingCall {
@@ -23,10 +23,6 @@ interface ShoppingTool extends ShoppingCall {
 
 /** The tool whose page a paired client can pull back by `callId`. */
 const SEARCH_TOOL = "shopping_search";
-
-/** The guide read, as its own constant: `shopping_brief_compile` takes the same route
- * under its own name, and two spellings of one path is a route nobody owns. */
-export const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
 
 export const SHOPPING_TOOLS = [
   {
@@ -85,8 +81,9 @@ export const SHOPPING_TOOLS = [
       + " seller terms THIS category is bought with and nothing else — a fitting service,"
       + " a certification — at the mirrored path under `seller`; returns, restocking and"
       + " the shipping terms are the base every category already has, so leave them out."
-      + " A key an ancestor already defines is refused by name, as `price` is. An existing path is refused and"
-      + " nothing is written — that refusal means the vocabulary is already there, so"
+      + " A key an ancestor already defines is refused by name, as `price` is. An"
+      + " existing path is refused and nothing is written — that refusal means the"
+      + " vocabulary is already there, so"
       + " search that same path; never coin a near-path variant to route around it, and"
       + " never call this to change a category that exists. Every sil shopper sees what"
       + " you write and nothing can undo it.",
