@@ -135,6 +135,28 @@
                 },
                 {
                   "type": "string"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                      "description": "Quotes the amount as the page states it."
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$",
+                      "minLength": 3,
+                      "maxLength": 3,
+                      "description": "Quotes the amount in this currency."
+                    }
+                  },
+                  "additionalProperties": false
                 }
               ]
             },
