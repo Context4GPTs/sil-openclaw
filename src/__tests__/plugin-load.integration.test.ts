@@ -167,6 +167,7 @@ describe("plugin load — data dir is created by the FULL real register() (card 
     // catching a silent removal, which is how a shipped tool disappears under a
     // green suite.
     expect([...api._tools.keys()].sort()).toEqual([
+      "shopping_brief_compile",
       "shopping_doc_find",
       "shopping_doc_read",
       "shopping_doc_remove",

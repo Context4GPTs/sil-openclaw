@@ -137,6 +137,7 @@ describe("plugin entry — registration contract", () => {
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
+      "shopping_brief_compile",
       "shopping_doc_find",
       "shopping_doc_read",
       "shopping_doc_remove",

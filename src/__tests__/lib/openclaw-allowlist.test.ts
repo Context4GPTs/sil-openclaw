@@ -54,7 +54,8 @@ import {
 // unit core takes them as an argument so the test pins behaviour, not wiring).
 const SIL: SilAllowlistFacts = {
   id: "sil",
-  // The real fourteen-tool set — the seven `shopping_*` catalog tools, the four
+  // The real fifteen-tool set — the seven `shopping_*` catalog tools, the compile
+  // tool, the four
   // `shopping_doc_*` document tools, and the three account tools.
   //
   // THIS CARRIER IS THE SILENT ONE, and it has gone stale before. Nothing here goes RED
@@ -63,7 +64,8 @@ const SIL: SilAllowlistFacts = {
   // the canonical set can sit here indefinitely. Bumped in lockstep with the mirrors
   // that do bite (`manifest-contract`, `index.test`).
   tools: [
-    "shopping_doc_find",
+    "shopping_brief_compile",
+      "shopping_doc_find",
     "shopping_doc_read",
     "shopping_doc_remove",
     "shopping_doc_write",

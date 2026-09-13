@@ -24,9 +24,9 @@ interface ShoppingTool extends ShoppingCall {
 /** The tool whose page a paired client can pull back by `callId`. */
 const SEARCH_TOOL = "shopping_search";
 
-/** The guide read, as its own constant: it is the one route a second tool also takes,
- * and two spellings of one path is a route nobody owns. */
-const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
+/** The guide read, as its own constant: `shopping_brief_compile` takes the same route
+ * under its own name, and two spellings of one path is a route nobody owns. */
+export const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
 
 export const SHOPPING_TOOLS = [
   {

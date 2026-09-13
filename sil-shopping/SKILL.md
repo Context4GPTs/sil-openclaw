@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use when the user asks to shop with sil or to manage what sil holds for them: register or check their sil account, read sil''s registry for a category and coin one when nothing stands, read a category''s buying guide and keys, search a settled category, open a shortlisted variant''s dossier, price it at every seller and check whether that seller ships to the buyer, list, read, write or remove the buyer''s own documents (the shopper document and its Briefs), or — on any shopping intent — run the eight-beat shopping loop. Drives sil_register, sil_whoami, shopping_domain_search, shopping_domain_get, shopping_domain_create, shopping_search, shopping_product_get, shopping_offers, shopping_seller_get, shopping_doc_find, shopping_doc_read, shopping_doc_write, shopping_doc_remove, sil_doctor.'
+description: 'Use when the user asks to shop with sil or to manage what sil holds for them: register or check their sil account, read sil''s registry for a category and coin one when nothing stands, read a category''s buying guide and keys, compile a Brief item into the calls it makes, search a settled category, open a shortlisted variant''s dossier, price it at every seller on the terms the buyer asked for, read a seller''s whole terms, list, read, write or remove the buyer''s own documents (the shopper document and its Briefs), or — on any shopping intent — run the eight-beat shopping loop. Drives sil_register, sil_whoami, shopping_domain_search, shopping_domain_get, shopping_domain_create, shopping_brief_compile, shopping_search, shopping_product_get, shopping_offers, shopping_seller_get, shopping_doc_find, shopping_doc_read, shopping_doc_write, shopping_doc_remove, sil_doctor.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -85,10 +85,11 @@ over the whole reconciled body.
 | a buy intent whose category has no settled registry path — or `shopping_search` refused the domain | `shopping_domain_search` | [`domain_and_brief.md`](references/domain_and_brief.md) |
 | the category's buying guide, and the keys it is bought by | `shopping_domain_get` | [`domain_and_brief.md`](references/domain_and_brief.md) |
 | a `shopping_domain_search` read came back `matches: []`, after research | `shopping_domain_create` | [`domain_and_brief.md`](references/domain_and_brief.md) |
+| the Brief's rows as the two calls they make, before searching an item | `shopping_brief_compile` | [`shop_loop.md`](references/shop_loop.md) |
 | "find X" / "search for X" in one settled category | `shopping_search` | [`shop_loop.md`](references/shop_loop.md) |
 | open the whole of what sil holds on a shortlisted variant | `shopping_product_get` | [`shop_loop.md`](references/shop_loop.md) |
-| "what does it cost?" / "who sells this?" — dated prices per seller | `shopping_offers` | [`shop_loop.md`](references/shop_loop.md) |
-| "will it reach me?" — a seller's shipping and returns terms | `shopping_seller_get` | [`shop_loop.md`](references/shop_loop.md) |
+| "what does it cost?" / "who sells this?" — dated prices and seller terms per offer | `shopping_offers` | [`shop_loop.md`](references/shop_loop.md) |
+| "will it reach me?" — one seller's whole shipping and returns terms | `shopping_seller_get` | [`shop_loop.md`](references/shop_loop.md) |
 | "what do you have on me?" / "which jobs are open?" | `shopping_doc_find` | [`domain_and_brief.md`](references/domain_and_brief.md) |
 | "show me what you know" / "show me the &lt;job&gt; brief" | `shopping_doc_read` | [`domain_and_brief.md`](references/domain_and_brief.md) |
 | "remember this" / "that's wrong, fix it" — a fact, a taste, a job edit | `shopping_doc_write` | [`fill_and_feedback.md`](references/fill_and_feedback.md) |

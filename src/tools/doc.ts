@@ -231,8 +231,10 @@ function registerRemove(api: PluginAPI): void {
   });
 }
 
-/** Map a store failure variant to the canonical structured envelope + a non-PII log. */
-function mapFailure(api: PluginAPI, tool: string, result: StoreFailure) {
+/** Map a store failure variant to the canonical structured envelope + a non-PII log.
+ * Exported for `shopping_brief_compile`, which reads the same store through the same
+ * verb and must answer a corrupt Brief exactly as these four do. */
+export function mapFailure(api: PluginAPI, tool: string, result: StoreFailure) {
   if (result.kind === "invalid_request") {
     api.logger.warn(tool + "_invalid_request", { field: result.field });
     return jsonResult({ status: "invalid_request", field: result.field, message: result.message });

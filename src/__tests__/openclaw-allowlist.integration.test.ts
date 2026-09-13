@@ -62,11 +62,12 @@ const SCRIPT = join(REPO_ROOT, "scripts", "allowlist-openclaw.mjs");
 
 // sil's real facts (asserted against, sourced from the manifest the script reads).
 const SIL_ID = "sil";
-// The real fourteen-tool set — the eleven `shopping_*` tools of the agent contract plus
+// The real fifteen-tool set — the twelve `shopping_*` tools of the agent contract plus
 // the three account tools. Drives `tools_added === SIL_TOOLS.length` and the per-tool
 // not-enumerated-into-config scan below.
 const SIL_TOOLS = [
-  "shopping_doc_find",
+  "shopping_brief_compile",
+      "shopping_doc_find",
   "shopping_doc_read",
   "shopping_doc_remove",
   "shopping_doc_write",

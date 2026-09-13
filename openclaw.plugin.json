@@ -10,6 +10,7 @@
   },
   "contracts": {
     "tools": [
+      "shopping_brief_compile",
       "shopping_doc_find",
       "shopping_doc_read",
       "shopping_doc_remove",

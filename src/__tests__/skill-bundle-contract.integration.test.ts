@@ -13,6 +13,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { registerIdentityTools } from "../tools/identity.js";
+import { registerBriefCompileTool } from "../tools/brief-compile.js";
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerDocTools } from "../tools/doc.js";
 import { registerDoctorTools } from "../tools/doctor.js";
@@ -72,6 +73,7 @@ const CORE_TOOLS = [
   "shopping_domain_search",
   "shopping_domain_get",
   "shopping_domain_create",
+  "shopping_brief_compile",
   "shopping_search",
   "shopping_product_get",
   "shopping_offers",
@@ -97,6 +99,7 @@ function registeredTools(): string[] {
   registerIdentityTools(api);
   registerCatalogTools(api);
   registerDocTools(api);
+  registerBriefCompileTool(api);
   registerDoctorTools(api);
   return [...registeredToolNames(api)];
 }

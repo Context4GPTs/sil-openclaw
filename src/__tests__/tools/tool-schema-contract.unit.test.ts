@@ -32,6 +32,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { registerIdentityTools } from "../../tools/identity.js";
+import { registerBriefCompileTool } from "../../tools/brief-compile.js";
 import { registerCatalogTools } from "../../tools/catalog.js";
 import { registerDocTools } from "../../tools/doc.js";
 import { registerDoctorTools } from "../../tools/doctor.js";
@@ -43,6 +44,7 @@ import {
 } from "../helpers/mock-plugin-api.js";
 import { perNicheExpertOffenders } from "../helpers/per-niche-expert.js";
 import {
+  ARTIFACT_TOOLS,
   SHOPPING_TOOLS,
   artifact,
   artifactParameters,
@@ -204,6 +206,7 @@ function allRegisteredTools(): MockPluginAPI {
   registerIdentityTools(api);
   registerCatalogTools(api);
   registerDocTools(api);
+  registerBriefCompileTool(api);
   registerDoctorTools(api);
   return api;
 }
@@ -260,7 +263,7 @@ function wholeSurface(api: MockPluginAPI): [string, string][] {
 }
 
 describe("the shopping tools' parameters ARE the committed request artifacts", () => {
-  it.each(SHOPPING_TOOLS)(
+  it.each(ARTIFACT_TOOLS)(
     "%s publishes its artifact verbatim, minus the three FILE annotations",
     (tool) => {
       // The one bar that makes "the plugin adds no shape of its own" checkable. A
@@ -275,7 +278,7 @@ describe("the shopping tools' parameters ARE the committed request artifacts", (
     },
   );
 
-  it.each(SHOPPING_TOOLS)("%s strips `$schema` / `$id` / `title` before the host sees it", (tool) => {
+  it.each(ARTIFACT_TOOLS)("%s strips `$schema` / `$id` / `title` before the host sees it", (tool) => {
     // They describe the FILE, not the argument the model has to build, and a `$id` on a
     // tool input invites a host to resolve a URL nobody serves.
     const registered = getTool(allRegisteredTools(), tool).parameters as unknown as Record<
@@ -292,7 +295,7 @@ describe("the shopping tools' parameters ARE the committed request artifacts", (
     }
   });
 
-  it.each(SHOPPING_TOOLS)("%s's description is bounded — enough to act on, short enough to read", (tool) => {
+  it.each(ARTIFACT_TOOLS)("%s's description is bounded — enough to act on, short enough to read", (tool) => {
     // An agent reads this at pick-time under context pressure; the clause that survives
     // is the short one. The ceiling is generous — it fails a parameter tutorial, not
     // tight prose — and the floor fails a one-liner that teaches nothing.
@@ -327,7 +330,7 @@ describe("the retired tool NAMES cannot come back", () => {
       "sil_register",
       "sil_whoami",
     ]);
-    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(11);
+    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(12);
   });
 });
 
@@ -394,7 +397,15 @@ describe("each shopping tool carries its discipline clause", () => {
    * deleted a 1341-line prose test that pinned wording and stayed green through a live
    * behavioural bug. Each entry is the one thing an agent that loses it gets wrong.
    */
-  const DISCIPLINE: Record<(typeof SHOPPING_TOOLS)[number], RegExp[]> = {
+  const DISCIPLINE: Record<(typeof ARTIFACT_TOOLS)[number], RegExp[]> = {
+    // Where each of the two lists goes, and that a widening is a Brief edit.
+    shopping_brief_compile: [
+      /shopping_search/,
+      /shopping_offers/,
+      /ship_to/,
+      /widen/i,
+      /hard rows first/i,
+    ],
     // The read that licenses the mint, and the bound on how often it is taken.
     shopping_domain_search: [/matches: \[\]/, /licens/i, /\b(2|two)\b/],
     // What the keys are for, and which of them identify a purchasable option.
@@ -411,7 +422,7 @@ describe("each shopping tool carries its discipline clause", () => {
     shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i],
   };
 
-  it.each(SHOPPING_TOOLS)("%s's description carries every load-bearing token of its clause", (tool) => {
+  it.each(ARTIFACT_TOOLS)("%s's description carries every load-bearing token of its clause", (tool) => {
     const description = getTool(allRegisteredTools(), tool).description ?? "";
     const missing = DISCIPLINE[tool].filter((re) => !re.test(description)).map((re) => re.source);
     expect(missing).toEqual([]);

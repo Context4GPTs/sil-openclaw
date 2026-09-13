@@ -3,9 +3,10 @@
  *
  * A UCP commerce plugin for sil. It registers its real tool groups — the account
  * tools (`sil_register`, `sil_whoami`, `sil_doctor`), the seven `shopping_*`
- * catalog tools, and the shopper's own documents (`shopping_doc_find`,
- * `shopping_doc_read`, `shopping_doc_write`, `shopping_doc_remove`) — so they load
- * in an OpenClaw host.
+ * catalog tools, the shopper's own documents (`shopping_doc_find`,
+ * `shopping_doc_read`, `shopping_doc_write`, `shopping_doc_remove`) and
+ * `shopping_brief_compile`, which turns a Brief item into the two calls it makes —
+ * so they load in an OpenClaw host.
  * There is no transport, no persistent service, and no background work at
  * register time — `register()` is strictly synchronous and opens nothing.
  *
@@ -18,9 +19,8 @@
  * that way: all NETWORK I/O lives inside a tool's `execute()` — no timers,
  * no sockets, no unawaited promises here. Two synchronous filesystem reads
  * are exempt because they return immediately and hold no resource open:
- * `ensureDataDir()`'s `mkdirSync`, and the seven `readFileSync`s
- * `registerCatalogTools` makes to publish each tool's request artifact as
- * its `parameters`.
+ * `ensureDataDir()`'s `mkdirSync`, and the `readFileSync` each artifact-backed
+ * tool makes to publish its request artifact as its `parameters`.
  *
  * To add a tool, see `src/tools/identity.ts` (the reference group — it
  * sets the `jsonResult` success shape and structured-error envelope every
@@ -40,6 +40,7 @@ import {
 import { ensureDataDir, getDataDir } from "./lib/credentials.js";
 import { registerSearchResultsMethod } from "./gateway/search-results.js";
 import { detectWiringDrift, readSilWiringFacts } from "./lib/host-wiring.js";
+import { registerBriefCompileTool } from "./tools/brief-compile.js";
 import { registerCatalogTools } from "./tools/catalog.js";
 import { registerDocTools } from "./tools/doc.js";
 import { registerDoctorTools } from "./tools/doctor.js";
@@ -88,6 +89,7 @@ export default definePluginEntry({
     registerIdentityTools(api);
     registerCatalogTools(api);
     registerDocTools(api);
+    registerBriefCompileTool(api);
     registerDoctorTools(api);
 
     // The pull surface a paired client resolves a search page from. Registering

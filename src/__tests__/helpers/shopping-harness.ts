@@ -33,6 +33,7 @@ import { join } from "node:path";
 
 import { setApiUrl, setWebUrl } from "../../lib/config.js";
 import { getDataDir, getTokensPath } from "../../lib/credentials.js";
+import { registerBriefCompileTool } from "../../tools/brief-compile.js";
 import { registerCatalogTools } from "../../tools/catalog.js";
 import { createMockPluginApi, type MockPluginAPI } from "./mock-plugin-api.js";
 
@@ -234,9 +235,9 @@ export const rotated = (access: string, refresh: string): Reply =>
 
 /**
  * The per-file environment every shopping integration test needs: a temp
- * `$SIL_DATA_DIR`, both origins pinned away from anything real, and the seven tools
- * registered on a fresh mock api per test. Seven files needed the same twenty lines, and
- * seven copies is seven places for the origin pinning to rot.
+ * `$SIL_DATA_DIR`, both origins pinned away from anything real, and every sil-api-calling
+ * shopping tool registered on a fresh mock api per test. Eight files needed the same
+ * twenty lines, and eight copies is eight places for the origin pinning to rot.
  *
  * The returned handle is re-populated in `beforeEach`, so a test reads `harness.api`
  * rather than closing over a stale one.
@@ -254,6 +255,7 @@ export function useShoppingHarness(label: string): { api: MockPluginAPI } {
     setApiUrl(SIL_API);
     harness.api = createMockPluginApi();
     registerCatalogTools(harness.api);
+    registerBriefCompileTool(harness.api);
   });
 
   afterEach(() => {
