@@ -174,35 +174,33 @@ describe("B — DOMAIN", () => {
     expect(unsatisfied(edits, (s) => /\bnever\b|\bnot\b|\bcannot\b|\bcan'?t\b/i.test(s))).toEqual([]);
   });
 
-  it("B2 — a key the adopted vocabulary lacks travels EXACTLY one way — a `## Notes / open` row — and is never coined, nor sent", () => {
+  it("B2 — a key the adopted vocabulary lacks is SENT, lands in `## Notes / open`, and is never coined", () => {
+    // The founder's ruling, 2026-09-13: results over refusals. The search takes any
+    // well-formed key, answers the products it found and leaves that key absent from
+    // `fit`, so the old "never a spec row" prose would now cost the buyer a row sil
+    // would happily have recorded. Both halves are pinned POSITIVELY — a negation scan
+    // reads green on the retired wording, because the bullet opens "never a coin" and
+    // the whole thing is ONE statement, so that `never` clears a clause it has nothing
+    // to do with. Measured on the previous iteration: the mutant passed.
     const body = beatBody(2);
     expect(body).toContain("## Notes / open");
 
-    // The gap AND its destination in ONE statement. The pre-card bundle carried a gap
-    // sentence AND a `## Notes / open` bullet a hundred lines apart, about unrelated
+    // The gap AND its two destinations in ONE statement — the pre-card bundle carried a
+    // gap sentence and a `## Notes / open` bullet a hundred lines apart, about unrelated
     // things, so a body-scoped pair passes on prose that never connected them.
-    const gaps = splitStatements(body).filter((s) => /named gap/i.test(s));
+    const gaps = splitStatements(body).filter((s) => /\bdomain\b[^.]{0,40}\blacks?\b|\blacks?\b[^.]{0,40}\bdomain\b/i.test(s));
     expect(gaps.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(gaps, (s) => /notes ?\/ ?open/i.test(s))).toEqual([]);
+    expect(unsatisfied(gaps, (s) => /\bsent\b|\bsend it\b/i.test(s))).toEqual([]);
 
-    // The second channel is CLOSED, and that is a wire fact, not a preference:
-    // sil-api's `assertFilters` throws on a key the domain does not list, so sending
-    // the gap as a spec row costs the whole search. The bundle said the opposite until
-    // this iteration — prose the agent obeys, against a wire that refuses it.
-    //
-    // Pinned POSITIVELY, on the refusal. Scanning the spec-row statements for a
-    // negation instead reads GREEN on the old two-ways wording: that bullet opens
-    // "never a coin", and the whole thing is ONE statement, so the `never` clears a
-    // clause it has nothing to do with. Measured — the mutant passed.
-    const refusal = splitStatements(body).filter((s) => /\brefus(?:e|es|al)\b/i.test(s));
-    expect(refusal.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(
-      unsatisfied(
-        refusal,
-        (s) => /\bspec row\b/i.test(s) && /\bkey\b/i.test(s) && /\bdomain\b/i.test(s),
-      ),
-    ).toEqual([]);
+    const sent = splitStatements(body).filter((s) => /\bsend it\b|\bis sent\b/i.test(s));
+    expect(sent.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(sent, (s) => /absent from `?fit`?/i.test(s))).toEqual([]);
 
+    const notes = splitStatements(body).filter((s) => /notes ?\/ ?open/i.test(s));
+    expect(notes.length).toBeGreaterThan(0); // guard-of-the-guard
+
+    // …and the one channel that stays closed: a missing key is never coined from a
+    // session, because the mint is for a category sil does not have.
     const coining = splitStatements(body).filter((s) => /\bcoin/i.test(s));
     expect(coining.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(unsatisfied(coining, (s) => /\bnever\b|\bnot\b|\brather than\b/i.test(s))).toEqual([]);

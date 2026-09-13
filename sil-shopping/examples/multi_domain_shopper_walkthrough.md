@@ -43,9 +43,10 @@ item is a legal, writable state. Beat 1 does not run again for this job.
   boots resolution carried across. Adopted, written into the shell row, announced.
 
 The guide names `liner_type` as decisive for boots, and the domain read returned no key
-for the *instep volume* the buyer described. That one travels as a `## Notes / open` row
-and nowhere else — sending it as a spec row would make `shopping_search` refuse the whole
-call — and it is never coined into the shared registry.
+for the *instep volume* the buyer described. That one is **sent anyway** — the search
+takes it, answers the products it found, leaves it absent from `fit` and records the ask
+for research — **and** written as a `## Notes / open` row, to be judged at beat 6 from
+what the pages print. It is never coined into the shared registry from this session.
 
 ### Beat 3 — FILL (per item)
 
@@ -74,9 +75,12 @@ buyer answers the first and skips the second: the shell's dimension is written t
 
 ### Beat 5 — SEARCH (per item, ≤ 4 calls each)
 
-Two independent fan-outs, issued concurrently. Each starts with its tightest projection —
-the ancestor-scoped rows as `specs`, the item's own subsection prose as `query` — then
-widens **soft** rows only. The boots' four calls do not spend the shell's budget.
+Two independent fan-outs, issued concurrently. `shopping_brief_compile { ref, item }`
+builds each one — the ancestor-scoped rows as `specs`, the item's own subsection prose as
+`query` — and the agent adds `n` and the `ship_to` label the buyer's `## Constraints`
+names. Each starts with that tightest projection, then widens **soft** rows only, and each
+widening is an edit to the Brief and a second compile. The boots' four calls do not spend
+the shell's budget. The compile's `seller_specs` is held back for beat 6.
 
 ### Beat 6 — REFLECT (per item)
 
@@ -85,9 +89,12 @@ and an empty `fit` ⇒ **NOT VERIFIED**, kept and flagged with the missing key n
 carries `fit: { fibre_wool_pct: 12 }` ⇒ **VIOLATED**, out. A fourth is in budget but its
 price is in dollars against a euro row — a bound sil could not test, said out loud. The
 job's stated ceiling is summed across both picks here, never turned into a spec row.
-`shopping_product_get` opens the two survivors, `shopping_offers` dates their prices per
-seller and `shopping_seller_get` says which of those sellers reaches Berlin. A hero plus
-one alternative, each with a why.
+`shopping_offers` prices the two survivors with the compile's `seller_specs` and the same
+`ship_to`: each offer comes back with `seller_fit`, so the seller rows are vetoed per
+offer — one seller's `ships: not_serviceable` is VIOLATED for that offer, an `unknown` is
+NOT VERIFIED and keeps it. `shopping_product_get` opens the survivors and
+`shopping_seller_get` reads the chosen seller's whole terms. A hero plus one alternative,
+each with a why.
 
 ### Beat 7 — FEEDBACK (per item)
 

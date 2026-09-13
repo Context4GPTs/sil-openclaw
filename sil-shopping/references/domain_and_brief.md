@@ -59,18 +59,23 @@ things.
   carries its own keys; use them **verbatim** in the Brief's spec tables rather than
   coining beside them. A synonym (`speed_mbps` vs `transfer_speed_mbps`) is simply
   outside what the registry holds, so sil holds no value for it.
-- **A key the job needs that the domain lacks is a NAMED GAP, never a coin.** It travels
-  exactly one way and no other: a **`## Notes / open` row** on the Brief, judged at beat 6
-  from what the pages print. It is never a spec row — `shopping_search` refuses a key the
-  domain does not list, and that refusal costs the whole call. Research coins it later,
-  with evidence.
+- **A key the job needs that the domain lacks is SENT, and never a coin.** Write the row
+  and send it: `shopping_search` takes any well-formed key, answers the products it
+  found, leaves that key **absent from `fit`**, and records the ask on the search row so
+  research can coin what buyers actually need. So it travels twice — as a spec row, and
+  as a **`## Notes / open` row** on the Brief, judged at beat 6 from what the pages print.
+  What is never permitted is coining it from a session: `shopping_domain_create` is for a
+  category sil does not have, never for a key an existing one is missing.
 - **Coining is `shopping_domain_create`'s job, once, for a NEW category** — its `specs`
-  are the first keys of a path sil did not have. Research **how the category is bought**
-  on the web first (never products), and coin only the keys the path does not already
-  inherit: a key an ancestor already defines is refused by name, as `price` is. Mark
-  `variant_spec: true` on a key that identifies a purchasable option — a boot's size, a
-  colour — and `product_spec: true` on one that tells one product from the next, a model
-  year or an edition; the registry derives each key's operators from its `type`. An
+  are the first keys of a path sil did not have, and its `seller_specs` are the seller
+  terms **that category** is bought with (a fitting service, a certification), coined at
+  the mirrored path under `seller`. Returns, restocking and the shipping terms are the
+  base every category already inherits — never re-coin them. Research **how the category
+  is bought** on the web first (never products), and coin only the keys the path does not
+  already inherit: a key an ancestor already defines is refused by name, as `price` is.
+  Mark `variant_spec: true` on a key that identifies a purchasable option — a boot's
+  size, a colour — and `product_spec: true` on one that tells one product from the next, a
+  model year or an edition; the registry derives each key's operators from its `type`. An
   existing path is refused and nothing is written; never coin a near-path variant to
   route around that refusal. Tell the buyer the first search answers from the pages
   themselves while sil reads them.

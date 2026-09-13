@@ -36,7 +36,24 @@ recorded one is a link the buyer can check and delete.
 
 **Compile both tables.** Each resolved dimension becomes a row in `## Hard constraints`
 or `## Preferences` — the section IS the hardness. Keys come from what the domain read
-returned, verbatim. **A hard row is never filled around**: the veto applies at pick
+returned, verbatim, and **which list the key came from decides the row's `domain`**:
+
+- a key from the read's **`specs`** is a **product row**, written under the item's own
+  domain — `product.sports.winter.ski.boots | flex_index | gte | 110 | flex`;
+- a key from the read's **`seller_specs`** is a **seller row**, written under `seller` or
+  its branch — the returns window, the restocking fee, the delivery days, the shipping
+  fee, the free-shipping threshold, whether duties are included, and whatever the
+  category itself is bought with. **A seller row is the JOB's, not the item's**: it rides
+  every item's offers call, so write it once.
+
+`shopping_brief_compile` reads those rows back and answers the two calls they make, which
+is why the `domain` cell has to be right at fill.
+
+**A key the job needs that nothing resolves goes to `## Notes / open`** — including
+**every `variant_spec` key the buyer has not said**. A size nobody stated is the one gap
+that cannot be judged from a page at Beat 6, and the rows are what Beat 4 reads.
+
+**A hard row is never filled around**: the veto applies at pick
 (Beat 6), never during fill. A *"prefer X, Y/Z acceptable"* requirement is **one `op: in`
 set** over `{X, Y, Z}` with the X-preference weighed as Beat-6 judgment — never a hard
 `eq` on X alone, which rejects the acceptable alternatives and empties the set.

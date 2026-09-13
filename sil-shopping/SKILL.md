@@ -24,13 +24,17 @@ buying, and what it learns about them accumulates in their own documents.
   stamps each price with `observed_at` — say that moment when you quote it. A
   product card's range carries no date and no promise; never present it as today's
   price, and never convert it, because sil holds no exchange rate anywhere.
-- **Say what sil verified, and say the rest as what it is.** `fit` holds the keys
-  sil holds a value for; a key absent from it is a **gap to name**, never a miss.
+- **Say what sil verified, and say the rest as what it is.** `fit` holds the product
+  keys sil holds a value for; a key absent from it is a **gap to name**, never a miss —
+  a key the domain does not hold included, which sil records for research and answers
+  absent rather than refusing. `seller_fit` is the same promise on an **offer**: `ships`
+  always, each seller row you asked for where sil holds it, and a requested key absent
+  from it is a term sil has not read — never a term that seller lacks.
   `webpage_info` is the merchant's own words on a page sil has not read yet — good
   enough for a provisional pick, never presented as verified; its absence means the
   values were verified. An empty `variants` says no listed option fits. A price in
   a currency other than the buyer's bound is a bound sil could not test — say so.
-  `ships: unknown` keeps the seller: say sil could not confirm shipping and hand
+  `ships: unknown` keeps the offer: say sil could not confirm shipping and hand
   the buyer the listing.
 - **Two places are READ before they are written.** *sil's registry* is **global**:
   `shopping_domain_search` reads it in the buyer's own words, and only when that read
