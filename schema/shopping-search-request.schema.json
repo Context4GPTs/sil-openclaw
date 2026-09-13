@@ -88,71 +88,11 @@
       "maxItems": 32,
       "description": "Sends the desired product values, one per hard row or preference; a key the domain does not hold is recorded, never refused."
     },
-    "seller_specs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "key",
-          "op",
-          "value"
-        ],
-        "properties": {
-          "key": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64,
-            "description": "Names the key from the domain read; `price` is a key every domain has."
-          },
-          "op": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "eq"
-              },
-              {
-                "type": "string",
-                "const": "neq"
-              },
-              {
-                "type": "string",
-                "const": "gte"
-              },
-              {
-                "type": "string",
-                "const": "lte"
-              },
-              {
-                "type": "string",
-                "const": "in"
-              },
-              {
-                "type": "string",
-                "const": "nin"
-              }
-            ],
-            "description": "Sends the operator the domain read listed for this key."
-          },
-          "value": {
-            "description": "Sends the desired value, typed by the key's type."
-          },
-          "currency": {
-            "type": "string",
-            "pattern": "^[A-Z]{3}$",
-            "minLength": 3,
-            "maxLength": 3,
-            "description": "Required on money: sil holds no exchange rate, so the bound is tested against offers in this currency only, and `eur` matches no offer sil stores."
-          }
-        },
-        "additionalProperties": false
-      },
-      "maxItems": 32,
-      "description": "Sends the desired seller terms — keys of the `seller` root — one per hard row or preference."
-    },
     "ship_to": {
       "type": "string",
-      "pattern": "^[A-Za-z]{2}$",
-      "description": "Names the destination every seller term and `ships` is read against; the buyer's registered address when absent."
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Localizes the search to one of the buyer's addresses on file, named by its label; the default address when absent."
     }
   },
   "additionalProperties": false

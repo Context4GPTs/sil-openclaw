@@ -21,7 +21,6 @@
           "id",
           "title",
           "fit",
-          "seller_fit",
           "price",
           "variants"
         ],
@@ -62,25 +61,6 @@
               }
             },
             "description": "Compares each requested product-level key with what it asked; a key absent here is a gap, never a miss."
-          },
-          "seller_fit": {
-            "type": "object",
-            "patternProperties": {
-              "^.*$": {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              }
-            },
-            "description": "Compares each requested seller key with what it asked, on the value that best meets the row across the sellers; `ships` rides here as `serviceable` or `not_serviceable`, absent while any seller is unread."
           },
           "price": {
             "type": "array",

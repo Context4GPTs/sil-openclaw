@@ -146,9 +146,15 @@ describe("ask 1 — the cold-start journey terminates at one seller's terms", ()
     seedTokens(ACCESS, REFRESH);
     const router = scriptTheJourney();
     await call("shopping_domain_create", contractRequest("shopping_domain_create"), "t1");
-    const body = router.domains[0].body as { specs: Record<string, unknown>[] };
+    const body = router.domains[0].body as {
+      specs: Record<string, unknown>[];
+      seller_specs: Record<string, unknown>[];
+    };
     expect(body).toEqual(contractRequest("shopping_domain_create"));
-    for (const spec of body.specs) {
+    // Both vocabularies: the mint coins the category's own seller terms at the mirrored
+    // path under `seller`, and they are the keys beat 6's `seller_fit` can answer at all.
+    expect(body.seller_specs.length).toBeGreaterThan(0);
+    for (const spec of [...body.specs, ...body.seller_specs]) {
       expect(typeof spec["type"]).toBe("string");
       expect(Object.keys(spec)).not.toContain("data_type");
       expect(Object.keys(spec)).not.toContain("level");

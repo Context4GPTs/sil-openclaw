@@ -5,7 +5,6 @@
   "type": "object",
   "required": [
     "status",
-    "ship_to",
     "sellers"
   ],
   "properties": {
@@ -16,8 +15,9 @@
     },
     "ship_to": {
       "type": "string",
-      "pattern": "^[A-Z]{2}$",
-      "description": "Says which destination every `ships` below is about."
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Says which address every `ships` below is about; absent when the default address carries no label."
     },
     "sellers": {
       "type": "array",
@@ -28,7 +28,8 @@
           "name",
           "host",
           "country",
-          "ships"
+          "ships",
+          "specs"
         ],
         "properties": {
           "id": {
@@ -76,6 +77,25 @@
               }
             ],
             "description": "Says whether it ships there; `unknown` keeps the seller and says sil has not read its policy."
+          },
+          "specs": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "description": "Reads the seller's whole terms, base and branch, as the dossier's `specs` are a product's; empty for a seller sil has read nothing about."
           },
           "shipping": {
             "type": "object",

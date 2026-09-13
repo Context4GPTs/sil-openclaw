@@ -104,6 +104,84 @@
             "lte"
           ]
         }
+      ],
+      "seller_specs": [
+        {
+          "key": "return_window_days",
+          "display_name": "Return window",
+          "description": "Days after delivery a return is accepted.",
+          "type": "number",
+          "unit": "days",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "restocking_fee_ratio",
+          "display_name": "Restocking fee",
+          "type": "number",
+          "unit": "ratio",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "delivery_days_min",
+          "display_name": "Delivery, from",
+          "type": "number",
+          "unit": "days",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "delivery_days_max",
+          "display_name": "Delivery, up to",
+          "type": "number",
+          "unit": "days",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "fee",
+          "display_name": "Shipping fee",
+          "type": "money",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "free_threshold",
+          "display_name": "Free shipping from",
+          "type": "money",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "duties_included",
+          "display_name": "Duties included",
+          "type": "boolean",
+          "operators": [
+            "eq"
+          ]
+        },
+        {
+          "key": "bootfitting_service",
+          "display_name": "Bootfitting service",
+          "description": "Whether the shop fits and adjusts the boot after the sale.",
+          "type": "boolean",
+          "operators": [
+            "eq"
+          ]
+        }
       ]
     }
   },
@@ -128,6 +206,11 @@
         },
         {
           "key": "discipline"
+        }
+      ],
+      "seller_specs": [
+        {
+          "key": "bootfitting_service"
         }
       ]
     },
@@ -177,6 +260,14 @@
             "freeride-touring"
           ]
         }
+      ],
+      "seller_specs": [
+        {
+          "key": "bootfitting_service",
+          "display_name": "Bootfitting service",
+          "type": "boolean",
+          "description": "Whether the shop fits and adjusts the boot after the sale."
+        }
       ]
     }
   },
@@ -190,7 +281,6 @@
           "brand": "Atomic",
           "image": "https://cdn.shopify.com/s/files/1/0670/5135/6456/files/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580-gs2qoce3w9aoubnfhm89.jpg?v=1770768168",
           "fit": {},
-          "seller_fit": {},
           "price": [
             {
               "from": "939.95",
@@ -215,7 +305,6 @@
           "brand": "Atomic",
           "image": "https://www.skibarn.com/cdn/shop/files/Screenshot2026-08-11140738.png?v=1786478456&width=638",
           "fit": {},
-          "seller_fit": {},
           "price": [
             {
               "from": "549.95",
@@ -241,7 +330,6 @@
           "brand": "Rossignol",
           "image": "https://www.tradeinn.com/f/14250/142503605/rossignol-alltrack-80-w-gw-woman-alpine-ski-boots.webp",
           "fit": {},
-          "seller_fit": {},
           "price": [
             {
               "from": "210.49",
@@ -268,9 +356,6 @@
           "fit": {
             "flex_index": 130
           },
-          "seller_fit": {
-            "return_window_days": 30
-          },
           "price": [
             {
               "from": "939.95",
@@ -293,7 +378,6 @@
           "fit": {
             "flex_index": 100
           },
-          "seller_fit": {},
           "price": [
             {
               "from": "237.67",
@@ -317,7 +401,6 @@
           "fit": {
             "flex_index": 100
           },
-          "seller_fit": {},
           "price": [
             {
               "from": "549.95",
@@ -372,17 +455,8 @@
   "shopping_offers": {
     "response": {
       "status": "ok",
+      "ship_to": "home",
       "offers": [
-        {
-          "variant_id": "v1",
-          "seller_id": "s1",
-          "seller_name": "SkiEssentials",
-          "price": "939.95",
-          "currency": "USD",
-          "availability": "in_stock",
-          "observed_at": "2026-09-11T10:02:14Z",
-          "url": "https://www.skiessentials.com/products/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580"
-        },
         {
           "variant_id": "v1",
           "seller_id": "s2",
@@ -391,7 +465,24 @@
           "currency": "USD",
           "availability": "out_of_stock",
           "observed_at": "2026-09-11T10:02:14Z",
-          "url": "https://www.atomic.com/en-us/shop/product/hawx-ultra-130-s-dual-boa-ae0002296.html"
+          "url": "https://www.atomic.com/en-us/shop/product/hawx-ultra-130-s-dual-boa-ae0002296.html",
+          "seller_fit": {
+            "ships": "unknown"
+          }
+        },
+        {
+          "variant_id": "v1",
+          "seller_id": "s1",
+          "seller_name": "SkiEssentials",
+          "price": "939.95",
+          "currency": "USD",
+          "availability": "in_stock",
+          "observed_at": "2026-09-11T10:02:14Z",
+          "url": "https://www.skiessentials.com/products/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580",
+          "seller_fit": {
+            "ships": "not_serviceable",
+            "return_window_days": 30
+          }
         }
       ]
     }
@@ -399,7 +490,7 @@
   "shopping_seller_get": {
     "response": {
       "status": "ok",
-      "ship_to": "GR",
+      "ship_to": "home",
       "sellers": [
         {
           "id": "s1",
@@ -407,6 +498,9 @@
           "host": "www.skiessentials.com",
           "country": "US",
           "ships": "not_serviceable",
+          "specs": {
+            "return_window_days": 30
+          },
           "shipping": {
             "policy_url": "https://www.skiessentials.com/shipping",
             "routes": [
@@ -450,7 +544,8 @@
           "name": "Atomic",
           "host": "www.atomic.com",
           "country": "AT",
-          "ships": "unknown"
+          "ships": "unknown",
+          "specs": {}
         }
       ]
     }
@@ -535,7 +630,13 @@
           "currency": "EUR"
         }
       ],
-      "seller_specs": []
+      "seller_specs": [
+        {
+          "key": "return_window_days",
+          "op": "gte",
+          "value": 14
+        }
+      ]
     }
   }
 }

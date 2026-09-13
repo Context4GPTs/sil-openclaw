@@ -6,7 +6,8 @@
   "required": [
     "status",
     "path",
-    "specs"
+    "specs",
+    "seller_specs"
   ],
   "properties": {
     "status": {
@@ -44,6 +45,23 @@
         "additionalProperties": false
       },
       "description": "Reads back the keys the registry accepted, as it accepted them."
+    },
+    "seller_specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Uses this key in the Brief's seller rows and in `shopping_offers`."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Confirms which seller terms were coined for this category."
     }
   },
   "additionalProperties": false

@@ -21,8 +21,9 @@
     },
     "ship_to": {
       "type": "string",
-      "pattern": "^[A-Za-z]{2}$",
-      "description": "Names the destination; absent, sil fills it from the buyer's registered address."
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Reads every seller's `ships` against one of the buyer's addresses on file, named by its label; the default address when absent."
     }
   },
   "additionalProperties": false

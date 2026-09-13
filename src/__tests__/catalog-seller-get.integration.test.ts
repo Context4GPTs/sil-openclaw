@@ -45,9 +45,9 @@ describe("shopping_seller_get — one route, one request", () => {
     expect(router.other).toEqual([]);
   });
 
-  it("with no destination the key is OMITTED — the route fills the buyer's own", async () => {
+  it("with no address the key is OMITTED — the route fills the buyer's default", async () => {
     // "Ship to me" is an omitted key. The plugin must not call sil_whoami to fill it,
-    // and must not send an empty string that fails the artifact's pattern.
+    // and must not send an empty string that fails the artifact's own minLength.
     seedTokens(ACCESS, REFRESH);
     const router = installRouter(() => ok(contractResponse(TOOL)));
     await run({ ids: ["s1"] });
@@ -55,11 +55,11 @@ describe("shopping_seller_get — one route, one request", () => {
     expect(router.all).toHaveLength(1);
   });
 
-  it("a stated destination travels as given", async () => {
+  it("a stated address travels as given — a LABEL, never a country", async () => {
     seedTokens(ACCESS, REFRESH);
     const router = installRouter(() => ok(contractResponse(TOOL)));
-    await run({ ids: ["s1"], ship_to: "GR" });
-    expect(router.sellers[0].body).toEqual({ ids: ["s1"], ship_to: "GR" });
+    await run({ ids: ["s1"], ship_to: "home" });
+    expect(router.sellers[0].body).toEqual({ ids: ["s1"], ship_to: "home" });
   });
 });
 
@@ -74,5 +74,17 @@ describe("shopping_seller_get — what the answer means", () => {
     // kept only the answerable half would show up here rather than in production.
     expect(sellers.map((s) => s["ships"])).toContain("unknown");
     expect(sellers.length).toBeGreaterThan(1);
+  });
+
+  it("`specs` is the seller's WHOLE terms, and empty for a seller sil has not read", async () => {
+    // This is the details tool: `seller_fit` on an offer answers the rows the Brief
+    // asked, `specs` here answers everything sil holds. An empty map is the honest
+    // answer for an unread seller — never an absent key the agent reads as a gap in us.
+    seedTokens(ACCESS, REFRESH);
+    installRouter(() => ok(contractResponse(TOOL)));
+    const sellers = (await run())["sellers"] as Record<string, unknown>[];
+    for (const seller of sellers) expect(seller["specs"]).toEqual(expect.any(Object));
+    const unread = sellers.find((s) => s["ships"] === "unknown");
+    expect(unread?.["specs"]).toEqual({});
   });
 });

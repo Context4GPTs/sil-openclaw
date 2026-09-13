@@ -13,6 +13,12 @@
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
     },
+    "ship_to": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Says which address every `seller_fit.ships` below is about; absent when the default address carries no label."
+    },
     "offers": {
       "type": "array",
       "items": {
@@ -25,7 +31,8 @@
           "currency",
           "availability",
           "observed_at",
-          "url"
+          "url",
+          "seller_fit"
         ],
         "properties": {
           "variant_id": {
@@ -93,6 +100,25 @@
           "url": {
             "type": "string",
             "description": "Hands the buyer the listing."
+          },
+          "seller_fit": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "description": "Compares each requested seller key with what it asked, on this seller's value; `ships` rides here — serviceable, not_serviceable or unknown for the address — always."
           }
         },
         "additionalProperties": false

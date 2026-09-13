@@ -26,7 +26,9 @@ const TOOL = "shopping_search";
 const ACCESS = "at-live-token";
 const REFRESH = "rt-live-token";
 
-/** Ask 1 of the contract's journey, as §3.4 states it. */
+/** Ask 1 of the contract's journey, as §3.4 states it. `ship_to` is an address LABEL —
+ * the one `sil_whoami` lists — never a country, and it localizes without moving the
+ * request's shape. */
 const ASK = {
   domain: "product.sports.winter.ski.boots",
   query: "ski boots for an advanced skier, size 27.5",
@@ -36,6 +38,7 @@ const ASK = {
     { key: "flex_index", op: "gte", value: 110 },
     { key: "price", op: "lte", value: "300", currency: "EUR" },
   ],
+  ship_to: "home",
 };
 
 const harness = useShoppingHarness("search");
@@ -65,6 +68,32 @@ describe("shopping_search — one route, the ask verbatim", () => {
     const router = installRouter(() => ok(contractResponse(TOOL)));
     await run();
     expect((router.search[0].body as typeof ASK).specs).toEqual(ASK.specs);
+  });
+
+  it("the search carries NO seller side — seller rows are the offers' ask", async () => {
+    // `seller_specs` moved to `shopping_offers`, where a term is answered per seller.
+    // A search that still carried them would be refused by the route, and the agent
+    // would read the refusal as a bad product row.
+    seedTokens(ACCESS, REFRESH);
+    const router = installRouter(() => ok(contractResponse(TOOL)));
+    await run();
+    expect(Object.keys(router.search[0].body as object).sort()).toEqual([
+      "domain",
+      "n",
+      "query",
+      "ship_to",
+      "specs",
+    ]);
+  });
+
+  it("with no address the key is OMITTED — the route fills the buyer's default", async () => {
+    // The plugin never reads `sil_whoami` to fill it, and an empty string would fail the
+    // artifact's own minLength rather than mean "my default".
+    seedTokens(ACCESS, REFRESH);
+    const router = installRouter(() => ok(contractResponse(TOOL)));
+    const { ship_to: _label, ...noAddress } = ASK;
+    await run(noAddress);
+    expect(router.search[0].body).toEqual(noAddress);
   });
 
   it("the token reaches neither a log line nor the result", async () => {
