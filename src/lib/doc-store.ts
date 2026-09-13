@@ -360,9 +360,10 @@ function atomicWrite(path: string, contents: string): void {
 }
 
 // ===========================================================================
-// `## Items` — the Brief's scope, fan-out and completion, parsed out of the body
-// the scan already loaded (§4.8: a Brief carries many domains, so its domain filter
-// cannot be a frontmatter scalar).
+// The Brief's own sections, parsed out of the body the scan already loaded: `## Items`
+// (its scope, fan-out and completion — §4.8: a Brief carries many domains, so its
+// domain filter cannot be a frontmatter scalar), each item's prose, and the two spec
+// tables `shopping_brief_compile` reads.
 // ===========================================================================
 
 export interface ItemRow {
@@ -370,6 +371,20 @@ export interface ItemRow {
   domain: string;
   status: string;
 }
+
+/** One row of `## Hard constraints` / `## Preferences`. `hard` is the SECTION the row
+ * was written in, never a column — that is what the Brief's shape means by hardness. */
+export interface SpecRow {
+  domain: string;
+  key: string;
+  op: string;
+  value: string;
+  unit: string;
+  hard: boolean;
+}
+
+const ITEM_HEADERS = ["item", "domain", "status"] as const;
+const SPEC_HEADERS = ["domain", "key", "op", "value", "unit"] as const;
 
 function sectionBody(body: string, heading: string): string {
   const lines = body.split(/\r?\n/);
@@ -380,23 +395,77 @@ function sectionBody(body: string, heading: string): string {
   return (end < 0 ? rest : rest.slice(0, end)).join("\n");
 }
 
-function parseItems(body: string): ItemRow[] {
-  const rows: ItemRow[] = [];
-  for (const line of sectionBody(body, "## Items").split(/\r?\n/)) {
+/** The body rows of a markdown table, KEYED by the column's header — a row missing its
+ * last cell reads as an empty one rather than shifting every cell after it, and no
+ * caller counts columns. The header and the `---` separator are dropped; a model writes
+ * both, and neither is data. */
+function markdownRows<K extends string>(
+  text: string,
+  headers: readonly K[],
+): Record<K, string>[] {
+  const rows: Record<K, string>[] = [];
+  for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("|")) continue;
     const cells = trimmed.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
-    const [item = "", domain = "", status = ""] = cells;
-    if (item === "" || /^:?-{2,}:?$/.test(item)) continue; // the separator row
-    if (item.toLowerCase() === "item" && domain.toLowerCase() === "domain") continue; // header
-    rows.push({ item, domain, status });
+    const [first = "", second = ""] = cells;
+    if (first === "" || /^:?-{2,}:?$/.test(first)) continue;
+    if (first.toLowerCase() === headers[0] && second.toLowerCase() === headers[1]) continue;
+    rows.push(
+      Object.fromEntries(headers.map((h, i) => [h, cells[i] ?? ""])) as Record<K, string>,
+    );
   }
   return rows;
 }
 
+export function parseItems(body: string): ItemRow[] {
+  return markdownRows(sectionBody(body, "## Items"), ITEM_HEADERS).map((row) => ({
+    item: row.item,
+    domain: row.domain,
+    status: row.status,
+  }));
+}
+
+/** Hard rows first, then preferences, each in document order — the order the compiled
+ * search body carries them in. */
+export function parseSpecRows(body: string): SpecRow[] {
+  return [
+    ...specRowsOf(body, "## Hard constraints", true),
+    ...specRowsOf(body, "## Preferences", false),
+  ];
+}
+
+function specRowsOf(body: string, heading: string, hard: boolean): SpecRow[] {
+  return markdownRows(sectionBody(body, heading), SPEC_HEADERS).map((row) => ({
+    domain: row.domain,
+    key: row.key,
+    op: row.op,
+    value: row.value,
+    unit: row.unit,
+    hard,
+  }));
+}
+
+/** One item's own prose subsection under `## Items` — the free text that becomes the
+ * search `query`. Addressed by the item LABEL, which is what the buyer calls the thing. */
+export function itemProse(body: string, item: string): string {
+  const lines = sectionBody(body, "## Items").split(/\r?\n/);
+  const wanted = item.trim().toLowerCase();
+  const start = lines.findIndex((l) => headingText(l)?.toLowerCase() === wanted);
+  if (start < 0) return "";
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => headingText(l) !== null);
+  return (end < 0 ? rest : rest.slice(0, end)).join("\n").trim();
+}
+
+function headingText(line: string): string | null {
+  const m = /^#{1,6}\s+(.*)$/.exec(line.trim());
+  return m === null ? null : (m[1] as string).trim();
+}
+
 /** Nearest-wins prefix match, the ancestor rule the whole design reuses: `product`
  * matches `product.apparel`, and never `production`. */
-function domainMatches(itemDomain: string, filter: string): boolean {
+export function domainMatches(itemDomain: string, filter: string): boolean {
   return itemDomain === filter || itemDomain.startsWith(filter + ".");
 }
 
