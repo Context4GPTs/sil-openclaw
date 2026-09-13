@@ -7,36 +7,26 @@
  * or it silently NARROWS them (CLAUDE.md), which is why all seven live in one group.
  */
 
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk";
-import type { TSchema } from "typebox";
 
-import { getApiUrl } from "../lib/config.js";
-import { clearTokens, readConfig, readTokens } from "../lib/credentials.js";
+import { requestSchema } from "../lib/artifacts.js";
+import { readConfig } from "../lib/credentials.js";
 import { wiringAdvisoryBlocks } from "../lib/host-wiring.js";
 import { putSearchResult, type SearchResultPage } from "../lib/search-results-store.js";
-import {
-  callShopping,
-  refreshAndRetryOnce,
-  type ShoppingOutcome,
-  type ShoppingRoute,
-} from "../lib/sil-client.js";
+import { callRoute, type ShoppingCall } from "../lib/shopping-call.js";
 import { jsonResult } from "../lib/tool-result.js";
 
-interface ShoppingTool extends ShoppingRoute {
-  readonly name: string;
+interface ShoppingTool extends ShoppingCall {
   readonly label: string;
   readonly description: string;
-  /** What the agent runs next on a refusal only THIS route can produce — the 404 the
-   * path read answers, the 409 the mint answers. Absent where no recovery exists. */
-  readonly refusalRecovery?: string;
 }
 
 /** The tool whose page a paired client can pull back by `callId`. */
 const SEARCH_TOOL = "shopping_search";
+
+/** The guide read, as its own constant: `shopping_brief_compile` makes the same call
+ * under its own name, and two spellings of one path is a route nobody owns. */
+export const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
 
 export const SHOPPING_TOOLS = [
   {
@@ -58,8 +48,7 @@ export const SHOPPING_TOOLS = [
   },
   {
     name: "shopping_domain_get",
-    method: "GET",
-    path: "/catalog/domains/:path",
+    ...DOMAIN_GET_ROUTE,
     label: "Read a category's buying guide and keys",
     refusalRecovery: "shopping_domain_search",
     description:
@@ -192,87 +181,14 @@ function defineTool(api: PluginAPI, tool: ShoppingTool): ToolDefinition {
     description: tool.description,
     parameters: requestSchema(tool.name),
     async execute(callId, params) {
-      const stored = readTokens();
-      if (stored === null) return notRegistered(tool.name);
-
-      const first = await callShopping(getApiUrl(), stored.access_token, tool, params);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => callShopping(getApiUrl(), accessToken, tool, params),
-      );
-      switch (recovered.kind) {
-        case "result":
-          if (recovered.refreshed) api.logger.info(`${tool.name}_refreshed`, {});
-          return mapOutcome(api, tool, callId, recovered.outcome);
-        case "must_reregister":
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info(`${tool.name}_must_reregister`, { cause: recovered.reason });
-          return mustReregister(tool.name);
-        case "second_unauthorized":
-          clearTokens();
-          api.logger.info(`${tool.name}_must_reregister`, { cause: "retry_unauthorized" });
-          return mustReregister(tool.name);
-        case "retryable":
-          api.logger.info(`${tool.name}_refresh_retryable`, {});
-          return transient(tool.name);
-      }
-    },
-  };
-}
-
-/** The repo root's `schema/`, resolved from both `src/tools/` and `dist/tools/`. It
- * ships via `package.json#files`. */
-const SCHEMA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "schema");
-
-/**
- * The tool's request artifact, as the host's `parameters`.
- *
- * The three annotation keys are stripped: `$schema`, `$id` and `title` describe the
- * FILE, not the argument the model has to build, and a `$id` on a tool input invites a
- * host to resolve a URL nobody serves. A missing or shapeless artifact throws at
- * registration — a broken build, not a runtime state to model.
- */
-function requestSchema(tool: string): TSchema {
-  const stem = tool.slice("shopping_".length).replaceAll("_", "-");
-  const path = join(SCHEMA_DIR, `shopping-${stem}-request.schema.json`);
-  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`${path}: request artifact is not a JSON Schema object`);
-  }
-  const schema: Record<string, unknown> = { ...parsed };
-  for (const annotation of ["$schema", "$id", "title"]) delete schema[annotation];
-  return schema as TSchema;
-}
-
-/* ── outcome → the contract's §4 vocabulary ─────────────────────────────────── */
-
-function mapOutcome(api: PluginAPI, tool: ShoppingTool, callId: string, outcome: ShoppingOutcome) {
-  switch (outcome.kind) {
-    case "ok":
-      if (tool.name === SEARCH_TOOL) bufferPage(callId, outcome.body);
+      const called = await callRoute(api, tool, params);
+      if (called.kind === "refused") return called.result;
+      if (tool.name === SEARCH_TOOL) bufferPage(callId, called.body);
       // VERBATIM, and the advisory rides its own block: the body's keys are the API's
       // contract, so nothing of ours may sit beside them.
-      return jsonResult(outcome.body, ...wiringAdvisoryBlocks(api));
-    case "invalid_request":
-      api.logger.info(`${tool.name}_invalid_request`, {});
-      return invalidRequest(outcome.message);
-    case "not_found":
-      api.logger.info(`${tool.name}_not_found`, {});
-      return refusal("not_found", outcome.message, tool.refusalRecovery);
-    case "already_exists":
-      api.logger.info(`${tool.name}_already_exists`, {});
-      return refusal("already_exists", outcome.message, tool.refusalRecovery);
-    case "forbidden":
-      return forbiddenResult(api, tool.name, outcome.reason);
-    case "retryable":
-      api.logger.info(`${tool.name}_retryable`, outcome.source ? { source: outcome.source } : {});
-      return transient(tool.name, outcome.source, outcome.detail);
-    case "unauthorized":
-      // Structurally unreachable past the 401 choreography, kept exhaustive so a
-      // refactor cannot silently drop a variant.
-      return mustReregister(tool.name);
-  }
+      return jsonResult(called.body, ...wiringAdvisoryBlocks(api));
+    },
+  };
 }
 
 /**
@@ -286,97 +202,4 @@ function bufferPage(callId: string, body: Record<string, unknown>): void {
   if (principal === undefined) return;
   if (!Array.isArray(body["products"])) return;
   putSearchResult(callId, body as SearchResultPage, principal);
-}
-
-/* ── the shared envelopes ───────────────────────────────────────────────────── */
-
-/** Not registered: a distinct, actionable outcome naming the recovery tool, with
- * no results field the agent could mistake for an empty answer. */
-function notRegistered(tool: string) {
-  return jsonResult({
-    status: "not_registered",
-    message:
-      `Not registered on sil. Run sil_register to authenticate, then call ${tool} again.`,
-    recovery: "sil_register",
-  });
-}
-
-/**
- * sil refused the request (a 400), surfaced VERBATIM.
- *
- * The route refuses before it spends and names the offender in its own message, so the
- * message IS the agent's recourse and is never rewritten or matched on here. No
- * `recovery`: auth is fine, and re-sending the same body cannot succeed.
- */
-function invalidRequest(message: string) {
-  return jsonResult({ status: "invalid_request", message });
-}
-
-/** A refusal only one route can produce — a path the registry does not hold, or a mint
- * onto a path that already stands. Terminal but NOT fatal and NOT retryable, so the
- * recovery is the next tool to call rather than the same call again. */
-function refusal(status: "not_found" | "already_exists", message: string, recovery?: string) {
-  return jsonResult({
-    status,
-    message,
-    ...(recovery !== undefined ? { recovery } : {}),
-  });
-}
-
-/** Terminal: the session is dead — reached only after the shared refresh-and-retry
- * choreography has exhausted its one refresh + one retry. */
-function mustReregister(tool: string) {
-  return jsonResult({
-    status: "must_reregister",
-    message:
-      `Your sil session has expired. Run sil_register to sign in again, then call ${tool} again.`,
-    recovery: "sil_register",
-  });
-}
-
-/**
- * A 403 — the token is valid but the user is not provisioned (or a principal
- * mismatch). Refreshing cannot help; this is not a 401.
- *
- * The token CLEAR is gated on exactly `user_not_provisioned`: that token maps to no
- * account on this backend and is structurally dead, so clearing it lets the next
- * `sil_register` re-onboard instead of short-circuiting to already-registered. A
- * `principal_mismatch` can be transient and MUST NOT clear — the exact-equality gate is
- * the correctness boundary here, and a truthy or prefix check would wipe a good session.
- */
-function forbiddenResult(api: PluginAPI, tool: string, reason: string) {
-  api.logger.warn(`${tool}_forbidden`, { reason });
-  if (reason === "user_not_provisioned") clearTokens();
-  const message =
-    reason === "user_not_provisioned"
-      ? "Your sil account is not fully set up. Complete onboarding (run"
-        + " sil_register) and try again."
-      : "sil rejected this request (" + reason + "). Run sil_register to"
-        + " re-establish your session, then try again.";
-  return jsonResult({ status: "forbidden", reason, message, recovery: "sil_register" });
-}
-
-/**
- * Transient: retry, NOT a re-register (a false terminal on a transient sends the
- * agent down a recovery that cannot fix it). The two causally distinct failures
- * share `status: "retryable"` and split on ATTRIBUTION — `source` absent means
- * sil or the network is down and the copy names nothing it cannot identify;
- * `source` present means one named source is degraded and sil itself is fine, so
- * the copy must never say "sil is unavailable". `detail` (the upstream cause) is
- * relayed as its own field rather than folded into our sentence.
- */
-function transient(tool: string, source?: string, detail?: string) {
-  if (source === undefined) {
-    return jsonResult({
-      status: "retryable",
-      message: `sil is temporarily unavailable. Please try ${tool} again.`,
-    });
-  }
-  return jsonResult({
-    status: "retryable",
-    message:
-      `The catalog source "${source}" is temporarily unavailable.`
-      + ` sil itself is fine — retry ${tool} shortly.`,
-    ...(detail !== undefined ? { detail } : {}),
-  });
 }
