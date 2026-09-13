@@ -177,7 +177,7 @@ function forbiddenResult(api: PluginAPI, tool: string, reason: string): ToolResu
  * the copy must never say "sil is unavailable". `detail` (the upstream cause) is
  * relayed as its own field rather than folded into our sentence.
  */
-export function transient(tool: string, source?: string, detail?: string): ToolResult {
+function transient(tool: string, source?: string, detail?: string): ToolResult {
   if (source === undefined) {
     return jsonResult({
       status: "retryable",
