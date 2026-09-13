@@ -165,7 +165,7 @@
         "additionalProperties": false
       },
       "maxItems": 50,
-      "description": "Coins the category's own seller terms at the mirrored path under `seller`; the base needs no coining."
+      "description": "Coins the category's own seller terms onto the category itself; the base needs no coining."
     }
   },
   "additionalProperties": false
