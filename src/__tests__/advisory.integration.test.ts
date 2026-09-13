@@ -951,14 +951,13 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     // ⚠️ THIS LIST IS A WHITELIST, NOT A SWEEP. A module absent from it is invisible
     // to this guard — SILENTLY, with a green suite. That is worse than a red: the
     // module ships unguarded on the posture the manifest declares. ADD EVERY NEW
-    // audit-scope module here (add-only). `creation-entrypoint.ts` was added by card
-    // `creation-bin-unreachable-on-clawhub-installs` (AC D2): it resolves and probes
-    // the creation script's path, and the ONE thing it must never do is RUN it —
-    // naming a path is not spawning it, which is what keeps `noChildProcess` true.
+    // audit-scope module here (add-only). `allowlist-script.ts` is here because it
+    // resolves the tool-admission script's path, and the ONE thing it must never do is
+    // RUN it — naming a path is not spawning it, which keeps `noChildProcess` true.
     for (const file of [
       "src/lib/host-wiring.ts",
       "src/lib/version-advisory.ts",
-      "src/lib/creation-entrypoint.ts",
+      "src/lib/allowlist-script.ts",
     ]) {
       const source = readFileSync(join(REPO_ROOT, file), "utf8");
       for (const forbidden of [
@@ -975,10 +974,8 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
   });
 
   it("AC D1 — NO plugin source module reaches for a child process (a SWEEP, not a whitelist)", () => {
-    // The manifest declares `security.noChildProcess: true`, and this card's Out of
-    // scope exists to protect it: creation stays a separate operator script, and
-    // `sil_doctor` REPORTS the path rather than spawning it. Naming a path is not
-    // running it.
+    // The manifest declares `security.noChildProcess: true`: every operator script
+    // stays a separate process the plugin names and never spawns.
     //
     // Deliberately a SWEEP over every source file tsc compiles into `dist/` — the
     // whitelist above cannot carry this claim, because a module absent from that list
@@ -1008,7 +1005,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
 
     // Anti-vacuity: a walk that found nothing would pass this test forever.
     expect(sources.length).toBeGreaterThan(10);
-    expect(sources.some((p) => p.endsWith("creation-entrypoint.ts"))).toBe(true);
+    expect(sources.some((p) => p.endsWith("allowlist-script.ts"))).toBe(true);
 
     const offenders = sources.filter((path) =>
       /child_process|\bexecSync\b|\bspawnSync\b|\bexecFileSync\b|\bspawn\(/.test(
@@ -1075,22 +1072,17 @@ describe("AC11 — six flat fields, folded into the doctor's existing determinis
     for (const i of ourIndices) expect(i).toBeLessThan(firstInfo);
   });
 
-  it("sil_doctor's report carries EXACTLY the seven top-level keys — no extras", async () => {
+  it("sil_doctor's report carries EXACTLY the six top-level keys — no extras", async () => {
     // A SECOND exact-set mirror of the report shape (the first is
     // `REPORT_KEYS` in `tools/doctor.test.ts`) — this one over the REAL `execute()`
     // rather than the pure assembler, so it also proves the tool actually threads
-    // the field through. Both are `toEqual`, never a subset: an exact set is what
-    // catches drift in BOTH directions.
-    //
-    // Bumped ADD-ONLY by card `creation-bin-unreachable-on-clawhub-installs`, which
-    // adds `creationEntrypoint`. This test's previous title claimed "this card adds
-    // no report key" — true of #67, which wrote it, and false now. A key change
-    // bites HERE as well as in `tools/doctor.test.ts` and (silently, since a
-    // structural cast tolerates extras) `doctor.integration.test.ts`'s local mirror.
+    // the fields through. Both are `toEqual`, never a subset: an exact set is what
+    // catches drift in BOTH directions. A key change bites HERE as well as in
+    // `tools/doctor.test.ts` and (silently, since a structural cast tolerates extras)
+    // `doctor.integration.test.ts`'s local mirror.
     const report = await runDoctor(allDriftConfig(), HOST_TOO_OLD);
     expect(Object.keys(report).sort()).toEqual([
       "counts",
-      "creationEntrypoint",
       "dataDir",
       "findings",
       "healthy",

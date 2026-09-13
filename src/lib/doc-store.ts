@@ -505,9 +505,8 @@ function findShopper(filters: FindFilters, unreadable: UnreadableDocs): ShopperC
     return undefined;
   }
   const name = parsed.fields["name"] ?? "";
-  // A shopper document that cannot say who it is is degraded, not healthy — the same
-  // verdict `readShopperIdentity` reaches, reported once, here. Still a coordinate:
-  // the person exists, and hiding them would read as "no shopper".
+  // A shopper document that cannot say who it is is degraded, not healthy — but still
+  // a coordinate: the person exists, and hiding them would read as "no shopper".
   if (!nonBlank(name)) {
     unreadable.push({ id: "shopper", error: USER_SPEC_FILE + " frontmatter carries no name" });
   }
@@ -737,44 +736,6 @@ export function removeDocument(ref: unknown): RemoveDocResult {
     return persistenceFailed(target.path, err);
   }
   return { ok: true, ref: target.ref, kind: target.kind };
-}
-
-// ===========================================================================
-// readShopperIdentity — the singleton pre-flight ("does a shopper exist?"), used by
-// the create-shopper bin and sil_doctor. Empty-is-healthy; a malformed user_spec is
-// `unreadable` (inconclusive), never a fabricated "no shopper".
-// ===========================================================================
-
-export interface ShopperIdentity {
-  ok: true;
-  name?: string;
-  unreadable: Array<{ id: string; error: string }>;
-}
-
-export function readShopperIdentity(): ShopperIdentity {
-  const userSpecPath = join(getShopperArtefactDir(), USER_SPEC_FILE);
-  const at = probe(userSpecPath);
-  // Inconclusive, not empty — the create-shopper bin reads an empty answer as "no
-  // shopper yet" and would mint a second person over the one it could not see.
-  if (at.state === "unknown") {
-    return { ok: true, unreadable: [{ id: USER_SPEC_FILE, error: presenceError(at.error) }] };
-  }
-  if (at.state === "absent") return { ok: true, unreadable: [] };
-  const parsed = readArtefactFile(userSpecPath);
-  if (parsed === null) {
-    return {
-      ok: true,
-      unreadable: [{ id: USER_SPEC_FILE, error: "user_spec.md has malformed or absent frontmatter" }],
-    };
-  }
-  const name = parsed.fields["name"];
-  if (!nonBlank(name)) {
-    return {
-      ok: true,
-      unreadable: [{ id: USER_SPEC_FILE, error: "user_spec.md frontmatter carries no name" }],
-    };
-  }
-  return { ok: true, name, unreadable: [] };
 }
 
 // ===========================================================================

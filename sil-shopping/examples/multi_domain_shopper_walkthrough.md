@@ -1,19 +1,12 @@
 ---
 name: multi-domain-shopper-walkthrough
-description: A worked eight-beat run — create one shopper (after endorsement), then a single two-item job across two unrelated categories, showing beat 1 running once per job, beats 2–7 running per item, one merged ask turn before any search, and a later session opening with the verdict ask, out of band. Illustrative, not a spec.
+description: A worked eight-beat run on a cold disk — one two-item job across two unrelated categories, showing beat 1 running once per job, beats 2–7 running per item, the buyer's document minted at the first saved fact, one merged ask turn before any search, and a later session opening with the verdict ask, out of band. Illustrative, not a spec.
 ---
 
-# Worked run — one shopper, one two-item job, eight beats
+# Worked run — one two-item job, eight beats, nothing set up first
 
-Illustrative only — authoritative rules live in the beat references.
-
-## Create the shopper (once, after endorsement)
-
-The two-touchpoint interview assembles a draft persona + a seed for the shopper document.
-Only after the user **endorses** it does the engine run `openclaw agents add` and write
-`user_spec.md` — nothing before that. The result is **one** shopper, a **singleton**. The
-seed holds one durable fact — *ships to Berlin; allergic to wool* — true in every category,
-so it lives in the shopper document's `## Constraints`.
+Illustrative only — authoritative rules live in the beat references. The disk is empty
+when this starts: there is no document, no Brief and no preparation, and none is asked for.
 
 ## The job: "a week in Chamonix — I need boots and a shell"
 
@@ -50,17 +43,26 @@ item is a legal, writable state. Beat 1 does not run again for this job.
   boots resolution carried across. Adopted, written into the shell row, announced.
 
 The guide names `liner_type` as decisive for boots, and the domain read returned no key
-for the *instep volume* the buyer described — so that travels as a spec row whose key comes
-back absent from `fit`, a **named gap**, plus a `## Notes / open` row. It is never coined
-into the shared registry.
+for the *instep volume* the buyer described. That one travels as a `## Notes / open` row
+and nowhere else — sending it as a spec row would make `shopping_search` refuse the whole
+call — and it is never coined into the shared registry.
 
 ### Beat 3 — FILL (per item)
 
-The shopper document is read first: the wool exclusion becomes `fibre_wool_pct eq 0` in
-`## Hard constraints` (it reaches **both** items — it is scoped at the root), and the
-recorded foot width becomes `last_width gte 102` on the boots only. Neither sentence
-appears in either source; the guide did the translation. Each item gets its `applies:`
-line. Fill asks nothing.
+`shopping_doc_read { ref: "shopper" }` answers `not_found`: sil listed the directory that
+would hold it and nothing was there. So this fill has only the buyer's own sentence to
+work from, and the guide to translate it. *"Nothing with wool in it"* is durable — true
+whatever they are buying next — so beat 3 saves it, and **that first saved fact is what
+mints the document**:
+
+```
+shopping_doc_write { ref: "shopper", mode: "create", name: "Ioannis", body: "## Constraints\nNo wool — reacts to it.\n" }
+```
+
+`name` came from `sil_whoami`. From there the fill proceeds as always: the wool exclusion
+becomes `fibre_wool_pct eq 0` in `## Hard constraints` (it reaches **both** items — it is
+scoped at the root), and the instep note stays open. Each item gets its `applies:` line.
+Fill asks nothing.
 
 ### Beat 4 — ASK (once, merged, before any search)
 
@@ -80,17 +82,20 @@ widens **soft** rows only. The boots' four calls do not spend the shell's budget
 
 The veto runs first on three states. Two boot products come back carrying `webpage_info`
 and an empty `fit` ⇒ **NOT VERIFIED**, kept and flagged with the missing key named. A third
-carries `fit: { last_width: 98 }` ⇒ **VIOLATED**, out. A fourth is in budget but its price
-is in dollars against a euro row — a bound sil could not test, said out loud. The job's
-stated ceiling is summed across both picks here, never turned into a spec row.
+carries `fit: { fibre_wool_pct: 12 }` ⇒ **VIOLATED**, out. A fourth is in budget but its
+price is in dollars against a euro row — a bound sil could not test, said out loud. The
+job's stated ceiling is summed across both picks here, never turned into a spec row.
 `shopping_product_get` opens the two survivors, `shopping_offers` dates their prices per
 seller and `shopping_seller_get` says which of those sellers reaches Berlin. A hero plus
 one alternative, each with a why.
 
 ### Beat 7 — FEEDBACK (per item)
 
-*"I always end up in Arc'teryx for shells"* is durable and buyer-originated ⇒ the shopper
-document's `## Shopping` gains it at the **outerwear** scope, re-derived whole, silently.
+*"I always end up in Arc'teryx for shells"* is durable and buyer-originated ⇒ the document's
+`## Shopping` gains it at the **outerwear** scope, re-derived whole, silently. Had beat 3
+saved nothing, this would have been the `mode: "create"` write instead — whichever beat
+holds the first durable fact is the one that mints the document.
+
 The boots row goes `picked`; the shell row stays `open`, so **the job stays open** — a pick
 ends an item, never the job.
 
@@ -102,15 +107,9 @@ question naming the thing: *"before we shop boots again — how did they work ou
 
 *"Bad — heels blistered by day three."* One `shopping_doc_write { ref: "shopper", mode:
 "replace" }` writes three things: the `## Past purchases` row (what · when · verdict ·
-**why**, in the buyer's own words), a `## Fit` row because the shell size taught something,
+**why**, in the buyer's own words), a `## Fit` row because the size taught something,
 and the `## Shopping` section that said *"runs a snug last"* — **re-derived whole**, not
 caveated. Nothing else is written: there is no review, and none is offered.
 
 Had the buyer declined, nothing would be written, the ask would not repeat that session,
 and the new job would run unaffected.
-
-## The singleton edge
-
-"Set me up a second shopper" → the engine refuses: **a shopper already exists**. Steer to
-opening a new Brief, or correcting the current one with `shopping_doc_write` — never a second
-shopper.

@@ -1,6 +1,6 @@
 ---
 name: shop-loop
-description: The eight-beat shopping loop — the state machine the shopper runs on every job. Owns Beat 1 (BRIEF), Beat 5 (SEARCH) and Beat 6 (REFLECT); routes Beats 2, 3, 4, 7 and 8 to the references that own them. Load when shopping as the shopper.
+description: The eight-beat shopping loop — the state machine this agent runs on every job. Owns Beat 1 (BRIEF), Beat 5 (SEARCH) and Beat 6 (REFLECT); routes Beats 2, 3, 4, 7 and 8 to the references that own them. Load on a shopping intent.
 ---
 
 # The eight-beat shopping loop

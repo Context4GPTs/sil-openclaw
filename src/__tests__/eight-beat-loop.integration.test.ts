@@ -174,19 +174,28 @@ describe("B — DOMAIN", () => {
     expect(unsatisfied(edits, (s) => /\bnever\b|\bnot\b|\bcannot\b|\bcan'?t\b/i.test(s))).toEqual([]);
   });
 
-  it("B2 — a key the adopted vocabulary lacks travels EXACTLY two ways — an unapplied predicate and a `## Notes / open` row — and is never coined", () => {
+  it("B2 — a key the adopted vocabulary lacks travels EXACTLY one way — a `## Notes / open` row — and is never coined, nor sent", () => {
     const body = beatBody(2);
     expect(body).toContain("## Notes / open");
 
-    // BOTH channels in ONE statement. The pre-card bundle already carried an
-    // `applied: false` gap sentence AND a `## Notes / open` bullet — a hundred lines
-    // apart, about unrelated things — so a body-scoped pair passes on prose that
-    // never connected them, and the agent writes the predicate and forgets the row.
-    const gaps = splitStatements(body).filter(
-      (s) => /unapplied|applied:?\s*[`'"]*false|named gap/i.test(s),
-    );
+    // The gap AND its destination in ONE statement. The pre-card bundle carried a gap
+    // sentence AND a `## Notes / open` bullet a hundred lines apart, about unrelated
+    // things, so a body-scoped pair passes on prose that never connected them.
+    const gaps = splitStatements(body).filter((s) => /named gap/i.test(s));
     expect(gaps.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(unsatisfied(gaps, (s) => /notes ?\/ ?open/i.test(s))).toEqual([]);
+
+    // The second channel is CLOSED, and that is a wire fact, not a preference:
+    // sil-api's `assertFilters` throws on a key the domain does not list, so sending
+    // the gap as a spec row costs the whole search. The bundle said the opposite until
+    // this iteration — prose the agent obeys, against a wire that refuses it.
+    const sending = splitStatements(body).filter(
+      (s) => /\bspec row\b/i.test(s) && /\bdomain\b/i.test(s),
+    );
+    expect(sending.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(sending, (s) => /\bnever\b|\brefuses?\b|\brefused\b/i.test(s)),
+    ).toEqual([]);
 
     const coining = splitStatements(body).filter((s) => /\bcoin/i.test(s));
     expect(coining.length).toBeGreaterThan(0); // guard-of-the-guard

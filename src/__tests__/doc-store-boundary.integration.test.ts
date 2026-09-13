@@ -20,7 +20,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -158,33 +157,6 @@ async function runDoctor(): Promise<{ healthy: boolean; findings: DoctorFinding[
 function replaceDirWithFile(path: string): void {
   rmSync(path, { recursive: true, force: true });
   write(path, "this is a file where the store expects a directory\n");
-}
-
-/** `readShopperIdentity`'s one NON-agent consumer. Its singleton pre-flight (step 3)
- * is terminal, so no host command is ever reached — `openclaw` is deliberately absent
- * from PATH, and a run that got past the pre-flight would die there, loudly. */
-const CREATE_SHOPPER_BIN = join(REPO_ROOT, "scripts", "create-shopper.mjs");
-
-function runCreateShopper(): { status: number; stdout: string; marker: Record<string, unknown> } {
-  const configPath = join(dataDir, "openclaw.json");
-  writeFileSync(configPath, JSON.stringify({ gateway: { mode: "local" } }) + "\n");
-  const r = spawnSync(process.execPath, [CREATE_SHOPPER_BIN], {
-    input: JSON.stringify({
-      name: "Second Person",
-      workspace: join(dataDir, "workspace"),
-      persona: "A careful generalist buyer.",
-      userSpec: "Ships to Athens.",
-    }),
-    env: { PATH: "/usr/bin:/bin", HOME: dataDir, OPENCLAW_CONFIG_PATH: configPath, SIL_DATA_DIR: dataDir },
-    encoding: "utf8",
-    timeout: 20_000,
-  });
-  const line = (r.stderr ?? "").trim().split("\n").filter(Boolean).at(-1) ?? "";
-  return {
-    status: r.status ?? 1,
-    stdout: r.stdout ?? "",
-    marker: line === "" ? {} : (JSON.parse(line) as Record<string, unknown>),
-  };
 }
 
 beforeEach(() => {
@@ -365,36 +337,6 @@ describe("`doc-store.ts`'s `Unreadable` contract — an unlistable store ROOT is
     expect(found["status"]).toBe("ok");
     expect(found["unreadable"]).not.toEqual([]);
     expect(reported(found)).toContain("shopper");
-  });
-
-  it.skipIf(AS_ROOT)("the create-shopper BIN fails closed on it — an empty read mints a SECOND person over the buyer it could not see", () => {
-    // The one entry point whose consumer is not an agent: `create-shopper.mjs:474`
-    // treats a non-empty `unreadable[]` as INCONCLUSIVE. Drop the root probe and
-    // `readShopperIdentity` answers `{unreadable: []}` — indistinguishable from a fresh
-    // machine — so the singleton gate opens and the bin walks on to `agents add`.
-    seedShopper();
-
-    // Guard-of-the-guard: readable, this same store makes the bin REFUSE — proof it
-    // reaches the pre-flight and reads this person, so the bar below turns on the lock.
-    const readable = runCreateShopper();
-    expect(readable.status).not.toBe(0);
-    expect(readable.marker["status"]).toBe("collision");
-
-    chmodSync(shopperDir(), 0o000);
-
-    const locked = runCreateShopper();
-    // Restored first: a failed assertion must not poison the afterEach cleanup.
-    chmodSync(shopperDir(), 0o700);
-
-    expect(locked.status).not.toBe(0);
-    expect(locked.stdout).not.toContain("sil_shopper_created");
-    expect(locked.marker["status"]).toBe("persistence_failed");
-    // …and it fails HERE, at the store, not two steps later at the host CLI: the path
-    // it names is the store it could not read, and the cause says so.
-    expect(locked.marker["path"]).toBe(shopperDir());
-    expect(String(locked.marker["cause"])).toMatch(/degraded/);
-    // The person is exactly as they were — nothing minted over them.
-    expect(readFileSync(join(shopperDir(), "user_spec.md"), "utf8")).toContain("Buys once and keeps it.");
   });
 
   it.skipIf(AS_ROOT)("shopping_doc_write answers `unreadable` in BOTH modes — create fell to persistence_failed, replace to `mint it with mode: create`", async () => {
@@ -761,32 +703,12 @@ describe("the ROOT's own two doors — an un-stat-able data dir, and a `shopper/
     expect(report.healthy).toBe(false);
   });
 
-  it.skipIf(AS_ROOT)("AC22 — the create-shopper bin's singleton pre-flight fails CLOSED at `shopper/` 0o400, over a buyer it cannot see", () => {
-    seedShopper();
-    const specPath = join(shopperDir(), "user_spec.md");
-    const before = readFileSync(specPath, "utf8");
-
-    // Guard-of-the-guard: readable, this same store makes the bin REFUSE — proof it
-    // reaches the pre-flight and reads this person.
-    expect(runCreateShopper().marker["status"]).toBe("collision");
-
-    chmodSync(shopperDir(), 0o400);
-    const locked = runCreateShopper();
-    // Restored first: a failed assertion must not poison the afterEach cleanup.
-    chmodSync(shopperDir(), 0o700);
-
-    expect(locked.status).not.toBe(0);
-    expect(locked.stdout).not.toContain("sil_shopper_created");
-    expect(locked.marker["status"]).toBe("persistence_failed");
-    // It fails HERE, at the store it could not read — not two steps later at the host
-    // CLI. `path` is the only field that tells those two apart.
-    expect(locked.marker["path"]).toBe(shopperDir());
-    expect(String(locked.marker["cause"])).toMatch(/degraded/);
-    // The person is exactly as they were — no second shopper minted over them.
-    expect(readFileSync(specPath, "utf8")).toBe(before);
-  });
-
-  it("AC23 — with NO `shopper/` at all: an empty store, `not_found`, and a mint that lands (the bar that stops the fix bricking onboarding)", async () => {
+  it("SC4 — on a wiped disk the shopper document appears at the FIRST SAVED FACT, with no ceremony before it", async () => {
+    // The whole of "there is no creation ceremony", end to end through the registered
+    // tools. Every step before the write is a legal state, not an error to repair: the
+    // absent store answers an empty find and a `not_found` read, and `mode: "create"`
+    // over a directory that does not exist yet is beat 3, not a fault. Nothing else
+    // runs first — no bin, no setup, no singleton pre-flight.
     expect(existsSync(shopperDir())).toBe(false); // guard-of-the-guard: a fresh machine
 
     const found = await call("shopping_doc_find");
@@ -797,20 +719,22 @@ describe("the ROOT's own two doors — an un-stat-able data dir, and a `shopper/
 
     expect((await call("shopping_doc_read", { ref: "shopper" }))["status"]).toBe("not_found");
 
-    // The bin's singleton gate OPENS on "nothing yet": it walks PAST the store
-    // pre-flight and dies at the host CLI, which is absent from PATH by design — so
-    // `path` is the config it could not drive, never the store, and the cause is not
-    // the degraded-store refusal. (The end-to-end mint from this same baseline is
-    // `create-shopper.integration.test.ts`'s happy path.)
-    const fresh = runCreateShopper();
-    expect(fresh.marker["status"]).toBe("persistence_failed");
-    expect(fresh.marker["path"]).toBe(join(dataDir, "openclaw.json"));
-    expect(String(fresh.marker["cause"])).not.toMatch(/degraded/);
+    const written = await call("shopping_doc_write", {
+      ref: "shopper",
+      mode: "create",
+      name: "Ioannis",
+      body: "## Constraints\nNo wool — reacts to it.\n",
+    });
+    expect(written["status"]).toBe("ok");
 
-    // …and the mint itself lands: `create` over an absent store directory is beat 1,
-    // not a fault.
-    expect(
-      (await call("shopping_doc_write", { ref: "shopper", mode: "create", name: "Ioannis", body: "## Who\nnew here\n" }))["status"],
-    ).toBe("ok");
+    // …and the fact is READABLE afterwards, which is what makes it a saved fact rather
+    // than an `ok` over nothing: the file is on disk and the index now carries the
+    // person by the name the write was given.
+    expect(existsSync(join(shopperDir(), "user_spec.md"))).toBe(true);
+    expect((await call("shopping_doc_find"))["shopper"]).toEqual({
+      ref: "shopper",
+      name: "Ioannis",
+    });
+    expect((await call("shopping_doc_read", { ref: "shopper" }))["body"]).toContain("No wool");
   });
 });

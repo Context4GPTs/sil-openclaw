@@ -27,13 +27,11 @@
   },
   "main": "./dist/index.js",
   "bin": {
-    "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs",
-    "sil-openclaw-create-shopper": "./scripts/create-shopper.mjs"
+    "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs"
   },
   "files": [
     "dist",
     "schema",
-    "scripts/create-shopper.mjs",
     "scripts/allowlist-openclaw.mjs",
     "sil-shopping",
     "openclaw.plugin.json",

@@ -56,8 +56,11 @@ describe("dist/ is built once per vitest run, before any test file executes", ()
     // Anti-vacuity, and the measured failure itself: `does not provide an export named
     // getShopperArtefactDir` was a bin reading a dist/ that did NOT match its source.
     // Runtime export names, not a text grep — a half-written module cannot fake these.
+    // An EXACT set, not a floor: one operator bin survives the creation ceremony's
+    // deletion, so `> 1` would now be unsatisfiable and `> 0` would stop noticing if the
+    // derivation went empty.
     const libEntries = distEntriesTheBinsImport().filter((e) => e.startsWith("lib/"));
-    expect(libEntries.length).toBeGreaterThan(1);
+    expect(libEntries).toEqual(["lib/openclaw-allowlist.js"]);
     for (const rel of libEntries) {
       const compiled = await import(pathToFileURL(join(DIST_DIR, rel)).href);
       const source = readFileSync(join(REPO_ROOT, "src", rel.replace(/\.js$/, ".ts")), "utf8");

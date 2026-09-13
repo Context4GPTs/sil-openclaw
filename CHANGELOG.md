@@ -69,6 +69,12 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Removed
 
+- **BREAKING — the shopper-creation ceremony, whole.** Gone: the
+  `sil-openclaw-create-shopper` bin and its engine, the onboarding ladder and its
+  per-search pitch, and `sil_doctor`'s `creationEntrypoint` field and
+  `creation.entrypoint_present` finding. A shopping intent runs the eight beats on
+  whatever agent holds the plugin, and the shopper document is created by the first
+  `shopping_doc_write { ref: "shopper", mode: "create" }` a saved fact makes.
 - **BREAKING — `sil_search`, `sil_product_get`, `sil_stores`, `sil_domain_find`,
   `sil_domain_create` and the four `sil_doc_*` verbs.** Renamed, never aliased: the old
   names do not register, and there is no deprecation stub.
@@ -95,14 +101,14 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Fixed
 
-- **`create-shopper` attaches the skill where a 2026.8.1+ host looks.** The host's config
-  migration renamed `agents.list` (an array) to `agents.entries` (a map keyed by id), and
-  `openclaw agents add` writes that shape, so creation failed closed after the add on
-  every 2026.8.1+ gateway. The script now reads both shapes, and the attach is re-read
-  from `openclaw.json` and fails closed when the skill is not there — a host that parses
-  the path differently writes one literal key and still exits 0, and that silent
-  misattach is the state the fix exists to prevent. The wiring-drift detector reads both
-  shapes too, so it no longer goes blind on a migrated host.
+- **The wiring-drift detector reads a 2026.8.1+ host's config.** That host's migration
+  renamed `agents.list` (an array) to `agents.entries` (a map keyed by id), and the
+  detector went blind on it — reporting a healthy install as mis-wired, or the reverse.
+  It reads both shapes now.
+- **A key the domain does not hold travels ONE way, not two.** The skill told the agent to
+  send it as a spec row and read the gap back off `fit`; the search refuses a key the
+  domain does not list, so that row cost the whole call. It travels as a `## Notes / open`
+  row and is judged at beat 6 from what the pages print.
 - **A directory sil cannot list no longer reads as an absent document.** The document
   verbs decided absence with `existsSync` — a boolean over a stat that swallows every
   errno, so an unlistable `briefs/` answered `not_found` for a Brief sitting on disk. The

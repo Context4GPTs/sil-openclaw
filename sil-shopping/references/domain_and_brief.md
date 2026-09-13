@@ -60,9 +60,10 @@ things.
   coining beside them. A synonym (`speed_mbps` vs `transfer_speed_mbps`) is simply
   outside what the registry holds, so sil holds no value for it.
 - **A key the job needs that the domain lacks is a NAMED GAP, never a coin.** It travels
-  exactly two ways and no third: as a spec row on the search whose key comes back absent
-  from `fit` (a named gap, and never a reason to drop a product), and as a
-  **`## Notes / open` row** on the Brief. Research coins it later, with evidence.
+  exactly one way and no other: a **`## Notes / open` row** on the Brief, judged at beat 6
+  from what the pages print. It is never a spec row — `shopping_search` refuses a key the
+  domain does not list, and that refusal costs the whole call. Research coins it later,
+  with evidence.
 - **Coining is `shopping_domain_create`'s job, once, for a NEW category** — its `specs`
   are the first keys of a path sil did not have. Research **how the category is bought**
   on the web first (never products), and coin only the keys the path does not already

@@ -3,7 +3,7 @@
  * with `renameSync` only. The operator bins statically import `../dist/lib/*.js`, so a
  * `tsc` emitting straight into the shared `dist/` lets a bin spawned mid-emit read a
  * truncated module and die at ESM instantiation. `rename(2)` is atomic: every reader
- * sees one whole version. Card: create-shopper-bin-dies-on-its-exit-path.
+ * sees one whole version.
  */
 
 import { execFileSync } from "node:child_process";
