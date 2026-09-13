@@ -150,7 +150,7 @@ export function detectWiringDrift(config: unknown, facts: SilWiringFacts): Findi
  * plugin id but NOT the published name.
  *
  * Both halves are load-bearing. "Lacks the published name" alone is not drift —
- * a host runs many agents and only one is the shopper, so that would fire on
+ * a host runs many agents and only some reach for sil at all, so that would fire on
  * every unrelated agent. And an agent carrying BOTH tokens is not drift either:
  * the published name attaches, the skill runs, nothing is degraded.
  */
