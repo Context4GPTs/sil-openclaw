@@ -4,16 +4,17 @@
  *
  * Nine tools reach sil-api with a Bearer: the seven catalog `shopping_*` tools, the one
  * registry read `shopping_brief_compile` makes, and `sil_whoami`. Each drives
- * `refreshAndRetryOnce` — at most one refresh, at most one retry, no loop. The failure this file forecloses is DRIFT: a tool that refreshes twice,
- * retries a dead token, clears credentials on a transient blip, or (worst) succeeds where
- * another goes terminal, so the agent's recovery depends on which tool happened to notice
- * the expiry first.
+ * `refreshAndRetryOnce` — at most one refresh, at most one retry, no loop. The failure
+ * this file forecloses is DRIFT: a tool that refreshes twice, retries a dead token,
+ * clears credentials on a transient blip, or (worst) succeeds where another goes
+ * terminal, so the agent's recovery depends on which tool happened to notice the expiry
+ * first.
  *
  * The proof is a matrix — the same scenario, driven through every tool, asserted to
  * produce the same STATUS, the same credential side effect and the same call counts.
  * Parity is asserted across the set, not tool by tool, so a divergence names itself. It
  * is also why the per-tool files do not each re-assert the shared arms: one code path,
- * one bar, driven eight ways.
+ * one bar, driven nine ways.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -29,7 +30,6 @@ import { setApiUrl, setWebUrl } from "../lib/config.js";
 import { readTokens } from "../lib/credentials.js";
 import { createMockPluginApi, getTool, type MockPluginAPI } from "./helpers/mock-plugin-api.js";
 import { SHOPPING_TOOLS } from "../tools/catalog.js";
-import { BRIEF_COMPILE } from "./helpers/shopping-wire.js";
 import {
   SIL_API,
   SIL_WEB,
@@ -42,7 +42,7 @@ import {
   type RouteKind,
   type Router,
 } from "./helpers/shopping-harness.js";
-import { AUTH, SEARCH_400, contractResponse } from "./helpers/shopping-wire.js";
+import { AUTH, BRIEF_COMPILE, SEARCH_400, contractResponse } from "./helpers/shopping-wire.js";
 
 const ACCESS = "at-live-token";
 const REFRESH = "rt-live-token";
@@ -98,7 +98,9 @@ const BEARER_TOOLS = [
       status: "ok",
       path: DOMAIN,
       guide: "how they are bought",
-      specs: [{ key: "mondo_size", display_name: "Mondopoint size", type: "number", operators: ["eq"] }],
+      specs: [
+        { key: "mondo_size", display_name: "Mondopoint size", type: "number", operators: ["eq"] },
+      ],
       seller_specs: [],
     }),
   },
@@ -130,7 +132,9 @@ beforeEach(() => {
     ref: BRIEF_REF,
     mode: "create",
     title: "Chamonix",
-    body: `## Items\n\n| item | domain | status |\n|---|---|---|\n| ski boots | ${DOMAIN} | open |\n\n### ski boots\nboots for the season\n`,
+    body:
+      "## Items\n\n| item | domain | status |\n|---|---|---|\n"
+      + `| ski boots | ${DOMAIN} | open |\n\n### ski boots\nboots for the season\n`,
   });
 });
 

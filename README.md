@@ -135,7 +135,7 @@ agent  Different niche — camping. Learning how to buy a backpacking
 
 ## Tools
 
-Fourteen tools. The eleven the shopping loop calls are named `shopping_*` — for what they
+Fifteen tools. The twelve the shopping loop calls are named `shopping_*` — for what they
 do for you — and the three account tools keep the `sil_` name. Your agent calls them for
 you; you just say what you want.
 
@@ -154,10 +154,11 @@ you; you just say what you want.
 | `shopping_domain_search` | Read sil's shared registry in your own words and get back the categories that match, each with a line on how the thing is bought. An empty list is the one answer that licenses a mint. |
 | `shopping_domain_get` | Read one standing category: its buying guide, and every key it is bought by with the operators, unit and allowed values each takes. |
 | `shopping_domain_create` | Coin a NEW category — its path, a guide written from research, and its first keys. The one permanent, global write in sil; an existing path is refused and nothing is written. |
-| `shopping_search` | Search one settled category. Send the domain, your own words, how many products you want, and the values you want as `specs`. Products come back best-first with `fit` (what sil verified), their variants, a price range, and `webpage_info` where sil has not read the page yet. |
+| `shopping_brief_compile` | Turn one item of your Brief into the calls it makes: its category, your own words as the query, your rows about the product as `specs`, and your rows about the seller as `seller_specs`. The first goes to the search, the second to the offers — so a requirement you stated once is asked the same way every time. |
+| `shopping_search` | Search one settled category. Send the domain, your own words, how many products you want, the values you want as `specs`, and `ship_to` — the label of one of your saved addresses, which localizes the search (your default one when it is left off). Products come back best-first with `fit` (what sil verified), their variants, a price range, and `webpage_info` where sil has not read the page yet. |
 | `shopping_product_get` | Open the whole of what sil holds on 1–10 shortlisted variants: the description, the images, every key sil holds, and where each reading came from and when. |
-| `shopping_offers` | Price 1–10 variants live: one entry per seller, each with the price exactly as the page prints it, its currency, availability, the listing URL and the moment sil read it. |
-| `shopping_seller_get` | For 1–10 sellers, whether each ships to you — `serviceable`, `not_serviceable`, or `unknown` — plus the shipping routes and return terms sil has read. `unknown` keeps the seller; it just means sil has not read that policy. |
+| `shopping_offers` | Price 1–10 variants live, on your own terms: send your `seller_specs` and a `ship_to` label, and each offer comes back with the price exactly as the page prints it, its currency, availability, the listing URL, the moment sil read it, and `seller_fit` — whether that seller ships to that address (`serviceable`, `not_serviceable` or `unknown`) and what it holds for each term you asked about. |
+| `shopping_seller_get` | One seller's whole terms, for 1–10 of them: `specs` (every seller key sil holds a value for), whether it ships to you, and the shipping routes and return terms sil has read. `unknown` keeps the seller; it just means sil has not read that policy. |
 
 **Your shopper's documents** — two kinds, four verbs, all on your own disk
 

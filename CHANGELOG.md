@@ -68,15 +68,17 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 ### Changed
 
 - **BREAKING — the catalog answer is the agent contract's, and the pre-contract one is
-  deleted.** `shopping_search` takes `domain` · `query` · `n` · `specs` and answers with
-  `products[]`, each carrying `fit` (only what sil verified — a key absent from it is a
-  gap to name, never a miss), the `variants` that fit, a price range per currency, and
-  `webpage_info` where sil has not read the page yet. The dossier, the offers and the
-  seller terms are three separate reads now. Nothing is projected on the way back.
+  deleted.** `shopping_search` takes `domain` · `query` · `n` · `specs` · `ship_to` and
+  answers with `products[]`, each carrying `fit` (only what sil verified — a key absent
+  from it is a gap to name, never a miss), the `variants` that fit, a price range per
+  currency, and `webpage_info` where sil has not read the page yet. It asks nothing about
+  sellers: the dossier, the offers with their seller terms, and one seller's whole terms
+  are three separate reads now. Nothing is projected on the way back.
 - **The honesty vocabulary the agent reads.** `webpage_info` present means sil has not
   read that page; its absence means the values were verified. An empty `variants` says no
-  listed option fits. A price in another currency is a bound sil could not test.
-  `ships: unknown` keeps the seller.
+  listed option fits. A price in another currency is a bound sil could not test. On an
+  offer's `seller_fit`, `ships: unknown` keeps that offer and a requested seller key
+  absent is a term sil has not read — never a term the seller lacks.
 - **BREAKING — the shopper's store is FLAT, and the pre-0.5 layout migrates in one hop on
   first touch of a document tool.** `shopper/user_spec.md` + `shopper/briefs/<slug>.md`
   replace `shopper/domains/<slug>/`. A legacy source file is deleted **only once its own
