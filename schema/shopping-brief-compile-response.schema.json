@@ -1,31 +1,39 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.sil.com/shopping-search-request.schema.json",
-  "title": "sil shopping_search — request",
+  "$id": "https://schemas.sil.com/shopping-brief-compile-response.schema.json",
+  "title": "sil shopping_brief_compile — response",
   "type": "object",
   "required": [
+    "status",
+    "item",
     "domain",
     "query",
-    "n"
+    "specs",
+    "seller_specs"
   ],
   "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "item": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Confirms which item this is."
+    },
     "domain": {
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Sends the path the domain read returned."
+      "description": "Sends it as `shopping_search.domain`."
     },
     "query": {
       "type": "string",
       "minLength": 1,
       "maxLength": 512,
-      "description": "Sends the buyer's words."
-    },
-    "n": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 50,
-      "description": "Asks for this many products."
+      "description": "Sends it as `shopping_search.query` — the item in the buyer's words."
     },
     "specs": {
       "type": "array",
@@ -86,7 +94,7 @@
         "additionalProperties": false
       },
       "maxItems": 32,
-      "description": "Sends the desired product values, one per hard row or preference; a key the domain does not hold is recorded, never refused."
+      "description": "Sends it as `shopping_search.specs`, verbatim; hard rows first."
     },
     "seller_specs": {
       "type": "array",
@@ -147,12 +155,7 @@
         "additionalProperties": false
       },
       "maxItems": 32,
-      "description": "Sends the desired seller terms — keys of the `seller` root — one per hard row or preference."
-    },
-    "ship_to": {
-      "type": "string",
-      "pattern": "^[A-Za-z]{2}$",
-      "description": "Names the destination every seller term and `ships` is read against; the buyer's registered address when absent."
+      "description": "Sends it as `shopping_search.seller_specs`, verbatim; hard rows first."
     }
   },
   "additionalProperties": false

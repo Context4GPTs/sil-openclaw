@@ -1,8 +1,11 @@
-# Where these fourteen files come from
+# Where these sixteen files come from
 
 Copied verbatim from `sil-services` `packages/schemas/schema/`, commit
-`4049d74895f83c0d89e82416b422738b10c400ce`. One request and one response artifact per
+`8d4ec20e4629796b14de4972fac149f3e183a6cb`. One request and one response artifact per
 shopping tool; each is `JSON.stringify` of the TypeBox object the API serialises against.
+`shopping_brief_compile` is local to the plugin, so its pair has no route behind it — the
+request artifact is still the tool's `parameters`, and the response artifact is the shape
+the tool answers and validates against before returning.
 
 **Re-copy, never hand-edit.** A local edit is drift the moment the sibling moves, and the
 plugin registers these bytes as each tool's `parameters` — an edited artifact is a
