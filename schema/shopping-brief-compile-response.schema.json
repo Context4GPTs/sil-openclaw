@@ -155,7 +155,7 @@
         "additionalProperties": false
       },
       "maxItems": 32,
-      "description": "Sends it as `shopping_search.seller_specs`, verbatim; hard rows first."
+      "description": "Sends it as `shopping_offers.seller_specs`, verbatim; hard rows first."
     }
   },
   "additionalProperties": false

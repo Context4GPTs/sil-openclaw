@@ -103,22 +103,42 @@
           },
           "seller_fit": {
             "type": "object",
-            "patternProperties": {
-              "^.*$": {
+            "required": [
+              "ships"
+            ],
+            "properties": {
+              "ships": {
                 "anyOf": [
                   {
-                    "type": "number"
+                    "type": "string",
+                    "const": "serviceable"
                   },
                   {
-                    "type": "boolean"
+                    "type": "string",
+                    "const": "not_serviceable"
                   },
                   {
-                    "type": "string"
+                    "type": "string",
+                    "const": "unknown"
                   }
-                ]
+                ],
+                "description": "Says whether it ships there; `unknown` keeps the seller and says sil has not read its policy."
               }
             },
-            "description": "Compares each requested seller key with what it asked, on this seller's value; `ships` rides here — serviceable, not_serviceable or unknown for the address — always."
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Compares each requested seller key with what it asked, on this seller's value; `ships` says whether it reaches the address."
           }
         },
         "additionalProperties": false
