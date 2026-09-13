@@ -76,17 +76,17 @@ export const SHOPPING_TOOLS = [
       + " by. Two things must both hold first: a shopping_domain_search read came back"
       + " `matches: []`, and you have read up on the web on how the category is bought"
       + " (never on products). Mark variant_spec on a key that identifies a purchasable"
-      + " option and product_spec on one that tells one product from the next; the"
-      + " registry derives each key's operators from its type. Only the keys a PRODUCT is"
-      + " bought by are coined here: a category's seller terms are never yours to coin —"
-      + " the base is sil's and a branch key is coined by research — and shopping_domain_get"
-      + " answers them as `seller_specs`. A key an ancestor already defines with the same"
-      + " type and unit is not coined again: the reply carries it back as"
-      + " `inherited: true`, and you may filter on it as if you had. An existing path is"
-      + " refused and nothing is written — that refusal means the vocabulary is already"
-      + " there, so search that same path; never coin a near-path variant to route around"
-      + " it, and never call this to change a category that exists. Every sil shopper sees"
-      + " what you write and nothing can undo it.",
+      + " option and product_spec on one that tells one product from the next; the registry"
+      + " derives each key's operators from its type. Only the keys a PRODUCT is bought by"
+      + " are coined here: a category's seller terms are never yours to coin — the base is"
+      + " sil's and a branch key is coined by research — and shopping_domain_get answers"
+      + " them as `seller_specs`. A key an ancestor already defines with the same type and"
+      + " unit is not coined again: the reply carries it back as `inherited: true`, and you"
+      + " may filter on it as if you had. An existing path is refused and nothing is written"
+      + " — that refusal means the vocabulary is already there, so search that same path;"
+      + " never coin a near-path variant to route around it, and never call this to change a"
+      + " category that exists. Every sil shopper sees what you write and nothing can undo"
+      + " it.",
   },
   {
     name: SEARCH_TOOL,
@@ -161,21 +161,20 @@ export const SHOPPING_TOOLS = [
     label: "Read one seller's whole terms",
     description:
       "Beat 6, one seller's WHOLE terms: send 1–10 seller ids from shopping_offers, and"
-      + " nothing else. Each seller comes back with its"
-      + " name, host and country, `specs` — every seller key sil holds a value for, base"
-      + " and branch, as the dossier's `specs` are a product's — and `ships`, which"
-      + " answers for the buyer's default address: serviceable"
-      + " (sil read a route covering it), not_serviceable (sil read this"
-      + " seller's policy and it excludes it), or unknown (sil has read nothing about"
-      + " this seller). `unknown` is an ordinary answer that keeps the seller — say sil"
-      + " could not confirm shipping, and hand the buyer the listing; an empty `specs` is"
-      + " the same answer about its terms. Where sil has read them, `shipping` carries"
-      + " the routes with their cost, free-over threshold and days, and `returns` the"
-      + " window and any restocking fee; a term the page never stated is simply absent,"
-      + " which is never zero and never free. A `policy_url` of null means the terms were"
-      + " read off a product page and sil holds no policy page. This is the details read:"
-      + " whether an offer meets the buyer's own seller rows is `seller_fit` on that"
-      + " offer, from shopping_offers.",
+      + " nothing else. Each seller comes back with its name, host and country, `specs` —"
+      + " every seller key sil holds a value for, base and branch, as the dossier's `specs`"
+      + " are a product's — and `ships`, which answers for the buyer's default address:"
+      + " serviceable (sil read a route covering it), not_serviceable (sil read this"
+      + " seller's policy and it excludes it), or unknown (sil has read nothing about this"
+      + " seller). `unknown` is an ordinary answer that keeps the seller — say sil could not"
+      + " confirm shipping, and hand the buyer the listing; an empty `specs` is the same"
+      + " answer about its terms. Where sil has read them, `shipping` carries the routes"
+      + " with their cost, free-over threshold and days, and `returns` the window and any"
+      + " restocking fee; a term the page never stated is simply absent, which is never zero"
+      + " and never free. A `policy_url` of null means the terms were read off a product"
+      + " page and sil holds no policy page. This is the details read: whether an offer"
+      + " meets the buyer's own seller rows is `seller_fit` on that offer, from"
+      + " shopping_offers.",
   },
 ] as const satisfies readonly ShoppingTool[];
 

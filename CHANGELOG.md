@@ -42,11 +42,11 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   default address.
 - **Seller terms are asked and answered per OFFER, and never coined by the agent.**
   `shopping_offers` takes `seller_specs` — keys of the domain read's own `seller_specs`,
-  which are sil's base plus whatever branch research has coined — and answers
-  `seller_fit` on each
-  offer: `ships` always (serviceable, not_serviceable or unknown for that address), plus
-  each requested key with that seller's value where sil holds one. `shopping_seller_get`
-  is the details read beside it, carrying every seller key sil holds as `specs`.
+  which are sil's base plus whatever branch research has coined — and answers `seller_fit`
+  on each offer: `ships` always (serviceable, not_serviceable or unknown for that address),
+  plus each requested key with that seller's value where sil holds one.
+  `shopping_seller_get` is the details read beside it, carrying every seller key sil holds
+  as `specs`.
 - **A key the domain does not hold is recorded, never refused.** The search takes any
   well-formed key, answers the products it found and leaves that key absent from `fit`,
   writing the ask on the search row so research can coin what buyers need. The skill sends

@@ -410,22 +410,50 @@ describe("each shopping tool carries its discipline clause", () => {
     shopping_domain_search: [/matches: \[\]/, /licens/i, /\b(2|two)\b/],
     // What the keys are for, and which of them identify a purchasable option.
     shopping_domain_get: [/variant_spec/, /product_spec/, /operators?/i],
-    // The write nothing can undo, and the two things that must hold first.
-    shopping_domain_create: [/\bNEW\b/, /research|read(ing)? up/i, /undo|permanent/i],
+    // The write nothing can undo, the two things that must hold first, the vocabulary it
+    // may not coin, and the mark that lets the agent use a key it did not mint.
+    shopping_domain_create: [
+      /\bNEW\b/,
+      /research|read(ing)? up/i,
+      /undo|permanent/i,
+      /never .{0,20}to coin/i,
+      /inherited/,
+      /shopping_domain_get/,
+    ],
     // The honesty the whole answer turns on, and the fan-out bound.
     shopping_search: [/\b4\b|\bfour\b/, /widen/i, /hard row is never relaxed/i, /webpage_info/, /gap/i],
     // What the dossier adds over the shortlist, and that a miss is an absence.
     shopping_product_get: [/sources/, /absent/i, /opaque/i],
     // What dates a price, and why the spread is the answer.
     shopping_offers: [/observed_at/, /spread/i, /convert/i],
-    // The three states, and that the third one keeps its seller.
-    shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i],
+    // The three states, that the third one keeps its seller, and that ids are the whole ask.
+    shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i, /nothing else/i],
   };
 
   it.each(ARTIFACT_TOOLS)("%s's description carries every load-bearing token of its clause", (tool) => {
     const description = getTool(allRegisteredTools(), tool).description ?? "";
     const missing = DISCIPLINE[tool].filter((re) => !re.test(description)).map((re) => re.source);
     expect(missing).toEqual([]);
+  });
+
+  /**
+   * `seller_specs` is still sayable in the mint's description — as the field
+   * shopping_domain_get answers, never as one this call takes — so an occurrence is
+   * cleared by its ATTRIBUTION rather than by its wording.
+   */
+  const ATTRIBUTED_SELLER_SPECS = /shopping_domain_get[^.]{0,60}seller_specs/g;
+
+  it("neither description names the field the signed wire took off its request", () => {
+    // The map above only proves a clause is PRESENT: a description can carry every token
+    // and still tell the agent to send a field the route no longer takes, which is what
+    // both of these were before the signed wire. An agent sends what it reads.
+    const api = allRegisteredTools();
+    const mint = getTool(api, "shopping_domain_create").description ?? "";
+    expect(mint.replace(ATTRIBUTED_SELLER_SPECS, "")).not.toMatch(/seller_specs/);
+    expect(getTool(api, "shopping_seller_get").description ?? "").not.toMatch(/ship_to/);
+    // Guard-of-the-guard: the strip clears a real occurrence, so the bar is not passing
+    // over prose that simply dropped the pointer to where seller terms come from.
+    expect(mint).toMatch(/seller_specs/);
   });
 });
 
