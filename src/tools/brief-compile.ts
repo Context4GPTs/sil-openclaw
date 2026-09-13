@@ -89,14 +89,15 @@ export function registerBriefCompileTool(api: PluginAPI): void {
       + " shopping_search, adding `n` and `ship_to`; send `seller_specs` to"
       + " shopping_offers at beat 6 with the shortlisted variant ids and the same"
       + " `ship_to`, which is the address label the buyer's `## Constraints` names and"
-      + " otherwise nothing at all. Send the rows as they came back: a widening is an"
+      + " otherwise nothing at all. `query` is the buyer's words alone — the `applies:`"
+      + " line beat 3 writes in the same subsection stays in the Brief and never rides"
+      + " it. Send the rows as they came back: a widening is an"
       + " edit to the Brief and a second compile, never a row rewritten by hand. A row"
       + " the registry cannot take — an operator the key does not list, a value its type"
-      + " refuses, a unit that is not the registry's, money with no currency — is refused"
-      + " by name here, before any spend; a key the registry does not hold travels as"
-      + " written, and the search records it. An item whose domain cell is still empty is"
-      + " invalid_request: settle it with shopping_domain_search and shopping_domain_get"
-      + " first. Local reads plus one registry read — nothing is written, nothing searched.",
+      + " refuses, a wrong unit, money with no currency — is refused by name here, before"
+      + " any spend; a key the registry does not hold travels as written, and the search"
+      + " records it. An item whose domain cell is still empty is invalid_request: settle"
+      + " it at beat 2 first. One registry read, nothing written, nothing searched.",
     parameters: requestSchema(TOOL),
     async execute(_callId, params) {
       const compiled = await compile(api, params);
@@ -145,14 +146,12 @@ async function compile(api: PluginAPI, params: Record<string, unknown>): Promise
       "shopping_domain_search",
     );
   }
-  // A query on the wire is one line; the Brief is hard-wrapped, so the wrap is folded
-  // and nothing else — the words are the buyer's.
-  const query = itemProse(doc.body, item.item).replace(/\s+/g, " ");
+  const query = queryFrom(itemProse(doc.body, item.item));
   if (query === "") {
     return refuse(
       api,
       "invalid_request",
-      `The \`## Items\` row ${JSON.stringify(item.item)} has no prose subsection, and that`
+      `The \`## Items\` row ${JSON.stringify(item.item)} carries no prose of its own, and that`
         + " prose IS the search query. Write it at beat 1, then compile again.",
       "shopping_doc_write",
     );
@@ -164,6 +163,21 @@ async function compile(api: PluginAPI, params: Record<string, unknown>): Promise
     return refuse(api, "invalid_request", rowRefusal(scoped.blank, fault), "shopping_doc_write");
   }
   return await compileScoped(api, { item: item.item, domain: item.domain, query }, scoped);
+}
+
+/**
+ * The item's subsection as the search takes it: one line, and only the buyer's words.
+ * Beat 3 writes an `applies:` bookkeeping line into that same subsection — it stays in
+ * the Brief and never rides the query, where it reads as words the buyer said. The rest
+ * is folded, because the Brief is hard-wrapped and a query on the wire is one line.
+ */
+function queryFrom(prose: string): string {
+  return prose
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(?:[-*+]\s*)?applies:/i.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 interface Scoped {

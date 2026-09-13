@@ -81,9 +81,11 @@ const BRIEF = [
   "### ski boots",
   "ski boots for the upcoming season, size 27.5, advanced skier, up to 300 euros;",
   "GripWalk soles; resort, a week in Chamonix in February",
+  "applies: mondo_size, skill_level, flex_index, last_width, sole_norm, model_year, price",
   "",
   "### helmet",
   "a ski helmet for the same trip, it has to work with my goggles",
+  "applies: head_circumference, price",
   "",
   "## Hard constraints",
   "",
@@ -187,6 +189,20 @@ describe("A3 — the journey's Brief compiles to the contract's own bodies", () 
         { key: "sole_norm", op: "eq", value: "gripwalk" },
       ]),
     );
+  });
+
+  it("the Brief's `applies:` line stays in the Brief — it never rides the query", async () => {
+    // Beat 3 writes `applies:` INSIDE the item's subsection, so it is prose by position
+    // and bookkeeping by meaning. Sent, it reads to the index as words the buyer said —
+    // measured live on the creation boot, where the query carried "applies: mondo_size,
+    // flex_index, last_width" into the web leg.
+    scriptTheRegistry();
+    const query = (await compile({ ref: REF, item: "ski boots" }))["query"] as string;
+    expect(query).not.toMatch(/applies:/i);
+    expect(query).not.toMatch(/mondo_size/);
+    // …and the buyer's own words are all still there, to the last clause.
+    expect(query).toContain("ski boots for the upcoming season");
+    expect(query).toContain("a week in Chamonix in February");
   });
 
   it("`in` on a key the domain does not hold still sends a LIST, not one long string", async () => {

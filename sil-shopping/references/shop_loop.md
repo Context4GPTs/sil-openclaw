@@ -74,9 +74,14 @@ Beat 5 **projects** what Beats 3–4 resolved; it never re-derives it. **Call
   label as `sil_whoami` lists them, never a country, and it localizes the search to that
   address without changing what is asked.
 
-**Send the compiled rows as they came back.** A **widening is an edit to the Brief and a
-second compile**, never a row rewritten on the wire — otherwise the Brief stops being
-what the next session reuses, and the widening is gone with the turn.
+**Pass the compiled body through — never re-type it.** Copy `domain`, `query` and the
+`specs` array into the call exactly as they came back: **every value as it was answered**,
+a money value a decimal **string** (`"300"` — not `300`, not `"300.00"`). Re-typing a
+value is how a perfectly good row gets refused and the call is spent for nothing.
+
+A **widening is an edit to the Brief and a second compile**, never a row rewritten on the
+wire — otherwise the Brief stops being what the next session reuses, and the widening is
+gone with the turn.
 
 **The bound is ≤ 4 priority-ordered `shopping_search` calls PER ITEM.** It is never spent
 across the whole job: each item gets its own fan-out, and halving one item's budget

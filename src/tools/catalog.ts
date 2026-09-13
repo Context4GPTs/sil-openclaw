@@ -83,8 +83,8 @@ export const SHOPPING_TOOLS = [
       + " the shipping terms are the base every category already has, so leave them out."
       + " A key an ancestor already defines is refused by name, as `price` is. An"
       + " existing path is refused and nothing is written — that refusal means the"
-      + " vocabulary is already there, so"
-      + " search that same path; never coin a near-path variant to route around it, and"
+      + " vocabulary is already there, so search that same path; never coin a near-path"
+      + " variant to route around it, and"
       + " never call this to change a category that exists. Every sil shopper sees what"
       + " you write and nothing can undo it.",
   },
@@ -94,25 +94,25 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/search",
     label: "Search sil in one settled category",
     description:
-      "Beat 5: the products and variants that fit, in one settled category, as"
+      "Beat 5: the products and variants that fit in one settled category, as"
       + " shopping_brief_compile builds it from the Brief. Send the domain path, the"
-      + " buyer's own words as `query`, how many products you want, and the desired"
-      + " values as `specs` — one per hard row or preference, with the operator the"
-      + " domain read listed. `ship_to` is the LABEL of one of the buyer's addresses as"
-      + " sil_whoami lists them, never a country: it localizes the search to that"
-      + " address, and sil uses the default one when you send nothing. Seller terms"
-      + " belong to shopping_offers, answered per seller. `price`"
+      + " buyer's words as `query`, how many products you want, and that compile's"
+      + " `specs` array UNCHANGED — every value exactly as it was answered, a money value"
+      + " a decimal STRING (`\"300\"`, never 300 or \"300.00\"), or the row is refused and"
+      + " the call is spent. `ship_to` is the LABEL of one of the buyer's addresses as"
+      + " sil_whoami lists them, never a country: it localizes the search, and sil uses"
+      + " the default address when you send nothing. Seller terms are shopping_offers'"
+      + " ask, answered per seller. `price`"
       + " is a key every domain has and its currency is required: sil holds no exchange"
-      + " rate, so a bound in another currency is one sil could not test — say so rather"
-      + " than dropping the product. Present the products in the order returned and never"
-      + " re-rank them. `fit` answers the ask key by key with what sil verified, so a key"
+      + " rate, so a bound in another currency is one sil could not test — say so, never"
+      + " drop the product. Present the products in the order returned, never re-ranked."
+      + " `fit` answers the ask key by key with what sil verified, so a key"
       + " absent from it is a gap to name, never a miss — a key the domain does not hold"
-      + " included: recorded for research, answered absent, never refused. `variants`"
-      + " carries the options that fit, and an empty list says no listed option fits."
+      + " included: recorded for research, answered absent, never refused. An empty"
+      + " `variants` says no listed option fits."
       + " `webpage_info` means sil has not read that page yet: the merchant's own words,"
-      + " good for a provisional pick and never presented as verified; its absence means"
-      + " the values were verified. At most 4 calls per item, widening soft rows only; a"
-      + " hard row is never relaxed.",
+      + " good for a provisional pick, never verified; its absence means they were. At"
+      + " most 4 calls per item, widening soft rows only; a hard row is never relaxed.",
   },
   {
     name: "shopping_product_get",

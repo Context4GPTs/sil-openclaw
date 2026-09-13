@@ -61,7 +61,8 @@ set** over `{X, Y, Z}` with the X-preference weighed as Beat-6 judgment — neve
 **Write each item's `applies:` line** — the materialized partition, **keys only, never
 values**: for item domain D, every row whose `domain` is ancestor-or-self of D. Decided
 once, visible in the document, checkable. Restating the values is how a corrected row
-and its copy come to disagree.
+and its copy come to disagree. It is **bookkeeping, not the buyer's words**: it stays in
+the Brief, and `shopping_brief_compile` drops it from the `query` it answers.
 
 **FILL's job is to RESOLVE, and it stops there.** What it could not resolve is handed
 untouched to Beat 4 ASK, which is the only beat that puts a question to the buyer.
