@@ -1,8 +1,7 @@
 /**
  * UNIT — the shared `dist/` build helper (`src/__tests__/helpers/build-dist.ts`).
  *
- * Card: create-shopper-bin-dies-on-its-exit-path. `tsc` emitting straight into the one
- * shared `dist/` let a bin spawned mid-emit read a truncated module and die at ESM
+ * `tsc` emitting straight into the one shared `dist/` let a bin spawned mid-emit read a truncated module and die at ESM
  * instantiation (`does not provide an export named …`, exit 1, stdout empty). The
  * helper's whole job is that emit never being observable: compile to a temp `--outDir`,
  * then install by `rename(2)`, which is atomic — a concurrent reader sees the whole old

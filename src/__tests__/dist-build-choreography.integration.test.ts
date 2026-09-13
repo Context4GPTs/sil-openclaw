@@ -2,10 +2,9 @@
  * INTEGRATION — who builds `dist/`, and when (tier: integration — reads what this run's
  * `globalSetup` provided, the real `dist/` it produced, and every test file's source).
  *
- * Card: create-shopper-bin-dies-on-its-exit-path. `create-shopper.integration.test.ts`
- * and `openclaw-allowlist.integration.test.ts` each drove the build compiler in a
- * `beforeAll`, emitting NON-atomically into the one shared `dist/` — while their own
- * spawned bins were statically importing `../dist/lib/*.js`. A bin that started mid-emit
+ * Two test files each drove the build compiler in a `beforeAll`, emitting
+ * NON-atomically into the one shared `dist/` — while their own spawned bins were
+ * statically importing `../dist/lib/*.js`. A bin that started mid-emit
  * read a truncated module and died at ESM instantiation (stdout empty, exit 1). Measured
  * 1 anomaly in 2,365 spawns under 6-way parallel vitest; 32 in ~24,000 against a
  * compiler storm; `dist/lib/profile-store.js` read 0 bytes on 11 of 811,224 reads.

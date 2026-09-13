@@ -71,9 +71,10 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 - **BREAKING — the shopper-creation ceremony, whole.** Gone: the
   `sil-openclaw-create-shopper` bin and its engine, the onboarding ladder and its
-  per-search pitch, and `sil_doctor`'s `creationEntrypoint` field and
-  `creation.entrypoint_present` finding. A shopping intent runs the eight beats on
-  whatever agent holds the plugin, and the shopper document is created by the first
+  per-search pitch, `sil_register`'s `next_step: "offer_shopper"` breadcrumb (contract
+  §5), and `sil_doctor`'s `creationEntrypoint` field and `creation.entrypoint_present`
+  finding. A shopping intent runs the eight beats on whatever agent holds the plugin,
+  and the shopper document is created by the first
   `shopping_doc_write { ref: "shopper", mode: "create" }` a saved fact makes.
 - **BREAKING — `sil_search`, `sil_product_get`, `sil_stores`, `sil_domain_find`,
   `sil_domain_create` and the four `sil_doc_*` verbs.** Renamed, never aliased: the old
