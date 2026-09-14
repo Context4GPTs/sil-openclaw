@@ -34,10 +34,11 @@ spec row is this job's.
 Every thing you read lands in **`## Working from`** — an unrecorded read is a nag; a
 recorded one is a link the buyer can check and delete.
 
-**What the buyer says while answering beat 4 ASK is durable too.** A size, an ability, a
-measured foot is written to the shopper document here — cold, before that item's first
-search — so it exists from the first answer and the next session reuses it instead of
-re-asking. THIS job's budget is not a fact about the person: it is a Brief row.
+**The durable facts in the buyer's own ask are saved at once.** A size, an ability, a
+measured foot — stated when they open the job, or later when they answer beat 4 ASK — is
+written to the shopper document here, cold, before that item's first search. The next
+session reuses it instead of re-asking. THIS job's budget is not a fact about the person:
+it is a Brief row.
 
 **Compile both tables.** Each resolved dimension becomes a row in `## Hard constraints`
 or `## Preferences` — the section IS the hardness. Keys come from what the domain read

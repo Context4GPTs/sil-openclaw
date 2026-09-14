@@ -569,12 +569,12 @@ describe("the live draws' share — wordings a buyer round measured", () => {
     ).toEqual([]);
   });
 
-  it("L2 — a durable fact the ASK itself collected is written at FILL, cold, before the first search — and THIS job's budget is not one", () => {
-    // Draw 2 asked size, ability and budget, was answered, and wrote no shopper
-    // document at all: "when the buyer states something durable" never fired for the
-    // answers the agent had just elicited, so session 2 re-asked all three. The
-    // budget is the other half — saved onto the person it follows them into the
-    // next job, where it was never their ceiling.
+  it("L2 — a durable fact the buyer's own ask carries is written at FILL, cold, before the first search — and THIS job's budget is not one", () => {
+    // Draw 2's buyer opened with "size 27.5 for advanced skier up to 300 euros" and
+    // the agent asked nothing, so "when the buyer states something durable" never
+    // fired, no document was written, and session 2 re-asked all three. The budget is
+    // the other half — saved onto the person it follows them into the next job, where
+    // it was never their ceiling.
     const fill = beatStatements(3).filter(
       (s) => /\bASK\b/.test(s) && /durable|\bsize\b|\bfact\b/i.test(s),
     );

@@ -74,9 +74,9 @@ unregistered outcome routes to `sil_register`.
 
 **The shopper document is created at the first saved fact.** Its first write is a
 `shopping_doc_write { ref: "shopper", mode: "create", name, body }` over an empty disk,
-which is the ordinary case. **The answers to the first ask are that first fact** — a size,
-an ability, a measured foot the buyer states while answering beat 4 is durable, and beat 3
-FILL writes it before the first search; beat 7 FEEDBACK writes what the reaction adds.
+which is the ordinary case. **The buyer's first ask usually carries it** — a size, an
+ability, a measured foot stated while opening the job is durable, and beat 3 FILL writes it
+before the first search; beat 7 FEEDBACK writes what the reaction adds.
 `name` is the buyer's own — from `sil_whoami` where they are registered, else the name the
 host addresses them by in this session — never a placeholder and never invented. Every later write is `mode: "replace"`
 over the whole reconciled body.
