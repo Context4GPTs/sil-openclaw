@@ -121,6 +121,29 @@ describe("classifyIdentityResponse — status taxonomy (the auth branch)", () =>
     }
   });
 
+  it("200 → `country` passes through when the read carries a string, and is ABSENT otherwise", () => {
+    // The contract's "knows where the buyer is". A country the read does not carry
+    // must not be invented — an agent would localize a search to a guess.
+    const withCountry = classifyIdentityResponse(200, {
+      ...REAL_IDENTITY,
+      country: "GB",
+    });
+    expect(withCountry.kind).toBe("ok");
+    if (withCountry.kind === "ok") expect(withCountry.identity.country).toBe("GB");
+
+    const without = classifyIdentityResponse(200, REAL_IDENTITY);
+    expect(without.kind).toBe("ok");
+    if (without.kind === "ok") {
+      expect(without.identity).not.toHaveProperty("country");
+    }
+
+    // A non-string is dropped rather than coerced: `country: 826` must not reach
+    // the agent as "826" or as `true`.
+    const nonString = classifyIdentityResponse(200, { ...REAL_IDENTITY, country: 826 });
+    expect(nonString.kind).toBe("ok");
+    if (nonString.kind === "ok") expect(nonString.identity).not.toHaveProperty("country");
+  });
+
   it("200 with the identity wrapped in a UCP envelope → ok (unwraps result)", () => {
     const out = classifyIdentityResponse(200, ENVELOPED_IDENTITY);
     expect(out.kind).toBe("ok");

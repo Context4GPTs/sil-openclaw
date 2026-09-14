@@ -144,7 +144,7 @@ you; you just say what you want.
 | Tool | What it does |
 |---|---|
 | `sil_register` | Start a browser sign-in and link your agent to your sil identity. Takes no arguments. |
-| `sil_whoami` | Read your sil identity — name and saved addresses — as the agent sees it. Takes no arguments. |
+| `sil_whoami` | Read your sil identity — name, country and saved addresses — as the agent sees it. Takes no arguments. |
 | `sil_doctor` | Check the install: file modes, credential health, host wiring, and whether a newer plugin is published. Reports; repairs only what is safe. |
 
 **Shopping**

@@ -1,35 +1,3 @@
-/**
- * Identity tools for the sil plugin.
- *
- * `sil_register` is the real browser-based registration tool (the first tool to
- * replace a stub). It follows the klodi register pattern, adapted to sil-web's
- * PKCE contract and to this skeleton's constraints (no NATS, no system-event
- * wake — the declared SDK has neither).
- *
- * `execute()` flow (ALL I/O lives here — `register()` opens nothing):
- *   1. Already-registered short-circuit. If `tokens.json` exists, return
- *      `{ status: "already_registered", user }` — mint nothing, poll nothing,
- *      overwrite nothing. (Presence-based, not freshness-based: refresh is SC7.)
- *   2. Mint PKCE in-process. session_id (UUID), verifier (base64url 32 bytes),
- *      challenge = S256(verifier). The verifier is held ONLY in the poll step
- *      closure below — it never touches disk.
- *   3. Build the auth URL `<apiUrl>/authorize?session=<id>&code_challenge=<chal>`.
- *      The plugin does NOT pre-POST to sil-web: the pending session row is
- *      INSERTed server-side when the USER's browser opens this URL.
- *   4. Start a fire-and-forget bounded poll of the claim endpoint, then return
- *      promptly with `{ status: "awaiting_browser", auth_url, session_id }`.
- *   5. On the poll's terminal success, persist tokens.json + config.json
- *      atomically. Other terminals (expired / already_claimed / invalid_request /
- *      timeout) persist nothing; the agent learns the outcome by re-calling
- *      sil_register (→ already_registered) or sil_whoami. A claim 404 (`not_found`)
- *      is NOT a terminal — it is the normal pre-session early state and keeps the
- *      poll ticking; a session that never appears ends as `timeout` at the deadline.
- *
- * register() must stay synchronous and side-effect-free beyond registering the
- * tool — no fetch, no timer, no unawaited promise here. The poll timer is armed
- * inside execute(), never at register time.
- */
-
 import type { PluginAPI } from "openclaw/plugin-sdk";
 import { Type } from "typebox";
 
@@ -66,16 +34,25 @@ export function registerIdentityTools(api: PluginAPI): void {
   registerWhoami(api);
 }
 
+/**
+ * All of registration's I/O lives in execute(): a fresh call mints PKCE, returns
+ * the link at once, and arms ONE bounded background poll of the claim endpoint,
+ * which persists the token pair on its only success. A claim 404 is the normal
+ * pre-open state and keeps polling; every other terminal persists nothing and is
+ * learnt by calling sil_register again.
+ */
 function registerRegister(api: PluginAPI): void {
   api.registerTool({
     name: "sil_register",
     label: "Register on sil",
     description:
-      "Start browser-based registration on sil. Returns an auth URL for the"
-      + " user to open in a browser. The plugin polls the session in the"
-      + " background until registration completes (then it stores credentials"
-      + " locally), the link expires, or the attempt times out. Call this tool"
-      + " again afterwards to confirm registration completed.",
+      "Hand the buyer a link that opens. `open` is the whole link: show it on its"
+      + " own line so nothing breaks it, and let the buyer open it themselves. The"
+      + " plugin polls in the background and stores the credentials once they"
+      + " finish, so call sil_register again to confirm — it answers"
+      + " already_registered. A buyer who is already registered gets that answer"
+      + " straight away: carry on with what they asked for, nothing is offered and"
+      + " nothing is created.",
     parameters: Type.Object({}),
     async execute() {
       // 1 — already registered: short-circuit, no mint, no poll, no overwrite.
@@ -85,38 +62,35 @@ function registerRegister(api: PluginAPI): void {
         return jsonResult({
           status: "already_registered",
           user: config?.user ?? null,
-          // Folded here but NOT onto `awaiting_browser`: this is a terminal
-          // result, whereas that one is a mid-flow auth hand-off whose whole job
-          // is to get one link in front of the user.
+          // Folded here but NOT onto `awaiting_browser`: that one is a hand-off
+          // whose whole job is to get one link in front of the buyer.
           ...wiringAdvisories(api),
         });
       }
 
-      // A fresh registration attempt clears any prior in-process persist-failure
-      // marker: this process is starting over, so a stale marker from an earlier
-      // failed attempt must not make a later genuine `not_registered` (or this
-      // attempt's own outcome) masquerade as `persistence_failed`. (FIX C.)
+      // A fresh attempt clears any prior in-process persist-failure marker, so a
+      // stale one cannot make a later genuine `not_registered` read as
+      // `persistence_failed`.
       clearPersistFailure();
 
       // 2 — mint PKCE. The verifier stays in this closure (never on disk).
       const sessionId = newSessionId();
       const verifier = newVerifier();
       const challenge = deriveChallenge(verifier);
-      // The sil-WEB origin (auth authority) — this is what the auth URL is built
-      // from. The local was historically misnamed `apiUrl`; it is the web origin.
       const webUrl = getWebUrl();
 
-      // 3 — build the auth URL. Opening it (by the user's browser) is what
-      // creates the pending session server-side; the plugin does not pre-POST.
-      const authUrl =
-        `${stripTrailingSlash(webUrl)}/authorize`
-        + `?session=${sessionId}&code_challenge=${challenge}`;
+      // 3 — the session rides in the PATH: every OpenClaw host masks the value of
+      // a query parameter named `session`, so a `?session=` link reaches the buyer
+      // as `session=***` and sil-web answers invalid_session. Opening this link is
+      // what creates the pending session server-side; the plugin does not pre-POST.
+      const open =
+        `${stripTrailingSlash(webUrl)}/authorize/${sessionId}`
+        + `?code_challenge=${challenge}`;
 
       // 4 — fire-and-forget bounded poll. Not awaited: execute() returns now.
-      // The poll step maps each claim outcome to the loop's done/continue
-      // signal AND performs persistence on success (so the atomic write
-      // completes inside the awaited tick, before onDone fires); the verifier
-      // is captured here and never leaves memory.
+      // The poll step persists on success inside its own awaited tick, so the
+      // files are on disk before the loop settles; the verifier is captured here
+      // and never leaves memory.
       startPoll({
         intervalMs: POLL_INTERVAL_MS,
         deadlineMs: POLL_DEADLINE_MS,
@@ -128,30 +102,18 @@ function registerRegister(api: PluginAPI): void {
 
       return jsonResult({
         status: "awaiting_browser",
-        // The steer lead line routes the user into their OWN default browser
-        // BEFORE the Auth0 leg (where Auth0's session cookie works on its own
-        // domain), instead of an in-app/embedded webview that partitions it and
-        // dead-ends the login. It is a SEPARATE line ABOVE the link, so the link
-        // line stays exactly `<authUrl>` — ONE atomic, angle-bracket-wrapped
-        // target that a greedy chat auto-linker captures WHOLE (`&code_challenge`
-        // included) instead of truncating at the `&` and 400-ing
-        // `invalid_code_challenge`. `auth_url` below stays the canonical,
-        // UNWRAPPED machine field agents parse. (FIX A + system-browser steer.)
-        message:
-          BROWSER_STEER_HUMAN
-          + "\n"
-          + presentAuthLink(authUrl),
-        auth_url: authUrl,
-        session_id: sessionId,
-        // The agent-facing steer MUST agree with the human `message` (both built
-        // from the shared BROWSER_STEER_NEGATIVE clause) so an agent relaying the
-        // instruction can't paraphrase it back to a generic "a browser" and
-        // re-open the cookie-blocking-webview gap.
+        open,
+        // The steer is a SEPARATE line above the link, so the link line stays
+        // exactly `<open>` — one atomic target a greedy chat auto-linker captures
+        // whole rather than truncating mid-URL.
+        message: BROWSER_STEER_HUMAN + "\n" + presentAuthLink(open),
+        // Built from the same negative clause as `message`, so an agent relaying
+        // it cannot paraphrase back to a generic "a browser".
         instructions:
-          "Share the auth URL with the user and tell them to "
+          "Share the link with the buyer and tell them to "
           + BROWSER_STEER_AGENT
-          + " The plugin is polling in the background — once the user finishes"
-          + " signing in, call sil_register again to confirm (it will report"
+          + " The plugin is polling in the background — once they finish signing"
+          + " in, call sil_register again to confirm (it will report"
           + " already_registered).",
       });
     },
@@ -159,64 +121,35 @@ function registerRegister(api: PluginAPI): void {
 }
 
 /**
- * `sil_whoami` — read the registered user's live identity (name + addresses)
- * from sil-api with the stored Bearer token, refreshing transparently on an
- * expired session token.
- *
- * execute() flow (ALL I/O here; register() opens nothing, arms no timer —
- * whoami is a synchronous request/response, NOT a poll):
- *   1. Read tokens.json. Absent → terminal `not_registered` (run sil_register),
- *      ZERO network calls (nothing to authenticate with).
- *   2. fetchIdentity(sil-api, access_token), then route the outcome through the
- *      SHARED `refreshAndRetryOnce` choreography — the SAME path every
- *      `shopping_*` call uses, so 401 recovery is uniform across every
- *      sil-api-calling tool (factored so the three cannot drift apart; FLAG-10).
- *      The helper owns the bounded refresh-and-retry-once: on a 401 it refreshes
- *      ONCE via sil-web (rotates tokens.json), re-reads the rotated pair, and
- *      retries the read ONCE; a non-401 first outcome passes straight through.
- *   3. Map the helper's discriminant to the agent-facing result:
- *        result            → ok / forbidden / retryable mapped as usual (the first
- *                            non-401, OR the retry's non-401 outcome);
- *        must_reregister    → terminal (clear tokens on invalid_grant);
- *        second_unauthorized→ terminal + clear tokens (a freshly-rotated token still
- *                            rejected is structurally dead — NEVER a second refresh);
- *        retryable          → terminal transient ("try again").
- *      At most one refresh + one retry per call (structural in the helper).
- *
- * Privacy: the access/refresh tokens and the Bearer header never reach a log
- * line or the result; identity PII (name, addresses) is in the result (the
- * point) but never logged. Logs carry only non-credential status markers.
+ * A live read, never a poll. The 401 recovery is the SHARED `refreshAndRetryOnce`
+ * every `shopping_*` call uses, so the tools cannot drift apart: at most one
+ * refresh and one retry per call, and a freshly-rotated token still rejected is
+ * structurally dead — clear the pair, never refresh twice. Identity PII rides the
+ * result and is never logged; tokens reach neither.
  */
 function registerWhoami(api: PluginAPI): void {
   api.registerTool({
     name: "sil_whoami",
     label: "Who am I on sil",
     description:
-      "Return the registered user's identity (name and addresses) from sil,"
-      + " using the credentials stored by sil_register. If the stored session token"
-      + " has expired it is refreshed transparently and the read is retried. If you"
-      + " are not registered, or the session has fully expired, the result names"
-      + " the recovery action (run sil_register).",
+      "The buyer's name, country and the addresses on file, read live from sil"
+      + " with the credentials sil_register stored — a stale session token is"
+      + " refreshed once and the read retried. Use it to know where the buyer is:"
+      + " never ask them for what this answers. If they are not registered, or the"
+      + " session is past refreshing, the result names the recovery (sil_register).",
     parameters: Type.Object({}),
     async execute() {
-      // 1 — not registered: terminal, zero network calls. If THIS process saw a
-      // token-persist failure (auth succeeded but the write failed), surface the
-      // distinct `persistence_failed` state instead — the no-tokens.json state on
-      // disk is identical for both, so the in-process marker is the only signal
-      // that tells them apart (FIX C; cold-restart correctly degrades to
-      // not_registered — see the persistence_failed/notRegistered helpers).
+      // 1 — no tokens on disk is the SAME state for a never-registered buyer and
+      // for one whose token write failed in this process, so the in-process marker
+      // is the only thing that tells the two apart.
       const stored = readTokens();
       if (stored === null) {
         const failure = getPersistFailure();
         return failure !== null ? persistenceFailed(failure) : notRegistered();
       }
 
-      // B (origin visibility): resolve the sil-WEB origin (the origin the
-      // registration link is built from) + its source, surface it on the success
-      // payload so a wrong/staging origin is diagnosable BEFORE anything 404s,
-      // and emit a single warn when the source is non-default. Warn-only — a
-      // staging/self-host origin is legitimate, so it is NEVER rejected. Scope is
-      // the WEB origin only; the sil-api read origin is out of scope. (FIX B.)
+      // A staging/self-host web origin is legitimate, so it is surfaced and warned
+      // about, never rejected — a wrong one is then diagnosable before anything 404s.
       const webOrigin = getWebUrl();
       const webOriginSource = getWebUrlSource();
       if (webOriginSource !== "default") {
@@ -230,10 +163,8 @@ function registerWhoami(api: PluginAPI): void {
         web_origin_source: webOriginSource,
       };
 
-      // 2 — read identity; on a 401 refresh-and-retry ONCE via the shared
-      // choreography (the SAME `refreshAndRetryOnce` path every `shopping_*`
-      // call uses — 401 recovery is uniform across every
-      // sil-api-calling tool, factored so the three cannot drift apart).
+      // 2 — read identity; on a 401 refresh-and-retry ONCE, shared with every
+      // `shopping_*` call so the recovery cannot drift between tools.
       const first = await fetchIdentity(getApiUrl(), stored.access_token);
       const recovered = await refreshAndRetryOnce(
         first,
@@ -242,17 +173,13 @@ function registerWhoami(api: PluginAPI): void {
       );
       switch (recovered.kind) {
         case "result":
-          // The first non-401 outcome, OR the retry's non-401 outcome (ok /
-          // forbidden / retryable) — mapped to its terminal/transient/success result.
-          // On a silent recovery (`refreshed`: a 401 was healed by the refresh+retry)
-          // emit the operator marker so a thrashing session is visible in logs —
-          // logs-only, no token material, NOT a payload field (the agent never sees it).
+          // Logs-only, never a payload field: a session thrashing through silent
+          // 401 recoveries is invisible otherwise.
           if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
           return identityOutcomeToResult(api, recovered.outcome, originBlock);
         case "must_reregister":
-          // The refresh token is dead (invalid_grant) → clear the now-known-dead
-          // pair so the user's sil_register recovery is not blocked by stale
-          // presence; a TOCTOU empty re-read (no_stored_tokens) has nothing to clear.
+          // Clear the known-dead pair so its stale presence cannot block the
+          // sil_register recovery; an empty re-read has nothing to clear.
           if (recovered.reason === "invalid_grant") clearTokens();
           api.logger.info("sil_whoami_must_reregister", { cause: recovered.reason });
           return mustReregister();
@@ -270,18 +197,14 @@ function registerWhoami(api: PluginAPI): void {
   });
 }
 
-/** The web-origin visibility block attached to the success payload (FIX B):
- * the resolved sil-web origin + its source, so a wrong/staging origin is
- * diagnosable. Strings only — never any token material. */
+/** The resolved sil-web origin and where it came from. Strings only. */
 interface OriginBlock {
   web_origin: string;
   web_origin_source: string;
 }
 
-/** Map a non-401 identity outcome to the agent-facing result. (401 is handled
- * inline by the refresh path; it never reaches here.) The origin block rides the
- * SUCCESS payload (the point is pre-failure diagnosis); the terminal/transient
- * envelopes don't carry it. */
+/** Map a non-401 identity outcome to the agent-facing result. The origin block
+ * rides the SUCCESS payload only — pre-failure diagnosis is its whole point. */
 function identityOutcomeToResult(
   api: PluginAPI,
   outcome: IdentityOutcome,
@@ -291,15 +214,9 @@ function identityOutcomeToResult(
     case "ok":
       return identityResult(api, outcome.identity, originBlock);
     case "forbidden":
-      // Decision B — the dead-token clear is UNIFORM across all three sil-api tools.
-      // `sil_whoami` is the tool that is legible TODAY; an agent that diagnoses the
-      // 403 via whoami, follows `recovery:"sil_register"`, and hits
-      // `already_registered` is stranded identically to the catalog path. So clear on
-      // `user_not_provisioned` HERE too (the held token maps to no account on this
-      // backend; a refresh cannot help — structurally dead, like the invalid_grant
-      // clear above). Gated on EXACT equality: `principal_mismatch` / unknown reasons
-      // can be transient and must stay recoverable, so they keep the legible forbidden
-      // envelope WITHOUT a destructive clear (AC9 clears, AC10 does not).
+      // A token that maps to no account is structurally dead, so clear it or the
+      // sil_register recovery answers `already_registered` and strands the buyer.
+      // EXACT equality: `principal_mismatch` can be transient and must survive.
       api.logger.warn("sil_whoami_forbidden", { reason: outcome.reason });
       if (outcome.reason === "user_not_provisioned") clearTokens();
       return forbidden(outcome.reason);
@@ -313,9 +230,8 @@ function identityOutcomeToResult(
   }
 }
 
-/** Success: the identity payload + the web-origin visibility block (FIX B) —
- * no token, no Bearer header. The origin block (strings only) lets the agent
- * relay the resolved origin + its source so a wrong origin is diagnosable. */
+/** Success: `identity` carries the buyer's name, country (when the read has one)
+ * and addresses — no token, no Bearer header. */
 function identityResult(
   api: PluginAPI,
   identity: Identity,
@@ -342,12 +258,9 @@ function notRegistered() {
 }
 
 /**
- * Registered-but-persistence-failed (FIX C): auth succeeded in THIS process but
- * the token write failed, so nothing reached disk. DISTINCT from `not_registered`
- * because the recovery differs — the user must FIX THE DATA DIR (the path + cause
- * name what to fix), THEN re-register; a bare "run sil_register" would just fail
- * to persist again, looping. `error` carries the "<path>: <cause>" from the
- * in-process marker. No identity fields (the tokens never landed).
+ * Auth succeeded but the token write failed. Distinct from `not_registered`
+ * because the recovery differs: a bare "run sil_register" fails to persist again
+ * and loops, so `error` names the path and cause to fix first.
  */
 function persistenceFailed(error: string) {
   return jsonResult({
@@ -394,9 +307,7 @@ function transient() {
 }
 
 /** The terminal step shape carried through the poller to `onDone`. `persist_failed`
- * is FIX C's new terminal: auth succeeded but the token write failed — distinct
- * from the wire terminals (it is not a `ClaimOutcome["kind"]`) and from a
- * `timeout`. `error` carries the "<path>: <cause>" for the loud log + whoami. */
+ * is not a `ClaimOutcome["kind"]`: the claim succeeded and the write did not. */
 interface ClaimStep extends Record<string, unknown> {
   done: boolean;
   outcome?: ClaimOutcome["kind"] | "persist_failed";
@@ -405,17 +316,10 @@ interface ClaimStep extends Record<string, unknown> {
 }
 
 /**
- * In-process persist-failure marker (FIX C). A failed token write leaves NO
- * `tokens.json` on disk — exactly the state a never-registered user has — so the
- * two are indistinguishable from disk alone. This module-level marker is the only
- * signal that tells `sil_whoami` "auth succeeded in THIS process but persistence
- * failed" apart from a bare `not_registered`. It is intentionally in-process only:
- * the failure mode IS an unwritable data dir, so an on-disk sentinel would fail to
- * write for the same reason — and after a cold restart `not_registered` is the
- * TRUE state (no creds exist), with a re-run of `sil_register` re-surfacing the
- * write failure loudly. Set by `claimStep` on the persist_failed terminal; reset
- * on a fresh `sil_register` start so a stale marker can't mislabel a later genuine
- * not_registered (and resettable in tests via that same fresh-start path).
+ * The only thing that tells a failed token write apart from a never-registered
+ * buyer — both leave no `tokens.json`. In-process on purpose: the failure mode IS
+ * an unwritable data dir, so an on-disk sentinel would fail to write too, and
+ * after a restart `not_registered` is the true state.
  */
 let _persistFailure: string | null = null;
 
@@ -433,15 +337,10 @@ function clearPersistFailure(): void {
 
 /**
  * One poll step: claim, then map the outcome to the loop's done/continue signal.
- * `pending`/`retryable`/`not_found` keep the loop alive (`done:false`). The 404
- * `not_found` is the NORMAL pre-session early state (the session row is INSERTed
- * server-side only when the user opens the auth URL), so it keeps polling exactly
- * like `pending`, bounded by the 30-min deadline — a session that never appears
- * settles as `timeout`, never as `not_found`. A successful claim is persisted
- * HERE — tokens.json + config.json written atomically inside this awaited tick —
- * so the files are on disk before the loop settles; the step then carries only
- * the user_id forward (the tokens never travel past this closure). The terminals
- * (expired / already_claimed / invalid_request) persist nothing.
+ * A 404 `not_found` is the normal state BEFORE the buyer opens the link (the
+ * session row is inserted server-side then), so it keeps polling like `pending`
+ * and a session that never appears settles as `timeout`. The success is persisted
+ * HERE, inside the awaited tick, so the files land before the loop settles.
  */
 async function claimStep(
   apiUrl: string,
@@ -455,14 +354,10 @@ async function claimStep(
     case "not_found":
       return { done: false };
     case "success":
-      // Persist the bearer pair + identity. FIX C: wrap ONLY the persist calls
-      // (never the whole step — a too-wide catch could mislabel a genuine claim
-      // success). A write failure (unwritable / missing-and-uncreatable / full
-      // $SIL_DATA_DIR) is TERMINAL, not transient: re-polling the claim cannot
-      // make the data dir writable, and the claim is single-use server-side. So
-      // return a descriptive `persist_failed` terminal (path + cause) and set the
-      // in-process marker — instead of letting the throw reach the poller's catch,
-      // which would swallow it as a retry and end the run as a misleading timeout.
+      // ONLY the persist calls are wrapped — a wider catch could mislabel a
+      // genuine claim success. A write failure is TERMINAL: re-polling cannot make
+      // the data dir writable and the claim is single-use, so a throw reaching the
+      // poller's catch would end the run as a misleading timeout.
       try {
         await writeTokens({
           access_token: outcome.access_token,
@@ -502,11 +397,8 @@ function handleDone(
     return;
   }
 
-  // FIX C: a token-persist failure is logged LOUDLY at error — the most severe
-  // terminal, distinct from the routine info/warn terminals — carrying the path +
-  // cause (in `step.error`) so an operator sees persistence failed, NOT that the
-  // user abandoned the flow. The tokens never reached disk, so there is no token
-  // material to leak; only the session id + the path/cause error are logged.
+  // At error, alone among the terminals: an operator must see a persist failure
+  // rather than read it as a buyer who abandoned the flow.
   if (step.outcome === "persist_failed") {
     api.logger.error("sil_register_persist_failed", {
       session_id: sessionId,
@@ -520,11 +412,8 @@ function handleDone(
     return;
   }
 
-  // expired / already_claimed / invalid_request — log the terminal so the outcome
-  // is never silent; the agent learns it on its next sil_register / sil_whoami.
-  // `invalid_request` logs at WARN: a malformed claim request is unreachable from
-  // this client today, so it signals a contract-drift bug, not a user outcome —
-  // make it loud (the genuine `expired`/`already_claimed` are routine, at info).
+  // `invalid_request` is WARN: this client cannot produce a malformed claim, so it
+  // signals contract drift rather than a buyer outcome. The rest are routine.
   const outcome = typeof step.outcome === "string" ? step.outcome : "unknown";
   const marker = `sil_register_${outcome}`;
   if (outcome === "invalid_request") {
@@ -538,14 +427,8 @@ function stripTrailingSlash(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
-/**
- * Render an errno-style cause from a caught (unknown) persist error, for the
- * loud log + whoami `persistence_failed` state (FIX C). A Node fs error carries
- * a `.code` (EACCES/ENOSPC/ENOTDIR/ENOENT…) and a `.message` that already names
- * the code and the human cause ("not a directory") — surface the code first
- * (prominent for an operator) then the full message. Carries NO token material:
- * an fs error names paths/errnos only, and the tokens never reached this point.
- */
+/** The errno first, then the message: an operator scanning a log line reads
+ * EACCES/ENOSPC before the prose. An fs error names paths only, never a token. */
 function describeCause(err: unknown): string {
   if (err instanceof Error) {
     const code = (err as NodeJS.ErrnoException).code;
@@ -554,41 +437,18 @@ function describeCause(err: unknown): string {
   return String(err);
 }
 
-/**
- * Present an auth URL as a single atomic link target for a human-rendered chat
- * surface: angle-bracket wrapped (`<…>`). The angle brackets are the RFC-3986 /
- * Markdown convention that bounds a URL so a greedy auto-linker captures the
- * WHOLE span — including the `&code_challenge=…` query param — instead of
- * terminating the link at the first `&` (the reported production break that
- * dropped `code_challenge` and 400-ed `invalid_code_challenge`). The caller puts
- * the returned token on its OWN line so no surrounding prose can be folded into
- * the link. Pure (no I/O) — the [unit] seam for the atomic-link contract. The
- * structured `auth_url` field is the UNWRAPPED canonical URL; this is the
- * human-presentation form only, and it carries the same params byte-for-byte (it
- * never re-encodes, never adds the verifier).
- */
-function presentAuthLink(authUrl: string): string {
-  return `<${authUrl}>`;
+/** Angle brackets are the RFC-3986 convention that bounds a URL, so a greedy chat
+ * auto-linker captures the WHOLE span instead of stopping at a separator. The
+ * caller puts it on its own line so no prose can be folded into the link. */
+function presentAuthLink(open: string): string {
+  return `<${open}>`;
 }
 
 /**
- * System-browser steer copy (the proactive webview → default-browser hand-off).
- *
- * Auth0's hosted login sets its session cookie on its OWN domain; an app's
- * embedded/in-app webview routinely partitions or blocks that cookie, so opening
- * the auth URL there dead-ends the login. The plugin CANNOT detect the surface —
- * the host `api` exposes no client/UA/surface signal (see openclaw.d.ts) and a
- * tool's execute receives no request context — so the steer ships UNCONDITIONALLY
- * at presentation time, BEFORE the Auth0 leg (not as a post-failure recovery; that
- * reactive path is sil-services #50). Phrased as a neutral setup step, not a
- * warning — onboarding first-impression is the metric.
- *
- * One shared NEGATIVE clause feeds both the human `message` and the agent
- * `instructions` so the two copies cannot drift — an agent paraphrasing must
- * carry the same "not the in-app browser" half, never collapse it back to a
- * generic "a browser". Plain "default browser (Safari/Chrome)" is used over the
- * term "system browser": it names the concrete action a non-technical user can
- * follow on their own device.
+ * Auth0 sets its session cookie on its own domain and an embedded webview
+ * partitions it, so the link dead-ends there. The host exposes no surface signal
+ * to detect that, so the steer ships unconditionally — and ONE negative clause
+ * feeds both copies, so an agent relaying it cannot drop the half that matters.
  */
 const BROWSER_STEER_NEGATIVE =
   "your device's default browser (Safari, Chrome, …), not this app's"

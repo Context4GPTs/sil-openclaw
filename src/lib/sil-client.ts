@@ -36,7 +36,7 @@
  * request body:
  *
  *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
- *     200 { name, addresses }                             → ok (carries identity)
+ *     200 { name, country?, addresses }                   → ok (carries identity)
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     5xx / network / abort                               → retryable
@@ -58,15 +58,10 @@
  * unit-tested in isolation, since misclassifying two 200s is the highest-risk
  * subtle bug in the whole flow.
  *
- * The VERB is load-bearing: sil-api's `POST /identity` is the agent enrich-STUB
- * ({kind, verified, subject, ...} — no name/addresses); `GET /identity` is the
- * real self-read returning {id, name, addresses} (sil-api `handlers/identity.ts`,
- * PR #7). The identity lives in the envelope's `result` (the tool unwraps it so
- * the agent sees identity, not transport metadata). `classifyIdentityResponse`
- * still narrows DEFENSIVELY — a 200 whose result has no usable identity (no
- * `name`) falls to `retryable`, NEVER to a false `ok`, so a stray stub 200 (or a
- * malformed body) can't be green while the product promise is unmet. An EMPTY
- * `addresses: []` IS a valid identity (a provisioned, address-less user).
+ * The VERB is load-bearing: only `GET /identity` is the self-read — `POST` is the
+ * agent enrich route and carries no name. The identity rides in the envelope's
+ * `result`, and a 200 with no usable identity (no `name`) falls to `retryable`,
+ * never to a false `ok`. An EMPTY `addresses: []` IS a valid identity.
  *
  * Tokens never appear in a log line here (mirrors sil-web's invariant) — they
  * only travel inside the returned union variant.
@@ -126,11 +121,11 @@ export interface IdentityAddress extends Record<string, unknown> {
 }
 
 /** The authenticated user's identity, unwrapped from the sil-api envelope's
- * `result`. The `name` is the authoritative human name; `addresses` is the
- * user's address list (possibly empty). This is the REAL contract whoami
- * surfaces — NOT the current /identity stub's {kind, verified, subject, ...}. */
+ * `result`. `country` is the upper-case ISO-2 the read carries and is ABSENT
+ * when nothing on file says it — never inferred from an address. */
 export interface Identity {
   name: string;
+  country?: string;
   addresses: IdentityAddress[];
 }
 
@@ -330,20 +325,12 @@ export async function refreshSession(
 }
 
 /**
- * Read the authenticated user's identity from sil-api (the SECOND origin — the
- * Fastify domain service, NOT sil-web). This is a bodyless `GET <silApiUrl>/identity`:
- * sil-api's authenticated self-read derives the principal from the JWT `sub`
- * (the `Authorization: Bearer <token>` header), loads that user's addresses,
- * and returns `{ id, name, addresses }` (sil-api `handlers/identity.ts` GET route —
- * declares only a response schema, takes no request body). The verb is the whole
- * point: POST hits the agent
- * enrich-STUB (no name/addresses), GET hits the real self-read. No `agent_id`
- * or `on_behalf_of` is sent — the GET self-read has no body, so the principal
- * is unambiguously the token subject and the `principal_mismatch` 403 path is
- * eliminated entirely. A network error / timeout → `retryable`.
+ * Read the authenticated user's identity from sil-api (the SECOND origin, not
+ * sil-web): a BODYLESS `GET /identity` answering `{ id, name, country?, addresses }`.
+ * Bodyless is the point — the principal is the token subject and nothing else, so
+ * no `agent_id` is sendable and the `principal_mismatch` 403 cannot arise.
  *
- * The Bearer header is built HERE and never logged; the token travels only in
- * the outbound request, never into the returned union.
+ * The Bearer header is built HERE and never logged.
  */
 export async function fetchIdentity(
   silApiUrl: string,
@@ -580,22 +567,12 @@ export async function refreshAndRetryOnce<O>(
 }
 
 /**
- * Unwrap + narrow a sil-api identity response body to a typed `Identity`, or
- * null if it carries no usable identity. Defends against the latent wire shape:
- * the identity may be wrapped in a `result` field OR (if the follow-on returns it
- * bare) at the top level, so we try `result` first and fall back to the body
- * itself.
+ * Unwrap + narrow a sil-api identity body to a typed `Identity`, or null when it
+ * carries none. The body may wrap the identity in `result` or return it bare.
  *
- * A usable identity REQUIRES a non-empty `name` string (the authoritative human
- * name) and that `addresses` is an ARRAY — but the array may be EMPTY. sil-api
- * returns `addresses: []` for a provisioned user who has onboarded a name but
- * not yet added an address (`handlers/identity.ts` → `buildIdentityReadResult`);
- * that is a real, authenticated identity, NOT a not-yet-ready read. Rejecting it
- * would strand such a user on a false `retryable` they could never escape by
- * retrying. The `name` gate is the load-bearing anti-false-green guard: the
- * current /identity STUB shape ({kind, verified, subject, ...}) has NO name, so
- * it still returns null → `retryable`, never a false `ok`. Extra fields on each
- * address are preserved (addresses pass through opaque — see `IdentityAddress`).
+ * An EMPTY `addresses` is a real identity (a provisioned user who has not added
+ * an address yet) — rejecting it would strand them on a `retryable` no retry can
+ * clear. The non-empty `name` gate is what keeps a nameless body off `ok`.
  */
 function extractIdentity(body: unknown): Identity | null {
   const envelope = asRecord(body);
@@ -613,7 +590,10 @@ function extractIdentity(body: unknown): Identity | null {
     (a): a is IdentityAddress => asRecord(a) !== null,
   );
 
-  return { name, addresses };
+  // `country` is optional on the read and is passed through only as a string —
+  // an absent or non-string one is dropped, never coerced or inferred.
+  const country = source["country"];
+  return typeof country === "string" ? { name, country, addresses } : { name, addresses };
 }
 
 /** Pull the actionable reason out of a 403 body (`user_not_provisioned` /

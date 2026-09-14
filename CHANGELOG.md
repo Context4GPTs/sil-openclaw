@@ -71,6 +71,13 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
+- **BREAKING — `sil_register` answers `open`, and the session travels in the PATH.**
+  `<sil-web>/authorize/<session>?code_challenge=…`: every OpenClaw host masks the value of
+  a query parameter named `session`, so the buyer opened `session=***` and sil-web said
+  `invalid_session`. `auth_url` and `session_id` are off the wire (contract §5) — the
+  plugin still mints the session id and claims with it.
+- **`sil_whoami` carries the buyer's `country` inside `identity`**, beside `name`, when the
+  read has one — absent when nothing on file says it, never inferred from an address.
 - **BREAKING — the catalog answer is the agent contract's, and the pre-contract one is
   deleted.** `shopping_search` takes `domain` · `query` · `n` · `specs` · `ship_to` and
   answers with `products[]`, each carrying `fit` (only what sil verified — a key absent

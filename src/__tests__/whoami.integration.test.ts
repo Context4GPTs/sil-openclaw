@@ -77,6 +77,7 @@ const SIL_API = "https://sil-api.test.example.com"; // identity-read origin
 
 const REAL_IDENTITY = {
   name: "Ada Lovelace",
+  country: "GB",
   addresses: [
     { line1: "12 Analytical Engine Way", city: "London", country: "GB" },
   ],
@@ -286,14 +287,17 @@ describe("sil_whoami — happy path (valid access token)", () => {
     expect(blob).not.toContain("\"verified\"");
     expect(blob).not.toContain("\"note\"");
 
-    // The founder's reported bug, closed at the TOOL level: the full result
-    // envelope is `{ status: "ok", identity: { name, addresses } }` — NOT the
-    // `retryable` the bug produced. Assert the structured shape, not just markers.
+    // The whole envelope, structurally: `{ status: "ok", identity: { name,
+    // country, addresses } }` — the shape an agent reads to know where the buyer is.
     expect(payload["status"]).toBe("ok");
-    expect(payload["status"]).not.toBe("retryable");
-    const identity = payload["identity"] as { name?: unknown; addresses?: unknown };
+    const identity = payload["identity"] as {
+      name?: unknown;
+      country?: unknown;
+      addresses?: unknown;
+    };
     expect(identity).toBeDefined();
     expect(identity.name).toBe("Ada Lovelace");
+    expect(identity.country).toBe("GB");
     expect(Array.isArray(identity.addresses)).toBe(true);
     expect((identity.addresses as unknown[]).length).toBe(1);
   });

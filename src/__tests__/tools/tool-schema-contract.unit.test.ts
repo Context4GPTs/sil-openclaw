@@ -59,42 +59,37 @@ import {
   RETIRED_V0_TOKENS,
 } from "../helpers/honesty-vocabulary.js";
 
-/**
- * The agent-facing tool contract for the identity surface, captured from
- * the live 0.34.14 emission (transcribed verbatim from the card's Risks
- * section). The migration must keep each tool's `parameters` JSON-schema
- * deep-equal to the value here. `name` / `label` / `description` are plain
- * string literals (TypeBox-independent) and must not be incidentally
- * edited during the import swap.
- *
- * Both identity tools publish the same `Type.Object({})` empty schema — the
- * shape most likely to silently grow a spurious `required` under a key
- * reorder, which is exactly what the deep-equal below pins.
- */
+/** Both account tools publish this — the shape most likely to silently grow a
+ * spurious `required` under a dependency key reorder, which the deep-equal pins. */
 const EMPTY_OBJECT_SCHEMA = { type: "object", properties: {} } as const;
 
-/** Every identity tool the plugin registers, with the agent-visible
- * contract each must honour after the migration. The set is itself part of
- * the contract: exactly these two, no additions / removals / renames. */
+/**
+ * Every account tool the plugin registers, with the agent-visible contract each
+ * must honour — the description VERBATIM, because it is almost the whole of what
+ * an agent learns the tool from, so an incidental edit has to be deliberate. The
+ * set is part of the contract: exactly these two, no additions or renames.
+ */
 const TOOL_CONTRACT = {
   sil_register: {
     label: "Register on sil",
     description:
-      "Start browser-based registration on sil. Returns an auth URL for the"
-      + " user to open in a browser. The plugin polls the session in the"
-      + " background until registration completes (then it stores credentials"
-      + " locally), the link expires, or the attempt times out. Call this tool"
-      + " again afterwards to confirm registration completed.",
+      "Hand the buyer a link that opens. `open` is the whole link: show it on its"
+      + " own line so nothing breaks it, and let the buyer open it themselves. The"
+      + " plugin polls in the background and stores the credentials once they"
+      + " finish, so call sil_register again to confirm — it answers"
+      + " already_registered. A buyer who is already registered gets that answer"
+      + " straight away: carry on with what they asked for, nothing is offered and"
+      + " nothing is created.",
     parameters: EMPTY_OBJECT_SCHEMA,
   },
   sil_whoami: {
     label: "Who am I on sil",
     description:
-      "Return the registered user's identity (name and addresses) from sil,"
-      + " using the credentials stored by sil_register. If the stored session token"
-      + " has expired it is refreshed transparently and the read is retried. If you"
-      + " are not registered, or the session has fully expired, the result names"
-      + " the recovery action (run sil_register).",
+      "The buyer's name, country and the addresses on file, read live from sil"
+      + " with the credentials sil_register stored — a stale session token is"
+      + " refreshed once and the read retried. Use it to know where the buyer is:"
+      + " never ask them for what this answers. If they are not registered, or the"
+      + " session is past refreshing, the result names the recovery (sil_register).",
     parameters: EMPTY_OBJECT_SCHEMA,
   },
 } as const;
@@ -116,7 +111,7 @@ describe("identity tool-set invariant — exactly the two contracted tools", () 
   });
 });
 
-describe("tool string fields are invariant across the migration (TypeBox-independent literals)", () => {
+describe("the account tools' agent-facing strings are pinned verbatim", () => {
   let api: MockPluginAPI;
 
   beforeEach(() => {
@@ -124,7 +119,7 @@ describe("tool string fields are invariant across the migration (TypeBox-indepen
   });
 
   for (const [name, contract] of Object.entries(TOOL_CONTRACT)) {
-    it(`${name}: name, label, and description equal their pre-migration values verbatim`, () => {
+    it(`${name}: name, label, and description equal the contracted text verbatim`, () => {
       const tool = getTool(api, name);
       expect(tool.name).toBe(name);
       expect(tool.label).toBe(contract.label);

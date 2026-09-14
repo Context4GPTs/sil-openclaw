@@ -1,30 +1,17 @@
 /**
- * UNIT — sil_register tool (tier: unit, mock api + temp data dir, fetch
- * mocked so nothing reaches the network).
+ * UNIT — sil_register's agent-facing reply (mock api, temp data dir, fetch
+ * stubbed so the armed background poll never reaches the network).
  *
- * Covers the unit-tier acceptance criteria for `sil_register`
- * (SC1·F1 PKCE+auth-URL, the pluginConfig→env→default host override, the
- * prompt non-blocking return, the already-registered short-circuit, and
- * the verifier-never-on-disk invariant after a full run). The poll→claim
- * lifecycle across status codes is the integration tier's job
- * (`register-claim.integration.test.ts`); here we assert the tool's
- * SYNCHRONOUS-from-the-agent's-view contract and the in-process PKCE/URL
- * math, with `fetch` stubbed to a never-resolving/pending answer so the
- * background poll can't escape the test.
+ * The contract (agent-contract §3.10, §5): a fresh run answers exactly
+ * `{ status: "awaiting_browser", open, message, instructions }`, where `open`
+ * carries the session in its PATH — `/authorize/<uuid>?code_challenge=…` — because
+ * every OpenClaw host masks the value of a query parameter named `session`, and a
+ * masked link reaches sil-web as `invalid_session`. `auth_url`, `session_id` and
+ * `next_step` are off the wire.
  *
- * Hermetic via the `SIL_DATA_DIR` override (own temp dir per test) and the
- * config-reset machinery mirrored from `index.test.ts` (reset the module
- * singleton + env so each test starts at the default host). Fake timers
- * are used wherever a fresh registration arms the background poll, so no
- * live timer leaks across tests.
- *
- * Contract this file pins for the implementation (expert-developer):
- *   - src/tools/identity.ts exports registerIdentityTools(api) which
- *     registers a `sil_register` tool (Type.Object({}) — no inputs);
- *   - execute() returns a jsonResult whose payload carries `status`
- *     ("already_registered" | "awaiting_browser"), and for a fresh run
- *     `auth_url` + `session_id`;
- *   - the auth_url is `<resolvedHost>/authorize?session=<uuid>&code_challenge=<43-char S256>`.
+ * The poll→claim lifecycle is the integration tier's
+ * (`register-claim.integration.test.ts`); here it is the reply shape, the PKCE/URL
+ * math, and the host-override resolution.
  */
 
 import {
@@ -49,9 +36,17 @@ import {
 } from "../helpers/mock-plugin-api.js";
 
 const TOOL = "sil_register";
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The whole path of `open`: the session id is the ONLY segment under /authorize. */
+const OPEN_PATH_RE =
+  /^\/authorize\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 const CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
+
+/** The session id, read back the only way the wire now offers it. */
+function sessionOf(open: unknown): string {
+  const match = OPEN_PATH_RE.exec(new URL(open as string).pathname);
+  if (match === null) throw new Error(`open has no session path segment: ${String(open)}`);
+  return match[1]!;
+}
 
 let dataDir: string;
 let priorSilDataDir: string | undefined;
@@ -118,7 +113,7 @@ describe("sil_register — tool registration shape", () => {
   });
 });
 
-describe("sil_register — fresh registration: PKCE + auth URL (SC1/F1)", () => {
+describe("sil_register — fresh registration: the link the buyer opens", () => {
   let api: MockPluginAPI;
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
@@ -138,50 +133,48 @@ describe("sil_register — fresh registration: PKCE + auth URL (SC1/F1)", () => 
     vi.useRealTimers();
   });
 
-  it("returns a non-terminal awaiting_browser status with a session_id", async () => {
+  it("`open` carries the session in the PATH and `code_challenge` as its ONLY query parameter", async () => {
+    // A host masks the value of a parameter named `session`, so a `?session=` link
+    // reaches the buyer as `session=***`. The path segment survives every masker.
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    expect(payload["status"]).toBe("awaiting_browser");
-    expect(payload["session_id"]).toMatch(UUID_RE);
+    const open = payload["open"];
+    expect(typeof open).toBe("string");
+
+    const url = new URL(open as string);
+    expect(url.pathname).toMatch(OPEN_PATH_RE);
+    expect([...url.searchParams.keys()]).toEqual(["code_challenge"]);
+    expect(url.searchParams.get("code_challenge")).toMatch(CHALLENGE_RE);
+    expect(url.searchParams.has("session")).toBe(false);
   });
 
-  it("returns an auth_url of the exact form <host>/authorize?session=<id>&code_challenge=<challenge>", async () => {
+  it("the reply is EXACTLY { status, open, message, instructions } — no auth_url, session_id or next_step", async () => {
+    // By exact key set, not by forbidding three literals: a rename to `authUrl` or
+    // `sessionId` would walk straight past a needle scan and back onto the wire.
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    const authUrl = payload["auth_url"] as string;
-    expect(typeof authUrl).toBe("string");
-
-    const url = new URL(authUrl);
-    expect(url.pathname).toBe("/authorize");
-    // session param is the minted UUID and equals the returned session_id.
-    expect(url.searchParams.get("session")).toBe(payload["session_id"]);
-    expect(url.searchParams.get("session")).toMatch(UUID_RE);
-    // code_challenge is the 43-char S256 digest, present and well-formed.
-    const challenge = url.searchParams.get("code_challenge");
-    expect(challenge).toMatch(CHALLENGE_RE);
-    // EXACTLY these two query params (no verifier, no extras leaked).
-    expect([...url.searchParams.keys()].sort()).toEqual([
-      "code_challenge",
-      "session",
+    expect(payload["status"]).toBe("awaiting_browser");
+    expect(Object.keys(payload).sort()).toEqual([
+      "instructions",
+      "message",
+      "open",
+      "status",
     ]);
   });
 
-  it("sends the S256 DIGEST in the URL, never the raw verifier", async () => {
-    // sil-web stores/compares digests; a raw verifier in code_challenge
-    // would break the claim CAS. The challenge must NOT be a base64url
-    // of 32 bytes with the wrong length, and must be exactly 43 chars.
+  it("sends the S256 DIGEST in the link, never the raw verifier", async () => {
+    // sil-web compares digests; a raw verifier in `code_challenge` would break the
+    // claim CAS — and the verifier is the claim secret, so it leaves no field.
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    const challenge = new URL(payload["auth_url"] as string).searchParams.get(
+    const challenge = new URL(payload["open"] as string).searchParams.get(
       "code_challenge",
     );
     expect(challenge).toHaveLength(43);
-    // Whatever the verifier is, it is NOT exposed anywhere in the payload.
-    const blob = JSON.stringify(payload);
-    expect(blob).not.toMatch(/verifier/i);
+    expect(JSON.stringify(payload)).not.toMatch(/verifier/i);
   });
 
-  it("mints a FRESH session per call (two calls → different session_ids)", async () => {
+  it("mints a FRESH session per call (two calls → different path segments)", async () => {
     const a = payloadOf(await getTool(api, TOOL).execute("c1", {}));
     const b = payloadOf(await getTool(api, TOOL).execute("c2", {}));
-    expect(a["session_id"]).not.toBe(b["session_id"]);
+    expect(sessionOf(a["open"])).not.toBe(sessionOf(b["open"]));
   });
 });
 
@@ -200,13 +193,14 @@ describe("sil_register — host override resolution (pluginConfig → env → de
     vi.useRealTimers();
   });
 
-  it("builds the auth URL against the SIL_WEB_URL env override", async () => {
+  it("builds the link against the SIL_WEB_URL env override", async () => {
     process.env["SIL_WEB_URL"] = "https://api.staging.example.com";
     const api = createMockPluginApi();
     registerIdentityTools(api);
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    const url = new URL(payload["auth_url"] as string);
-    expect(url.origin).toBe("https://api.staging.example.com");
+    expect(new URL(payload["open"] as string).origin).toBe(
+      "https://api.staging.example.com",
+    );
   });
 
   it("a pluginConfig override beats the env (config wins)", async () => {
@@ -217,7 +211,7 @@ describe("sil_register — host override resolution (pluginConfig → env → de
     const api = createMockPluginApi();
     registerIdentityTools(api);
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    expect(new URL(payload["auth_url"] as string).origin).toBe(
+    expect(new URL(payload["open"] as string).origin).toBe(
       "https://config.example.com",
     );
   });
@@ -227,7 +221,7 @@ describe("sil_register — host override resolution (pluginConfig → env → de
     registerIdentityTools(api);
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
     // Not the staging/config hosts — the configured default origin.
-    const origin = new URL(payload["auth_url"] as string).origin;
+    const origin = new URL(payload["open"] as string).origin;
     expect(origin).not.toBe("https://config.example.com");
     expect(origin).not.toBe("https://env.example.com");
     expect(origin.startsWith("https://")).toBe(true);
@@ -312,21 +306,10 @@ describe("sil_register — already-registered short-circuit (F1)", () => {
     expect(tokens.refresh_token).toBe("existing-rt");
   });
 
-  it("does NOT return an auth_url (no new browser flow)", async () => {
-    const api = createMockPluginApi();
-    registerIdentityTools(api);
-    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    expect(payload["auth_url"]).toBeUndefined();
-  });
-
-  it("`already_registered` offers and creates NOTHING — the status, the identity, and no routing hint", async () => {
-    // Contract §3.10: the agent "carries on; nothing is offered or created". This
-    // payload used to carry `next_step: "offer_shopper"`, the after-register hook into
-    // a creation ceremony that no longer exists — and §5 retires `next_step` on this
-    // tool outright. Asserted by EXACT KEY SET, not by forbidding one literal: a
-    // rename to `nextStep` / `suggested_action` walks straight past a needle scan, and
-    // the two symmetric negatives this replaces (whoami's `not_registered`, register's
-    // `awaiting_browser`) went vacuous the moment the field left the codebase.
+  it("`already_registered` offers and creates NOTHING — the status, the identity, and no link", async () => {
+    // Contract §3.10: the agent "carries on; nothing is offered or created". By EXACT
+    // KEY SET, so a routing hint under any spelling — and a stray `open` inviting a
+    // second browser flow — turns it RED.
     const api = createMockPluginApi();
     registerIdentityTools(api);
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));

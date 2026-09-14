@@ -38,7 +38,7 @@ const VERIFIER_BYTES = 32;
  * Pure; no I/O. The result is a 43-char base64url string.
  *
  * Identical to sil-web's `deriveChallenge` — pinned by a shared test vector so
- * any drift fails in CI rather than silently as a runtime 404.
+ * any drift fails in the suite rather than silently as a runtime 404.
  */
 export function deriveChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
@@ -55,7 +55,7 @@ export function isValidCodeChallenge(value: string): boolean {
 
 /**
  * True iff `value` is a well-formed session id (UUID). This is the format gate
- * sil-web's `/authorize` and `/claim` apply to the incoming `session` param.
+ * sil-web's `/authorize/<session>` and its claim route apply to that segment.
  */
 export function isValidSessionId(value: string): boolean {
   return UUID_RE.test(value);
@@ -70,7 +70,7 @@ export function newSessionId(): string {
  * Mint a fresh PKCE code verifier — 32 cryptographically-random bytes as a
  * base64url string. NEVER written to disk: it is the bearer secret for the
  * claim CAS; only its digest (the challenge) ever leaves the process, and only
- * inside the auth URL.
+ * inside the link the buyer opens.
  */
 export function newVerifier(): string {
   return randomBytes(VERIFIER_BYTES).toString("base64url");
