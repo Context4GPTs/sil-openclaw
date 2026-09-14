@@ -254,7 +254,7 @@ describe("C — ASK is a beat, so `## Notes / open` is a surface", () => {
     expect(unsatisfied(nothing, (s) => /\bask/i.test(s))).toEqual([]);
   });
 
-  it("C3 — the ASK turn is BOUNDED, each question carries the guide's reason, and it plays the filled understanding back", () => {
+  it("C3 — the ASK turn is BOUNDED, each question carries the guide's reason, and its FIRST LINE is the `Heard:` playback", () => {
     const units = beatStatements(4);
     expect(units.length).toBeGreaterThan(0); // guard-of-the-guard
     const bars: [string, RegExp][] = [
@@ -266,12 +266,20 @@ describe("C — ASK is a beat, so `## Notes / open` is a surface", () => {
         "each question tied to why it decides the buy",
         /decides the buy|why it (matters|decides)|load-bearing|the guide (says|marks)/i,
       ],
-      [
-        "plays the filled understanding back for correction",
-        /play(s|ing)? (it |the .{0,24})?back|read(s|ing)? back|restate|reflect(s|ing)? back|mis-?translation/i,
-      ],
     ];
     expect(bars.filter(([, re]) => !units.some((s) => re.test(s))).map(([name]) => name)).toEqual([]);
+
+    // RE-DERIVED, on five live draws that asked with no playback at all while the
+    // prose said the turn "plays the filled understanding back" — a disposition an
+    // agent can believe it satisfied. A LABELLED OPENING LINE is the one form it
+    // either emits or visibly does not, and the translation is the half worth
+    // playing back: a buyer corrects `flex 110-130` far more cheaply than `advanced`.
+    const playback = units.filter((s) => /Heard:/.test(s));
+    expect(playback.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(playback, (s) => /first line|opens? with|before the questions?/i.test(s)),
+    ).toEqual([]);
+    expect(unsatisfied(playback, (s) => /translat/i.test(s))).toEqual([]);
   });
 
   it("C4 — a declined or unanswered ASK still searches on the best defensible reading, states the assumption, and writes a `## Notes / open` row", () => {
