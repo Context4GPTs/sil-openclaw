@@ -157,9 +157,9 @@ Frontmatter: `title` and `status` (`active` | `done` | `dropped`). Sections:
 - **`## Context`** — job-level background: the trip, the occasion, the total budget.
   Reasoned over; never sent as a query.
 - **`## Items`** — a table (item · domain · status) plus **one prose subsection per row**.
-  The scope, the fan-out and the completion count. Each subsection is the buyer's own sentence for
-  that item — `shopping_search`'s `query` leg for it — and in a taste-led domain it is
-  the load-bearing field in the whole document.
+  The scope, the fan-out and the completion count. Each subsection is the buyer's own
+  sentence for that item — `shopping_search`'s `query` leg for it — and in a taste-led
+  domain it is the load-bearing field in the whole document.
 - **`## Buying guide`** — the adopted guide, verbatim, keyed by `### <domain-path>`.
 - **`## Hard constraints`** / **`## Preferences`** — spec rows
   (domain · key · op · value · unit). **The section IS the hardness** — there is no
