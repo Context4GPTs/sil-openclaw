@@ -552,7 +552,7 @@
       "status": "ok",
       "item": "ski boots",
       "domain": "product.sports.winter.ski.boots",
-      "query": "ski boots for the upcoming season, size 27.5, advanced skier, up to 300 euros; GripWalk soles; resort, a week in Chamonix in February",
+      "query": "ski boots 27.5 flex 110",
       "specs": [
         {
           "key": "mondo_size",
@@ -613,7 +613,7 @@
       "status": "ok",
       "item": "helmet",
       "domain": "product.sports.winter.ski.helmets",
-      "query": "a ski helmet for the same trip, it has to work with my goggles",
+      "query": "ski helmet 58",
       "specs": [
         {
           "key": "head_circumference",

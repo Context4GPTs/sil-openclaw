@@ -1,7 +1,7 @@
 # Where these sixteen files come from
 
 Copied verbatim from `sil-services` `packages/schemas/schema/`, commit
-`2da9a617db2d6a7d5dfd92eb3b38da7ed5f383b9`. One request and one response artifact per
+`247474ce4cb3c4e8ca4363fbe998ac6d9d817677`. One request and one response artifact per
 shopping tool; each is `JSON.stringify` of the TypeBox object the API serialises against.
 `shopping_brief_compile` is local to the plugin, so its pair has no route behind it — the
 request artifact is still the tool's `parameters`, and the response artifact is the shape

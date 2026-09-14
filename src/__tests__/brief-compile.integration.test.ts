@@ -206,8 +206,9 @@ describe("A3 — the journey's Brief compiles to the contract's own bodies", () 
     // prose by position. Measured on the creation boot, the query carried "applies:
     // mondo_size, flex_index, last_width" into the web leg; measured on the index's
     // shopping vertical, the buyer's sentence answers ZERO offers where "ski boots 27.5
-    // flex 110" answers forty. Written as a literal here, not lifted, because the whole
-    // claim is that a body other than the buyer's prose reaches the wire.
+    // flex 110" answers forty. The line is rewritten to that literal rather than lifted:
+    // the claim is that a body other than the buyer's prose reaches the wire, and a
+    // derived one would restate §3.9 instead of checking it.
     expect(writeDocument({ ref: REF, mode: "replace", title: "Chamonix", body: BRIEF.replace(`search: ${BOOTS_SEARCH}`, "search: ski boots 27.5 flex 110") }).ok).toBe(true);
     scriptTheRegistry();
     const query = (await compile({ ref: REF, item: "ski boots" }))["query"] as string;
