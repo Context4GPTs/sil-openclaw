@@ -68,7 +68,8 @@ set** over `{X, Y, Z}` with the X-preference weighed as Beat-6 judgment — neve
 subsection, beside the buyer's sentence. Both are written here, after the guide has
 translated the facts, so the numbers in them are the settled ones. Both are
 **bookkeeping, not the buyer's words**: they stay in the Brief and neither is ever sent
-as prose.
+as prose. They are the **last two lines** of that subsection, the buyer's sentence above
+them and nothing below the `search:` line, which is read to the end of what follows it.
 
 - **`applies:`** — the materialized partition, **keys only, never values**: for item
   domain D, every row whose `domain` is ancestor-or-self of D. Decided once, visible in

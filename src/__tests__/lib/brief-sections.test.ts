@@ -161,6 +161,29 @@ describe("itemSearchLine — the shopping words one item is searched by", () => 
     expect(itemSearchLine(briefWith("search: ski boots 27.5", "", "an aside"), "boots")).toBe(
       "ski boots 27.5",
     );
+    // …and a line that reads as prose or a table stops it with no blank line at all. Beat
+    // 3 puts the line last, but a sentence folded in is the body the index answers
+    // nothing for, so the reader may not depend on that.
+    expect(
+      itemSearchLine(
+        briefWith("search: ski boots 27.5 flex 110", "ski boots for the season, 300 euros"),
+        "boots",
+      ),
+    ).toBe("ski boots 27.5 flex 110");
+    expect(
+      itemSearchLine(briefWith("search: ski boots 27.5", "| colour | no preference |"), "boots"),
+    ).toBe("ski boots 27.5");
+  });
+
+  it("the LAST `search:` line wins — a correction appended below the stale one", () => {
+    // Beat 4 rewrites the line when an answer settles a picking number. A model that
+    // appends the correction instead would otherwise search the size it just replaced.
+    expect(
+      itemSearchLine(
+        briefWith("search: ski boots 26.5 flex 90", "search: ski boots 27.5 flex 110"),
+        "boots",
+      ),
+    ).toBe("ski boots 27.5 flex 110");
   });
 
   it("stops at the next item's heading — an item beat 3 has not reached yet is empty", () => {

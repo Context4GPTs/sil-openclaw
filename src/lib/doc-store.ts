@@ -450,19 +450,16 @@ function specRowsOf(body: string, heading: string, hard: boolean): SpecRow[] {
  * is ANCHORED, so `research:` and a mid-sentence "search:" are not this line. */
 const SEARCH_LABEL = /^\s*(?:[-*+]\s+)?[*`]*search[*`]*\s*:/i;
 
-/** What ends a fold: a blank line, the next bookkeeping label, a list item. A
- * continuation of the buyer's shopping words is none of the three. */
-const ENDS_FOLD = /^\s*$|^\s*(?:[-*+]\s|\d+\.\s|[*`]*[a-z_]+[*`]*\s*:)/i;
+/** What ends a fold: a blank line, the next bookkeeping label, a list item, or anything
+ * that reads as prose or a table — a comma, a period, a `|`. The buyer's sentence lives
+ * in this same subsection, and folded in it is a query no listing can match. */
+const ENDS_FOLD = /^\s*$|^\s*(?:[-*+]\s|[*`]*[a-z_]+[*`]*\s*:)|[,.|]/i;
 
 /**
- * One item's shopping words — the `search:` line beat 3 writes inside that item's
- * `## Items` subsection, which is the search `query`. Addressed by the item LABEL, what
- * the buyer calls the thing; `""` when the item has no subsection or no such line, and
- * the caller refuses on that. The rest of the subsection is the buyer's sentence, which
- * the agent reads and no call sends.
- *
- * The Brief is hard-wrapped and a query on the wire is one line, so continuations fold;
- * markup is stripped, because `**` on the wire is a value no listing can equal.
+ * One item's shopping words, by the item LABEL — the LAST `search:` line of that item's
+ * `## Items` subsection, which is the search `query`. `""` when there is none, and the
+ * caller refuses on that. LAST because beat 4 rewrites the line when an answer settles a
+ * picking number, and a model may append the correction rather than replace it.
  */
 export function itemSearchLine(body: string, item: string): string {
   const lines = sectionBody(body, "## Items").split(/\r?\n/);
@@ -472,7 +469,7 @@ export function itemSearchLine(body: string, item: string): string {
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((l) => headingText(l) !== null);
   const subsection = end < 0 ? rest : rest.slice(0, end);
-  const at = subsection.findIndex((l) => SEARCH_LABEL.test(l));
+  const at = subsection.findLastIndex((l) => SEARCH_LABEL.test(l));
   if (at < 0) return "";
   const folded = [(subsection[at] as string).replace(SEARCH_LABEL, "")];
   for (const line of subsection.slice(at + 1)) {

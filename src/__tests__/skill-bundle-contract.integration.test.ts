@@ -519,6 +519,15 @@ describe("SC4 — no path in the bundle asks for a created shopper", () => {
     expect(minting.length).toBeGreaterThan(0);
   });
 
+  it("beat 3 puts the two bookkeeping lines LAST in the item's subsection", () => {
+    // The compile folds a hard-wrapped `search:` line, so a line written below it is read
+    // as part of it — measured, the buyer's sentence under the line rode into `query`.
+    // The reader stops at prose; this layout rule is what keeps that from mattering.
+    const lines = beatStatements(3).filter((s) => /`search:`/.test(s));
+    expect(lines.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(lines, (s) => /\blast\b/i.test(s) && /subsection/i.test(s))).toEqual([]);
+  });
+
   it("SKILL.md says the `name` at that mint is the buyer's own, and never a placeholder", () => {
     // `shopping_doc_write` REQUIRES `name` on a shopper create, so prose that leaves it
     // unsaid invites an invented one — which lands on disk as the person's identity.
