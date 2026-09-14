@@ -451,9 +451,11 @@ function specRowsOf(body: string, heading: string, hard: boolean): SpecRow[] {
 const SEARCH_LABEL = /^\s*(?:[-*+]\s+)?[*`]*search[*`]*\s*:/i;
 
 /** What ends a fold: a blank line, the next bookkeeping label, a list item, or anything
- * that reads as prose or a table — a comma, a period, a `|`. The buyer's sentence lives
- * in this same subsection, and folded in it is a query no listing can match. */
-const ENDS_FOLD = /^\s*$|^\s*(?:[-*+]\s|[*`]*[a-z_]+[*`]*\s*:)|[,.|]/i;
+ * that reads as prose or a table — a comma, a `|`, a period ENDING the line. The buyer's
+ * sentence lives in this same subsection and folded in is a query no listing can match;
+ * the period is anchored because mid-line it is a size (`9.5 US`), which is the token
+ * class the shopping words exist to carry. */
+const ENDS_FOLD = /^\s*$|^\s*(?:[-*+]\s|[*`]*[a-z_]+[*`]*\s*:)|[,|]|\.\s*$/i;
 
 /**
  * One item's shopping words, by the item LABEL — the LAST `search:` line of that item's

@@ -124,6 +124,29 @@ const NOT_THE_LABEL = [
   "# search: ski boots 27.5",
 ];
 
+/** A hard-wrapped line and the ONE line it must fold to. The last two are the measured
+ * decimal continuations — a size, not a sentence. */
+const FOLDS: [string[], string][] = [
+  [
+    ["search: ski boots 27.5 flex 110 last 100 mm", "gripwalk soles 2026", "applies: mondo_size"],
+    "ski boots 27.5 flex 110 last 100 mm gripwalk soles 2026",
+  ],
+  [
+    ["search: ski boots mondo 27.5 flex 110 last width 100 mm gripwalk sole", "norm 27.5 shell alpine"],
+    "ski boots mondo 27.5 flex 110 last width 100 mm gripwalk sole norm 27.5 shell alpine",
+  ],
+  [["search: running shoes wide", "9.5 US neutral"], "running shoes wide 9.5 US neutral"],
+];
+
+/** What the fold must NOT absorb, each under the same `search: ski boots 27.5`. */
+const STOPS: [string, string[]][] = [
+  ["a blank line", ["search: ski boots 27.5", "", "an aside"]],
+  ["the next label", ["search: ski boots 27.5", "applies: mondo_size"]],
+  ["a table row", ["search: ski boots 27.5", "| colour | no preference |"]],
+  ["a sentence with a comma", ["search: ski boots 27.5", "ski boots for the season, 300 euros"]],
+  ["a sentence ending in a period", ["search: ski boots 27.5", "Boots that will not blister."]],
+];
+
 describe("itemSearchLine — the shopping words one item is searched by", () => {
   it("returns that item's `search:` line, never the sentence or the `applies:` line beside it", () => {
     // The boots' subsection carries all three, in that order. A reader that took the
@@ -145,34 +168,21 @@ describe("itemSearchLine — the shopping words one item is searched by", () => 
     }
   });
 
-  it("folds a hard-wrapped line, and stops at the blank line or the next label", () => {
-    // The Brief is hard-wrapped at ~88 columns and a query on the wire is ONE line, so a
-    // continuation left behind silently searches half the words the guide settled.
-    expect(
-      itemSearchLine(
-        briefWith(
-          "search: ski boots 27.5 flex 110 last 100 mm",
-          "gripwalk soles 2026",
-          "applies: mondo_size, flex_index",
-        ),
-        "boots",
-      ),
-    ).toBe("ski boots 27.5 flex 110 last 100 mm gripwalk soles 2026");
-    expect(itemSearchLine(briefWith("search: ski boots 27.5", "", "an aside"), "boots")).toBe(
-      "ski boots 27.5",
+  it("folds a hard-wrapped line — a decimal in the continuation is a size, never a full stop", () => {
+    // The Brief wraps at ~88 columns and a query on the wire is ONE line. Measured: a
+    // period read anywhere cut `9.5 US neutral` off a running-shoe query, dropping the
+    // one token class the shopping words exist to carry.
+    expect(FOLDS.map(([lines]) => itemSearchLine(briefWith(...lines), "boots"))).toEqual(
+      FOLDS.map(([, query]) => query),
     );
-    // …and a line that reads as prose or a table stops it with no blank line at all. Beat
-    // 3 puts the line last, but a sentence folded in is the body the index answers
-    // nothing for, so the reader may not depend on that.
+  });
+
+  it("stops the fold at a blank line, the next label, a table row, or the buyer's sentence", () => {
+    // Beat 3 puts the line last, but a sentence folded in is the body the index answers
+    // nothing for, so the reader may not depend on the layout holding.
     expect(
-      itemSearchLine(
-        briefWith("search: ski boots 27.5 flex 110", "ski boots for the season, 300 euros"),
-        "boots",
-      ),
-    ).toBe("ski boots 27.5 flex 110");
-    expect(
-      itemSearchLine(briefWith("search: ski boots 27.5", "| colour | no preference |"), "boots"),
-    ).toBe("ski boots 27.5");
+      STOPS.map(([why, lines]) => [why, itemSearchLine(briefWith(...lines), "boots")]),
+    ).toEqual(STOPS.map(([why]) => [why, "ski boots 27.5"]));
   });
 
   it("the LAST `search:` line wins — a correction appended below the stale one", () => {
