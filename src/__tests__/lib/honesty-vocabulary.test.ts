@@ -25,8 +25,10 @@ import {
   notFoundLicenceOffenders,
   overPromiseOffenders,
   overTriggerOffenders,
+  retiredPhraseOffenders,
   retiredV0Offenders,
   statesQualifiedNotFound,
+  RETIRED_V0_PHRASES,
   RETIRED_V0_TOKENS,
 } from "../helpers/honesty-vocabulary.js";
 
@@ -174,6 +176,23 @@ describe("retiredV0Offenders — the retired request surface's dead strings", ()
 
   it("matches case-insensitively — a Title-cased reintroduction still fails", () => {
     expect(retiredV0Offenders("the CHECKOUT_URL field")).toEqual(["checkout_url"]);
+  });
+
+  it("bites every retired PHRASE across a hard wrap — the form the bundle writes them in", () => {
+    // A byte-wise `includes` misses `filled\nunderstanding`, which is how the base's
+    // own playback sentence was invisible to the scan that named it.
+    for (const phrase of RETIRED_V0_PHRASES) {
+      const wrapped = `the prose says ${phrase.replace(/ /g, "\n")} here`;
+      expect({ phrase, hits: retiredPhraseOffenders(wrapped) }).toEqual({ phrase, hits: [phrase] });
+    }
+  });
+
+  it("a phrase needle never reaches a tool description — `query` IS a free-text substring", () => {
+    // The admission rule above is "a dead string that cannot appear innocently", and
+    // these two are ordinary English. Scoped to the bundle, `shopping_doc_find` can say
+    // what its filter does, hyphen or no hyphen.
+    expect(retiredV0Offenders("Free text substring over slugs and titles.")).toEqual([]);
+    expect(retiredPhraseOffenders("Each subsection is the buyer's own\nsentence.")).toEqual([]);
   });
 
   it("every needle is lower-case (guard-of-the-guard: the body is lowered, not the needle)", () => {

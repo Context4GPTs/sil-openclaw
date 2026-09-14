@@ -299,12 +299,6 @@ export function statesQualifiedNotFound(body: string): boolean {
  * guard-of-the-guard at both call sites.
  */
 export const RETIRED_V0_TOKENS = [
-  // Two retired PHRASES rather than wire names, and the only kind this list takes:
-  // each was the wording a live draw failed under (a subsection written as "free
-  // text", a playback stated as a disposition), so a file re-saying either revives
-  // the defect its fix was measured against.
-  "free text",
-  "filled understanding",
   "auth_url",
   "next_step",
   "checkout_url",
@@ -325,4 +319,18 @@ export const RETIRED_V0_TOKENS = [
 export function retiredV0Offenders(body: string): string[] {
   const lower = body.toLowerCase();
   return RETIRED_V0_TOKENS.filter((token) => lower.includes(token));
+}
+
+/**
+ * The wordings two live draws failed under. They are ordinary English, not dead
+ * strings — `shopping_doc_find`'s `query` IS a free-text substring — so they are
+ * scanned over the BUNDLE alone, never over a tool description.
+ */
+export const RETIRED_V0_PHRASES = ["free text", "filled understanding"];
+
+/** Phrase needles through `unwrapped()`: the bundle wraps at ~88 columns, and a
+ * byte-wise `includes` reads `filled\nunderstanding` as absent. */
+export function retiredPhraseOffenders(body: string): string[] {
+  const units = unwrapped(body).map((s) => s.toLowerCase());
+  return RETIRED_V0_PHRASES.filter((phrase) => units.some((u) => u.includes(phrase)));
 }

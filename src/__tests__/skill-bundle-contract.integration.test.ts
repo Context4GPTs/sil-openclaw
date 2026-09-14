@@ -31,8 +31,10 @@ import {
   notFoundLicenceOffenders,
   overPromiseOffenders,
   overTriggerOffenders,
+  retiredPhraseOffenders,
   retiredV0Offenders,
   statesQualifiedNotFound,
+  RETIRED_V0_PHRASES,
   RETIRED_V0_TOKENS,
 } from "./helpers/honesty-vocabulary.js";
 // The bundle's reading + SCOPING primitives, shared with
@@ -169,6 +171,7 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     // so it would sit in the list looking protective while matching nothing.
     expect(RETIRED_TOKENS.filter((t) => t !== t.toLowerCase())).toEqual([]);
     expect(RETIRED_V0_TOKENS.filter((t) => t !== t.toLowerCase())).toEqual([]);
+    expect(RETIRED_V0_PHRASES.filter((t) => t !== t.toLowerCase())).toEqual([]);
   });
 
   it("the bundle prose obeys the SAME honesty rules the tool descriptions do", () => {
@@ -222,6 +225,10 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
       // Without these entries the bundle ships driving the shopper at `checkout_url`,
       // a field the wire does not have, under a fully green suite.
       for (const t of retiredV0Offenders(body)) offenders.push(`${rel} → ${t}`);
+      // The two retired PHRASES, bundle-only and matched unwrapped — the prose they
+      // describe is this bundle's, and both were already invisible to a byte-wise
+      // scan at the 88-column wrap they are written at.
+      for (const p of retiredPhraseOffenders(body)) offenders.push(`${rel} → ${p}`);
       for (const ctx of perNicheExpertOffenders(body)) offenders.push(`${rel}: …${ctx}…`);
     }
     expect(offenders).toEqual([]);

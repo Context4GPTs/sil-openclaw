@@ -446,8 +446,8 @@ function specRowsOf(body: string, heading: string, hard: boolean): SpecRow[] {
   }));
 }
 
-/** One item's own prose subsection under `## Items` — the free text that becomes the
- * search `query`. Addressed by the item LABEL, which is what the buyer calls the thing. */
+/** One item's own prose subsection under `## Items` — the buyer's own sentence, which
+ * becomes the search `query`. Addressed by the item LABEL, what the buyer calls the thing. */
 export function itemProse(body: string, item: string): string {
   const lines = sectionBody(body, "## Items").split(/\r?\n/);
   const wanted = item.trim().toLowerCase();
