@@ -328,9 +328,10 @@ export function retiredV0Offenders(body: string): string[] {
  */
 export const RETIRED_V0_PHRASES = ["free text", "filled understanding"];
 
-/** Phrase needles through `unwrapped()`: the bundle wraps at ~88 columns, and a
- * byte-wise `includes` reads `filled\nunderstanding` as absent. */
+/** Phrase needles through `unwrapped()`, then whitespace-collapsed: the bundle wraps
+ * at ~88 columns and indents a bullet's continuation, so a byte-wise `includes` reads
+ * `filled\nunderstanding` as absent and a joined `free\n  text` as two spaces. */
 export function retiredPhraseOffenders(body: string): string[] {
-  const units = unwrapped(body).map((s) => s.toLowerCase());
+  const units = unwrapped(body).map((s) => s.toLowerCase().replace(/\s+/g, " "));
   return RETIRED_V0_PHRASES.filter((phrase) => units.some((u) => u.includes(phrase)));
 }

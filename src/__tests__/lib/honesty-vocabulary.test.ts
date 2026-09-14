@@ -180,10 +180,17 @@ describe("retiredV0Offenders — the retired request surface's dead strings", ()
 
   it("bites every retired PHRASE across a hard wrap — the form the bundle writes them in", () => {
     // A byte-wise `includes` misses `filled\nunderstanding`, which is how the base's
-    // own playback sentence was invisible to the scan that named it.
+    // own playback sentence was invisible to the scan that named it. Both wraps the
+    // bundle actually writes: bare, and a bullet's 2-space continuation indent.
     for (const phrase of RETIRED_V0_PHRASES) {
-      const wrapped = `the prose says ${phrase.replace(/ /g, "\n")} here`;
-      expect({ phrase, hits: retiredPhraseOffenders(wrapped) }).toEqual({ phrase, hits: [phrase] });
+      for (const wrap of ["\n", "\n  "]) {
+        const body = `- the prose says ${phrase.replace(/ /g, wrap)} here`;
+        expect({ phrase, wrap, hits: retiredPhraseOffenders(body) }).toEqual({
+          phrase,
+          wrap,
+          hits: [phrase],
+        });
+      }
     }
   });
 
