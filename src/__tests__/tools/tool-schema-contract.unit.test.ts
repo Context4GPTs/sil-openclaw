@@ -1,33 +1,8 @@
 /**
- * UNIT — agent-facing tool-schema contract is invariant across the
- * TypeBox 0.34 → 1.x migration (tier: unit, <100ms, no I/O, mock api).
- *
- * Card: migrate-openclaw-tool-schemas-to-typebox-1-x. The migration is a
- * dependency-major swap ONLY — the JSON-schema object each tool publishes
- * in `parameters` (the value the OpenClaw host serializes and presents to
- * agents) must be equivalent before and after. This file pins that
- * equivalence OBSERVATIONALLY against the known-good literals captured in
- * the card's Risks section, so an unexpected emission drift fails the
- * build rather than silently reaching an agent.
- *
- * Scope of THIS block: the account surface (`sil_register`, `sil_whoami`) —
- * both no-argument tools whose `parameters` is `Type.Object({})`. It
- * deep-equals the WHOLE schema (order-insensitive) so the empty-object shape
- * cannot silently grow a spurious `required` or property during a dependency
- * bump. The shopping tools publish a committed artifact instead, and are
- * deep-equalled against it further down.
- *
- * CONTRACT NOTE (architect Risk — load-bearing for these assertions):
- * TypeBox 1.x reorders JSON-schema keys vs 0.34 (e.g. `required` before
- * `properties`, nested `type` before `description`). JSON-Schema objects
- * are UNORDERED key sets; the host serializes and validates by key, not
- * byte order. So every schema assertion below uses `toEqual` (deep,
- * order-insensitive) — NEVER `expect(JSON.stringify(a)).toBe(<0.34
- * byte-literal>)`, which would flip RED on a pure dependency bump even
- * though the contract is intact.
- *
- * Runs entirely against createMockPluginApi() — no host, no network, no
- * filesystem.
+ * UNIT — every agent-facing string and schema the plugin registers (mock api, no
+ * I/O). Schemas are compared with `toEqual`, never a serialized byte-literal:
+ * JSON-Schema key order is not contract, so a TypeBox bump that reorders keys
+ * must not flip RED while a grown `required` must.
  */
 
 import { describe, it, expect, beforeEach } from "vitest";

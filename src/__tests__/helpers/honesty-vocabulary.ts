@@ -299,6 +299,8 @@ export function statesQualifiedNotFound(body: string): boolean {
  * guard-of-the-guard at both call sites.
  */
 export const RETIRED_V0_TOKENS = [
+  "auth_url",
+  "next_step",
   "checkout_url",
   "price_min",
   "price_max",

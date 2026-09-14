@@ -23,6 +23,7 @@ import {
   claimSession,
   fetchIdentity,
   refreshAndRetryOnce,
+  stripTrailingSlash,
   type ClaimOutcome,
   type Identity,
   type IdentityOutcome,
@@ -343,11 +344,11 @@ function clearPersistFailure(): void {
  * HERE, inside the awaited tick, so the files land before the loop settles.
  */
 async function claimStep(
-  apiUrl: string,
+  webUrl: string,
   sessionId: string,
   verifier: string,
 ): Promise<ClaimStep> {
-  const outcome: ClaimOutcome = await claimSession(apiUrl, sessionId, verifier);
+  const outcome: ClaimOutcome = await claimSession(webUrl, sessionId, verifier);
   switch (outcome.kind) {
     case "pending":
     case "retryable":
@@ -421,10 +422,6 @@ function handleDone(
   } else {
     api.logger.info(marker, { session_id: sessionId });
   }
-}
-
-function stripTrailingSlash(url: string): string {
-  return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
 /** The errno first, then the message: an operator scanning a log line reads

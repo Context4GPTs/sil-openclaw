@@ -742,6 +742,8 @@ async function readJsonBody(res: Response): Promise<unknown> {
   }
 }
 
-function stripTrailingSlash(url: string): string {
+/** Every URL here is built by concatenation, so a configured origin with a
+ * trailing slash would emit a doubled `//` path the route does not match. */
+export function stripTrailingSlash(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }

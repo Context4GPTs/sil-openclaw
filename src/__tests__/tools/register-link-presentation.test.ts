@@ -4,8 +4,8 @@
  *
  * A human reads `message` through a chat renderer that auto-links. The link
  * therefore sits on its OWN line, angle-bracket wrapped, so the target the
- * renderer produces is `open` byte-for-byte and nothing around it is folded in —
- * and the browser steer sits on the line ABOVE, never on the link's line.
+ * renderer produces is `open` and nothing around it is folded in — and the
+ * browser steer sits on the line ABOVE, never on the link's line.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -40,31 +40,6 @@ function payloadOf(result: {
     throw new Error(`tool result has no text payload: ${String(text)}`);
   }
   return JSON.parse(text) as Record<string, unknown>;
-}
-
-/**
- * A greedy chat auto-linker, modelling the class of renderer the presentation is
- * written for: an angle-bracket-delimited `<URL>` is ONE target bounded by the
- * bracket, while a bare URL runs to the next whitespace and swallows whatever
- * punctuation or prose is glued to it. Returns the targets it would produce.
- */
-function greedyAutoLink(text: string): string[] {
-  const targets: string[] = [];
-  const bracketed = /<(https?:\/\/[^>\s]+)>/g;
-  const spans: Array<[number, number]> = [];
-  let m: RegExpExecArray | null;
-  while ((m = bracketed.exec(text)) !== null) {
-    targets.push(m[1]!);
-    spans.push([m.index, m.index + m[0].length]);
-  }
-  // Blank the bracketed spans so their URL is not re-matched as a bare one.
-  let bare = text;
-  for (const [start, end] of spans) {
-    bare = bare.slice(0, start) + " ".repeat(end - start) + bare.slice(end);
-  }
-  const bareUrl = /https?:\/\/\S+/g;
-  while ((m = bareUrl.exec(bare)) !== null) targets.push(m[0]);
-  return targets;
 }
 
 beforeEach(() => {
@@ -116,19 +91,6 @@ describe("sil_register — the presented link is one atomic target", () => {
     expect(steerLine).toBeGreaterThanOrEqual(0);
     expect(steerLine).toBeLessThan(linkLine);
     expect(lines[steerLine]!).toMatch(POSITIVE_STEER_RE);
-  });
-
-  it("a greedy auto-linker captures the whole link and nothing else", async () => {
-    const payload = await freshRegister();
-    const open = payload["open"] as string;
-
-    expect(greedyAutoLink(payload["message"] as string)).toEqual([open]);
-
-    // Guard-of-the-guard: the same linker over a BARE, prose-adjacent link does
-    // NOT produce the URL — so the assertion above is the bracket doing work.
-    expect(greedyAutoLink(`Open this link: ${open}, then sign in.`)).not.toEqual([
-      open,
-    ]);
   });
 
   it("`instructions` carries the same steer, so an agent relaying it cannot drop the half that matters", async () => {

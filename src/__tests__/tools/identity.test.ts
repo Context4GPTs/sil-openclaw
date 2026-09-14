@@ -28,6 +28,7 @@ import { join } from "node:path";
 
 import { registerIdentityTools } from "../../tools/identity.js";
 import { setWebUrl } from "../../lib/config.js";
+import { deriveChallenge } from "../../lib/pkce.js";
 import { getDataDir } from "../../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -97,33 +98,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("sil_register — tool registration shape", () => {
-  it("registers a sil_register tool with no input parameters", () => {
-    const api = createMockPluginApi();
-    registerIdentityTools(api);
-    const tool = getTool(api, TOOL);
-    expect(tool.name).toBe(TOOL);
-    expect(tool.label.length).toBeGreaterThan(0);
-    expect(tool.description.length).toBeGreaterThan(0);
-    // F1: the tool takes no arguments — a TypeBox object with no properties.
-    expect((tool.parameters as { type?: unknown }).type).toBe("object");
-    const props = (tool.parameters as { properties?: Record<string, unknown> })
-      .properties;
-    expect(props === undefined || Object.keys(props).length === 0).toBe(true);
-  });
-});
-
 describe("sil_register — fresh registration: the link the buyer opens", () => {
   let api: MockPluginAPI;
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  /** The verifier, captured where it legitimately leaves the process: the claim
+   * POST body. The poll's fetch never settles, so nothing is written. */
+  let sentVerifier: string | null;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    // Background poll, if armed, hangs on a never-settling fetch — it can
-    // never reach the network nor resolve during the test.
-    fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockImplementation(() => new Promise<Response>(() => {}));
+    sentVerifier = null;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (_input: unknown, init?: { body?: unknown }) => {
+        if (init && typeof init.body === "string") {
+          const parsed = JSON.parse(init.body) as { code_verifier?: string };
+          if (typeof parsed.code_verifier === "string") sentVerifier = parsed.code_verifier;
+        }
+        return new Promise<Response>(() => {});
+      },
+    );
     api = createMockPluginApi();
     registerIdentityTools(api);
   });
@@ -160,15 +152,21 @@ describe("sil_register — fresh registration: the link the buyer opens", () => 
     ]);
   });
 
-  it("sends the S256 DIGEST in the link, never the raw verifier", async () => {
-    // sil-web compares digests; a raw verifier in `code_challenge` would break the
-    // claim CAS — and the verifier is the claim secret, so it leaves no field.
+  it("`code_challenge` is the S256 digest of the verifier the claim sends, never the verifier itself", async () => {
+    // sil-web compares digest to digest, so a pre-image in the link breaks the claim
+    // CAS AND publishes the claim secret. Both strings are 43-char base64url, so only
+    // the derivation and the inequality can tell them apart.
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+    await vi.advanceTimersByTimeAsync(5000); // one poll tick builds the claim body
+    const sent = sentVerifier;
+    if (sent === null) throw new Error("the claim sent no code_verifier");
+
     const challenge = new URL(payload["open"] as string).searchParams.get(
       "code_challenge",
     );
-    expect(challenge).toHaveLength(43);
-    expect(JSON.stringify(payload)).not.toMatch(/verifier/i);
+    expect(challenge).toBe(deriveChallenge(sent));
+    expect(challenge).not.toBe(sent);
+    expect(JSON.stringify(payload)).not.toContain(sent);
   });
 
   it("mints a FRESH session per call (two calls → different path segments)", async () => {
@@ -179,13 +177,11 @@ describe("sil_register — fresh registration: the link the buyer opens", () => 
 });
 
 describe("sil_register — host override resolution (pluginConfig → env → default)", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
     vi.useFakeTimers();
-    fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockImplementation(() => new Promise<Response>(() => {}));
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => new Promise<Response>(() => {}),
+    );
   });
 
   afterEach(() => {
@@ -193,14 +189,16 @@ describe("sil_register — host override resolution (pluginConfig → env → de
     vi.useRealTimers();
   });
 
-  it("builds the link against the SIL_WEB_URL env override", async () => {
-    process.env["SIL_WEB_URL"] = "https://api.staging.example.com";
+  it("builds the link against the SIL_WEB_URL env override, and does not double its trailing slash", async () => {
+    // A configured origin routinely carries one; concatenated raw it emits
+    // `//authorize/<uuid>`, which the route does not match.
+    process.env["SIL_WEB_URL"] = "https://api.staging.example.com/";
     const api = createMockPluginApi();
     registerIdentityTools(api);
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    expect(new URL(payload["open"] as string).origin).toBe(
-      "https://api.staging.example.com",
-    );
+    const url = new URL(payload["open"] as string);
+    expect(url.origin).toBe("https://api.staging.example.com");
+    expect(url.pathname).toMatch(OPEN_PATH_RE);
   });
 
   it("a pluginConfig override beats the env (config wins)", async () => {
