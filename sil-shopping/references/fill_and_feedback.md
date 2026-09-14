@@ -34,6 +34,11 @@ spec row is this job's.
 Every thing you read lands in **`## Working from`** — an unrecorded read is a nag; a
 recorded one is a link the buyer can check and delete.
 
+**What the buyer says while answering beat 4 ASK is durable too.** A size, an ability, a
+measured foot is written to the shopper document here — cold, before that item's first
+search — so it exists from the first answer and the next session reuses it instead of
+re-asking. THIS job's budget is not a fact about the person: it is a Brief row.
+
 **Compile both tables.** Each resolved dimension becomes a row in `## Hard constraints`
 or `## Preferences` — the section IS the hardness. Keys come from what the domain read
 returned, verbatim, and **which list the key came from decides the row's `domain`**:
@@ -85,15 +90,20 @@ what is still unresolved and still load-bearing. The section is consumed, not me
 written.
 
 **How to ask.** A **few at a time, never a battery**. Each question carries **why it
-decides the buy**, in the guide's own terms. The turn **plays back the filled
-understanding** so a mis-translation is as cheap for the buyer to correct as an answer is
-to give. **Two items both holding an open dimension are merged into ONE turn** — per-item
-beats do not mean per-item interrogations.
+decides the buy**, in the guide's own terms. **The turn's first line plays back what was
+heard** — `Heard:` then every fact the buyer has stated for this item, each with the
+guide's translation where it made one, and the questions follow it: `Heard: 27.5 ·
+advanced (so flex 110–130 by the guide) · resort · at most €300.` A mis-translation is
+then as cheap for the buyer to correct as an answer is to give. **Two items both holding
+an open dimension are merged into ONE turn** — per-item beats do not mean per-item
+interrogations.
 
 **Elicitation gates QUALITY, never ACCESS.** A declined question, or one the buyer simply
 does not answer, still searches: proceed on the **best defensible reading**, **state the
 assumption in the same turn** ("assuming waterproofing, since it's for the slope"), and
-write the dimension as a **`## Notes / open` row**. A half-resolved Brief runs.
+write the dimension as a **`## Notes / open` row**. A half-resolved Brief runs. **The best
+defensible reading settles an open fact, never a proposed relaxation** — a widening the
+buyer did not choose is not taken, and every hard row stands.
 
 **ASK has two entry points.** Here, and again from Beat 6 when not-verified dominates the
 surviving set or the guide marks the risk unrecoverable after purchase. Neither of them

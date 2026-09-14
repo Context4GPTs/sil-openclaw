@@ -55,6 +55,10 @@ things.
     empty list is the **only** thing that licenses a mint. A `shopping_domain_get` that
     answers `not_found` never licenses one: it says nothing about the standing path
     under a different parent, which is the fork this discipline exists to prevent.
+- **A minted path names its ancestors** — the way the category is shelved (sport, season,
+  discipline, item), dotted and lower-case: `product.sports.winter.ski.boots`, never
+  `product.ski_boots` hung on the root, which is a fork every later buyer inherits. When
+  the read returned only the root, coin that whole path under it.
 - **One concept, one spelling — take the key sil already holds.** A standing domain
   carries its own keys; use them **verbatim** in the Brief's spec tables rather than
   coining beside them. A synonym (`speed_mbps` vs `transfer_speed_mbps`) is simply
@@ -153,8 +157,8 @@ Frontmatter: `title` and `status` (`active` | `done` | `dropped`). Sections:
 - **`## Context`** — job-level background: the trip, the occasion, the total budget.
   Reasoned over; never sent as a query.
 - **`## Items`** — a table (item · domain · status) plus **one prose subsection per row**.
-  The scope, the fan-out and the completion count. Each subsection's prose is that item's
-  free text — `shopping_search`'s `query` leg for it — and in a taste-led domain it is
+  The scope, the fan-out and the completion count. Each subsection is the buyer's own sentence for
+  that item — `shopping_search`'s `query` leg for it — and in a taste-led domain it is
   the load-bearing field in the whole document.
 - **`## Buying guide`** — the adopted guide, verbatim, keyed by `### <domain-path>`.
 - **`## Hard constraints`** / **`## Preferences`** — spec rows

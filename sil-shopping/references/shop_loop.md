@@ -35,8 +35,10 @@ not replace the second: Beat 2 runs an **exact-by-domain** recall over a differe
 question, and neither subsumes the other.
 
 **Then decide scope, and only scope.** The Brief gets an `## Items` table with **one row
-per thing being bought**, and one **prose subsection per row** carrying that thing in the
-buyer's own words. **No domains yet** — classification is Beat 2's job, per item.
+per thing being bought**, and one **prose subsection per row**: the buyer's own words for
+that thing, **one sentence**, never a specification restated from the spec rows and never
+grown as facts arrive — the rows carry the facts, and a widening edits a row, not the
+sentence. **No domains yet** — classification is Beat 2's job, per item.
 
 - **An unclassified item is a legal, writable state.** When the category is not settled,
   write the row with an **empty domain cell** and carry on. It is never an error, never a
@@ -59,12 +61,13 @@ asked for.
 Beat 5 **projects** what Beats 3–4 resolved; it never re-derives it. **Call
 `shopping_brief_compile { ref, item }` per item** and send what it answers:
 
-- **`domain`, `query` and `specs`** go to `shopping_search`. `specs` is every
-  `## Hard constraints` and `## Preferences` row whose `domain` is **ancestor-or-self** of
-  that item's domain; `query` is that item's own subsection prose. `price` is a key every
-  domain has without the read listing it, and its `currency` is **required** — sil holds
-  no exchange rate. Hardness is the row's **section**, not a wire field — it is Beat 6
-  that enforces it.
+- **`domain`, `query` and `specs`** go to `shopping_search`. `query` is that item's
+  subsection as it stands — the buyer's one sentence, never a specification rebuilt from
+  the spec rows. `specs` is every `## Hard constraints` and `## Preferences` row whose
+  `domain` is **ancestor-or-self** of that item's domain. `price` is a key every domain
+  has without the read listing it, and its `currency` is **required** — sil holds no
+  exchange rate. Hardness is the row's **section**, not a wire field — it is Beat 6 that
+  enforces it.
 - **`seller_specs`** is not sent here at all. It is Beat 6's ask, on the shortlisted
   variants, and it is answered **per offer**.
 - **You add `n`** — a spend knob (the web leg fetches candidates to fill it), chosen for
@@ -164,7 +167,9 @@ returns — beside the `seller_fit` the offer already answered.
   Best-first **as returned** — never a re-rank, never a bare list.
 - **Shortfall or empty → propose a specific relaxation and wait.** Name the gap, show the
   closest survivors, **propose** the specific change that would widen it, then **wait**.
-  No silent re-search, no silent auto-widen; the buyer can redirect instead.
+  No silent re-search, no silent auto-widen. **An answer that does not choose the widening
+  is not a yes** — every hard row stands, the shortfall is restated as it was, and the
+  buyer can redirect instead.
 
 A **non-`ok`** status is not an empty match — do not relax the ask; follow that tool's own
 **`recovery`** exactly.

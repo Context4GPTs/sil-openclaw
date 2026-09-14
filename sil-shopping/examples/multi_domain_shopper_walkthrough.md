@@ -23,10 +23,11 @@ when this starts: there is no document, no Brief and no preparation, and none is
 | shell |        | open   |
 
 ### boots
-Boots that won't blister — resort, not touring. The rental Langes sat wrong over the instep.
+Boots that won't blister — resort, not touring, and the rental Langes sat wrong over the
+instep.
 
 ### shell
-Something that packs down small. Nothing shiny.
+Something that packs down small, nothing shiny.
 ```
 
 Both domain cells are **empty** — the categories are not settled yet, and an unclassified
@@ -68,9 +69,9 @@ Fill asks nothing.
 ### Beat 4 — ASK (once, merged, before any search)
 
 Two open dimensions survive fill — `liner_type` for the boots, packed volume for the shell
-— and both are load-bearing per their guides. They go out in **one turn**, each carrying
-why it decides the buy, with the filled understanding played back for correction. The
-buyer answers the first and skips the second: the shell's dimension is written to
+— and both are load-bearing per their guides. They go out in **one turn**, opening with the
+`Heard:` playback of every fact stated so far and each question carrying why it decides the
+buy. The buyer answers the first and skips the second: the shell's dimension is written to
 `## Notes / open`, the assumption is stated in the same turn, and **the search still runs**.
 
 ### Beat 5 — SEARCH (per item, ≤ 4 calls each)
