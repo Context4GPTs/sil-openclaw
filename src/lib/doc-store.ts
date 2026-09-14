@@ -446,9 +446,13 @@ function specRowsOf(body: string, heading: string, hard: boolean): SpecRow[] {
   }));
 }
 
-/** Bullet- and bold-tolerant, because a model markdown-formats a label it is told to
- * write and a refusal over `**search:**` costs the buyer a turn. */
-const SEARCH_LINE = /^\s*(?:[-*+]\s+)?\*{0,2}search\*{0,2}\s*:\*{0,2}\s*(.*)$/i;
+/** The label, through the markup a model wraps it in — a bullet, bold, a code span. It
+ * is ANCHORED, so `research:` and a mid-sentence "search:" are not this line. */
+const SEARCH_LABEL = /^\s*(?:[-*+]\s+)?[*`]*search[*`]*\s*:/i;
+
+/** What ends a fold: a blank line, the next bookkeeping label, a list item. A
+ * continuation of the buyer's shopping words is none of the three. */
+const ENDS_FOLD = /^\s*$|^\s*(?:[-*+]\s|\d+\.\s|[*`]*[a-z_]+[*`]*\s*:)/i;
 
 /**
  * One item's shopping words — the `search:` line beat 3 writes inside that item's
@@ -456,6 +460,9 @@ const SEARCH_LINE = /^\s*(?:[-*+]\s+)?\*{0,2}search\*{0,2}\s*:\*{0,2}\s*(.*)$/i;
  * the buyer calls the thing; `""` when the item has no subsection or no such line, and
  * the caller refuses on that. The rest of the subsection is the buyer's sentence, which
  * the agent reads and no call sends.
+ *
+ * The Brief is hard-wrapped and a query on the wire is one line, so continuations fold;
+ * markup is stripped, because `**` on the wire is a value no listing can equal.
  */
 export function itemSearchLine(body: string, item: string): string {
   const lines = sectionBody(body, "## Items").split(/\r?\n/);
@@ -464,11 +471,15 @@ export function itemSearchLine(body: string, item: string): string {
   if (start < 0) return "";
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((l) => headingText(l) !== null);
-  for (const line of end < 0 ? rest : rest.slice(0, end)) {
-    const found = SEARCH_LINE.exec(line);
-    if (found !== null) return (found[1] as string).replace(/\s+/g, " ").trim();
+  const subsection = end < 0 ? rest : rest.slice(0, end);
+  const at = subsection.findIndex((l) => SEARCH_LABEL.test(l));
+  if (at < 0) return "";
+  const folded = [(subsection[at] as string).replace(SEARCH_LABEL, "")];
+  for (const line of subsection.slice(at + 1)) {
+    if (ENDS_FOLD.test(line)) break;
+    folded.push(line);
   }
-  return "";
+  return folded.join(" ").replace(/[*`]/g, "").replace(/\s+/g, " ").trim();
 }
 
 function headingText(line: string): string | null {

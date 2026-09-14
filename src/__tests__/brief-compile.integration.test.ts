@@ -201,15 +201,12 @@ describe("A3 — the journey's Brief compiles to the contract's own bodies", () 
     );
   });
 
-  it("`query` IS the `search:` line — the sentence above it and the `applies:` line stay in the Brief", async () => {
-    // Beat 3 writes both bookkeeping lines INSIDE the item's subsection, so both are
-    // prose by position. Measured on the creation boot, the query carried "applies:
-    // mondo_size, flex_index, last_width" into the web leg; measured on the index's
-    // shopping vertical, the buyer's sentence answers ZERO offers where "ski boots 27.5
-    // flex 110" answers forty. The line is rewritten to that literal rather than lifted:
-    // the claim is that a body other than the buyer's prose reaches the wire, and a
-    // derived one would restate §3.9 instead of checking it.
-    expect(writeDocument({ ref: REF, mode: "replace", title: "Chamonix", body: BRIEF.replace(`search: ${BOOTS_SEARCH}`, "search: ski boots 27.5 flex 110") }).ok).toBe(true);
+  it("`query` IS the `search:` line, not the sentence or the `applies:` line", async () => {
+    // On the index's shopping vertical the buyer's sentence answers ZERO priced offers
+    // where "ski boots 27.5 flex 110" answers forty — so the line is rewritten to that
+    // literal rather than lifted, which would restate §3.9 instead of checking it.
+    const body = BRIEF.replace(`search: ${BOOTS_SEARCH}`, "search: ski boots 27.5 flex 110");
+    expect(writeDocument({ ref: REF, mode: "replace", title: "Chamonix", body }).ok).toBe(true);
     scriptTheRegistry();
     const query = (await compile({ ref: REF, item: "ski boots" }))["query"] as string;
     expect(query).toBe("ski boots 27.5 flex 110");
@@ -218,10 +215,10 @@ describe("A3 — the journey's Brief compiles to the contract's own bodies", () 
   });
 
   it("an item with no `search:` line is refused naming beat 3, before any spend", async () => {
-    // The whole subsection used to be the query, so an item beat 3 never reached would
-    // otherwise compile and send the buyer's sentence — exactly the body the index
-    // answers nothing for. The recovery is to write the line, not to settle a domain.
-    expect(writeDocument({ ref: REF, mode: "replace", title: "Chamonix", body: BRIEF.replace(`search: ${HELMET_SEARCH}\n`, "") }).ok).toBe(true);
+    // An item beat 3 never reached would otherwise compile and send the buyer's
+    // sentence — exactly the body the index answers nothing for.
+    const body = BRIEF.replace(`search: ${HELMET_SEARCH}\n`, "");
+    expect(writeDocument({ ref: REF, mode: "replace", title: "Chamonix", body }).ok).toBe(true);
     const router = scriptTheRegistry();
     const refusal = await compile({ ref: REF, item: "helmet" });
     expect(refusal["status"]).toBe("invalid_request");

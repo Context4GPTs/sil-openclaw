@@ -326,14 +326,10 @@ describe("guard-of-the-guard: the matrix actually covers the surface", () => {
 });
 
 describe("the refusal envelope is uniform across the surface", () => {
-  it("a 400 surfaces the route's own message VERBATIM on every tool, and only the MINT names a next call", async () => {
-    // The route names the offender in its own message, so the message IS the agent's
-    // recourse, and a tool that rewrote it would send the agent down a path that cannot
-    // help. The recovery is the one field that is deliberately NOT uniform: re-sending
-    // the same body cannot succeed anywhere, but the mint's 400 refuses the PATH, and
-    // with no recovery the agent is left with no move at all. Driven without `drive()`
-    // so the message itself is in the parity object — `drive` cannot carry it, because
-    // the terminal messages it also serves name their own tool and so differ by design.
+  it("a 400 carries the route's message VERBATIM, and no tool names a next call", async () => {
+    // One status covers several causes on a route, so the message IS the agent's
+    // recourse and no fixed next call can fit it. Driven without `drive()`, whose parity
+    // object cannot carry a message: the terminal ones it also serves name their own tool.
     const results: [string, unknown][] = [];
     const recoveries: [string, unknown][] = [];
     for (const spec of BEARER_TOOLS) {
@@ -349,9 +345,7 @@ describe("the refusal envelope is uniform across the surface", () => {
     }
     expectParity(results);
     expect(results[0][1]).toEqual({ status: "invalid_request", message: SEARCH_400.message });
-    expect(recoveries.filter(([, recovery]) => recovery !== undefined)).toEqual([
-      ["shopping_domain_create", "shopping_domain_search"],
-    ]);
+    expect(recoveries.filter(([, recovery]) => recovery !== undefined)).toEqual([]);
   });
 
   it("a 5xx is `retryable` on every tool — tokens survive, nothing is re-registered", async () => {

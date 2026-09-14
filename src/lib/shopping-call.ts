@@ -22,14 +22,12 @@ import { jsonResult } from "./tool-result.js";
 export const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
 
 /**
- * What the agent runs next, PER STATUS — the 404 a path read answers, the 409 and the
- * too-shallow-path 400 the mint answers. Per status because one route's two refusals
- * have different next calls: the mint's 409 means search that path, its 400 means read
- * the registry again. A status absent here carries no recovery.
+ * What the agent runs next, PER STATUS — the 404 a path read answers, the 409 the mint
+ * answers. Only these two: a status earns a fixed next call only when its cause is
+ * unambiguous, and `invalid_request` covers several causes on one route, so its next
+ * move is its own message's to name. A status absent here carries no recovery.
  */
-export type RefusalRecovery = Partial<
-  Record<"invalid_request" | "not_found" | "already_exists", string>
->;
+export type RefusalRecovery = Partial<Record<"not_found" | "already_exists", string>>;
 
 /** A route, under the NAME of the tool the agent called: every log marker and every
  * recovery hint names that tool, never the route behind it. */
@@ -85,6 +83,8 @@ function mapOutcome(api: PluginAPI, call: ShoppingCall, outcome: ShoppingOutcome
     case "ok":
       return { kind: "ok", body: outcome.body };
     case "invalid_request":
+      api.logger.info(`${call.name}_invalid_request`, {});
+      return { kind: "refused", result: refusal("invalid_request", outcome.message) };
     case "not_found":
     case "already_exists":
       api.logger.info(`${call.name}_${outcome.kind}`, {});
@@ -119,7 +119,8 @@ function notRegistered(tool: string): ToolResult {
  * A refusal the route made before it spent, surfaced VERBATIM: the message names the
  * offender in sil's own words, so it IS the agent's recourse and is never rewritten or
  * matched on here. Terminal but NOT fatal and NOT retryable — where a recovery exists it
- * is the next tool to call, never the same call again.
+ * is the next tool to call, never the same call again. An `invalid_request` never carries
+ * one: a next call that fits one of its causes is a hint that misleads on the rest.
  */
 function refusal(
   status: "invalid_request" | "not_found" | "already_exists",

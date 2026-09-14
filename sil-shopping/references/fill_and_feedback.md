@@ -110,6 +110,11 @@ then as cheap for the buyer to correct as an answer is to give. **Two items both
 an open dimension are merged into ONE turn** — per-item beats do not mean per-item
 interrogations.
 
+**An answer that supplies a picking number rewrites that item's `search:` line.** A size,
+a width, a flex arriving here lands in the spec rows *and* in the line beat 3 wrote: the
+line is the only thing that reaches `query`, so a number settled at this turn and left out
+of it is a number the search never sees.
+
 **Elicitation gates QUALITY, never ACCESS.** A declined question, or one the buyer simply
 does not answer, still searches: proceed on the **best defensible reading**, **state the
 assumption in the same turn** ("assuming waterproofing, since it's for the slope"), and

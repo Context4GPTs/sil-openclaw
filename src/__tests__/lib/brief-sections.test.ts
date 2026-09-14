@@ -91,6 +91,39 @@ describe("parseSpecRows — the two tables, in the order a search sends them", (
   });
 });
 
+/** A one-item Brief carrying exactly these subsection lines. */
+const briefWith = (...subsection: string[]): string =>
+  [
+    "## Items",
+    "",
+    "| item | domain | status |",
+    "|---|---|---|",
+    "| boots | product.sports.winter.ski.boots | open |",
+    "",
+    "### boots",
+    ...subsection,
+    "",
+  ].join("\n");
+
+/** The label as models actually format it, each with the words it must yield. */
+const MARKUP: [string, string][] = [
+  ["search: ski boots 27.5", "ski boots 27.5"],
+  ["- **search:** ski boots 27.5", "ski boots 27.5"],
+  ["`search:` ski boots 27.5", "ski boots 27.5"],
+  ["`search: ski boots 27.5`", "ski boots 27.5"],
+  ["**search: ski boots 27.5**", "ski boots 27.5"],
+  ["- **search:** **ski boots 27.5**", "ski boots 27.5"],
+];
+
+/** Lines that are NOT the label, and each of which a Brief can legitimately carry. */
+const NOT_THE_LABEL = [
+  "research: how ski boots are bought",
+  "searches: two so far",
+  "applies: mondo_size, flex_index",
+  "I will search: for boots",
+  "# search: ski boots 27.5",
+];
+
 describe("itemSearchLine — the shopping words one item is searched by", () => {
   it("returns that item's `search:` line, never the sentence or the `applies:` line beside it", () => {
     // The boots' subsection carries all three, in that order. A reader that took the
@@ -99,10 +132,35 @@ describe("itemSearchLine — the shopping words one item is searched by", () => 
     expect(itemSearchLine(BRIEF, "ski boots")).toBe("ski boots 27.5 flex 110");
   });
 
-  it("reads a line a model bulleted and bolded — `- **search:** …` is the same line", () => {
-    // Models markdown-format a label they are told to write, and the refusal that would
-    // follow costs the buyer a turn for a line that is actually there.
-    expect(itemSearchLine(BRIEF, "helmet")).toBe("ski helmet 58 cm");
+  it("reads the label through the markup a model wraps it in — and only that label", () => {
+    // Measured before this: a backticked label or value read as absent (a refused
+    // compile), and a bolded one put `**` on the wire, where it is a token no listing
+    // can match. The near-misses have to stay near-misses — `research:` is a line the
+    // buyer's own prose can begin with.
+    expect(MARKUP.map(([line]) => itemSearchLine(briefWith(line), "boots"))).toEqual(
+      MARKUP.map(([, words]) => words),
+    );
+    for (const line of NOT_THE_LABEL) {
+      expect({ line, read: itemSearchLine(briefWith(line), "boots") }).toEqual({ line, read: "" });
+    }
+  });
+
+  it("folds a hard-wrapped line, and stops at the blank line or the next label", () => {
+    // The Brief is hard-wrapped at ~88 columns and a query on the wire is ONE line, so a
+    // continuation left behind silently searches half the words the guide settled.
+    expect(
+      itemSearchLine(
+        briefWith(
+          "search: ski boots 27.5 flex 110 last 100 mm",
+          "gripwalk soles 2026",
+          "applies: mondo_size, flex_index",
+        ),
+        "boots",
+      ),
+    ).toBe("ski boots 27.5 flex 110 last 100 mm gripwalk soles 2026");
+    expect(itemSearchLine(briefWith("search: ski boots 27.5", "", "an aside"), "boots")).toBe(
+      "ski boots 27.5",
+    );
   });
 
   it("stops at the next item's heading — an item beat 3 has not reached yet is empty", () => {
@@ -111,6 +169,8 @@ describe("itemSearchLine — the shopping words one item is searched by", () => 
     // gloves' domain, and the answer would read as a perfectly ordinary miss.
     expect(itemSearchLine(BRIEF, "gloves")).toBe("");
     expect(itemSearchLine(BRIEF, "no such item")).toBe("");
+    // Guard-of-the-guard: the line the gloves must not reach is really there.
+    expect(itemSearchLine(BRIEF, "helmet")).toBe("ski helmet 58 cm");
   });
 
   it("matches the item label, not its case", () => {

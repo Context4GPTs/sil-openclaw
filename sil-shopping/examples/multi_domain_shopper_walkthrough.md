@@ -23,11 +23,11 @@ when this starts: there is no document, no Brief and no preparation, and none is
 | shell |        | open   |
 
 ### boots
-Boots that won't blister — resort, not touring, and the rental Langes sat wrong over the
-instep.
+Boots that won't blister — resort, not touring, and the rental Langes in 28.0 sat wrong
+over the instep.
 
 ### shell
-Something that packs down small, nothing shiny.
+Something that packs down small, nothing shiny — men's 52.
 ```
 
 Both domain cells are **empty** — the categories are not settled yet, and an unclassified
@@ -64,8 +64,9 @@ shopping_doc_write { ref: "shopper", mode: "create", name: "Ioannis", body: "## 
 `name` came from `sil_whoami`. From there the fill proceeds as always: the wool exclusion
 becomes `fibre_wool_pct eq 0` in `## Hard constraints` (it reaches **both** items — it is
 scoped at the root), and the instep note stays open. Each item gets its `applies:` line
-and its `search:` line — `search: ski boots resort` and `search: ski shell packable`, the
-words a shop lists the thing by. Fill asks nothing.
+and its `search:` line — `search: ski boots 28.0 resort` and `search: ski shell 52
+packable`, the category as a shop lists it plus the number the buyer gave that picks it.
+Fill asks nothing.
 
 ### Beat 4 — ASK (once, merged, before any search)
 

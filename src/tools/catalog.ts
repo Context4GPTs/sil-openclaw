@@ -69,12 +69,8 @@ export const SHOPPING_TOOLS = [
     method: "POST",
     path: "/catalog/domains",
     label: "Coin a new category in sil's registry",
-    // A colliding path means the vocabulary is already there, so search it; a path the
-    // registry refuses as too shallow means the ancestor is still unknown, so read again.
-    recovery: {
-      already_exists: "shopping_search",
-      invalid_request: "shopping_domain_search",
-    },
+    // A colliding path means the vocabulary is already there, so search that same path.
+    recovery: { already_exists: "shopping_search" },
     description:
       "Beat 2's mint, and the one permanent global write in sil: coin a NEW category —"
       + " its path, a buying guide written from research, and the first keys it is bought"
@@ -103,12 +99,11 @@ export const SHOPPING_TOOLS = [
     description:
       "Beat 5: the products and variants that fit in one settled category, as"
       + " shopping_brief_compile builds it from the Brief. Send the domain path, the"
-      + " shopping words as `query` — the item's `search:` line as that compile answers"
-      + " it — how many products you want, and that compile's"
+      + " shopping words as `query`, how many products you want, and that compile's"
       + " `specs` array UNCHANGED — every value exactly as it was answered, a money value"
       + " a decimal STRING (`\"300\"`, never 300 or \"300.00\"), or the row is refused and"
       + " the call is spent. `ship_to` is the LABEL of one of the buyer's addresses as"
-      + " sil_whoami lists them, never a country: sil uses"
+      + " sil_whoami lists them, never a country: it localizes the search, and sil uses"
       + " the default address when you send nothing. Seller terms are shopping_offers'"
       + " ask, answered per seller. `price`"
       + " is a key every domain has and its currency is required: sil holds no exchange"

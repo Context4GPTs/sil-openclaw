@@ -4,9 +4,9 @@
  *
  * Two properties are asserted that no other file can: the mint body reaches the route
  * EXACTLY as the agent composed it — `type`, `variant_spec`, `product_spec`, and nothing
- * the plugin invented — and each of its two refusals is carried back with the next call
- * it licenses, which is a DIFFERENT call for each: a colliding path means the vocabulary
- * is already there, a path hung on the root means the ancestor is still unknown.
+ * the plugin invented — and each refusal reaches the agent as sil wrote it: the 409 with
+ * the next call it licenses, because a colliding path means the vocabulary is already
+ * there, and the depth 400 with its own message, which is the whole of the next move.
  */
 
 import { describe, it, expect } from "vitest";
@@ -123,18 +123,14 @@ describe("shopping_domain_create — what the answer means", () => {
     });
   });
 
-  it("a path hung on the ROOT is `invalid_request`, and the recovery is to READ the registry again", async () => {
-    // Draw 2 minted `product.ski_boots` and `product.ski_helmets` on the root — a fork
-    // every later buyer inherits. The registry now refuses it, and the refusal needs a
-    // DIFFERENT next call from the 409: nothing stands at that path, so searching it
-    // finds nothing and the agent is left with no move. Every word of the message is
-    // sil's own — the whole of the agent's recourse is in it.
+  it("a path hung on the ROOT comes back VERBATIM — its message is the next move", async () => {
+    // Draw 2 minted `product.ski_boots` on the root, a fork every later buyer inherits.
+    // The route answers `invalid_request` for several causes, so no fixed recovery fits
+    // it; this one's message names its own, and a hint beside it would misfit the rest.
     seedTokens(ACCESS, REFRESH);
     installRouter((kind) => (kind === "domains" ? { status: 400, body: MINT_400 } : ok({})));
-    expect(await run()).toEqual({
-      status: "invalid_request",
-      message: MINT_400.message,
-      recovery: "shopping_domain_search",
-    });
+    const refusal = await run();
+    expect(refusal).toEqual({ status: "invalid_request", message: MINT_400.message });
+    expect(refusal).not.toHaveProperty("recovery");
   });
 });
