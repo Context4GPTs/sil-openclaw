@@ -13,7 +13,7 @@
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Mints this path; only its root must already stand."
+      "description": "Mints this path; only its root must already stand. A path directly under `product` is refused — name the family the thing is shelved in, as `product.sports.winter.ski.boots` does."
     },
     "guide": {
       "type": "string",
