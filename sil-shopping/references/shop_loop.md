@@ -36,9 +36,9 @@ question, and neither subsumes the other.
 
 **Then decide scope, and only scope.** The Brief gets an `## Items` table with **one row
 per thing being bought**, and one **prose subsection per row**: the buyer's own words for
-that thing, **one sentence**, never a specification restated from the spec rows and never
-grown as facts arrive — the rows carry the facts, and a widening edits a row, not the
-sentence. **No domains yet** — classification is Beat 2's job, per item.
+that thing, **one sentence**. It is never a specification restated from the spec rows, and
+never grown as facts arrive — the rows carry the facts, and a widening edits a row.
+**No domains yet** — classification is Beat 2's job, per item.
 
 - **An unclassified item is a legal, writable state.** When the category is not settled,
   write the row with an **empty domain cell** and carry on. It is never an error, never a
@@ -62,8 +62,8 @@ Beat 5 **projects** what Beats 3–4 resolved; it never re-derives it. **Call
 `shopping_brief_compile { ref, item }` per item** and send what it answers:
 
 - **`domain`, `query` and `specs`** go to `shopping_search`. `query` is that item's
-  subsection as it stands — the buyer's one sentence, never a specification rebuilt from
-  the spec rows. `specs` is every `## Hard constraints` and `## Preferences` row whose
+  subsection **as it stands** — the buyer's one sentence, the words they used.
+  `specs` is every `## Hard constraints` and `## Preferences` row whose
   `domain` is **ancestor-or-self** of that item's domain. `price` is a key every domain
   has without the read listing it, and its `currency` is **required** — sil holds no
   exchange rate. Hardness is the row's **section**, not a wire field — it is Beat 6 that

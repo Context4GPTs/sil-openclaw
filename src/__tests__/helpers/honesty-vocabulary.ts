@@ -299,6 +299,12 @@ export function statesQualifiedNotFound(body: string): boolean {
  * guard-of-the-guard at both call sites.
  */
 export const RETIRED_V0_TOKENS = [
+  // Two retired PHRASES rather than wire names, and the only kind this list takes:
+  // each was the wording a live draw failed under (a subsection written as "free
+  // text", a playback stated as a disposition), so a file re-saying either revives
+  // the defect its fix was measured against.
+  "free text",
+  "filled understanding",
   "auth_url",
   "next_step",
   "checkout_url",

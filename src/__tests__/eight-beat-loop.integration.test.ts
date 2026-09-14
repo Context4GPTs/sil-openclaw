@@ -269,17 +269,17 @@ describe("C — ASK is a beat, so `## Notes / open` is a surface", () => {
     ];
     expect(bars.filter(([, re]) => !units.some((s) => re.test(s))).map(([name]) => name)).toEqual([]);
 
-    // RE-DERIVED, on five live draws that asked with no playback at all while the
-    // prose said the turn "plays the filled understanding back" — a disposition an
-    // agent can believe it satisfied. A LABELLED OPENING LINE is the one form it
-    // either emits or visibly does not, and the translation is the half worth
-    // playing back: a buyer corrects `flex 110-130` far more cheaply than `advanced`.
+    // RE-DERIVED: five draws asked with no playback while the prose said the turn
+    // "plays the filled understanding back" — a disposition an agent can believe it
+    // satisfied. Keyed on the CLAUSE, since `mis-translation` shares the stem.
     const playback = units.filter((s) => /Heard:/.test(s));
     expect(playback.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
       unsatisfied(playback, (s) => /first line|opens? with|before the questions?/i.test(s)),
     ).toEqual([]);
-    expect(unsatisfied(playback, (s) => /translat/i.test(s))).toEqual([]);
+    expect(
+      unsatisfied(playback, (s) => /guide'?s translation|translation where/i.test(s)),
+    ).toEqual([]);
   });
 
   it("C4 — a declined or unanswered ASK still searches on the best defensible reading, states the assumption, and writes a `## Notes / open` row", () => {

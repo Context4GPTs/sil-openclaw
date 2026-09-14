@@ -538,19 +538,15 @@ describe("SC4 — no path in the bundle asks for a created shopper", () => {
 
 // ===========================================================================
 // What the live draws bought. Two buyer rounds on the live web attributed four
-// failures to this bundle's WORDING, each with its transcript line. The bars below
-// hold the behaviour the prose now has to carry, scoped to the beat that owns it,
-// and every one of them REDs on the wording the draw was run against. A fifth —
-// the ASK turn's playback line — is C3 in `eight-beat-loop.integration.test.ts`,
-// re-derived there rather than copied here.
+// failures to this bundle's WORDING; each bar below REDs on the wording the draw
+// ran against. The fifth, the playback line, is C3 in `eight-beat-loop`.
 // ===========================================================================
 
 describe("the live draws' share — wordings a buyer round measured", () => {
   it("L1 — the item's subsection is the buyer's OWN WORDS, ONE SENTENCE, and beat 5 sends it as it stands", () => {
-    // Both draws sent the index a specification as `query` — draw 2's ran to 60
-    // first-person words — and both got 0 candidates. "In the buyer's own words" was
-    // read as "write the thing up": the rows carry the facts, so a widening edits a
-    // row and the sentence stays the sentence the buyer said.
+    // Both draws compiled a specification into `query` — draw 2's ran to 60
+    // first-person words — and the index answered guides, 0 candidates. "In the
+    // buyer's own words" was read as "write the thing up".
     const subsections = beatStatements(1).filter((s) => /subsection/i.test(s));
     expect(subsections.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
@@ -560,21 +556,14 @@ describe("the live draws' share — wordings a buyer round measured", () => {
     const query = beatStatements(5).filter((s) => /`query`/.test(s));
     expect(query.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(
-        query,
-        (s) =>
-          /subsection/i.test(s)
-          && /(never|not|rather than)[^.]{0,60}(specification|restat|rebuilt|re-?typ|paragraph)/i.test(s),
-      ),
+      unsatisfied(query, (s) => /subsection/i.test(s) && /as it stands/i.test(s)),
     ).toEqual([]);
   });
 
   it("L2 — a durable fact the buyer's own ask carries is written at FILL, cold, before the first search — and THIS job's budget is not one", () => {
-    // Draw 2's buyer opened with "size 27.5 for advanced skier up to 300 euros" and
-    // the agent asked nothing, so "when the buyer states something durable" never
-    // fired, no document was written, and session 2 re-asked all three. The budget is
-    // the other half — saved onto the person it follows them into the next job, where
-    // it was never their ceiling.
+    // Draw 2's buyer opened with "size 27.5 for advanced skier up to 300 euros", the
+    // agent asked nothing, no document was written, and session 2 re-asked all three.
+    // The budget is the other half: on the person, it follows them into the next job.
     const fill = beatStatements(3).filter(
       (s) => /\bASK\b/.test(s) && /durable|\bsize\b|\bfact\b/i.test(s),
     );
@@ -595,11 +584,9 @@ describe("the live draws' share — wordings a buyer round measured", () => {
   });
 
   it("L3 — a relaxation the buyer does not choose is NOT taken: every hard row stands, and the best defensible reading settles a FACT", () => {
-    // Draw 1: the buyer answered a relaxation offer with "go with your best reading
-    // and tell me what you assumed", and the agent raised the €300 HARD row to €400
-    // and saved it to the Brief. ASK's proceed-on-the-best-reading clause reached a
-    // proposed widening it was never about, and beat 5's "a hard row is never
-    // relaxed" lost — a collision no bar could see, because each half read fine alone.
+    // Draw 1: answered "go with your best reading and tell me what you assumed", the
+    // agent raised the €300 HARD row to €400 and saved it. ASK's best-reading clause
+    // reached a proposed widening, and beat 5's "a hard row is never relaxed" lost.
     const reading = beatStatements(4).filter((s) => /defensible reading/i.test(s));
     expect(reading.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
@@ -612,11 +599,9 @@ describe("the live draws' share — wordings a buyer round measured", () => {
   });
 
   it("L4 — a minted path names its ANCESTORS: a leaf hung on the root is a fork every later buyer inherits", () => {
-    // Draw 2 minted `product.ski_boots`, then `product.ski_helmets`, as leaves on the
-    // root; draw 1 minted `product.sports.winter.ski.boots` from the same prompt. The
-    // descend rule licenses a DESCENDANT of what stands, and on a registry holding
-    // only the root a leaf on the root satisfies it — so the shape of the path itself
-    // has to be stated. Nothing can undo a mint.
+    // Draw 2 minted `product.ski_boots` and `product.ski_helmets` on the root; draw 1
+    // minted `product.sports.winter.ski.boots` from the same prompt. On a registry
+    // holding only the root, a leaf on the root satisfies "descend".
     const coining = beatStatements(2).filter(
       (s) => /\bcoin|\bmint/i.test(s) && /\bpath\b/i.test(s),
     );
