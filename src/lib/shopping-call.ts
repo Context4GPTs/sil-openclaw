@@ -21,13 +21,21 @@ import { jsonResult } from "./tool-result.js";
  * nobody owns. */
 export const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
 
+/**
+ * What the agent runs next, PER STATUS — the 404 a path read answers, the 409 and the
+ * too-shallow-path 400 the mint answers. Per status because one route's two refusals
+ * have different next calls: the mint's 409 means search that path, its 400 means read
+ * the registry again. A status absent here carries no recovery.
+ */
+export type RefusalRecovery = Partial<
+  Record<"invalid_request" | "not_found" | "already_exists", string>
+>;
+
 /** A route, under the NAME of the tool the agent called: every log marker and every
  * recovery hint names that tool, never the route behind it. */
 export interface ShoppingCall extends ShoppingRoute {
   readonly name: string;
-  /** What the agent runs next on a refusal only THIS route can produce — the 404 the
-   * path read answers, the 409 the mint answers. Absent where no recovery exists. */
-  readonly refusalRecovery?: string;
+  readonly recovery?: RefusalRecovery;
 }
 
 /** The API's own 200 body, or the refusal to hand the agent as it stands. */
@@ -77,19 +85,12 @@ function mapOutcome(api: PluginAPI, call: ShoppingCall, outcome: ShoppingOutcome
     case "ok":
       return { kind: "ok", body: outcome.body };
     case "invalid_request":
-      api.logger.info(`${call.name}_invalid_request`, {});
-      return { kind: "refused", result: invalidRequest(outcome.message) };
     case "not_found":
-      api.logger.info(`${call.name}_not_found`, {});
-      return {
-        kind: "refused",
-        result: refusal("not_found", outcome.message, call.refusalRecovery),
-      };
     case "already_exists":
-      api.logger.info(`${call.name}_already_exists`, {});
+      api.logger.info(`${call.name}_${outcome.kind}`, {});
       return {
         kind: "refused",
-        result: refusal("already_exists", outcome.message, call.refusalRecovery),
+        result: refusal(outcome.kind, outcome.message, call.recovery?.[outcome.kind]),
       };
     case "forbidden":
       return { kind: "refused", result: forbiddenResult(api, call.name, outcome.reason) };
@@ -115,21 +116,13 @@ function notRegistered(tool: string): ToolResult {
 }
 
 /**
- * sil refused the request (a 400), surfaced VERBATIM.
- *
- * The route refuses before it spends and names the offender in its own message, so the
- * message IS the agent's recourse and is never rewritten or matched on here. No
- * `recovery`: auth is fine, and re-sending the same body cannot succeed.
+ * A refusal the route made before it spent, surfaced VERBATIM: the message names the
+ * offender in sil's own words, so it IS the agent's recourse and is never rewritten or
+ * matched on here. Terminal but NOT fatal and NOT retryable — where a recovery exists it
+ * is the next tool to call, never the same call again.
  */
-function invalidRequest(message: string): ToolResult {
-  return jsonResult({ status: "invalid_request", message });
-}
-
-/** A refusal only one route can produce — a path the registry does not hold, or a mint
- * onto a path that already stands. Terminal but NOT fatal and NOT retryable, so the
- * recovery is the next tool to call rather than the same call again. */
 function refusal(
-  status: "not_found" | "already_exists",
+  status: "invalid_request" | "not_found" | "already_exists",
   message: string,
   recovery?: string,
 ): ToolResult {

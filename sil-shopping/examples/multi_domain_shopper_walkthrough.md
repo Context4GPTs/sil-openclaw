@@ -63,8 +63,9 @@ shopping_doc_write { ref: "shopper", mode: "create", name: "Ioannis", body: "## 
 
 `name` came from `sil_whoami`. From there the fill proceeds as always: the wool exclusion
 becomes `fibre_wool_pct eq 0` in `## Hard constraints` (it reaches **both** items — it is
-scoped at the root), and the instep note stays open. Each item gets its `applies:` line.
-Fill asks nothing.
+scoped at the root), and the instep note stays open. Each item gets its `applies:` line
+and its `search:` line — `search: ski boots resort` and `search: ski shell packable`, the
+words a shop lists the thing by. Fill asks nothing.
 
 ### Beat 4 — ASK (once, merged, before any search)
 
@@ -77,7 +78,7 @@ buy. The buyer answers the first and skips the second: the shell's dimension is 
 ### Beat 5 — SEARCH (per item, ≤ 4 calls each)
 
 Two independent fan-outs, issued concurrently. `shopping_brief_compile { ref, item }`
-builds each one — the ancestor-scoped rows as `specs`, the item's own subsection prose as
+builds each one — the ancestor-scoped rows as `specs`, the item's `search:` line as
 `query` — and the agent adds `n` and the `ship_to` label the buyer's `## Constraints`
 names. Each starts with that tightest projection, then widens **soft** rows only, and each
 widening is an edit to the Brief and a second compile. The boots' four calls do not spend

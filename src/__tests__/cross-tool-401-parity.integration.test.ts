@@ -134,7 +134,8 @@ beforeEach(() => {
     title: "Chamonix",
     body:
       "## Items\n\n| item | domain | status |\n|---|---|---|\n"
-      + `| ski boots | ${DOMAIN} | open |\n\n### ski boots\nboots for the season\n`,
+      + `| ski boots | ${DOMAIN} | open |\n\n### ski boots\nboots for the season\n`
+      + "search: ski boots 27.5 flex 110\n",
   });
 });
 
@@ -325,19 +326,32 @@ describe("guard-of-the-guard: the matrix actually covers the surface", () => {
 });
 
 describe("the refusal envelope is uniform across the surface", () => {
-  it("a 400 surfaces the route's own message VERBATIM on every tool, with no recovery", async () => {
+  it("a 400 surfaces the route's own message VERBATIM on every tool, and only the MINT names a next call", async () => {
     // The route names the offender in its own message, so the message IS the agent's
-    // recourse. A tool that rewrote it — or invented a recovery for a body that cannot
-    // succeed on re-send — would send the agent down a path that cannot help.
+    // recourse, and a tool that rewrote it would send the agent down a path that cannot
+    // help. The recovery is the one field that is deliberately NOT uniform: re-sending
+    // the same body cannot succeed anywhere, but the mint's 400 refuses the PATH, and
+    // with no recovery the agent is left with no move at all. Driven without `drive()`
+    // so the message itself is in the parity object — `drive` cannot carry it, because
+    // the terminal messages it also serves name their own tool and so differ by design.
     const results: [string, unknown][] = [];
+    const recoveries: [string, unknown][] = [];
     for (const spec of BEARER_TOOLS) {
       if (spec.tool === "sil_whoami") continue; // the identity read has no 400 arm
       vi.restoreAllMocks();
-      const r = await drive(spec, ok({}), () => ({ status: 400, body: SEARCH_400 }));
-      results.push([spec.tool, { status: r.status, recovery: r.recovery }]);
+      seedTokens(ACCESS, REFRESH);
+      installRouter((kind: RouteKind) =>
+        kind === "refresh" ? ok({}) : { status: 400, body: SEARCH_400 },
+      );
+      const payload = payloadOf(await getTool(api, spec.tool).execute("call-1", spec.params));
+      results.push([spec.tool, { status: payload["status"], message: payload["message"] }]);
+      recoveries.push([spec.tool, payload["recovery"]]);
     }
     expectParity(results);
-    expect(results[0][1]).toEqual({ status: "invalid_request", recovery: undefined });
+    expect(results[0][1]).toEqual({ status: "invalid_request", message: SEARCH_400.message });
+    expect(recoveries.filter(([, recovery]) => recovery !== undefined)).toEqual([
+      ["shopping_domain_create", "shopping_domain_search"],
+    ]);
   });
 
   it("a 5xx is `retryable` on every tool — tokens survive, nothing is re-registered", async () => {

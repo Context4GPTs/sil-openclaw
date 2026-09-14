@@ -65,6 +65,14 @@ const REGISTRY: Record<string, { specs: unknown[]; seller_specs: unknown[] }> = 
   },
 };
 
+/**
+ * Beat 3's `search:` line per item — LIFTED from the contract's own `query`, not typed
+ * here, for the same reason the bodies are: §3.9 is the oracle for that field, so an edit
+ * to it moves this Brief instead of reding the byte-for-byte bar below.
+ */
+const BOOTS_SEARCH = contractResponse(TOOL)["query"] as string;
+const HELMET_SEARCH = contractAlternate(TOOL)["query"] as string;
+
 /** The Brief the journey leaves after beat 3 — hard-wrapped, as a model writes it. */
 const BRIEF = [
   "## Context",
@@ -82,10 +90,12 @@ const BRIEF = [
   "ski boots for the upcoming season, size 27.5, advanced skier, up to 300 euros;",
   "GripWalk soles; resort, a week in Chamonix in February",
   "applies: mondo_size, skill_level, flex_index, last_width, sole_norm, model_year, price",
+  `search: ${BOOTS_SEARCH}`,
   "",
   "### helmet",
   "a ski helmet for the same trip, it has to work with my goggles",
   "applies: head_circumference, price",
+  `search: ${HELMET_SEARCH}`,
   "",
   "## Hard constraints",
   "",
@@ -191,18 +201,33 @@ describe("A3 — the journey's Brief compiles to the contract's own bodies", () 
     );
   });
 
-  it("the Brief's `applies:` line stays in the Brief — it never rides the query", async () => {
-    // Beat 3 writes `applies:` INSIDE the item's subsection, so it is prose by position
-    // and bookkeeping by meaning. Sent, it reads to the index as words the buyer said —
-    // measured live on the creation boot, where the query carried "applies: mondo_size,
-    // flex_index, last_width" into the web leg.
+  it("`query` IS the `search:` line — the sentence above it and the `applies:` line stay in the Brief", async () => {
+    // Beat 3 writes both bookkeeping lines INSIDE the item's subsection, so both are
+    // prose by position. Measured on the creation boot, the query carried "applies:
+    // mondo_size, flex_index, last_width" into the web leg; measured on the index's
+    // shopping vertical, the buyer's sentence answers ZERO offers where "ski boots 27.5
+    // flex 110" answers forty. Written as a literal here, not lifted, because the whole
+    // claim is that a body other than the buyer's prose reaches the wire.
+    expect(writeDocument({ ref: REF, mode: "replace", title: "Chamonix", body: BRIEF.replace(`search: ${BOOTS_SEARCH}`, "search: ski boots 27.5 flex 110") }).ok).toBe(true);
     scriptTheRegistry();
     const query = (await compile({ ref: REF, item: "ski boots" }))["query"] as string;
+    expect(query).toBe("ski boots 27.5 flex 110");
     expect(query).not.toMatch(/applies:/i);
-    expect(query).not.toMatch(/mondo_size/);
-    // …and the buyer's own words are all still there, to the last clause.
-    expect(query).toContain("ski boots for the upcoming season");
-    expect(query).toContain("a week in Chamonix in February");
+    expect(query).not.toContain("ski boots for the upcoming season");
+  });
+
+  it("an item with no `search:` line is refused naming beat 3, before any spend", async () => {
+    // The whole subsection used to be the query, so an item beat 3 never reached would
+    // otherwise compile and send the buyer's sentence — exactly the body the index
+    // answers nothing for. The recovery is to write the line, not to settle a domain.
+    expect(writeDocument({ ref: REF, mode: "replace", title: "Chamonix", body: BRIEF.replace(`search: ${HELMET_SEARCH}\n`, "") }).ok).toBe(true);
+    const router = scriptTheRegistry();
+    const refusal = await compile({ ref: REF, item: "helmet" });
+    expect(refusal["status"]).toBe("invalid_request");
+    expect(refusal["message"]).toContain("`search:` line");
+    expect(refusal["message"]).toMatch(/beat 3/);
+    expect(refusal["recovery"]).toBe("shopping_doc_write");
+    expect(router.all).toEqual([]);
   });
 
   it("`in` on a key the domain does not hold still sends a LIST, not one long string", async () => {

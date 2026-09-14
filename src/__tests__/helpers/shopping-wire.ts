@@ -141,6 +141,16 @@ export const MINT_409 = {
   message: 'domain "product.sports.winter.ski.boots" already exists',
 } as const;
 
+/** The mint's other refusal: a leaf hung on the root, which the registry will not coin. */
+export const MINT_400 = {
+  error: "invalid_request",
+  message:
+    '"product.ski_boots" hangs directly under the root. A category path names how the'
+    + " thing is shelved, family by family — product.sports.winter.ski.boots — so read"
+    + " the registry again in the buyer's words and coin the whole path under an ancestor"
+    + " that stands.",
+} as const;
+
 /**
  * The auth plugin's shared bodies — the SAME four across every route, the registry read
  * included: it registers inside the auth plugin's guarded scope, so an unauthenticated

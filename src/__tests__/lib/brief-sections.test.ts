@@ -1,6 +1,6 @@
 /**
  * UNIT — a Brief's own sections, as the store reads them out of one body: the two spec
- * tables and each item's prose subsection.
+ * tables and each item's `search:` line.
  *
  * These parsers feed a search body, so every bar here is about a fault that would reach
  * the wire looking healthy — a preference sent ahead of a hard row, a value read as a
@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { itemProse, parseSpecRows } from "../../lib/doc-store.js";
+import { itemSearchLine, parseSpecRows } from "../../lib/doc-store.js";
 
 /** One Brief, hard-wrapped and two-item, as beats 1 to 3 leave it. */
 const BRIEF = [
@@ -18,14 +18,21 @@ const BRIEF = [
   "| item | domain | status |",
   "|---|---|---|",
   "| ski boots | product.sports.winter.ski.boots | open |",
+  "| gloves | product.sports.winter.ski.gloves | open |",
   "| helmet | product.sports.winter.ski.helmets | open |",
   "",
   "### ski boots",
   "ski boots for the upcoming season, size 27.5, advanced skier, up to 300",
   "euros; GripWalk soles",
+  "applies: mondo_size, flex_index, price",
+  "search: ski boots 27.5 flex 110",
+  "",
+  "### gloves",
+  "warm gloves, nothing bulky",
   "",
   "### helmet",
   "a ski helmet for the same trip, it has to work with my goggles",
+  "- **search:** ski helmet 58 cm",
   "",
   "## Hard constraints",
   "",
@@ -84,25 +91,29 @@ describe("parseSpecRows — the two tables, in the order a search sends them", (
   });
 });
 
-describe("itemProse — one item's own words", () => {
-  it("returns that item's subsection only, stopping at the next item's heading", () => {
-    // Prose that ran on would search the helmet's words under the boots' domain, and the
-    // answer would look like a perfectly ordinary miss.
-    expect(itemProse(BRIEF, "ski boots")).toBe(
-      "ski boots for the upcoming season, size 27.5, advanced skier, up to 300\neuros; GripWalk soles",
-    );
-    expect(itemProse(BRIEF, "helmet")).toBe(
-      "a ski helmet for the same trip, it has to work with my goggles",
-    );
+describe("itemSearchLine — the shopping words one item is searched by", () => {
+  it("returns that item's `search:` line, never the sentence or the `applies:` line beside it", () => {
+    // The boots' subsection carries all three, in that order. A reader that took the
+    // first line, or any `<word>:` line, would send the buyer's sentence or a list of
+    // key names — the two bodies the index answers nothing for.
+    expect(itemSearchLine(BRIEF, "ski boots")).toBe("ski boots 27.5 flex 110");
   });
 
-  it("is empty for an item with no subsection — never the next item's prose", () => {
-    // The caller refuses on empty; falling through to the following section would send
-    // the buying guide, or another item's words, as this item's query.
-    expect(itemProse(BRIEF, "gloves")).toBe("");
+  it("reads a line a model bulleted and bolded — `- **search:** …` is the same line", () => {
+    // Models markdown-format a label they are told to write, and the refusal that would
+    // follow costs the buyer a turn for a line that is actually there.
+    expect(itemSearchLine(BRIEF, "helmet")).toBe("ski helmet 58 cm");
+  });
+
+  it("stops at the next item's heading — an item beat 3 has not reached yet is empty", () => {
+    // `gloves` has a subsection and no `search:` line; the helmet's sits four lines
+    // below it. Run on, the gloves would be searched with the helmet's words under the
+    // gloves' domain, and the answer would read as a perfectly ordinary miss.
+    expect(itemSearchLine(BRIEF, "gloves")).toBe("");
+    expect(itemSearchLine(BRIEF, "no such item")).toBe("");
   });
 
   it("matches the item label, not its case", () => {
-    expect(itemProse(BRIEF, "Ski Boots")).toBe(itemProse(BRIEF, "ski boots"));
+    expect(itemSearchLine(BRIEF, "Ski Boots")).toBe(itemSearchLine(BRIEF, "ski boots"));
   });
 });

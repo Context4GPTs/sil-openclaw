@@ -362,8 +362,8 @@ function atomicWrite(path: string, contents: string): void {
 // ===========================================================================
 // The Brief's own sections, parsed out of the body the scan already loaded: `## Items`
 // (its scope, fan-out and completion — §4.8: a Brief carries many domains, so its
-// domain filter cannot be a frontmatter scalar), each item's prose, and the two spec
-// tables `shopping_brief_compile` reads.
+// domain filter cannot be a frontmatter scalar), each item's `search:` line, and the two
+// spec tables `shopping_brief_compile` reads.
 // ===========================================================================
 
 export interface ItemRow {
@@ -446,16 +446,29 @@ function specRowsOf(body: string, heading: string, hard: boolean): SpecRow[] {
   }));
 }
 
-/** One item's own prose subsection under `## Items` — the buyer's own sentence, which
- * becomes the search `query`. Addressed by the item LABEL, what the buyer calls the thing. */
-export function itemProse(body: string, item: string): string {
+/** Bullet- and bold-tolerant, because a model markdown-formats a label it is told to
+ * write and a refusal over `**search:**` costs the buyer a turn. */
+const SEARCH_LINE = /^\s*(?:[-*+]\s+)?\*{0,2}search\*{0,2}\s*:\*{0,2}\s*(.*)$/i;
+
+/**
+ * One item's shopping words — the `search:` line beat 3 writes inside that item's
+ * `## Items` subsection, which is the search `query`. Addressed by the item LABEL, what
+ * the buyer calls the thing; `""` when the item has no subsection or no such line, and
+ * the caller refuses on that. The rest of the subsection is the buyer's sentence, which
+ * the agent reads and no call sends.
+ */
+export function itemSearchLine(body: string, item: string): string {
   const lines = sectionBody(body, "## Items").split(/\r?\n/);
   const wanted = item.trim().toLowerCase();
   const start = lines.findIndex((l) => headingText(l)?.toLowerCase() === wanted);
   if (start < 0) return "";
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((l) => headingText(l) !== null);
-  return (end < 0 ? rest : rest.slice(0, end)).join("\n").trim();
+  for (const line of end < 0 ? rest : rest.slice(0, end)) {
+    const found = SEARCH_LINE.exec(line);
+    if (found !== null) return (found[1] as string).replace(/\s+/g, " ").trim();
+  }
+  return "";
 }
 
 function headingText(line: string): string | null {

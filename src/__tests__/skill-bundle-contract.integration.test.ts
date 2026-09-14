@@ -550,21 +550,25 @@ describe("SC4 — no path in the bundle asks for a created shopper", () => {
 // ===========================================================================
 
 describe("the live draws' share — wordings a buyer round measured", () => {
-  it("L1 — the item's subsection is the buyer's OWN WORDS, ONE SENTENCE, and beat 5 sends it as it stands", () => {
-    // Both draws compiled a specification into `query` — draw 2's ran to 60
-    // first-person words — and the index answered guides, 0 candidates. "In the
-    // buyer's own words" was read as "write the thing up".
-    const subsections = beatStatements(1).filter((s) => /subsection/i.test(s));
-    expect(subsections.length).toBeGreaterThan(0); // guard-of-the-guard
+  it("L1 — beat 3's `search:` line is the SHOPPING WORDS, and beat 5 sends that line as `query`", () => {
+    // Both draws compiled a specification into `query` — draw 2's ran to 60 first-person
+    // words — and the index answered guides, 0 candidates. The measurement that settled
+    // it: sil now searches the index's SHOPPING vertical, where the buyer's prose ("ski
+    // boots size 27.5 advanced skier up to 300 euros") answers ZERO priced offers and
+    // "ski boots 27.5 flex 110" answers forty. So the rule is no longer "the buyer's own
+    // words as they stand" — it is a category plus the numbers that pick the product.
+    const line = beatStatements(3).filter((s) => /`search:`/.test(s));
+    expect(line.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(subsections, (s) => /own words/i.test(s) && /one sentence/i.test(s)),
+      unsatisfied(
+        line,
+        (s) => /categor/i.test(s) && /number/i.test(s) && /never a sentence/i.test(s),
+      ),
     ).toEqual([]);
 
     const query = beatStatements(5).filter((s) => /`query`/.test(s));
     expect(query.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(
-      unsatisfied(query, (s) => /subsection/i.test(s) && /as it stands/i.test(s)),
-    ).toEqual([]);
+    expect(unsatisfied(query, (s) => /`search:`/.test(s))).toEqual([]);
   });
 
   it("L2 — a durable fact the buyer's own ask carries is written at FILL, cold, before the first search — and THIS job's budget is not one", () => {

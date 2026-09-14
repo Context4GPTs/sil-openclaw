@@ -64,11 +64,22 @@ that cannot be judged from a page at Beat 6, and the rows are what Beat 4 reads.
 set** over `{X, Y, Z}` with the X-preference weighed as Beat-6 judgment — never a hard
 `eq` on X alone, which rejects the acceptable alternatives and empties the set.
 
-**Write each item's `applies:` line** — the materialized partition, **keys only, never
-values**: for item domain D, every row whose `domain` is ancestor-or-self of D. Decided
-once, visible in the document, checkable. Restating the values is how a corrected row
-and its copy come to disagree. It is **bookkeeping, not the buyer's words**: it stays in
-the Brief, and `shopping_brief_compile` drops it from the `query` it answers.
+**Write each item's two bookkeeping lines**, inside that item's own `## Items`
+subsection, beside the buyer's sentence. Both are written here, after the guide has
+translated the facts, so the numbers in them are the settled ones. Both are
+**bookkeeping, not the buyer's words**: they stay in the Brief and neither is ever sent
+as prose.
+
+- **`applies:`** — the materialized partition, **keys only, never values**: for item
+  domain D, every row whose `domain` is ancestor-or-self of D. Decided once, visible in
+  the document, checkable. Restating the values is how a corrected row and its copy come
+  to disagree.
+- **`search:`** — the shopping words that item is searched by: the category as a shop
+  lists it, then the numbers that pick the product (a size, a flex, a width), in the
+  buyer's language and never a sentence. `search: ski boots 27.5 flex 110` — never the
+  buyer's sentence restated, and never the budget, the level or the trip, which are spec
+  rows and `## Context`. `shopping_brief_compile` answers this line, and only this line,
+  as the `query` beat 5 sends.
 
 **FILL's job is to RESOLVE, and it stops there.** What it could not resolve is handed
 untouched to Beat 4 ASK, which is the only beat that puts a question to the buyer.

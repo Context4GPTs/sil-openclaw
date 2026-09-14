@@ -46,7 +46,7 @@ export const SHOPPING_TOOLS = [
     name: "shopping_domain_get",
     ...DOMAIN_GET_ROUTE,
     label: "Read a category's buying guide and keys",
-    refusalRecovery: "shopping_domain_search",
+    recovery: { not_found: "shopping_domain_search" },
     description:
       "Beats 2 and 3, the category's guide and its two vocabularies: send one standing"
       + " path and get the buying guide, every key the category is bought by as `specs`,"
@@ -69,7 +69,12 @@ export const SHOPPING_TOOLS = [
     method: "POST",
     path: "/catalog/domains",
     label: "Coin a new category in sil's registry",
-    refusalRecovery: "shopping_search",
+    // A colliding path means the vocabulary is already there, so search it; a path the
+    // registry refuses as too shallow means the ancestor is still unknown, so read again.
+    recovery: {
+      already_exists: "shopping_search",
+      invalid_request: "shopping_domain_search",
+    },
     description:
       "Beat 2's mint, and the one permanent global write in sil: coin a NEW category —"
       + " its path, a buying guide written from research, and the first keys it is bought"
@@ -82,7 +87,9 @@ export const SHOPPING_TOOLS = [
       + " sil's and a branch key is coined by research — and shopping_domain_get answers"
       + " them as `seller_specs`. A key an ancestor already defines with the same type and"
       + " unit is not coined again: the reply carries it back as `inherited: true`, and you"
-      + " may filter on it as if you had. An existing path is refused and nothing is written"
+      + " may filter on it as if you had. A path hung directly under the root is refused:"
+      + " name the family it belongs to, as `product.sports.winter.ski.boots` does."
+      + " An existing path is refused and nothing is written"
       + " — that refusal means the vocabulary is already there, so search that same path;"
       + " never coin a near-path variant to route around it, and never call this to change a"
       + " category that exists. Every sil shopper sees what you write and nothing can undo"
@@ -96,11 +103,12 @@ export const SHOPPING_TOOLS = [
     description:
       "Beat 5: the products and variants that fit in one settled category, as"
       + " shopping_brief_compile builds it from the Brief. Send the domain path, the"
-      + " buyer's words as `query`, how many products you want, and that compile's"
+      + " shopping words as `query` — the item's `search:` line as that compile answers"
+      + " it — how many products you want, and that compile's"
       + " `specs` array UNCHANGED — every value exactly as it was answered, a money value"
       + " a decimal STRING (`\"300\"`, never 300 or \"300.00\"), or the row is refused and"
       + " the call is spent. `ship_to` is the LABEL of one of the buyer's addresses as"
-      + " sil_whoami lists them, never a country: it localizes the search, and sil uses"
+      + " sil_whoami lists them, never a country: sil uses"
       + " the default address when you send nothing. Seller terms are shopping_offers'"
       + " ask, answered per seller. `price`"
       + " is a key every domain has and its currency is required: sil holds no exchange"

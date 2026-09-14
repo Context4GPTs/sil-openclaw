@@ -11,7 +11,7 @@ import { requestSchema, responseSchema } from "../lib/artifacts.js";
 import { docFailureResult } from "../lib/doc-result.js";
 import {
   domainMatches,
-  itemProse,
+  itemSearchLine,
   parseItems,
   parseSpecRows,
   readDocument,
@@ -37,7 +37,7 @@ const RESPONSE_ARTIFACT = responseSchema(TOOL);
 const DOMAIN_READ: ShoppingCall = {
   ...DOMAIN_GET_ROUTE,
   name: TOOL,
-  refusalRecovery: "shopping_domain_search",
+  recovery: { not_found: "shopping_domain_search" },
 };
 
 /** `price` is a key every domain has without the read listing it (contract §3.4):
@@ -81,17 +81,18 @@ export function registerBriefCompileTool(api: PluginAPI): void {
     label: "Compile a Brief item into its two calls",
     description:
       "Beats 3 to 5, the Brief as the calls it makes: name a Brief and one of its"
-      + " `## Items` rows, and get back that item's settled `domain`, its own subsection"
-      + " prose as `query`, the `## Hard constraints` and `## Preferences` rows whose"
+      + " `## Items` rows, and get back that item's settled `domain`, its `search:` line"
+      + " as `query`, the `## Hard constraints` and `## Preferences` rows whose"
       + " domain is the item's or an ancestor as `specs`, and the rows under `seller` as"
       + " `seller_specs` — hard rows first, each value typed by the key the domain read"
-      + " holds. The two go to two tools. Send `domain`, `query` and `specs` to"
+      + " holds. Send `domain`, `query` and `specs` to"
       + " shopping_search, adding `n` and `ship_to`; send `seller_specs` to"
       + " shopping_offers at beat 6 with the shortlisted variant ids and the same"
       + " `ship_to`, which is the address label the buyer's `## Constraints` names and"
-      + " otherwise nothing at all. `query` is the buyer's words alone — the `applies:`"
-      + " line beat 3 writes in the same subsection stays in the Brief and never rides"
-      + " it. Send the rows as they came back: a widening is an"
+      + " otherwise nothing at all. `query` is the item's own `search:` line — beat 3's"
+      + " shopping words, the category as a shop lists it and the numbers that pick the"
+      + " product, never its sentence and never the `applies:` line beside it."
+      + " Send the rows as they came back: a widening is an"
       + " edit to the Brief and a second compile, never a row rewritten by hand. A row"
       + " the registry cannot take — an operator the key does not list, a value its type"
       + " refuses, a wrong unit, money with no currency — is refused by name here, before"
@@ -146,13 +147,15 @@ async function compile(api: PluginAPI, params: Record<string, unknown>): Promise
       "shopping_domain_search",
     );
   }
-  const query = queryFrom(itemProse(doc.body, item.item));
+  const query = itemSearchLine(doc.body, item.item);
   if (query === "") {
     return refuse(
       api,
       "invalid_request",
-      `The \`## Items\` row ${JSON.stringify(item.item)} carries no prose of its own, and that`
-        + " prose IS the search query. Write it at beat 1, then compile again.",
+      `The \`## Items\` row ${JSON.stringify(item.item)} carries no \`search:\` line, and that`
+        + " line IS the search query. Write it in that item's subsection at beat 3 — the"
+        + " category as a shop lists it, then the numbers that pick the product — then"
+        + " compile again.",
       "shopping_doc_write",
     );
   }
@@ -163,21 +166,6 @@ async function compile(api: PluginAPI, params: Record<string, unknown>): Promise
     return refuse(api, "invalid_request", rowRefusal(scoped.blank, fault), "shopping_doc_write");
   }
   return await compileScoped(api, { item: item.item, domain: item.domain, query }, scoped);
-}
-
-/**
- * The item's subsection as the search takes it: one line, and only the buyer's words.
- * Beat 3 writes an `applies:` bookkeeping line into that same subsection — it stays in
- * the Brief and never rides the query, where it reads as words the buyer said. The rest
- * is folded, because the Brief is hard-wrapped and a query on the wire is one line.
- */
-function queryFrom(prose: string): string {
-  return prose
-    .split(/\r?\n/)
-    .filter((line) => !/^\s*(?:[-*+]\s*)?applies:/i.test(line))
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 interface Scoped {

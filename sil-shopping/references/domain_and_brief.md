@@ -18,8 +18,10 @@ wrong category.
 
 ### The reads Beat 2 makes
 
-1. **`shopping_domain_search { q: <the item's own prose> }`** — sil's shared registry: is
-   there already a category for this, and what does it say about how the thing is bought?
+1. **`shopping_domain_search { q: <the item's own sentence> }`** — sil's shared registry:
+   is there already a category for this, and what does it say about how the thing is
+   bought? The sentence alone: beat 3's `applies:` and `search:` lines sit in the same
+   subsection and are never sent as `q`.
 2. **`shopping_domain_get { path: <the adopted path> }`** — that category's buying guide
    and every key it is bought by, once a path is settled.
 3. **`shopping_doc_find { kind: "brief", domain: <the resolved path> }`** — the shopper's
@@ -42,8 +44,8 @@ things.
 - **Read in the buyer's own words, not a path guess.** `shopping_domain_search`'s `q` is
   matched against each standing category's path text *and* its buying guide, so prose
   reaches a settled path that a path-shaped guess walks straight past. Budget: **at most
-  2 reads** — the item's prose verbatim, then the plain category name only if the first
-  returned nothing.
+  2 reads** — the item's sentence verbatim, then the plain category name only if the
+  first returned nothing.
 - **Judge fit on the returned `about`, never on how a path reads.** Three verdicts:
   - **adopt** — a line describing *this* category ⇒ take that path **verbatim**, read it
     with `shopping_domain_get`, and use its keys **as-is**. **Coin nothing beside them**,
@@ -158,8 +160,9 @@ Frontmatter: `title` and `status` (`active` | `done` | `dropped`). Sections:
   Reasoned over; never sent as a query.
 - **`## Items`** — a table (item · domain · status) plus **one prose subsection per row**.
   The scope, the fan-out and the completion count. Each subsection is the buyer's own
-  sentence for that item — `shopping_search`'s `query` leg for it — and in a taste-led
-  domain it is the load-bearing field in the whole document.
+  sentence for that item — the `q` beat 2 reads the registry with — plus the two lines
+  beat 3 writes beside it: `applies:`, the keys that item's search carries, and
+  `search:`, the shopping words `shopping_brief_compile` answers as `query`.
 - **`## Buying guide`** — the adopted guide, verbatim, keyed by `### <domain-path>`.
 - **`## Hard constraints`** / **`## Preferences`** — spec rows
   (domain · key · op · value · unit). **The section IS the hardness** — there is no
