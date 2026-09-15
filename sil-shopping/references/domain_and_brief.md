@@ -82,9 +82,9 @@ things.
   declare that key with the configuration you want: your definition wins below your path,
   and nothing converts. Declared with nothing the ancestor does not already say, a key is
   not coined again — the mint answers `ok` and reports it `inherited: true`, usable in the
-  Brief and in the search exactly like a key you minted. So a root `weight` in kg is
-  declared again in g where that is how the category is bought, and it is g from your path
-  down; a `color` you would declare exactly as the root already does comes back inherited.
+  Brief and in the search exactly like a key you minted. The root defines `weight` in kg:
+  declare it in g where that is how your category is bought and it is g from your path
+  down, declare it in kg again and the mint answers `inherited: true` with no row of yours.
   Mark `variant_spec: true` on a key that identifies a purchasable option — a boot's
   size, a colour — and `product_spec: true` on one that tells one product from the next, a
   model year or an edition; the registry derives each key's operators from its `type`. An
