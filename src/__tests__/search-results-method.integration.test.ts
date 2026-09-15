@@ -48,7 +48,9 @@ import {
   RETENTION_MS,
   MAX_ENTRIES,
   getSearchResult,
+  putSearchResult,
   __resetSearchResultsStore,
+  type SearchResultPage,
 } from "../lib/search-results-store.js";
 import {
   createMockPluginApi,
@@ -977,6 +979,38 @@ describe("every sil_search_results_* marker carries its callId and cause in the 
     expect(logMessages(api)).toContain(
       `sil_search_results_skipped callId=call_refusal reason=refused:${String(payload["status"])}`,
     );
+  });
+
+  it("a handler FAULT logs one bounded line, and the wire still answers the uniform not_found", async () => {
+    // The catch is the only surface a plugin bug has: the wire says exactly what it says
+    // for a miss, by design. Its `cause` is an arbitrary Error message — long, and
+    // multiline the moment it carries a stack fragment — so it is the one field an
+    // attacker never has to supply for the line to break.
+    const CAUSE = `boom ${"x".repeat(300)}\nsil_search_results_hit callId=victim count=99 found=true`;
+    const api = registerPlugin();
+    // A page whose `products` throws on read: the fault the handler's own comment names,
+    // driven through the real store rather than a mocked module.
+    putSearchResult(
+      "call_boom",
+      {
+        status: "ok",
+        get products(): unknown[] {
+          throw new Error(CAUSE);
+        },
+      } as unknown as SearchResultPage,
+      ACCOUNT_A,
+    );
+
+    const faulted = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_boom" }));
+    const missed = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_never" }));
+    expect(JSON.stringify(faulted)).toBe(JSON.stringify(missed));
+
+    const failed = logMessages(api).filter((m) => m.startsWith("sil_search_results_failed"));
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).not.toContain("\n");
+    expect(failed[0]!.split(" ")).toHaveLength(2); // the marker and ONE `cause=` pair
+    expect(failed[0]!.length).toBeLessThan(200);
+    expect(failed[0]).toContain("cause=boom_"); // the real cause, not an empty pair
   });
 
   it("a hostile callId cannot forge a marker, inject a pair, or run the line away", async () => {
