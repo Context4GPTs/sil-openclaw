@@ -71,6 +71,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
+- The sil-api request timeout is 45 s (was 15 s): a live cold search outlives 15 s, and the plugin
+  answered "sil is temporarily unavailable" while sil-api finished the leg and wrote the row.
 - **BREAKING — `sil_register` answers `open`, and the session travels in the PATH.**
   `<sil-web>/authorize/<session>?code_challenge=…`: every OpenClaw host masks the value of
   a query parameter named `session`, so the buyer opened `session=***` and sil-web said

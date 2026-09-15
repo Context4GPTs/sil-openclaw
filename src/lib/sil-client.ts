@@ -72,9 +72,10 @@
 import { getWebUrl } from "./config.js";
 import { readTokens, writeTokens } from "./credentials.js";
 
-/** Per-request timeout: a stalled endpoint (DNS hang, SYN drop) must not wedge
- * a poll tick forever. Mirrors the 15s ceiling the klodi poller uses. */
-const REQUEST_TIMEOUT_MS = 15_000;
+/** Per-request timeout: a stalled endpoint must not wedge a call forever. 45 s because a live
+ * cold search is one shopping call, up to three page calls and 20 s of fetching real pages —
+ * at 15 s the plugin refused 7 of 12 live searches sil-api went on to finish (2026-09-15). */
+const REQUEST_TIMEOUT_MS = 45_000;
 
 /** The user identity sil-web returns inside a successful claim. */
 export interface ClaimedUser {
