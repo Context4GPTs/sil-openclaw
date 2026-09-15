@@ -891,23 +891,92 @@ describe("every sil_search_results_* marker carries its callId and cause in the 
     );
   });
 
-  it("a search whose page was NOT buffered says why, and the refusal it returns is unchanged", async () => {
-    // The skip is logged at the BUFFER, which is the only place that knows the cause —
-    // and the reason is the envelope's own status, so the two cannot drift apart.
+  it("the skip line rides BESIDE the refusal — the agent's bytes are the route's, unchanged", async () => {
+    // `execute` now does work on the path that returns a refusal. The bytes are the whole
+    // of what the agent reads, so they are pinned against this log existing at all.
     installRouter((kind) =>
       kind === "search"
         ? { status: 400, body: { error: "invalid_request", message: "no" } }
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
-    const { raw, payload } = await runSearch(api, "call_refused");
+    const { raw } = await runSearch(api, "call_refused");
 
-    expect(logMessages(api)).toContain(
-      `sil_search_results_skipped callId=call_refused reason=refused:${String(payload["status"])}`,
-    );
-    // The line rides beside the refusal, never inside it: the agent's bytes are the
-    // route's message and status, exactly as before this log existed.
     expect(raw).toBe(JSON.stringify({ status: "invalid_request", message: "no" }, null, 2));
+  });
+
+  it.each([
+    [
+      "not_registered",
+      (): void => {
+        rmSync(getTokensPath(), { force: true });
+        installRouter(() => ({ status: 500, body: {} }));
+      },
+    ],
+    [
+      // A 401 whose refresh is itself refused: the session is dead, not blipping.
+      "must_reregister",
+      (): void => {
+        installRouter((kind) =>
+          kind === "other" ? { status: 500, body: {} } : { status: 401, body: {} },
+        );
+      },
+    ],
+    [
+      "invalid_request",
+      (): void => {
+        installRouter((kind) =>
+          kind === "search"
+            ? { status: 400, body: { error: "invalid_request", message: "no" } }
+            : { status: 500, body: {} },
+        );
+      },
+    ],
+    [
+      "not_found",
+      (): void => {
+        installRouter((kind) =>
+          kind === "search"
+            ? { status: 404, body: { error: "not_found", message: "no such domain" } }
+            : { status: 500, body: {} },
+        );
+      },
+    ],
+    [
+      "already_exists",
+      (): void => {
+        installRouter((kind) =>
+          kind === "search"
+            ? { status: 409, body: { error: "domain_exists", message: "already" } }
+            : { status: 500, body: {} },
+        );
+      },
+    ],
+    [
+      "forbidden",
+      (): void => {
+        installRouter((kind) =>
+          kind === "search"
+            ? { status: 403, body: { error: "principal_mismatch" } }
+            : { status: 500, body: {} },
+        );
+      },
+    ],
+    ["retryable", (): void => void installRouter(() => ({ status: 500, body: {} }))],
+  ])("the skip names the refusal by the envelope's OWN status — %s", async (expected, wire) => {
+    // All seven arms of `RefusalStatus`, because a mis-mapped one names a status the
+    // agent never saw and an operator then debugs a refusal that did not happen. Two
+    // mis-mappings (forbidden→retryable, not_registered→forbidden) left the tier green
+    // while only `invalid_request` was driven. The expected reason is READ BACK from the
+    // envelope, never typed here; the status assertion is the row's own premise.
+    wire();
+    const api = registerPlugin();
+    const { payload } = await runSearch(api, "call_refusal");
+
+    expect(payload["status"]).toBe(expected);
+    expect(logMessages(api)).toContain(
+      `sil_search_results_skipped callId=call_refusal reason=refused:${String(payload["status"])}`,
+    );
   });
 
   it("a hostile callId cannot forge a marker, inject a pair, or run the line away", async () => {
