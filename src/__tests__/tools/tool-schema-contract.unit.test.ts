@@ -381,12 +381,15 @@ describe("each shopping tool carries its discipline clause", () => {
     // What the keys are for, and which of them identify a purchasable option.
     shopping_domain_get: [/variant_spec/, /product_spec/, /operators?/i],
     // The write nothing can undo, the two things that must hold first, the vocabulary it
-    // may not coin, and the mark that lets the agent use a key it did not mint.
+    // may not coin, and the inheritance rule in three parts — no rename, a re-declaration
+    // that binds the subtree, and the mark that lets the agent use a key it did not mint.
     shopping_domain_create: [
       /\bNEW\b/,
       /research|read(ing)? up/i,
       /undo|permanent/i,
       /never .{0,20}to coin/i,
+      /rename/i,
+      /subtree/i,
       /inherited/,
       /shopping_domain_get/,
     ],

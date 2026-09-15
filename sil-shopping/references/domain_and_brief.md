@@ -77,9 +77,14 @@ things.
   category's seller terms are never yours to coin: the base is sil's and a branch key is
   coined by research, so take them from `shopping_domain_get`'s `seller_specs` and write
   them as seller rows. Research **how the category is bought** on the web first (never
-  products). A key an ancestor already defines with the same type and unit is not coined
-  again — the mint answers `ok` and carries it back as `inherited: true`, usable in the
-  Brief and in the search exactly like a key you minted.
+  products). You inherit every key your ancestors define and may not rename one. To change
+  one for your own subtree — its unit, its allowed values, its variant or product mark —
+  declare that key with the configuration you want: your definition wins below your path,
+  and nothing converts. Declared with nothing the ancestor does not already say, a key is
+  not coined again — the mint answers `ok` and reports it `inherited: true`, usable in the
+  Brief and in the search exactly like a key you minted. So a root `weight` in kg is
+  declared again in g where that is how the category is bought, and it is g from your path
+  down; a `colour` you would declare exactly as it already stands comes back inherited.
   Mark `variant_spec: true` on a key that identifies a purchasable option — a boot's
   size, a colour — and `product_spec: true` on one that tells one product from the next, a
   model year or an edition; the registry derives each key's operators from its `type`. An

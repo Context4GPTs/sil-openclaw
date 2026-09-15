@@ -429,6 +429,25 @@ describe("read before mint — the bundle's half of the card", () => {
     ).toEqual([]);
   });
 
+  it("S5 — the inheritance rule reaches beat 2 whole: no rename, a subtree re-declaration, `inherited`", () => {
+    // The retired wording ("a key an ancestor defines with the same type and unit is not
+    // coined again") reads as a ban on declaring an ancestor's key at all. An agent that
+    // needs the leaf's own unit then either renames the key — forking the vocabulary for
+    // every later buyer — or sends the ancestor's unit and every value is wrong by 1000.
+    const units = beatStatements(2);
+
+    const inheriting = units.filter((s) => /inherit/i.test(s));
+    expect(inheriting.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(inheriting, (s) => /rename/i.test(s) && /\bnot\b|\bnever\b/i.test(s))).toEqual([]);
+
+    const declaring = units.filter((s) => /declare/i.test(s));
+    expect(declaring.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(declaring, (s) => /subtree/i.test(s) && /unit/i.test(s))).toEqual([]);
+
+    expect(unsatisfied(inheriting, (s) => /`inherited: true`/.test(s) && /not coined again/i.test(s)))
+      .toEqual([]);
+  });
+
   it("S5 — the read budget is stated as a NUMBER, not implied", () => {
     // An agent left to infer the bound either forfeits it — forking the vocabulary on a
     // near-miss — or reads the registry all afternoon. Write the arithmetic.

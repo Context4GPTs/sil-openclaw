@@ -102,6 +102,13 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 - **`openclaw.build.openclawVersion` / `pluginSdkVersion` record `2026.9.3`**, the host
   this plugin is verified against. Diagnostics only; the `compat` floor stays
   `>=2026.7.1` — nothing here needs a newer API.
+- **A category inherits every ancestor key and may RE-DECLARE one for its own subtree.**
+  `shopping_domain_create`'s description and the beat-2 reference carry the signed rule:
+  a key is never renamed; declaring an ancestor's key with another unit, allowed-value set
+  or variant/product mark makes that definition win below the new path, converting
+  nothing; declaring it with nothing the ancestor does not already say is not a second
+  coin — the mint answers `ok` and reports it `inherited: true`. The previous wording
+  ("the same type and unit is not coined again") read as a ban on declaring it at all.
 
 ### Removed
 
