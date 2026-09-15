@@ -35,7 +35,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Coins the key here; a key an ancestor already defines is refused by name."
+            "description": "Coins the key here; naming one an ancestor defines redefines it for this subtree, or answers `inherited: true` when the declaration states nothing new."
           },
           "display_name": {
             "type": "string",
