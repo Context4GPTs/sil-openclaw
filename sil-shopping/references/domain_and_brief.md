@@ -84,7 +84,7 @@ things.
   not coined again — the mint answers `ok` and reports it `inherited: true`, usable in the
   Brief and in the search exactly like a key you minted. So a root `weight` in kg is
   declared again in g where that is how the category is bought, and it is g from your path
-  down; a `colour` you would declare exactly as it already stands comes back inherited.
+  down; a `color` you would declare exactly as the root already does comes back inherited.
   Mark `variant_spec: true` on a key that identifies a purchasable option — a boot's
   size, a colour — and `product_spec: true` on one that tells one product from the next, a
   model year or an edition; the registry derives each key's operators from its `type`. An
