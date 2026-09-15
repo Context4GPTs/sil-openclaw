@@ -31,6 +31,7 @@
 import type { PluginAPI, RespondFn } from "openclaw/plugin-sdk";
 
 import { hasTokens, readConfig } from "../lib/credentials.js";
+import { logSearchResults } from "../lib/search-results-log.js";
 import { getSearchResult, searchResultMiss } from "../lib/search-results-store.js";
 
 export const SEARCH_RESULTS_METHOD = "sil.search_results";
@@ -63,7 +64,7 @@ export function registerSearchResultsMethod(api: PluginAPI): void {
       try {
         resolve(api, params, respond);
       } catch (err) {
-        api.logger.error("sil_search_results_failed", {
+        logSearchResults(api, "error", "failed", {
           cause: err instanceof Error ? err.message : String(err),
         });
         respond(true, NOT_FOUND);
@@ -80,7 +81,7 @@ function resolve(
 ): void {
   const callId = params["callId"];
   if (typeof callId !== "string" || callId.length === 0) {
-    api.logger.info("sil_search_results_invalid", { reason: "invalid_call_id" });
+    logSearchResults(api, "info", "invalid", { reason: "invalid_call_id" });
     respond(true, INVALID_REQUEST);
     return;
   }
@@ -91,22 +92,25 @@ function resolve(
   // identity that produced it, never to the machine.
   const principal = hasTokens() ? readConfig()?.user?.id : undefined;
   if (principal === undefined) {
-    api.logger.info("sil_search_results_miss", { found: false, reason: "no_principal" });
+    logSearchResults(api, "info", "miss", { callId, reason: "no_principal", found: false });
     respond(true, NOT_FOUND);
     return;
   }
 
   const page = getSearchResult(callId, principal);
   if (page === null) {
-    api.logger.info("sil_search_results_miss", {
+    // One `lookup` answers both, so a null page always has a cause; the fallback keeps
+    // the line honest rather than naming a cause the store did not give.
+    logSearchResults(api, "info", "miss", {
+      callId,
+      reason: searchResultMiss(callId, principal) ?? "unattributed",
       found: false,
-      reason: searchResultMiss(callId, principal),
     });
     respond(true, NOT_FOUND);
     return;
   }
 
-  api.logger.info("sil_search_results_hit", { found: true, count: page.products.length });
+  logSearchResults(api, "info", "hit", { callId, count: page.products.length, found: true });
   // Handed over BY REFERENCE, aliasing the array the agent envelope already
   // serialized. Deliberate: both paths JSON-serialize immediately and neither
   // mutates, so a defensive clone would copy ~50 KB per resolve for nothing.

@@ -12,6 +12,7 @@ import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk";
 import { requestSchema } from "../lib/artifacts.js";
 import { readConfig } from "../lib/credentials.js";
 import { wiringAdvisoryBlocks } from "../lib/host-wiring.js";
+import { logSearchResults } from "../lib/search-results-log.js";
 import { putSearchResult, type SearchResultPage } from "../lib/search-results-store.js";
 import { DOMAIN_GET_ROUTE, callRoute, type ShoppingCall } from "../lib/shopping-call.js";
 import { jsonResult } from "../lib/tool-result.js";
@@ -206,8 +207,11 @@ function defineTool(api: PluginAPI, tool: ShoppingTool): ToolDefinition {
     parameters: requestSchema(tool.name),
     async execute(callId, params) {
       const called = await callRoute(api, tool, params);
-      if (called.kind === "refused") return called.result;
-      if (tool.name === SEARCH_TOOL) bufferPage(callId, called.body);
+      if (called.kind === "refused") {
+        if (tool.name === SEARCH_TOOL) skipped(api, callId, `refused:${called.status}`);
+        return called.result;
+      }
+      if (tool.name === SEARCH_TOOL) bufferPage(api, callId, called.body);
       // VERBATIM, and the advisory rides its own block: the body's keys are the API's
       // contract, so nothing of ours may sit beside them.
       return jsonResult(called.body, ...wiringAdvisoryBlocks(api));
@@ -221,9 +225,22 @@ function defineTool(api: PluginAPI, tool: ShoppingTool): ToolDefinition {
  * byte-identical to what every channel got before this existed. Only a body that
  * actually carries its `products` list is stored — the pull surface counts it.
  */
-function bufferPage(callId: string, body: Record<string, unknown>): void {
+function bufferPage(api: PluginAPI, callId: string, body: Record<string, unknown>): void {
   const principal = readConfig()?.user?.id;
-  if (principal === undefined) return;
-  if (!Array.isArray(body["products"])) return;
+  if (principal === undefined) {
+    skipped(api, callId, "no_principal");
+    return;
+  }
+  if (!Array.isArray(body["products"])) {
+    skipped(api, callId, "no_products");
+    return;
+  }
   putSearchResult(callId, body as SearchResultPage, principal);
+}
+
+/** Why this `callId` will resolve nothing, logged where the decision is made. The pull
+ * says only `not_found` — deliberately — so this line is the whole of an operator's
+ * account of a search a client could not render. */
+function skipped(api: PluginAPI, callId: string, reason: string): void {
+  logSearchResults(api, "info", "skipped", { callId, reason });
 }

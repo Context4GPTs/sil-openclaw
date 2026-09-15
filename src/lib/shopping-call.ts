@@ -36,10 +36,25 @@ export interface ShoppingCall extends ShoppingRoute {
   readonly recovery?: RefusalRecovery;
 }
 
+/** The status inside a refusal envelope, surfaced beside it so a caller can log WHY the
+ * call was refused without parsing the result it must hand over unread. */
+export type RefusalStatus =
+  | "not_registered"
+  | "must_reregister"
+  | "invalid_request"
+  | "not_found"
+  | "already_exists"
+  | "forbidden"
+  | "retryable";
+
 /** The API's own 200 body, or the refusal to hand the agent as it stands. */
 export type CallResult =
   | { kind: "ok"; body: Record<string, unknown> }
-  | { kind: "refused"; result: ToolResult };
+  | { kind: "refused"; status: RefusalStatus; result: ToolResult };
+
+function refused(status: RefusalStatus, result: ToolResult): CallResult {
+  return { kind: "refused", status, result };
+}
 
 /**
  * Call one route with the stored credentials, refreshing and retrying at most once.
@@ -52,7 +67,7 @@ export async function callRoute(
   args: Record<string, unknown>,
 ): Promise<CallResult> {
   const stored = readTokens();
-  if (stored === null) return { kind: "refused", result: notRegistered(call.name) };
+  if (stored === null) return refused("not_registered", notRegistered(call.name));
 
   const first = await callShopping(getApiUrl(), stored.access_token, call, args);
   const recovered = await refreshAndRetryOnce(
@@ -67,14 +82,14 @@ export async function callRoute(
     case "must_reregister":
       if (recovered.reason === "invalid_grant") clearTokens();
       api.logger.info(`${call.name}_must_reregister`, { cause: recovered.reason });
-      return { kind: "refused", result: mustReregister(call.name) };
+      return refused("must_reregister", mustReregister(call.name));
     case "second_unauthorized":
       clearTokens();
       api.logger.info(`${call.name}_must_reregister`, { cause: "retry_unauthorized" });
-      return { kind: "refused", result: mustReregister(call.name) };
+      return refused("must_reregister", mustReregister(call.name));
     case "retryable":
       api.logger.info(`${call.name}_refresh_retryable`, {});
-      return { kind: "refused", result: transient(call.name) };
+      return refused("retryable", transient(call.name));
   }
 }
 
@@ -84,23 +99,23 @@ function mapOutcome(api: PluginAPI, call: ShoppingCall, outcome: ShoppingOutcome
       return { kind: "ok", body: outcome.body };
     case "invalid_request":
       api.logger.info(`${call.name}_invalid_request`, {});
-      return { kind: "refused", result: refusal("invalid_request", outcome.message) };
+      return refused("invalid_request", refusal("invalid_request", outcome.message));
     case "not_found":
     case "already_exists":
       api.logger.info(`${call.name}_${outcome.kind}`, {});
-      return {
-        kind: "refused",
-        result: refusal(outcome.kind, outcome.message, call.recovery?.[outcome.kind]),
-      };
+      return refused(
+        outcome.kind,
+        refusal(outcome.kind, outcome.message, call.recovery?.[outcome.kind]),
+      );
     case "forbidden":
-      return { kind: "refused", result: forbiddenResult(api, call.name, outcome.reason) };
+      return refused("forbidden", forbiddenResult(api, call.name, outcome.reason));
     case "retryable":
       api.logger.info(`${call.name}_retryable`, outcome.source ? { source: outcome.source } : {});
-      return { kind: "refused", result: transient(call.name, outcome.source, outcome.detail) };
+      return refused("retryable", transient(call.name, outcome.source, outcome.detail));
     case "unauthorized":
       // Structurally unreachable past the 401 choreography, kept exhaustive so a
       // refactor cannot silently drop a variant.
-      return { kind: "refused", result: mustReregister(call.name) };
+      return refused("must_reregister", mustReregister(call.name));
   }
 }
 

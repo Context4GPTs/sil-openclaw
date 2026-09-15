@@ -854,6 +854,83 @@ describe("C7 — behaviour never varies with client presence", () => {
 });
 
 // ===========================================================================
+// The operator log — the callId and the cause, in the MESSAGE
+// ===========================================================================
+
+/** The MESSAGE of every marker logged, which is the only half a container log prints:
+ * the host hands a plugin's structured fields to the log FILE and renders the console
+ * line from the message alone. */
+function logMessages(api: MockPluginAPI): string[] {
+  return [api.logger.info, api.logger.warn, api.logger.error, api.logger.debug].flatMap((fn) =>
+    vi.mocked(fn).mock.calls.map((c) => String(c[0])),
+  );
+}
+
+describe("every sil_search_results_* marker carries its callId and cause in the message", () => {
+  it("a resolve that missed names the callId it was asked for, and which cause it was", async () => {
+    // Measured every buyer round: a truncated frame sends the pull a callId that was
+    // never stored, and `[plugins] sil_search_results_miss` on its own cannot say
+    // whether the page expired, was another account's, or never existed at all.
+    installRouter((kind) =>
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
+    );
+    const api = registerPlugin();
+    await runSearch(api, "call_1");
+    seedAccount(ACCOUNT_B);
+
+    await callGatewayMethod(api, METHOD, { callId: "call_1" });
+    await callGatewayMethod(api, METHOD, { callId: "call_never" });
+    await callGatewayMethod(api, METHOD, { callId: 42 });
+
+    expect(logMessages(api)).toEqual(
+      expect.arrayContaining([
+        "sil_search_results_miss callId=call_1 reason=principal_mismatch found=false",
+        "sil_search_results_miss callId=call_never reason=unknown found=false",
+        "sil_search_results_invalid reason=invalid_call_id",
+      ]),
+    );
+  });
+
+  it("a search whose page was NOT buffered says why, and the refusal it returns is unchanged", async () => {
+    // The skip is logged at the BUFFER, which is the only place that knows the cause —
+    // and the reason is the envelope's own status, so the two cannot drift apart.
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 400, body: { error: "invalid_request", message: "no" } }
+        : { status: 500, body: {} },
+    );
+    const api = registerPlugin();
+    const { raw, payload } = await runSearch(api, "call_refused");
+
+    expect(logMessages(api)).toContain(
+      `sil_search_results_skipped callId=call_refused reason=refused:${String(payload["status"])}`,
+    );
+    // The line rides beside the refusal, never inside it: the agent's bytes are the
+    // route's message and status, exactly as before this log existed.
+    expect(raw).toBe(JSON.stringify({ status: "invalid_request", message: "no" }, null, 2));
+  });
+
+  it.each([
+    ["no_principal", () => rmSync(join(getDataDir(), "config.json"), { force: true })],
+    ["no_products", () => undefined],
+  ])("an `ok` search the buffer had to skip names %s with its callId", async (reason, strip) => {
+    // Both are `ok` to the agent and unresolvable to a client — the split a wire that
+    // answers one `not_found` for everything can never show an operator.
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: reason === "no_products" ? { status: "ok" } : searchEnvelope([wireProduct(1)]) }
+        : { status: 500, body: {} },
+    );
+    const api = registerPlugin();
+    strip();
+
+    const { payload } = await runSearch(api, "call_skipped");
+    expect(payload["status"]).toBe("ok"); // premise: the agent was answered
+    expect(logMessages(api)).toContain(`sil_search_results_skipped callId=call_skipped reason=${reason}`);
+  });
+});
+
+// ===========================================================================
 // Registration shape + operator-log privacy
 // ===========================================================================
 
@@ -912,8 +989,8 @@ describe("registration shape (C5) and log privacy", () => {
     await callGatewayMethod(api, METHOD, { callId: "call_1" });
 
     expect(api.logger.info).toHaveBeenCalledWith(
-      "sil_search_results_hit",
-      expect.objectContaining({ found: true, count: 2 }),
+      "sil_search_results_hit callId=call_1 count=2 found=true",
+      expect.objectContaining({ found: true, count: 2, callId: "call_1" }),
     );
     const blob = logBlob(api);
     // No product, no price, no checkout_url, no id material, no token.

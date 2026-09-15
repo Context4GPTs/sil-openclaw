@@ -158,6 +158,16 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   unknown, and unknown is stated as `unreadable` (`recovery: "inspect_document"`), never
   guessed. `sil_doctor` inherits the new `unreadable[]` entries, so the operator and
   agent surfaces describe one state.
+- **A delivery miss says WHICH callId and WHY, where an operator reads it.** The host
+  writes a plugin's structured fields to the log file and renders the console line from
+  the message alone, so a container log showed `[plugins] sil_search_results_miss` and
+  nothing else — no callId to join a client's pull onto the search that produced it.
+  Every marker now repeats its fields inline (`sil_search_results_miss callId=<id>
+  reason=expired found=false`), and a search whose page was never buffered logs
+  `sil_search_results_skipped callId=<id> reason=refused:<status>|no_principal|
+  no_products` at the buffer — the two states that are `ok` to the agent and
+  unresolvable to a client. The WIRE is untouched: `sil.search_results` still answers
+  one `not_found` body for unknown, expired, foreign and logged-out alike.
 
 ## [0.4.6] - 2026-07-24
 
