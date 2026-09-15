@@ -12,6 +12,9 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
  * the BUFFER side: a search whose page was never stored, and why. */
 export type SearchResultsEvent = "hit" | "miss" | "skipped" | "invalid" | "failed";
 
+// `severity`, never `level` — `docsNeedleExclusions()` drops any retired needle whose
+// string occurs in live `src/`, and that word plus a colon is one: renaming REDs AC16.
+
 /** Long enough for a host `callId` (28 chars) and every cause below, short enough that
  * no single call can run the line away. */
 const MAX_FIELD_CHARS = 128;

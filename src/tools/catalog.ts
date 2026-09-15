@@ -73,24 +73,24 @@ export const SHOPPING_TOOLS = [
     // A colliding path means the vocabulary is already there, so search that same path.
     recovery: { already_exists: "shopping_search" },
     description:
-      "Beat 2's mint, and the one permanent global write in sil: coin a NEW category —"
-      + " its path, a buying guide written from research, and the first keys it is bought"
-      + " by. Two things must both hold first: a shopping_domain_search read came back"
-      + " `matches: []`, and you have read up on the web on how the category is bought"
-      + " (never on products). Mark variant_spec on a key that identifies a purchasable"
-      + " option, product_spec on one that tells one product from the next. Only the keys a"
-      + " PRODUCT is bought by are coined here: a category's seller terms are never yours to"
+      "Beat 2's mint, the one permanent global write in sil: coin a NEW category — its"
+      + " path, a buying guide from research, and the first keys it is bought by. Two things"
+      + " must hold first: a shopping_domain_search read came back `matches: []`, and you have"
+      + " read up on the web how the category is bought (never on products). Mark variant_spec"
+      + " on a key that identifies a purchasable option, product_spec on one that tells one"
+      + " product from the next; the registry derives each key's operators from its type. Coin"
+      + " only the keys a PRODUCT is bought by: a category's seller terms are never yours to"
       + " coin — the base is sil's and a branch key is coined by research — and"
-      + " shopping_domain_get answers them as `seller_specs`. You inherit every ancestor's"
-      + " key and may not rename one: re-declare one only to change its configuration for"
-      + " your subtree — its unit, its allowed values, its variant or product mark — and that"
-      + " definition wins below this path, converting nothing. Re-declared with nothing the"
-      + " ancestor does not already say, a key is not coined again: the mint answers ok and"
-      + " reports it `inherited: true`, yours to filter on unminted. An existing path is"
-      + " refused and nothing is written: the vocabulary is already there, so search that"
-      + " same path; never coin a near-path variant to route around it, and never call this"
-      + " to change a category that exists. Every sil shopper sees what you write and nothing"
-      + " can undo it.",
+      + " shopping_domain_get answers them as `seller_specs`. You inherit every ancestor's key"
+      + " and may not rename one: re-declare one only to change its configuration for your"
+      + " subtree — its unit, its allowed values, its variant or product mark — and it wins"
+      + " below this path, converting nothing. Re-declared with nothing the ancestor does not"
+      + " already say, it is not coined again: the mint answers ok and reports it"
+      + " `inherited: true`, so you filter on it without having minted it. An existing path is"
+      + " refused and nothing is written: the vocabulary is already there, so search that same"
+      + " path; never coin a near-path variant to route around it, and never call this to"
+      + " change one that exists. Every sil shopper sees what you write and nothing can undo"
+      + " it.",
   },
   {
     name: SEARCH_TOOL,
