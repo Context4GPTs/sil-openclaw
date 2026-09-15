@@ -893,18 +893,25 @@ describe("every sil_search_results_* marker carries its callId and cause in the 
     );
   });
 
-  it("the skip line rides BESIDE the refusal — the agent's bytes are the route's, unchanged", async () => {
-    // `execute` now does work on the path that returns a refusal. The bytes are the whole
-    // of what the agent reads, so they are pinned against this log existing at all.
+  it("the skip line rides BESIDE the refusal — ONE block, and the bytes are the route's", async () => {
+    // `execute` now does work on the path that returns a refusal, and the refusal is the
+    // whole of what the agent reads there. Reading `content[0]` alone would pass over a
+    // second block appended beside it, so the COUNT is pinned too — under a drifting host
+    // config, so that appending `wiringAdvisoryBlocks(api)` here actually produces one.
     installRouter((kind) =>
       kind === "search"
         ? { status: 400, body: { error: "invalid_request", message: "no" } }
         : { status: 500, body: {} },
     );
-    const api = registerPlugin();
-    const { raw } = await runSearch(api, "call_refused");
+    const api = createMockPluginApi({
+      config: { agents: { list: [{ id: "shopper", skills: ["sil"] }] } },
+    });
+    capturedRegisterFn!(api);
 
-    expect(raw).toBe(JSON.stringify({ status: "invalid_request", message: "no" }, null, 2));
+    const result = await getTool(api, TOOL).execute("call_refused", { ...SEARCH_PARAMS });
+
+    expect(result.content).toHaveLength(1);
+    expect(rawOf(result)).toBe(JSON.stringify({ status: "invalid_request", message: "no" }, null, 2));
   });
 
   it.each([
