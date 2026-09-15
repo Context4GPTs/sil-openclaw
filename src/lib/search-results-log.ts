@@ -12,14 +12,25 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
  * the BUFFER side: a search whose page was never stored, and why. */
 export type SearchResultsEvent = "hit" | "miss" | "skipped" | "invalid" | "failed";
 
-// `severity`, never `level` — that word followed by a colon is a retired registry
-// needle, and one live occurrence switches it off across the whole docs sweep.
+/** Long enough for a host `callId` (28 chars) and every cause below, short enough that
+ * no single call can run the line away. */
+const MAX_FIELD_CHARS = 128;
+
+/** The `callId` is the CLIENT's string, checked only for being a non-empty one: raw, a
+ * newline in it forges a second marker on its own console line, whitespace splits one
+ * pair into several, and length is unbounded. The MESSAGE takes this; `fields` keeps the
+ * value as it arrived. */
+const render = (value: string | number | boolean): string =>
+  String(value)
+    .replace(/[^\x21-\x7E]/g, "_")
+    .slice(0, MAX_FIELD_CHARS);
+
 export function logSearchResults(
   api: PluginAPI,
   severity: "info" | "error",
   event: SearchResultsEvent,
   fields: Record<string, string | number | boolean>,
 ): void {
-  const pairs = Object.entries(fields).map(([key, value]) => `${key}=${String(value)}`);
+  const pairs = Object.entries(fields).map(([key, value]) => `${key}=${render(value)}`);
   api.logger[severity](`sil_search_results_${event} ${pairs.join(" ")}`, fields);
 }

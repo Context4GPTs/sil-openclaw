@@ -910,6 +910,39 @@ describe("every sil_search_results_* marker carries its callId and cause in the 
     expect(raw).toBe(JSON.stringify({ status: "invalid_request", message: "no" }, null, 2));
   });
 
+  it("a hostile callId cannot forge a marker, inject a pair, or run the line away", async () => {
+    // The callId is the CLIENT's string and the wire deliberately tells nothing, so this
+    // line IS the account of a delivery failure. Unrendered, a newline in it prints a
+    // complete second marker on its own console line (the host's writer strips no
+    // control characters — it only redacts secrets), and a long one prints a line as
+    // long as the input.
+    const FORGERY =
+      "x reason=hit found=true\nsil_search_results_hit callId=victim count=99 found=true";
+    const api = registerPlugin();
+
+    await callGatewayMethod(api, METHOD, { callId: FORGERY });
+    await callGatewayMethod(api, METHOD, { callId: "c".repeat(200_000) });
+
+    const messages = logMessages(api).filter((m) => m.startsWith("sil_search_results_"));
+    expect(messages).toHaveLength(2); // one marker per call, never three
+    for (const message of messages) {
+      expect(message).not.toContain("\n");
+      // The whole hostile id collapses into ONE `callId=` token, so nothing it carries
+      // can be read as a pair of its own — and the line stays bounded.
+      const tokens = message.split(" ");
+      expect(tokens).toHaveLength(4);
+      expect(tokens[0]).toBe("sil_search_results_miss");
+      expect(tokens[1]!.startsWith("callId=")).toBe(true);
+      expect(tokens.slice(2)).toEqual(["reason=unknown", "found=false"]);
+      expect(message.length).toBeLessThan(200);
+    }
+    // The raw value still reaches the structured fields, which go to the log file.
+    const fields = vi
+      .mocked(api.logger.info)
+      .mock.calls.find((c) => String(c[0]).startsWith("sil_search_results_miss"))?.[1];
+    expect(fields).toMatchObject({ callId: FORGERY });
+  });
+
   it.each([
     ["no_principal", () => rmSync(join(getDataDir(), "config.json"), { force: true })],
     ["no_products", () => undefined],
