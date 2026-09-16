@@ -1,23 +1,26 @@
 /**
  * sil OpenClaw plugin — entry point.
  *
- * A UCP commerce plugin for sil. It registers its real tool groups —
- * identity (`sil_register`, `sil_whoami`), catalog (`sil_search`,
- * `sil_product_get`, `sil_stores`, `sil_domain_create`, `sil_domain_find`)
- * and the shopper's own documents (`sil_doc_find`, `sil_doc_read`,
- * `sil_doc_write`, `sil_doc_remove`) — so they load in an OpenClaw host.
+ * A UCP commerce plugin for sil. It registers its real tool groups — the account
+ * tools (`sil_register`, `sil_whoami`, `sil_doctor`), the seven `shopping_*`
+ * catalog tools, the shopper's own documents (`shopping_doc_find`,
+ * `shopping_doc_read`, `shopping_doc_write`, `shopping_doc_remove`) and
+ * `shopping_brief_compile`, which turns a Brief item into the two calls it makes —
+ * so they load in an OpenClaw host.
  * There is no transport, no persistent service, and no background work at
  * register time — `register()` is strictly synchronous and opens nothing.
  *
  * `register()` MUST stay synchronous and side-effect-free beyond
- * registering tools, ensuring the data dir, and logging. The reference
- * adapter (`klodi-plugin/adapters/openclaw`) carries a smoke gate
- * precisely because an eager connection opened in `register()` once held
- * the host's install subprocess event loop open and blocked gateway
- * startup. Keep it that way: all I/O lives inside a tool's `execute()` —
- * no timers, no sockets, no unawaited promises here. The one synchronous
- * `mkdirSync` (via `ensureDataDir()`) is exempt: it returns immediately
- * and holds no resource open.
+ * registering tools, ensuring the data dir, reading the shopping
+ * artifacts, and logging. The reference adapter
+ * (`klodi-plugin/adapters/openclaw`) carries a smoke gate precisely
+ * because an eager connection opened in `register()` once held the host's
+ * install subprocess event loop open and blocked gateway startup. Keep it
+ * that way: all NETWORK I/O lives inside a tool's `execute()` — no timers,
+ * no sockets, no unawaited promises here. Two synchronous filesystem reads
+ * are exempt because they return immediately and hold no resource open:
+ * `ensureDataDir()`'s `mkdirSync`, and the `readFileSync` each artifact-backed
+ * tool makes to publish its request artifact as its `parameters`.
  *
  * To add a tool, see `src/tools/identity.ts` (the reference group — it
  * sets the `jsonResult` success shape and structured-error envelope every
@@ -37,6 +40,7 @@ import {
 import { ensureDataDir, getDataDir } from "./lib/credentials.js";
 import { registerSearchResultsMethod } from "./gateway/search-results.js";
 import { detectWiringDrift, readSilWiringFacts } from "./lib/host-wiring.js";
+import { registerBriefCompileTool } from "./tools/brief-compile.js";
 import { registerCatalogTools } from "./tools/catalog.js";
 import { registerDocTools } from "./tools/doc.js";
 import { registerDoctorTools } from "./tools/doctor.js";
@@ -85,12 +89,13 @@ export default definePluginEntry({
     registerIdentityTools(api);
     registerCatalogTools(api);
     registerDocTools(api);
+    registerBriefCompileTool(api);
     registerDoctorTools(api);
 
     // The pull surface a paired client resolves a search page from. Registering
     // a closure opens nothing — no socket, no timer — so the invariant above
     // holds; the store behind it is touched only inside the handler and inside
-    // sil_search's execute(). NOT a tool and NOT a `registerXTools` group: it
+    // shopping_search's execute(). NOT a tool and NOT a `registerXTools` group: it
     // never reaches the model, and the manifest's `contracts` vocabulary has no
     // gateway-method key, so this call IS the declaration.
     registerSearchResultsMethod(api);

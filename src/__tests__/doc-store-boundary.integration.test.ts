@@ -20,7 +20,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -160,33 +159,6 @@ function replaceDirWithFile(path: string): void {
   write(path, "this is a file where the store expects a directory\n");
 }
 
-/** `readShopperIdentity`'s one NON-agent consumer. Its singleton pre-flight (step 3)
- * is terminal, so no host command is ever reached — `openclaw` is deliberately absent
- * from PATH, and a run that got past the pre-flight would die there, loudly. */
-const CREATE_SHOPPER_BIN = join(REPO_ROOT, "scripts", "create-shopper.mjs");
-
-function runCreateShopper(): { status: number; stdout: string; marker: Record<string, unknown> } {
-  const configPath = join(dataDir, "openclaw.json");
-  writeFileSync(configPath, JSON.stringify({ gateway: { mode: "local" } }) + "\n");
-  const r = spawnSync(process.execPath, [CREATE_SHOPPER_BIN], {
-    input: JSON.stringify({
-      name: "Second Person",
-      workspace: join(dataDir, "workspace"),
-      persona: "A careful generalist buyer.",
-      userSpec: "Ships to Athens.",
-    }),
-    env: { PATH: "/usr/bin:/bin", HOME: dataDir, OPENCLAW_CONFIG_PATH: configPath, SIL_DATA_DIR: dataDir },
-    encoding: "utf8",
-    timeout: 20_000,
-  });
-  const line = (r.stderr ?? "").trim().split("\n").filter(Boolean).at(-1) ?? "";
-  return {
-    status: r.status ?? 1,
-    stdout: r.stdout ?? "",
-    marker: line === "" ? {} : (JSON.parse(line) as Record<string, unknown>),
-  };
-}
-
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), "sil-doc-boundary-"));
   priorSilDataDir = process.env["SIL_DATA_DIR"];
@@ -210,7 +182,7 @@ afterEach(() => {
 });
 
 describe("`doc-store.ts`'s never-throws boundary — a store the OS will not let us list is REPORTED, never thrown", () => {
-  it("`briefs` present as a FILE (ENOTDIR): sil_doc_find answers, names it, and still reports the shopper", async () => {
+  it("`briefs` present as a FILE (ENOTDIR): shopping_doc_find answers, names it, and still reports the shopper", async () => {
     // `existsSync(briefsDir)` passes on a file, and the very next `readdirSync`
     // raises ENOTDIR straight out of `execute()`. The shopper clause is what
     // forbids the lazy fix — wrapping the whole scan in a try/catch that returns
@@ -220,14 +192,14 @@ describe("`doc-store.ts`'s never-throws boundary — a store the OS will not let
 
     // Guard-of-the-guard: healthy, this store reports NOTHING unreadable, so the
     // assertion below cannot pass on a store that was already broken.
-    const healthy = await call("sil_doc_find");
+    const healthy = await call("shopping_doc_find");
     expect(healthy["status"]).toBe("ok");
     expect(healthy["unreadable"]).toEqual([]);
     expect((healthy["briefs"] as unknown[]).length).toBe(1);
 
     replaceDirWithFile(briefsDir());
 
-    const found = await call("sil_doc_find");
+    const found = await call("shopping_doc_find");
     expect(found["shopper"]).toMatchObject({ ref: "shopper", name: "Ioannis" });
     expect(reported(found)).toContain("briefs");
   });
@@ -243,7 +215,7 @@ describe("`doc-store.ts`'s never-throws boundary — a store the OS will not let
       seedBrief();
       chmodSync(briefsDir(), 0o000);
 
-      const found = await call("sil_doc_find");
+      const found = await call("shopping_doc_find");
       expect(found["shopper"]).toMatchObject({ ref: "shopper", name: "Ioannis" });
       expect(reported(found)).toContain("briefs");
     },
@@ -251,21 +223,21 @@ describe("`doc-store.ts`'s never-throws boundary — a store the OS will not let
 
   it("`domains` present as a FILE: ALL FOUR doc verbs answer — the legacy scan runs on every one of them", async () => {
     // `legacyDirs()` sits behind `migrateOnTouch`, which every verb calls, so this
-    // site is not a `sil_doc_find` bug: unguarded it throws out of read, write and
+    // site is not a `shopping_doc_find` bug: unguarded it throws out of read, write and
     // remove too. It is also reached TWICE per call — once by the scan, once by
     // `pruneLegacyTree` — so a guard on the scan alone still throws on the prune.
     seedShopper();
     replaceDirWithFile(legacyRoot());
 
-    const found = await call("sil_doc_find");
+    const found = await call("shopping_doc_find");
     expect(found["status"]).toBe("ok");
-    expect((await call("sil_doc_read", { ref: "shopper" }))["status"]).toBe("ok");
+    expect((await call("shopping_doc_read", { ref: "shopper" }))["status"]).toBe("ok");
     expect(
-      (await call("sil_doc_write", { ref: "brief:new-job", mode: "create", title: "New", body: "## Items\n" }))[
+      (await call("shopping_doc_write", { ref: "brief:new-job", mode: "create", title: "New", body: "## Items\n" }))[
         "status"
       ],
     ).toBe("ok");
-    expect((await call("sil_doc_remove", { ref: "brief:new-job" }))["status"]).toBe("removed");
+    expect((await call("shopping_doc_remove", { ref: "brief:new-job" }))["status"]).toBe("removed");
 
     // …and the unlistable legacy tree is DIAGNOSED, not silently skipped: a store
     // stuck one hop behind forever is exactly what the report is for.
@@ -284,10 +256,10 @@ describe("`doc-store.ts`'s never-throws boundary — a store the OS will not let
     const prds = join(legacyRoot(), "ski", "prds");
     replaceDirWithFile(prds);
 
-    const found = await call("sil_doc_find");
+    const found = await call("shopping_doc_find");
     expect(found["status"]).toBe("ok");
 
-    const body = String((await call("sil_doc_read", { ref: "shopper" }))["body"]);
+    const body = String((await call("shopping_doc_read", { ref: "shopper" }))["body"]);
     expect(section(body, "## Shopping")).toMatch(/^### ski$/m);
     expect(body).toContain("Never a narrow last");
     expect(existsSync(join(legacyRoot(), "ski", "method.md"))).toBe(false);
@@ -299,7 +271,7 @@ describe("`doc-store.ts`'s never-throws boundary — a store the OS will not let
 
   it("sil_doctor DIAGNOSES an unlistable `briefs` rather than throwing — the guard belongs in the store, not in the tool wrapper", async () => {
     // `sil_doctor` reads the store through `checkStore()` → `findDocuments()`, NOT
-    // through `sil_doc_*`. A guard placed in `doc.ts`'s `execute()` passes every
+    // through `shopping_doc_*`. A guard placed in `doc.ts`'s `execute()` passes every
     // bar above and leaves the one surface whose job is to diagnose a broken store
     // dying on it — with `dir.usable` true, because the DATA dir is fine.
     seedShopper();
@@ -328,76 +300,46 @@ describe("`doc-store.ts`'s never-throws boundary — a store the OS will not let
  * dangerous shape, because a throw at least stops the agent.
  */
 describe("`doc-store.ts`'s `Unreadable` contract — an unlistable store ROOT is UNREADABLE, never absent", () => {
-  it.skipIf(AS_ROOT)("sil_doc_read {ref: shopper} answers `unreadable` — `not_found` steers a re-mint over the buyer's own words", async () => {
-    // The whole cost is the recovery: `not_found`'s message names sil_doc_write
-    // (mode: create), and the shopper document is the one `sil_doc_remove` refuses to
+  it.skipIf(AS_ROOT)("shopping_doc_read {ref: shopper} answers `unreadable` — `not_found` steers a re-mint over the buyer's own words", async () => {
+    // The whole cost is the recovery: `not_found`'s message names shopping_doc_write
+    // (mode: create), and the shopper document is the one `shopping_doc_remove` refuses to
     // delete precisely because nothing else on disk reproduces it.
     seedShopper();
 
     // Guard-of-the-guard: readable, this document reads back — so the bar below
     // cannot pass on a store that simply never had a shopper.
-    const healthy = await call("sil_doc_read", { ref: "shopper" });
+    const healthy = await call("shopping_doc_read", { ref: "shopper" });
     expect(healthy["status"]).toBe("ok");
     expect(healthy["fields"]).toMatchObject({ name: "Ioannis" });
 
     chmodSync(shopperDir(), 0o000);
 
-    const read = await call("sil_doc_read", { ref: "shopper" });
+    const read = await call("shopping_doc_read", { ref: "shopper" });
     expect(read["status"]).toBe("unreadable");
     expect(read["recovery"]).toBe("inspect_document");
   });
 
-  it.skipIf(AS_ROOT)("sil_doc_find REPORTS it — a clean empty result tells sil_doctor a broken store is a healthy one", async () => {
+  it.skipIf(AS_ROOT)("shopping_doc_find REPORTS it — a clean empty result tells sil_doctor a broken store is a healthy one", async () => {
     // The read verb and the find verb reach the root through separate paths, so a
     // guard on `readDocument` alone leaves this one answering `{briefs: [],
     // unreadable: []}` — healthy, empty, and wrong. `checkStore()` believes it.
     seedShopper();
     seedBrief();
 
-    const healthy = await call("sil_doc_find");
+    const healthy = await call("shopping_doc_find");
     expect(healthy["status"]).toBe("ok");
     expect(healthy["unreadable"]).toEqual([]);
     expect((healthy["briefs"] as unknown[]).length).toBe(1);
 
     chmodSync(shopperDir(), 0o000);
 
-    const found = await call("sil_doc_find");
+    const found = await call("shopping_doc_find");
     expect(found["status"]).toBe("ok");
     expect(found["unreadable"]).not.toEqual([]);
     expect(reported(found)).toContain("shopper");
   });
 
-  it.skipIf(AS_ROOT)("the create-shopper BIN fails closed on it — an empty read mints a SECOND person over the buyer it could not see", () => {
-    // The one entry point whose consumer is not an agent: `create-shopper.mjs:474`
-    // treats a non-empty `unreadable[]` as INCONCLUSIVE. Drop the root probe and
-    // `readShopperIdentity` answers `{unreadable: []}` — indistinguishable from a fresh
-    // machine — so the singleton gate opens and the bin walks on to `agents add`.
-    seedShopper();
-
-    // Guard-of-the-guard: readable, this same store makes the bin REFUSE — proof it
-    // reaches the pre-flight and reads this person, so the bar below turns on the lock.
-    const readable = runCreateShopper();
-    expect(readable.status).not.toBe(0);
-    expect(readable.marker["status"]).toBe("collision");
-
-    chmodSync(shopperDir(), 0o000);
-
-    const locked = runCreateShopper();
-    // Restored first: a failed assertion must not poison the afterEach cleanup.
-    chmodSync(shopperDir(), 0o700);
-
-    expect(locked.status).not.toBe(0);
-    expect(locked.stdout).not.toContain("sil_shopper_created");
-    expect(locked.marker["status"]).toBe("persistence_failed");
-    // …and it fails HERE, at the store, not two steps later at the host CLI: the path
-    // it names is the store it could not read, and the cause says so.
-    expect(locked.marker["path"]).toBe(shopperDir());
-    expect(String(locked.marker["cause"])).toMatch(/degraded/);
-    // The person is exactly as they were — nothing minted over them.
-    expect(readFileSync(join(shopperDir(), "user_spec.md"), "utf8")).toContain("Buys once and keeps it.");
-  });
-
-  it.skipIf(AS_ROOT)("sil_doc_write answers `unreadable` in BOTH modes — create fell to persistence_failed, replace to `mint it with mode: create`", async () => {
+  it.skipIf(AS_ROOT)("shopping_doc_write answers `unreadable` in BOTH modes — create fell to persistence_failed, replace to `mint it with mode: create`", async () => {
     // Two branches of ONE `shopperDirError()` call, and both steered wrong without it:
     // `create` blamed the data directory (`fix_data_dir`) for a store whose documents
     // are intact, and `replace` said the document does not exist — an invitation to
@@ -407,31 +349,31 @@ describe("`doc-store.ts`'s `Unreadable` contract — an unlistable store ROOT is
 
     // Guard-of-the-guard: readable, both modes land on this very store.
     expect(
-      (await call("sil_doc_write", { ref: "brief:new-job", mode: "create", title: "New", body: "## Items\n" }))["status"],
+      (await call("shopping_doc_write", { ref: "brief:new-job", mode: "create", title: "New", body: "## Items\n" }))["status"],
     ).toBe("ok");
     expect(
-      (await call("sil_doc_write", { ref: "brief:chamonix", mode: "replace", title: "Chamonix", body: "## Items\n" }))["status"],
+      (await call("shopping_doc_write", { ref: "brief:chamonix", mode: "replace", title: "Chamonix", body: "## Items\n" }))["status"],
     ).toBe("ok");
 
     chmodSync(shopperDir(), 0o000);
 
-    const created = await call("sil_doc_write", { ref: "brief:another-job", mode: "create", title: "Another", body: "## Items\n" });
+    const created = await call("shopping_doc_write", { ref: "brief:another-job", mode: "create", title: "Another", body: "## Items\n" });
     expect(created["status"]).toBe("unreadable");
     expect(created["recovery"]).toBe("inspect_document");
 
-    const replaced = await call("sil_doc_write", { ref: "shopper", mode: "replace", name: "Ioannis", body: "## Who\nrewritten\n" });
+    const replaced = await call("shopping_doc_write", { ref: "shopper", mode: "replace", name: "Ioannis", body: "## Who\nrewritten\n" });
     expect(replaced["status"]).toBe("unreadable");
     expect(replaced["recovery"]).toBe("inspect_document");
   });
 
-  it.skipIf(AS_ROOT)("sil_doc_remove answers `unreadable`, never `not_found` — \"already gone\" said of a Brief that is on disk", async () => {
+  it.skipIf(AS_ROOT)("shopping_doc_remove answers `unreadable`, never `not_found` — \"already gone\" said of a Brief that is on disk", async () => {
     // `not_found` here reads as "your delete already happened", so the agent stops
     // asking. The Brief is still there, and nothing will look for it again.
     seedShopper();
     seedBrief();
     chmodSync(shopperDir(), 0o000);
 
-    const removed = await call("sil_doc_remove", { ref: "brief:chamonix" });
+    const removed = await call("shopping_doc_remove", { ref: "brief:chamonix" });
     expect(removed["status"]).toBe("unreadable");
     expect(removed["recovery"]).toBe("inspect_document");
 
@@ -439,7 +381,7 @@ describe("`doc-store.ts`'s `Unreadable` contract — an unlistable store ROOT is
     // removable — so the answer above was about the LOCK, not a ref that never was.
     chmodSync(shopperDir(), 0o700);
     expect(existsSync(join(briefsDir(), "chamonix.md"))).toBe(true);
-    expect((await call("sil_doc_remove", { ref: "brief:chamonix" }))["status"]).toBe("removed");
+    expect((await call("shopping_doc_remove", { ref: "brief:chamonix" }))["status"]).toBe("removed");
   });
 });
 
@@ -456,38 +398,42 @@ describe("`doc-store.ts`'s `Unreadable` contract — an unlistable store ROOT is
  * present-or-absent is unknown — and unknown is STATED, never guessed as absence.
  */
 describe("the CONTAINING directory — an unlistable `briefs/` is UNREADABLE, never absent", () => {
-  it.skipIf(AS_ROOT)("AC1 — sil_doc_read answers `unreadable`; `not_found`'s own message IS the re-mint instruction", async () => {
+  it.skipIf(AS_ROOT)("AC1 — shopping_doc_read answers `unreadable`; `not_found`'s own message IS the re-mint instruction", async () => {
     seedShopper();
     seedBrief();
 
     // Guard-of-the-guard: listable, this exact ref reads back — so the answer below is
     // about the LOCK, not a Brief that never existed.
-    expect((await call("sil_doc_read", { ref: "brief:chamonix" }))["status"]).toBe("ok");
+    expect((await call("shopping_doc_read", { ref: "brief:chamonix" }))["status"]).toBe("ok");
 
     const read = await underMode(briefsDir(), 0o000, () =>
-      call("sil_doc_read", { ref: "brief:chamonix" }),
+      call("shopping_doc_read", { ref: "brief:chamonix" }),
     );
 
     expect(read["status"]).toBe("unreadable");
     expect(read["recovery"]).toBe("inspect_document");
-    // …and it says WHERE it could not look. The store's OTHER `unreadable` reads
-    // "malformed or absent frontmatter", which is nonsense for a chmod fault and
-    // steers the repair at a file that is perfectly fine.
-    expect(String(read["message"])).toContain("briefs");
+    // …and it says WHAT it could not settle, about WHICH document. The store's OTHER
+    // `unreadable` reads "malformed or absent frontmatter", which is nonsense for a
+    // chmod fault and steers the repair at a file that is perfectly fine.
+    expect(String(read["message"])).toContain("brief:chamonix");
+    expect(String(read["message"])).toMatch(/presence could not be determined/i);
     expect(String(read["message"])).not.toMatch(/malformed/i);
+    // The ref, never the file: where the store keeps its bytes is an internal, and the
+    // errno MESSAGE embeds it, which is why the cause reaches the agent as a code.
+    expect(String(read["message"])).not.toContain(dataDir);
   });
 
-  it.skipIf(AS_ROOT)("AC2 — sil_doc_write {mode: replace} answers `unreadable`, never \"mint it with mode: create first\"", async () => {
+  it.skipIf(AS_ROOT)("AC2 — shopping_doc_write {mode: replace} answers `unreadable`, never \"mint it with mode: create first\"", async () => {
     seedShopper();
     seedBrief();
 
     // Guard-of-the-guard: listable, this same replace lands on this same store.
     expect(
-      (await call("sil_doc_write", { ref: "brief:chamonix", mode: "replace", title: "Chamonix", body: "## Items\n" }))["status"],
+      (await call("shopping_doc_write", { ref: "brief:chamonix", mode: "replace", title: "Chamonix", body: "## Items\n" }))["status"],
     ).toBe("ok");
 
     const replaced = await underMode(briefsDir(), 0o000, () =>
-      call("sil_doc_write", { ref: "brief:chamonix", mode: "replace", title: "Chamonix", body: "## Items\n" }),
+      call("shopping_doc_write", { ref: "brief:chamonix", mode: "replace", title: "Chamonix", body: "## Items\n" }),
     );
 
     expect(replaced["status"]).toBe("unreadable");
@@ -504,7 +450,7 @@ describe("the CONTAINING directory — an unlistable `briefs/` is UNREADABLE, ne
     const before = readFileSync(path, "utf8");
 
     const created = await underMode(briefsDir(), 0o000, () =>
-      call("sil_doc_write", { ref: "brief:chamonix", mode: "create", title: "Chamonix", body: "## Items\n| new | | open |\n" }),
+      call("shopping_doc_write", { ref: "brief:chamonix", mode: "create", title: "Chamonix", body: "## Items\n| new | | open |\n" }),
     );
 
     expect(created["status"]).toBe("unreadable");
@@ -521,27 +467,27 @@ describe("the CONTAINING directory — an unlistable `briefs/` is UNREADABLE, ne
     // Guard-of-the-guard: listable, a mint at a free slug lands — so the answer below
     // is the lock, not a rejected slug.
     expect(
-      (await call("sil_doc_write", { ref: "brief:new-job", mode: "create", title: "New", body: "## Items\n" }))["status"],
+      (await call("shopping_doc_write", { ref: "brief:new-job", mode: "create", title: "New", body: "## Items\n" }))["status"],
     ).toBe("ok");
 
     const created = await underMode(briefsDir(), 0o000, () =>
-      call("sil_doc_write", { ref: "brief:another-job", mode: "create", title: "Another", body: "## Items\n" }),
+      call("shopping_doc_write", { ref: "brief:another-job", mode: "create", title: "Another", body: "## Items\n" }),
     );
 
     expect(created["status"]).toBe("unreadable");
     expect(created["recovery"]).toBe("inspect_document");
   });
 
-  it.skipIf(AS_ROOT)("AC5 — sil_doc_remove answers `unreadable` and the Brief is still on disk — \"(already gone)\" said of a document that is not", async () => {
+  it.skipIf(AS_ROOT)("AC5 — shopping_doc_remove answers `unreadable` and the Brief is still on disk — \"(already gone)\" said of a document that is not", async () => {
     seedShopper();
     seedBrief();
     const path = join(briefsDir(), "chamonix.md");
 
     // Guard-of-the-guard: listable, that exact ref is present and readable.
-    expect((await call("sil_doc_read", { ref: "brief:chamonix" }))["status"]).toBe("ok");
+    expect((await call("shopping_doc_read", { ref: "brief:chamonix" }))["status"]).toBe("ok");
 
     const removed = await underMode(briefsDir(), 0o000, () =>
-      call("sil_doc_remove", { ref: "brief:chamonix" }),
+      call("shopping_doc_remove", { ref: "brief:chamonix" }),
     );
 
     expect(removed["status"]).toBe("unreadable");
@@ -556,11 +502,11 @@ describe("the CONTAINING directory — an unlistable `briefs/` is UNREADABLE, ne
     // other. The agent-facing answer must not depend on which one the store hit.
     seedShopper();
     seedBrief();
-    expect((await call("sil_doc_read", { ref: "brief:chamonix" }))["status"]).toBe("ok");
+    expect((await call("shopping_doc_read", { ref: "brief:chamonix" }))["status"]).toBe("ok");
 
     replaceDirWithFile(briefsDir());
 
-    const read = await call("sil_doc_read", { ref: "brief:chamonix" });
+    const read = await call("shopping_doc_read", { ref: "brief:chamonix" });
     expect(read["status"]).toBe("unreadable");
     expect(read["recovery"]).toBe("inspect_document");
   });
@@ -582,18 +528,18 @@ describe("…and real absence still reads as absence", () => {
     seedShopper();
     expect(existsSync(briefsDir())).toBe(false); // guard-of-the-guard
 
-    expect((await call("sil_doc_read", { ref: "brief:chamonix" }))["status"]).toBe("not_found");
+    expect((await call("shopping_doc_read", { ref: "brief:chamonix" }))["status"]).toBe("not_found");
     expect(
-      (await call("sil_doc_write", { ref: "brief:chamonix", mode: "create", title: "Chamonix", body: "## Items\n" }))["status"],
+      (await call("shopping_doc_write", { ref: "brief:chamonix", mode: "create", title: "Chamonix", body: "## Items\n" }))["status"],
     ).toBe("ok");
   });
 
   it("AC9 — a genuinely empty store is an ANSWERED emptiness, never a fault", async () => {
     mkdirSync(shopperDir(), { recursive: true, mode: 0o700 });
 
-    expect((await call("sil_doc_read", { ref: "shopper" }))["status"]).toBe("not_found");
+    expect((await call("shopping_doc_read", { ref: "shopper" }))["status"]).toBe("not_found");
 
-    const found = await call("sil_doc_find");
+    const found = await call("shopping_doc_find");
     expect(found["status"]).toBe("ok");
     expect(found).not.toHaveProperty("shopper");
     expect(found["briefs"]).toEqual([]);
@@ -605,8 +551,8 @@ describe("…and real absence still reads as absence", () => {
     seedBrief("chamonix", "## Items\n| skis |  | open |\n\n### skis\nthe buyer's own words\n");
 
     const [read, found] = await underMode(briefsDir(), 0o300, async () => [
-      await call("sil_doc_read", { ref: "brief:chamonix" }),
-      await call("sil_doc_find"),
+      await call("shopping_doc_read", { ref: "brief:chamonix" }),
+      await call("shopping_doc_find"),
     ]);
 
     // The store CAN hand this document over. A probe on the DIRECTORY downgrades it to
@@ -628,7 +574,7 @@ describe("scope and agreement — one fault, one state, three surfaces", () => {
       // Guard-of-the-guard: the fault is REALLY injected — this is the listing the
       // store is about to fail at.
       expect(() => readdirSync(briefsDir())).toThrow();
-      return call("sil_doc_read", { ref: "shopper" });
+      return call("shopping_doc_read", { ref: "shopper" });
     });
 
     expect(read["status"]).toBe("ok");
@@ -641,8 +587,8 @@ describe("scope and agreement — one fault, one state, three surfaces", () => {
     seedBrief();
 
     const [found, read] = await underMode(briefsDir(), 0o000, async () => [
-      await call("sil_doc_find"),
-      await call("sil_doc_read", { ref: "brief:chamonix" }),
+      await call("shopping_doc_find"),
+      await call("shopping_doc_read", { ref: "brief:chamonix" }),
     ]);
 
     expect(reported(found)).toContain("briefs");
@@ -662,7 +608,7 @@ describe("scope and agreement — one fault, one state, three surfaces", () => {
 
     const [report, read] = await underMode(briefsDir(), 0o000, async () => [
       await runDoctor(),
-      await call("sil_doc_read", { ref: "brief:chamonix" }),
+      await call("shopping_doc_read", { ref: "brief:chamonix" }),
     ]);
 
     expect(report.findings.filter((f) => f.id === "fs.unreadable_dir:shopper/briefs")).toEqual([
@@ -682,24 +628,24 @@ describe("scope and agreement — one fault, one state, three surfaces", () => {
  * too.
  */
 describe("the ROOT's own two doors — an un-stat-able data dir, and a `shopper/` that lists but does not traverse", () => {
-  it.skipIf(AS_ROOT)("AC17 — with `$SIL_DATA_DIR` itself at 0o000, sil_doc_read {ref: shopper} answers `unreadable`", async () => {
+  it.skipIf(AS_ROOT)("AC17 — with `$SIL_DATA_DIR` itself at 0o000, shopping_doc_read {ref: shopper} answers `unreadable`", async () => {
     seedShopper();
-    expect((await call("sil_doc_read", { ref: "shopper" }))["status"]).toBe("ok"); // guard-of-the-guard
+    expect((await call("shopping_doc_read", { ref: "shopper" }))["status"]).toBe("ok"); // guard-of-the-guard
 
-    const read = await underMode(dataDir, 0o000, () => call("sil_doc_read", { ref: "shopper" }));
+    const read = await underMode(dataDir, 0o000, () => call("shopping_doc_read", { ref: "shopper" }));
 
     expect(read["status"]).toBe("unreadable");
     expect(read["recovery"]).toBe("inspect_document");
   });
 
-  it.skipIf(AS_ROOT)("AC18 — …and sil_doc_find names the store rather than answering a CLEAN empty one", async () => {
+  it.skipIf(AS_ROOT)("AC18 — …and shopping_doc_find names the store rather than answering a CLEAN empty one", async () => {
     seedShopper();
     seedBrief();
 
-    const healthy = await call("sil_doc_find");
+    const healthy = await call("shopping_doc_find");
     expect(healthy["unreadable"]).toEqual([]); // guard-of-the-guard
 
-    const found = await underMode(dataDir, 0o000, () => call("sil_doc_find"));
+    const found = await underMode(dataDir, 0o000, () => call("shopping_doc_find"));
 
     expect(found["status"]).toBe("ok");
     // A clean empty result is what `checkStore()` turns into zero findings — the
@@ -710,7 +656,7 @@ describe("the ROOT's own two doors — an un-stat-able data dir, and a `shopper/
 
   it.skipIf(AS_ROOT)("AC19 — at `shopper/` 0o400 the listing SUCCEEDS and every child stat EACCESes: the read answers `unreadable`", async () => {
     seedShopper();
-    expect((await call("sil_doc_read", { ref: "shopper" }))["status"]).toBe("ok"); // guard-of-the-guard
+    expect((await call("shopping_doc_read", { ref: "shopper" }))["status"]).toBe("ok"); // guard-of-the-guard
 
     const read = await underMode(shopperDir(), 0o400, async () => {
       // The state's whole signature, asserted so this bar cannot pass on the wrong
@@ -718,21 +664,21 @@ describe("the ROOT's own two doors — an un-stat-able data dir, and a `shopper/
       // `existsSync` on the document sitting right there answers false.
       expect(readdirSync(shopperDir())).toContain("user_spec.md");
       expect(existsSync(join(shopperDir(), "user_spec.md"))).toBe(false);
-      return call("sil_doc_read", { ref: "shopper" });
+      return call("shopping_doc_read", { ref: "shopper" });
     });
 
     expect(read["status"]).toBe("unreadable");
     expect(read["recovery"]).toBe("inspect_document");
   });
 
-  it.skipIf(AS_ROOT)("AC20 — …and sil_doc_find names BOTH the shopper and `briefs` in unreadable[]", async () => {
+  it.skipIf(AS_ROOT)("AC20 — …and shopping_doc_find names BOTH the shopper and `briefs` in unreadable[]", async () => {
     seedShopper();
     seedBrief();
 
-    const healthy = await call("sil_doc_find");
+    const healthy = await call("shopping_doc_find");
     expect(healthy["unreadable"]).toEqual([]); // guard-of-the-guard
 
-    const found = await underMode(shopperDir(), 0o400, () => call("sil_doc_find"));
+    const found = await underMode(shopperDir(), 0o400, () => call("shopping_doc_find"));
 
     expect(found["status"]).toBe("ok");
     const ids = (found["unreadable"] as Array<{ id: string }>).map((u) => u.id);
@@ -757,56 +703,38 @@ describe("the ROOT's own two doors — an un-stat-able data dir, and a `shopper/
     expect(report.healthy).toBe(false);
   });
 
-  it.skipIf(AS_ROOT)("AC22 — the create-shopper bin's singleton pre-flight fails CLOSED at `shopper/` 0o400, over a buyer it cannot see", () => {
-    seedShopper();
-    const specPath = join(shopperDir(), "user_spec.md");
-    const before = readFileSync(specPath, "utf8");
-
-    // Guard-of-the-guard: readable, this same store makes the bin REFUSE — proof it
-    // reaches the pre-flight and reads this person.
-    expect(runCreateShopper().marker["status"]).toBe("collision");
-
-    chmodSync(shopperDir(), 0o400);
-    const locked = runCreateShopper();
-    // Restored first: a failed assertion must not poison the afterEach cleanup.
-    chmodSync(shopperDir(), 0o700);
-
-    expect(locked.status).not.toBe(0);
-    expect(locked.stdout).not.toContain("sil_shopper_created");
-    expect(locked.marker["status"]).toBe("persistence_failed");
-    // It fails HERE, at the store it could not read — not two steps later at the host
-    // CLI. `path` is the only field that tells those two apart.
-    expect(locked.marker["path"]).toBe(shopperDir());
-    expect(String(locked.marker["cause"])).toMatch(/degraded/);
-    // The person is exactly as they were — no second shopper minted over them.
-    expect(readFileSync(specPath, "utf8")).toBe(before);
-  });
-
-  it("AC23 — with NO `shopper/` at all: an empty store, `not_found`, and a mint that lands (the bar that stops the fix bricking onboarding)", async () => {
+  it("SC4 — on a wiped disk the shopper document appears at the FIRST SAVED FACT, with no ceremony before it", async () => {
+    // The whole of "there is no creation ceremony", end to end through the registered
+    // tools. Every step before the write is a legal state, not an error to repair: the
+    // absent store answers an empty find and a `not_found` read, and `mode: "create"`
+    // over a directory that does not exist yet is beat 3, not a fault. Nothing else
+    // runs first — no bin, no setup, no singleton pre-flight.
     expect(existsSync(shopperDir())).toBe(false); // guard-of-the-guard: a fresh machine
 
-    const found = await call("sil_doc_find");
+    const found = await call("shopping_doc_find");
     expect(found["status"]).toBe("ok");
     expect(found).not.toHaveProperty("shopper");
     expect(found["briefs"]).toEqual([]);
     expect(found["unreadable"]).toEqual([]);
 
-    expect((await call("sil_doc_read", { ref: "shopper" }))["status"]).toBe("not_found");
+    expect((await call("shopping_doc_read", { ref: "shopper" }))["status"]).toBe("not_found");
 
-    // The bin's singleton gate OPENS on "nothing yet": it walks PAST the store
-    // pre-flight and dies at the host CLI, which is absent from PATH by design — so
-    // `path` is the config it could not drive, never the store, and the cause is not
-    // the degraded-store refusal. (The end-to-end mint from this same baseline is
-    // `create-shopper.integration.test.ts`'s happy path.)
-    const fresh = runCreateShopper();
-    expect(fresh.marker["status"]).toBe("persistence_failed");
-    expect(fresh.marker["path"]).toBe(join(dataDir, "openclaw.json"));
-    expect(String(fresh.marker["cause"])).not.toMatch(/degraded/);
+    const written = await call("shopping_doc_write", {
+      ref: "shopper",
+      mode: "create",
+      name: "Ioannis",
+      body: "## Constraints\nNo wool — reacts to it.\n",
+    });
+    expect(written["status"]).toBe("ok");
 
-    // …and the mint itself lands: `create` over an absent store directory is beat 1,
-    // not a fault.
-    expect(
-      (await call("sil_doc_write", { ref: "shopper", mode: "create", name: "Ioannis", body: "## Who\nnew here\n" }))["status"],
-    ).toBe("ok");
+    // …and the fact is READABLE afterwards, which is what makes it a saved fact rather
+    // than an `ok` over nothing: the file is on disk and the index now carries the
+    // person by the name the write was given.
+    expect(existsSync(join(shopperDir(), "user_spec.md"))).toBe(true);
+    expect((await call("shopping_doc_find"))["shopper"]).toEqual({
+      ref: "shopper",
+      name: "Ioannis",
+    });
+    expect((await call("shopping_doc_read", { ref: "shopper" }))["body"]).toContain("No wool");
   });
 });

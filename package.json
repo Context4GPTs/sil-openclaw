@@ -27,12 +27,11 @@
   },
   "main": "./dist/index.js",
   "bin": {
-    "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs",
-    "sil-openclaw-create-shopper": "./scripts/create-shopper.mjs"
+    "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs"
   },
   "files": [
     "dist",
-    "scripts/create-shopper.mjs",
+    "schema",
     "scripts/allowlist-openclaw.mjs",
     "sil-shopping",
     "openclaw.plugin.json",
@@ -98,6 +97,8 @@
   },
   "devDependencies": {
     "@types/node": "22.15.3",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "typescript": "5.8.3",
     "vitest": "4.1.2"
   }

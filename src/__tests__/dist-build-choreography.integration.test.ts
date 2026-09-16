@@ -2,10 +2,9 @@
  * INTEGRATION — who builds `dist/`, and when (tier: integration — reads what this run's
  * `globalSetup` provided, the real `dist/` it produced, and every test file's source).
  *
- * Card: create-shopper-bin-dies-on-its-exit-path. `create-shopper.integration.test.ts`
- * and `openclaw-allowlist.integration.test.ts` each drove the build compiler in a
- * `beforeAll`, emitting NON-atomically into the one shared `dist/` — while their own
- * spawned bins were statically importing `../dist/lib/*.js`. A bin that started mid-emit
+ * Two test files each drove the build compiler in a `beforeAll`, emitting
+ * NON-atomically into the one shared `dist/` — while their own spawned bins were
+ * statically importing `../dist/lib/*.js`. A bin that started mid-emit
  * read a truncated module and died at ESM instantiation (stdout empty, exit 1). Measured
  * 1 anomaly in 2,365 spawns under 6-way parallel vitest; 32 in ~24,000 against a
  * compiler storm; `dist/lib/profile-store.js` read 0 bytes on 11 of 811,224 reads.
@@ -56,8 +55,11 @@ describe("dist/ is built once per vitest run, before any test file executes", ()
     // Anti-vacuity, and the measured failure itself: `does not provide an export named
     // getShopperArtefactDir` was a bin reading a dist/ that did NOT match its source.
     // Runtime export names, not a text grep — a half-written module cannot fake these.
+    // An EXACT set, not a floor: one operator bin survives the creation ceremony's
+    // deletion, so `> 1` would now be unsatisfiable and `> 0` would stop noticing if the
+    // derivation went empty.
     const libEntries = distEntriesTheBinsImport().filter((e) => e.startsWith("lib/"));
-    expect(libEntries.length).toBeGreaterThan(1);
+    expect(libEntries).toEqual(["lib/openclaw-allowlist.js"]);
     for (const rel of libEntries) {
       const compiled = await import(pathToFileURL(join(DIST_DIR, rel)).href);
       const source = readFileSync(join(REPO_ROOT, "src", rel.replace(/\.js$/, ".ts")), "utf8");

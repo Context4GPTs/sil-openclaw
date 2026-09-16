@@ -102,6 +102,17 @@ describe("package.json — OpenClaw ESM plugin shape", () => {
     expect(pkg.files).toContain("openclaw.plugin.json");
   });
 
+  it("ships `schema/` — every shopping tool reads its request artifact at REGISTRATION", () => {
+    // Harder than a discovery failure: registration parses the artifact to build each
+    // tool's `parameters`, so a packed artifact without `schema/` throws inside
+    // `register()` and the whole plugin fails to load. Green here, a dead install there.
+    expect(pkg.files).toContain("schema");
+    const artifacts = readdirSync(join(REPO_ROOT, "schema")).filter((f) =>
+      f.endsWith(".schema.json"),
+    );
+    expect(artifacts).toHaveLength(16);
+  });
+
   it("declares build and test scripts", () => {
     expect(pkg.scripts).toBeTypeOf("object");
     expect(typeof pkg.scripts!["build"]).toBe("string");
@@ -237,21 +248,16 @@ describe("skill basename is sil-unique — no stale `./skill` literal, ships und
   });
 
   it("the skill subtree (references + example) moved under sil-shopping/ intact", () => {
-    // A representative-but-stable probe: `references/` is populated, the one
-    // router-central reference whose NAME is a contract survives
-    // (agent_creation_engine — onboarding + the creation engine), and the example
-    // ships. Deliberately NOT the full reference set: that set churns as the skill
-    // is reshaped — this guard proves the subtree shipped, not which exact files it
-    // holds today. It previously named `method_and_prds.md`, which the eight-beat
-    // card renamed to `domain_and_brief.md`; swapping one churning literal for
-    // another would only move the next false RED, so it is a count now.
+    // A representative-but-stable probe: `references/` is populated and the example
+    // ships. Deliberately NOT the full reference set: that set churns as the skill is
+    // reshaped — this guard proves the subtree shipped, not which exact files it holds
+    // today. It previously named `method_and_prds.md`, renamed by the eight-beat card,
+    // then `agent_creation_engine.md`, deleted with the creation ceremony; swapping one
+    // churning literal for another only moves the next false RED, so it is a count.
     const root = join(REPO_ROOT, "sil-shopping");
     expect(
       readdirSync(join(root, "references")).filter((f) => f.endsWith(".md")).length,
     ).toBeGreaterThan(0);
-    expect(
-      existsSync(join(root, "references", "agent_creation_engine.md")),
-    ).toBe(true);
     expect(
       existsSync(
         join(root, "examples", "multi_domain_shopper_walkthrough.md"),
@@ -271,23 +277,19 @@ describe("skill basename is sil-unique — no stale `./skill` literal, ships und
 });
 
 describe("package.json#bin — the shipped operator bins (exact set, add-only)", () => {
-  // Card: one-tap-shopper-create-via-a-single-wrapper-bin. The create-shopper bin
-  // ships as a `package.json#bin` sibling of `sil-openclaw-allowlist` — NOT a plugin
-  // tool (contracts.tools is unchanged; the six exact-tool-set/count mirrors are NOT
-  // triggered). This guard is the EXACT-SET drift guard on the bin surface: it
-  // set-equals the two operator bins, so a forgotten new bin OR a stray extra one
-  // FAILS. It is add-only vs today's single-bin set — asserted with `toEqual`, never
-  // loosened to a `toContain`/subset (which would silently stop catching drift).
+  // The EXACT-SET drift guard on the bin surface: it set-equals the operator bins, so a
+  // forgotten new bin OR a stray extra one FAILS. Asserted with `toEqual`, never loosened
+  // to a `toContain`/subset (which would silently stop catching drift). The set shrank to
+  // one when the shopper-creation ceremony was deleted; a bin is add-only from here.
   const pkg = readJson<PackageJson>("package.json");
 
   // The EXACT map the shipped package must declare. Add a bin ⇒ add it HERE too
   // (add-only); this is the contract, not a lower bound.
   const EXPECTED_BIN: Record<string, string> = {
     "sil-openclaw-allowlist": "./scripts/allowlist-openclaw.mjs",
-    "sil-openclaw-create-shopper": "./scripts/create-shopper.mjs",
   };
 
-  it("declares EXACTLY the two operator bins — never a subset, never a stray extra", () => {
+  it("declares EXACTLY the tool-admission bin — never a subset, never a stray extra", () => {
     expect(pkg.bin).toEqual(EXPECTED_BIN);
   });
 
@@ -298,24 +300,25 @@ describe("package.json#bin — the shipped operator bins (exact set, add-only)",
     }
   });
 
-  it("#files ships EXACTLY the two operator bins from scripts/, never the whole scripts/ dir (keeps maintainer-only tooling out of the tarball)", () => {
+  it("#files ships EXACTLY the operator bins from scripts/, never the whole scripts/ dir (keeps maintainer-only tooling out of the tarball)", () => {
     // Shipping the coarse `scripts/` dir dragged maintainer-only tooling
     // (release.mjs, changelog.mjs, sync-version.mjs) onto every user's machine —
     // dead weight, extra attack surface, and the source of ClawHub's flagged
-    // `dangerous_exec` in release.mjs. The tarball must carry ONLY the two runtime
+    // `dangerous_exec` in release.mjs. The tarball must carry ONLY the runtime
     // bins. Derived from the bin map so the ship-list and the bin-list can't drift.
     const shipped = pkg.files ?? [];
     const runtimeEntries = Object.values(EXPECTED_BIN).map((t) => t.replace(/^\.\//, ""));
     for (const entry of runtimeEntries) expect(shipped).toContain(entry);
-    // No coarse whole-dir entry, and no scripts/* leak beyond the two runtime bins.
+    // No coarse whole-dir entry, and no scripts/* leak beyond the runtime bins.
     expect(shipped).not.toContain("scripts");
     expect(
       shipped.filter((f) => f.startsWith("scripts/") && !runtimeEntries.includes(f)),
     ).toEqual([]);
   });
 
-  it("scripts/create-shopper.mjs is a node bin (starts with the `#!/usr/bin/env node` shebang, mirroring the sibling bin)", () => {
-    const src = readText("scripts/create-shopper.mjs");
-    expect(src.startsWith("#!/usr/bin/env node")).toBe(true);
+  it("every shipped bin is a node bin (starts with the `#!/usr/bin/env node` shebang)", () => {
+    for (const target of Object.values(EXPECTED_BIN)) {
+      expect(readText(target.replace(/^\.\//, "")).startsWith("#!/usr/bin/env node")).toBe(true);
+    }
   });
 });

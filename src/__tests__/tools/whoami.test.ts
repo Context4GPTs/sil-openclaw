@@ -8,8 +8,8 @@
  *   - the NOT-REGISTERED short-circuit: no tokens.json → a clear, structured
  *     "run sil_register" outcome with ZERO network calls, never an
  *     empty/null/ambiguous identity, never a crash, never a hang;
- *   - the success result carries ONLY the identity payload — no access token,
- *     no refresh token, no raw Authorization header echoed back to the agent;
+ *   - the success result carries ONLY the identity payload (name, country and
+ *     addresses) — no access token, no refresh token, no Authorization header;
  *   - the tokens/JWT/PII leak-canary: across success AND not-registered paths,
  *     no token value AND no PII string (name/address) appears in any logger
  *     call at any level.
@@ -27,7 +27,7 @@
  *   - src/tools/identity.ts#registerIdentityTools(api) also registers a
  *     `sil_whoami` tool (Type.Object({}) — no inputs);
  *   - execute() returns a jsonResult; on success the payload carries the
- *     authenticated user's identity (name + addresses) and NOTHING crediential;
+ *     buyer's identity (name, country, addresses) and NOTHING credential;
  *   - with no tokens.json, execute() returns a terminal "not registered"
  *     payload naming `sil_register` as the recovery action and makes no fetch.
  */
@@ -62,6 +62,7 @@ const TOOL = "sil_whoami";
 
 const REAL_IDENTITY = {
   name: "Ada Lovelace",
+  country: "GB",
   addresses: [
     { line1: "12 Analytical Engine Way", city: "London", country: "GB" },
   ],
@@ -224,11 +225,14 @@ describe("sil_whoami — success result carries ONLY identity (no credential ech
     registerIdentityTools(api);
   });
 
-  it("surfaces the authenticated user's name + addresses", async () => {
+  it("surfaces the buyer's name, country and addresses INSIDE `identity`", async () => {
+    // Contract §3.10: `country` rides beside `name`, not at the top level — an
+    // agent that has to hunt for it asks the buyer instead.
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    const blob = JSON.stringify(payload);
-    expect(blob).toContain("Ada Lovelace");
-    expect(blob).toContain("Analytical Engine Way");
+    const identity = payload["identity"] as Record<string, unknown>;
+    expect(identity["name"]).toBe("Ada Lovelace");
+    expect(identity["country"]).toBe("GB");
+    expect(JSON.stringify(identity["addresses"])).toContain("Analytical Engine Way");
   });
 
   it("does NOT echo the access token, refresh token, or Authorization header", async () => {

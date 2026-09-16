@@ -1,860 +1,246 @@
 /**
- * The five v0 catalog tools, 1:1 with the five sil-api routes: `sil_search`
- * (`POST /catalog/search`), `sil_product_get` (`POST /catalog/lookup`),
- * `sil_stores` (`POST /catalog/stores`), `sil_domain_find` (`GET
- * /catalog/domains`) and `sil_domain_create` (`POST /catalog/domains`).
+ * The seven `shopping_*` tools, 1:1 with the sil-api catalog routes.
  *
- * FIVE INTENTIONS, FIVE TOOLS, NEVER FLAGS ON ONE ANOTHER. No `mode`, no
- * `action`, no `include_stores`, no `refresh`, no `create_domain_if_missing`. A
- * model picks a tool by name at the moment of use; a flag hides the intention
- * inside a parameter it will not read — and one of these five performs a GLOBAL
- * registry write that nothing in the product can undo. The read and that write
- * share a PATH and are told apart by the VERB alone, which is precisely why they
- * are two tools and not one: a `mode` on the mint would leave the undoable write
- * one mistyped enum value away from a discovery call.
- *
- * THE TOOLS COMPUTE NO VERDICT. The agent's three-state veto (verified satisfies
- * · verified violates · not verified) is computed from `values[].state`,
- * `predicates[].applied` and `results[].maturity`; the registry read's four-way
- * verdict (adopt · descend · mint · narrow) is computed from `exists`, `guide`
- * and `capped`. This layer's whole job is that they cross the boundary intact:
- * the payload is gated structurally at its top level and handed over VERBATIM.
- * There is no projection here, deliberately — a per-field projector drops exactly
- * the fields a verdict reads, and it would do so while looking perfectly healthy.
- *
- * ONE GROUP, ONE FILE. All five share one origin, one Bearer, one 401
- * choreography and one error envelope, and a new `registerXTools` group has to be
- * hand-wired into three guards or it silently NARROWS them (CLAUDE.md). The
- * envelope helpers at the bottom are tool-parameterised and shared by all five.
- *
- * `execute()` is the same shape in every tool:
- *   1. no stored tokens → terminal `not_registered`, ZERO network calls;
- *   2. one call, one route, via the shared `refreshAndRetryOnce` 401 recovery
- *      (uniform across every sil-api-calling tool — never per-tool);
- *   3. map the outcome to the shared envelope.
- * There is no client-side request validation: every v0 route refuses before it
- * spends and names the offender in its message by design, so a second validator
- * here would only be a surface to drift. Bounds the HOST can enforce for free
- * (`maxItems`, `minimum`/`maximum`, `pattern`) are stated in the schemas — that is
- * the same bound written once more where the host reads it, not a validator.
- *
- * `register()` stays synchronous and opens nothing; all I/O is inside `execute()`.
- * The session token and Bearer header never reach a log line or a result.
+ * A projection on the way back would drop exactly the fields the agent's honesty reading
+ * is computed from (`fit`, `variants`, `webpage_info`) while looking healthy, so the body
+ * crosses verbatim. A new `registerXTools` group has to be hand-wired into three guards
+ * or it silently NARROWS them (CLAUDE.md), which is why all seven live in one group.
  */
 
-import type { PluginAPI } from "openclaw/plugin-sdk";
-import { Type } from "typebox";
+import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk";
 
-import { getApiUrl } from "../lib/config.js";
-import { clearTokens, readConfig, readTokens } from "../lib/credentials.js";
-import { wiringAdvisories } from "../lib/host-wiring.js";
-import { putSearchResult } from "../lib/search-results-store.js";
-import {
-  findDomains,
-  lookupCatalog,
-  mintDomain,
-  readStores,
-  refreshAndRetryOnce,
-  searchCatalog,
-  type CatalogResultOutcome,
-  type DomainFindOutcome,
-  type DomainFindParams,
-  type DomainMintParams,
-  type MintOutcome,
-  type SearchParams,
-  type SearchPredicate,
-  type SpecDefinitionInput,
-  type StoresOutcome,
-  type StoresParams,
-} from "../lib/sil-client.js";
+import { requestSchema } from "../lib/artifacts.js";
+import { readConfig } from "../lib/credentials.js";
+import { wiringAdvisoryBlocks } from "../lib/host-wiring.js";
+import { logSearchResults } from "../lib/search-results-log.js";
+import { putSearchResult, type SearchResultPage } from "../lib/search-results-store.js";
+import { DOMAIN_GET_ROUTE, callRoute, type ShoppingCall } from "../lib/shopping-call.js";
 import { jsonResult } from "../lib/tool-result.js";
 
-/** ltree's label alphabet, narrowed to the lowercase form the registry uses —
- * `@sil/schemas`' `DOMAIN_PATH_RE`, mirrored so a malformed path is refused by
- * the host with the same rule the route would have applied. */
-const DOMAIN_PATH_PATTERN = "^[a-z0-9_]+(\\.[a-z0-9_]+)*$";
+interface ShoppingTool extends ShoppingCall {
+  readonly label: string;
+  readonly description: string;
+}
 
-/** ISO 3166-1 alpha-2, either case — `@sil/schemas`' `SHIP_TO_COUNTRY_RE`. */
-const COUNTRY_PATTERN = "^[A-Za-z]{2}$";
+/** The tool whose page a paired client can pull back by `callId`. */
+const SEARCH_TOOL = "shopping_search";
 
+export const SHOPPING_TOOLS = [
+  {
+    name: "shopping_domain_search",
+    method: "GET",
+    path: "/catalog/domains",
+    query: ["q"],
+    label: "Read sil's registry for a category",
+    description:
+      "Beat 2, what already stands: read sil's shared registry in the buyer's own words"
+      + " and get back the categories that match, each with its path and a line on how"
+      + " the thing is bought. Judge fit on `about`, then take that path verbatim, or"
+      + " descend under a broader one — never a sibling of a path that already stands."
+      + " `matches: []` is a real answer and the ONLY one that licenses"
+      + " shopping_domain_create; a non-ok status is not an empty answer, so settle the"
+      + " read before coining anything. At most two reads per category: the item's own"
+      + " prose, then the plain category name. Pass the path you take to"
+      + " shopping_domain_get for the guide and the keys.",
+  },
+  {
+    name: "shopping_domain_get",
+    ...DOMAIN_GET_ROUTE,
+    label: "Read a category's buying guide and keys",
+    recovery: { not_found: "shopping_domain_search" },
+    description:
+      "Beats 2 and 3, the category's guide and its two vocabularies: send one standing"
+      + " path and get the buying guide, every key the category is bought by as `specs`,"
+      + " and the seller terms it is bought with as `seller_specs` — the base every"
+      + " category shares (returns, restocking, the shipping terms of a route) plus this"
+      + " category's own branch. One read hands you both. Copy the guide into the Brief"
+      + " and translate the buyer's facts through it. Each key states the operators it"
+      + " takes, its type, its unit and any closed set of values — send that key and one"
+      + " of those operators, never a synonym you coined: a `specs` key goes to"
+      + " shopping_search, a `seller_specs` key to shopping_offers. A key marked"
+      + " variant_spec identifies a purchasable option (a size, a colour): settle it"
+      + " before searching, and expect its values under each product's variants. A key"
+      + " marked product_spec tells one product from the next. The root `product` always"
+      + " stands and carries the universals every category inherits; a path that does not"
+      + " stand answers not_found, and the recovery is to read the registry again in the"
+      + " buyer's words.",
+  },
+  {
+    name: "shopping_domain_create",
+    method: "POST",
+    path: "/catalog/domains",
+    label: "Coin a new category in sil's registry",
+    // A colliding path means the vocabulary is already there, so search that same path.
+    recovery: { already_exists: "shopping_search" },
+    description:
+      "Beat 2's mint, the one permanent global write in sil: coin a NEW category — its"
+      + " path, a buying guide from research, and the first keys it is bought by. Two things"
+      + " must hold first: a shopping_domain_search read came back `matches: []`, and you have"
+      + " read up on the web how the category is bought (never on products). Mark variant_spec"
+      + " on a key that identifies a purchasable option, product_spec on one that tells one"
+      + " product from the next; the registry derives each key's operators from its type. Coin"
+      + " only the keys a PRODUCT is bought by: a category's seller terms are never yours to"
+      + " coin — the base is sil's and a branch key is coined by research — and"
+      + " shopping_domain_get answers them as `seller_specs`. You inherit every ancestor's key"
+      + " and may not rename one: re-declare one only to change its configuration for your"
+      + " subtree — its unit, its allowed values, its variant or product mark — and it wins"
+      + " below this path, converting nothing. Re-declared with nothing the ancestor does not"
+      + " already say, it is not coined again: the mint answers ok and reports it"
+      + " `inherited: true`, so you filter on it without having minted it. An existing path is"
+      + " refused and nothing is written: the vocabulary is already there, so search that same"
+      + " path; never coin a near-path variant to route around it, and never call this to"
+      + " change one that exists. Every sil shopper sees what you write and nothing can undo"
+      + " it.",
+  },
+  {
+    name: SEARCH_TOOL,
+    method: "POST",
+    path: "/catalog/search",
+    label: "Search sil in one settled category",
+    description:
+      "Beat 5: the products and variants that fit in one settled category, as"
+      + " shopping_brief_compile builds it from the Brief. Send the domain path, the"
+      + " shopping words as `query`, how many products you want, and that compile's"
+      + " `specs` array UNCHANGED — every value exactly as it was answered, a money value"
+      + " a decimal STRING (`\"300\"`, never 300 or \"300.00\"), or the row is refused and"
+      + " the call is spent. `ship_to` is the LABEL of one of the buyer's addresses as"
+      + " sil_whoami lists them, never a country: it localizes the search, and sil uses"
+      + " the default address when you send nothing. Seller terms are shopping_offers'"
+      + " ask, answered per seller. `price`"
+      + " is a key every domain has and its currency is required: sil holds no exchange"
+      + " rate, so a bound in another currency is one sil could not test — say so, never"
+      + " drop the product. Present the products in the order returned, never re-ranked."
+      + " `fit` answers the ask key by key with what sil verified, so a key"
+      + " absent from it is a gap to name, never a miss — a key the domain does not hold"
+      + " included: recorded for research, answered absent, never refused. An empty"
+      + " `variants` says no listed option fits."
+      + " `webpage_info` means sil has not read that page yet: the merchant's own words,"
+      + " good for a provisional pick, never verified; its absence means they were. At"
+      + " most 4 calls per item, widening soft rows only; a hard row is never relaxed.",
+  },
+  {
+    name: "shopping_product_get",
+    method: "POST",
+    path: "/catalog/product",
+    label: "Read the whole dossier on a shortlisted variant",
+    description:
+      "Beat 6, the dossier: send 1–10 variant ids from a shopping_search answer and get"
+      + " the whole of what sil holds for each — the title, the maker, the page's own"
+      + " description, the images, every key sil holds for it (not only the ones you"
+      + " asked about), and `sources` naming which site each reading came from and when."
+      + " Compare the shortlist on this before recommending, and quote a source's date"
+      + " rather than implying sil read it just now. An id sil cannot place is simply"
+      + " absent from the answer — say that listing could not be placed, and never"
+      + " substitute another product. Ids are opaque: pass them back exactly as sil"
+      + " minted them, and never read one.",
+  },
+  {
+    name: "shopping_offers",
+    method: "POST",
+    path: "/catalog/offers",
+    label: "List who sells a variant, at what price and on what terms",
+    description:
+      "Beat 6, who sells the pick, at what price and on which terms: send 1–10 variant"
+      + " ids, the Brief's seller rows as `seller_specs` (the keys the domain read"
+      + " returned under `seller_specs`, which shopping_brief_compile has already built),"
+      + " and `ship_to` — the LABEL of one of the buyer's addresses as sil_whoami lists"
+      + " them, the default address when you send nothing. You get one entry per variant"
+      + " per seller, read live: the seller's name and id, the price exactly as the page"
+      + " prints it with its own currency (sil converts nothing), whether it can be"
+      + " bought now, the listing URL, `observed_at` — the moment sil read it, which is"
+      + " what dates the price for the buyer — and `seller_fit`. `seller_fit` answers the"
+      + " seller rows the way `fit` answers product rows, per offer: `ships` is always"
+      + " there — serviceable, not_serviceable or unknown for that address — and each"
+      + " requested key carries that seller's value where sil holds one. `unknown` is an"
+      + " ordinary answer that keeps the offer: say sil could not confirm shipping and"
+      + " hand the buyer the listing. A requested key absent from `seller_fit` is a term"
+      + " sil has not read, never a term the seller lacks. Several offers on one variant"
+      + " ARE the price spread, and the spread is the answer — never collapse it to a"
+      + " single best one. One seller's whole terms are shopping_seller_get's.",
+  },
+  {
+    name: "shopping_seller_get",
+    method: "POST",
+    path: "/catalog/sellers",
+    label: "Read one seller's whole terms",
+    description:
+      "Beat 6, one seller's WHOLE terms: send 1–10 seller ids from shopping_offers, and"
+      + " nothing else. Each seller comes back with its name, host and country, `specs` —"
+      + " every seller key sil holds a value for, base and branch, as the dossier's `specs`"
+      + " are a product's — and `ships`, which answers for the buyer's default address:"
+      + " serviceable (sil read a route covering it), not_serviceable (sil read this"
+      + " seller's policy and it excludes it), or unknown (sil has read nothing about this"
+      + " seller). `unknown` is an ordinary answer that keeps the seller — say sil could not"
+      + " confirm shipping, and hand the buyer the listing; an empty `specs` is the same"
+      + " answer about its terms. Where sil has read them, `shipping` carries the routes"
+      + " with their cost, free-over threshold and days, and `returns` the window and any"
+      + " restocking fee; a term the page never stated is simply absent, which is never zero"
+      + " and never free. A `policy_url` of null means the terms were read off a product"
+      + " page and sil holds no policy page. This is the details read: whether an offer"
+      + " meets the buyer's own seller rows is `seller_fit` on that offer, from"
+      + " shopping_offers.",
+  },
+] as const satisfies readonly ShoppingTool[];
+
+/** The seven names, as a literal union — so a table of one-per-tool anything is forced
+ * to cover them all rather than quietly covering six. */
+export type ShoppingToolName = (typeof SHOPPING_TOOLS)[number]["name"];
+
+/**
+ * Registers the seven, reading each one's request artifact off disk as it goes.
+ *
+ * That read is the ONE exception to "register() opens nothing": seven synchronous
+ * `readFileSync`s that return immediately and hold no resource open, exactly as
+ * `ensureDataDir`'s `mkdirSync` does. It is deliberately eager — an unreadable artifact
+ * is a broken build, and failing loud at load beats a tool whose `parameters` the host
+ * has already published by the time anyone finds out.
+ */
 export function registerCatalogTools(api: PluginAPI): void {
-  registerSearch(api);
-  registerProductGet(api);
-  registerStores(api);
-  // The read is registered before the write it licenses — the same order the
-  // agent is told to call them in.
-  registerDomainFind(api);
-  registerDomainCreate(api);
+  for (const tool of SHOPPING_TOOLS) api.registerTool(defineTool(api, tool));
 }
 
-function registerSearch(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_search",
-    label: "Search sil in one registry domain",
-    description:
-      "Search sil for buyable items in one registry domain. Send the domain path,"
-      + " the buyer's own words as `query`, and their stated requirements as typed"
-      + " predicates; get up to `n` results, best first. Present them in the order"
-      + " returned — do not re-rank. Each result carries the values sil holds"
-      + " (`unset` where it holds none), the merchant's own printed pairs, the"
-      + " offers it has read, and `maturity` (`catalog` = built and verified by"
-      + " sil; `web` = a listing read minutes ago, values honestly unset)."
-      + " `predicates[]` says, per requirement, whether sil could apply it. A"
-      + " requirement reported `applied: false`, or a result whose value is"
-      + " `unset`, is NOT VERIFIED — neither a match nor a miss: keep the result"
-      + " and name the missing value. Discipline: at most 4 calls per item; widen"
-      + " soft requirements only; a hard requirement is never relaxed. A refusal"
-      + " naming the domain and a refusal naming a predicate read alike on the"
-      + " wire, so settle which one it was with sil_domain_find — a `path` probe"
-      + " states whether the domain stands. If it does not, read again with `q`,"
-      + " and reach for sil_domain_create only once that discovery read comes back"
-      + " `matches: []` with `capped: false`. A probe never licenses a mint.",
-    parameters: Type.Object({
-      domain: Type.String({
-        pattern: DOMAIN_PATH_PATTERN,
-        maxLength: 255,
-        description:
-          "The registry path to search, dot-separated and lowercase (e.g."
-          + " product.sports.winter.ski.boots). Exactly one domain per call. A path"
-          + " sil does not hold is refused — read the registry with sil_domain_find"
-          + " for the path that already stands, and coin one with sil_domain_create"
-          + " only if none does. Never retry, and never guess a shallower path.",
-      }),
-      query: Type.String({
-        minLength: 1,
-        maxLength: 512,
-        description:
-          "What the buyer asked for, in their own words. Free text — sil ranks"
-          + " against it; requirements belong in `predicates`, not here.",
-      }),
-      n: Type.Integer({
-        minimum: 1,
-        maximum: 50,
-        description:
-          "How many results to return, 1–50. This is a spend knob: sil fetches"
-          + " candidates from the web to fill it, so choose it for the shopper's"
-          + " actual need. There is no default — state the number you want.",
-      }),
-      predicates: Type.Optional(
-        Type.Array(
-          Type.Object({
-            key: Type.String({
-              minLength: 1,
-              maxLength: 64,
-              description:
-                "A spec key from this domain's vocabulary. A key sil has not"
-                + " resolved is not an error — it comes back `applied: false`, a"
-                + " named gap, and every result is still returned.",
-            }),
-            op: Type.Union(
-              [
-                Type.Literal("eq"),
-                Type.Literal("neq"),
-                Type.Literal("gte"),
-                Type.Literal("lte"),
-                Type.Literal("in"),
-                Type.Literal("nin"),
-                Type.Literal("exists"),
-              ],
-              { description: "The comparison sil should apply to this key." },
-            ),
-            value: Type.Unknown({
-              description:
-                "The operand: a scalar for eq/neq, a number for gte/lte, an array"
-                + " for in/nin. Money travels as a decimal string.",
-            }),
-            currency: Type.Optional(
-              Type.String({
-                minLength: 3,
-                maxLength: 3,
-                description:
-                  "Required on a money predicate. sil holds no exchange rate"
-                  + " anywhere, so a cross-currency comparison is meaningless"
-                  + " rather than approximate.",
-              }),
-            ),
-          }),
-          {
-            maxItems: 32,
-            description:
-              "The buyer's stated requirements, typed. Each one comes back in"
-              + " `predicates[]` saying whether sil could apply it — that answer,"
-              + " not this list, is what tells you a result was verified.",
-          },
-        ),
-      ),
-      destination: Type.Optional(
-        Type.String({
-          pattern: COUNTRY_PATTERN,
-          description:
-            "Where the buyer is, as a 2-letter ISO 3166-1 country code. Leave it"
-            + " out to ship to the buyer's own registered country — do not call"
-            + " sil_whoami to fill it in.",
-        }),
-      ),
-    }),
+function defineTool(api: PluginAPI, tool: ShoppingTool): ToolDefinition {
+  return {
+    name: tool.name,
+    label: tool.label,
+    description: tool.description,
+    parameters: requestSchema(tool.name),
     async execute(callId, params) {
-      const stored = readTokens();
-      if (stored === null) return notRegistered("sil_search");
-
-      const search = readSearchParams(params);
-      const first = await searchCatalog(getApiUrl(), stored.access_token, search);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => searchCatalog(getApiUrl(), accessToken, search),
-      );
-      switch (recovered.kind) {
-        case "result":
-          if (recovered.refreshed) api.logger.info("sil_search_refreshed", {});
-          // Buffer the page for a paired client to pull by this exact `callId`
-          // (`sil.search_results`). A PURE SIDE EFFECT: the envelope returned
-          // below is byte-identical to what every channel got before this
-          // existed — no reference, no flag, no listener check. Only `ok` is
-          // stored; the other outcomes steer recovery and carry no product data.
-          // `advisories` stay OFF the page — they are operator copy, not products.
-          if (recovered.outcome.kind === "ok") {
-            const principal = readConfig()?.user?.id;
-            if (principal !== undefined) {
-              putSearchResult(callId, { status: "ok", ...recovered.outcome.result }, principal);
-            }
-          }
-          return mapResultOutcome(api, "sil_search", recovered.outcome);
-        case "must_reregister":
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_search_must_reregister", { cause: recovered.reason });
-          return mustReregister("sil_search");
-        case "second_unauthorized":
-          clearTokens();
-          api.logger.info("sil_search_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister("sil_search");
-        case "retryable":
-          api.logger.info("sil_search_refresh_retryable", {});
-          return transient("sil_search");
+      const called = await callRoute(api, tool, params);
+      if (called.kind === "refused") {
+        if (tool.name === SEARCH_TOOL) skipped(api, callId, `refused:${called.status}`);
+        return called.result;
       }
+      if (tool.name === SEARCH_TOOL) bufferPage(api, callId, called.body);
+      // VERBATIM, and the advisory rides its own block: the body's keys are the API's
+      // contract, so nothing of ours may sit beside them.
+      return jsonResult(called.body, ...wiringAdvisoryBlocks(api));
     },
-  });
-}
-
-function registerProductGet(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_product_get",
-    label: "Re-read sil results before the buyer decides",
-    description:
-      "Re-read up to 5 results you already hold, by the `ref` sil returned, before"
-      + " the buyer decides. Same result object, with the top offers' prices read"
-      + " live: every offer says `observed: live` (read just now) or `stored`"
-      + " (quoted from storage — say the date it was read, never present it as the"
-      + " current price). Only the offers move; values, pairs and media are the"
-      + " stored read. A ref that resolves to nothing is absent from the results —"
-      + " say that listing is gone, never substitute another product. Discipline:"
-      + " the shortlist read — live prices, top-K bounded.",
-    parameters: Type.Object({
-      refs: Type.Array(
-        Type.String({
-          minLength: 1,
-          maxLength: 2048,
-          description:
-            "A ref sil returned, verbatim: `variant:<uuid>` or `url:<url>`. It"
-            + " comes back echoed on the result, so a ref missing from the results"
-            + " is the one sil could not place.",
-        }),
-        {
-          minItems: 1,
-          maxItems: 5,
-          description:
-            "The shortlist, 1–5 refs. Trim it before the call, not after — the cap"
-            + " is the route's and a longer batch is refused outright.",
-        },
-      ),
-    }),
-    async execute(_callId, params) {
-      const stored = readTokens();
-      if (stored === null) return notRegistered("sil_product_get");
-
-      const refs = readRefs(params);
-      const first = await lookupCatalog(getApiUrl(), stored.access_token, refs);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => lookupCatalog(getApiUrl(), accessToken, refs),
-      );
-      switch (recovered.kind) {
-        case "result":
-          if (recovered.refreshed) api.logger.info("sil_product_get_refreshed", {});
-          return mapResultOutcome(api, "sil_product_get", recovered.outcome);
-        case "must_reregister":
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_product_get_must_reregister", { cause: recovered.reason });
-          return mustReregister("sil_product_get");
-        case "second_unauthorized":
-          clearTokens();
-          api.logger.info("sil_product_get_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister("sil_product_get");
-        case "retryable":
-          api.logger.info("sil_product_get_refresh_retryable", {});
-          return transient("sil_product_get");
-      }
-    },
-  });
-}
-
-function registerStores(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_stores",
-    label: "List every seller of one pick and whether it ships",
-    description:
-      "For one pick, list every seller that carries it and what sil knows about"
-      + " shipping it to the buyer. Each seller carries `serviceability`:"
-      + " `serviceable` (sil read a shipping route covering the destination),"
-      + " `not_serviceable` (sil read this seller's policy and it excludes the"
-      + " destination), or `unknown` (sil has not read this seller's policy)."
-      + " `unknown` is an ordinary answer, not a degraded one, and never a reason"
-      + " to drop a seller: keep it, say sil could not confirm shipping, and hand"
-      + " over its URL. Costs and thresholds come as ranges per currency where sil"
-      + " has read them and `unset` where it has not — `unset` is never zero and"
-      + " never free. The `handoff` names its own promise: `source: buy_url` is a"
-      + " checkout path, `source: url` is the listing page — say which one you are"
-      + " handing over. Discipline: the pick's check — three states; `unknown` is"
-      + " never no.",
-    parameters: Type.Object({
-      ref: Type.String({
-        minLength: 1,
-        maxLength: 2048,
-        description:
-          "The pick, as the single ref sil returned (`variant:<uuid>` or"
-          + " `url:<url>`). One pick per call: serviceability is an answer about"
-          + " this item, so a batch could not say which item it was about.",
-      }),
-      destination: Type.Optional(
-        Type.String({
-          pattern: COUNTRY_PATTERN,
-          description:
-            "Where the buyer is, as a 2-letter ISO 3166-1 country code. Leave it"
-            + " out to use the buyer's own registered country — do not call"
-            + " sil_whoami to fill it in. With neither, the call is refused rather"
-            + " than answered for an unknown place: ask the buyer where it ships.",
-        }),
-      ),
-    }),
-    async execute(_callId, params) {
-      const stored = readTokens();
-      if (stored === null) return notRegistered("sil_stores");
-
-      const query = readStoresParams(params);
-      const first = await readStores(getApiUrl(), stored.access_token, query);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => readStores(getApiUrl(), accessToken, query),
-      );
-      switch (recovered.kind) {
-        case "result":
-          if (recovered.refreshed) api.logger.info("sil_stores_refreshed", {});
-          return mapStoresOutcome(api, query.ref, recovered.outcome);
-        case "must_reregister":
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_stores_must_reregister", { cause: recovered.reason });
-          return mustReregister("sil_stores");
-        case "second_unauthorized":
-          clearTokens();
-          api.logger.info("sil_stores_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister("sil_stores");
-        case "retryable":
-          api.logger.info("sil_stores_refresh_retryable", {});
-          return transient("sil_stores");
-      }
-    },
-  });
-}
-
-function registerDomainFind(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_domain_find",
-    label: "Read sil's registry before coining a category",
-    description:
-      "Read sil's shared registry before coining anything into it: send `q` (the"
-      + " buyer's own words) or `path` (one exact registry path) — exactly one of"
-      + " the two per call, never both. `q` is discovery: your words are matched"
-      + " against each standing"
-      + " category's path text AND its buying guide, so prose reaches a settled"
-      + " path that a path-shaped guess cannot. `path` probes that one path:"
-      + " `exists` is stated on every match, and where it is false the `specs`"
-      + " returned are the vocabulary that path WOULD inherit if coined. Then act"
-      + " on what came back. A match whose `guide` describes this category is"
-      + " ADOPTED: take its path verbatim and its spec keys as your search"
-      + " vocabulary, and coin nothing. A guide describing a BROADER category"
-      + " permits only a descendant of that path, never a sibling. `matches: []`"
-      + " with `capped: false` is a real answer and the one signal that licenses"
-      + " sil_domain_create. `capped: true` means the list was bounded and more may"
-      + " stand past it — narrow the ask and read again rather than coining. A"
-      + " provisional match (`validated_at: null`) is a real category, adopted like"
-      + " any other. Discipline: at most 2 discovery reads per category, plus one"
-      + " `path` probe of the exact path you are about to coin.",
-    parameters: Type.Object({
-      q: Type.Optional(
-        Type.String({
-          minLength: 1,
-          maxLength: 200,
-          description:
-            "The buyer's ask, in their own words — the discovery door. It is"
-            + " matched against each standing category's path text AND its buying"
-            + " guide, which is why prose reaches a settled path a path-shaped"
-            + " guess cannot. Send this or `path`, never both: the route refuses a"
-            + " call carrying both or neither and says which one you sent.",
-        }),
-      ),
-      path: Type.Optional(
-        Type.String({
-          pattern: DOMAIN_PATH_PATTERN,
-          maxLength: 255,
-          description:
-            "One exact registry path, dot-separated and lowercase (e.g."
-            + " product.sports.winter.ski.boots) — the probe door. It answers about"
-            + " that path alone: `exists` says whether it already stands, and when"
-            + " it does not, `specs` is the vocabulary it would inherit, so you coin"
-            + " only the keys it lacks. A probe SHAPES a mint; only a `q` read"
-            + " licenses one. Send this or `q`, never both.",
-        }),
-      ),
-    }),
-    async execute(_callId, params) {
-      const stored = readTokens();
-      if (stored === null) return notRegistered("sil_domain_find");
-
-      const query = readFindParams(params);
-      const first = await findDomains(getApiUrl(), stored.access_token, query);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => findDomains(getApiUrl(), accessToken, query),
-      );
-      switch (recovered.kind) {
-        case "result":
-          if (recovered.refreshed) api.logger.info("sil_domain_find_refreshed", {});
-          return mapFindOutcome(api, recovered.outcome);
-        case "must_reregister":
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_domain_find_must_reregister", { cause: recovered.reason });
-          return mustReregister("sil_domain_find");
-        case "second_unauthorized":
-          clearTokens();
-          api.logger.info("sil_domain_find_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister("sil_domain_find");
-        case "retryable":
-          api.logger.info("sil_domain_find_refresh_retryable", {});
-          return transient("sil_domain_find");
-      }
-    },
-  });
-}
-
-function registerDomainCreate(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_domain_create",
-    label: "Add a new category to sil's shared registry",
-    description:
-      "Add a NEW category to sil's shared registry: its path, a buying guide"
-      + " written from research, and its first spec keys. Two things must both hold"
-      + " before you call it: a sil_domain_find DISCOVERY read — `q`, the buyer's own"
-      + " words — came back `matches: []` with `capped: false`, and you have read up"
-      + " on the web on how the category is actually bought (never on products). Then"
-      + " `path`-probe the exact path with sil_domain_find and coin only the keys that"
-      + " path does not already inherit — the response here echoes the keys you sent,"
-      + " so a skipped probe forks the vocabulary on your very first predicate. That"
-      + " probe SHAPES the mint and never licenses it: it answers only about the path"
-      + " you already guessed."
-      + " NEW nodes only — an existing path is refused and nothing is written; that"
-      + " refusal means the category is already there, so re-issue the search on"
-      + " the same path. Never mint a near-path variant to route around a refusal,"
-      + " and never call this to change or extend a domain that exists. What you"
-      + " write is global — every sil shopper sees it. A fresh node is provisional"
-      + " until sil validates it: tell the buyer the first answers come from the"
-      + " web while that catches up.",
-    parameters: Type.Object({
-      path: Type.String({
-        pattern: DOMAIN_PATH_PATTERN,
-        maxLength: 255,
-        description:
-          "The registry path to coin, dot-separated and lowercase. It must descend"
-          + " from a path sil already holds, and it is permanent — there is no way"
-          + " to rename or remove it, and a second node for one category splits the"
-          + " vocabulary for every shopper, forever.",
-      }),
-      guide: Type.String({
-        minLength: 1,
-        maxLength: 4096,
-        description:
-          "How this category is actually bought — what separates the options, what"
-          + " a buyer has to get right, what the numbers mean. This is the research"
-          + " you did on the web, written down; it is the only output of that"
-          + " research, and sil reads it when it extracts.",
-      }),
-      specs: Type.Array(
-        Type.Object({
-          key: Type.String({
-            minLength: 1,
-            maxLength: 64,
-            description: "The spec's key, lowercase and stable (e.g. flex_index).",
-          }),
-          display_name: Type.String({
-            minLength: 1,
-            maxLength: 128,
-            description: "What a buyer would call it.",
-          }),
-          description: Type.Optional(
-            Type.String({
-              maxLength: 1024,
-              description: "What it means and how it is read on a listing.",
-            }),
-          ),
-          data_type: Type.String({
-            minLength: 1,
-            maxLength: 32,
-            description: "One of number, boolean, enum or money.",
-          }),
-          unit: Type.Optional(
-            Type.String({
-              minLength: 1,
-              maxLength: 32,
-              description:
-                "Required on a number: it is the storage SCALE every value of this"
-                + " key is held in, not a label.",
-            }),
-          ),
-          allowed_values: Type.Optional(
-            Type.Array(Type.String({ minLength: 1 }), {
-              minItems: 1,
-              description: "An inline closed set. An enum declares this or a value_set.",
-            }),
-          ),
-          value_set: Type.Optional(
-            Type.String({
-              minLength: 1,
-              maxLength: 32,
-              description: "A registry-managed named set, where one already fits.",
-            }),
-          ),
-          level: Type.Optional(
-            Type.String({
-              minLength: 1,
-              maxLength: 16,
-              description:
-                "product or variant. Omit it where the category is not sure which.",
-            }),
-          ),
-          axis: Type.Optional(
-            Type.Boolean({
-              description:
-                "true on the ONE variant-level key merchants sell this category by — the"
-                + " size axis of a boot, never a colour. At most one per category, and it"
-                + " must be level variant; sil keys a size selector on it when a page"
-                + " names no key.",
-            }),
-          ),
-        }),
-        {
-          maxItems: 50,
-          description:
-            "The keys this category is actually shopped on — the few a buyer"
-            + " compares, not everything a spec sheet prints. A vocabulary is"
-            + " curated; every shopper after this one inherits it.",
-        },
-      ),
-    }),
-    async execute(_callId, params) {
-      const stored = readTokens();
-      if (stored === null) return notRegistered("sil_domain_create");
-
-      const mint = readMintParams(params);
-      const first = await mintDomain(getApiUrl(), stored.access_token, mint);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => mintDomain(getApiUrl(), accessToken, mint),
-      );
-      switch (recovered.kind) {
-        case "result":
-          if (recovered.refreshed) api.logger.info("sil_domain_create_refreshed", {});
-          return mapMintOutcome(api, recovered.outcome);
-        case "must_reregister":
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_domain_create_must_reregister", { cause: recovered.reason });
-          return mustReregister("sil_domain_create");
-        case "second_unauthorized":
-          clearTokens();
-          api.logger.info("sil_domain_create_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister("sil_domain_create");
-        case "retryable":
-          api.logger.info("sil_domain_create_refresh_retryable", {});
-          return transient("sil_domain_create");
-      }
-    },
-  });
-}
-
-/* ── outcome → envelope ─────────────────────────────────────────────────────── */
-
-/** Map a search or lookup outcome that has ALREADY cleared the 401-recovery path
- * to the agent-facing envelope. The `unauthorized` arm is structurally
- * unreachable but kept exhaustive so a refactor cannot silently drop a variant. */
-function mapResultOutcome(api: PluginAPI, tool: string, outcome: CatalogResultOutcome) {
-  switch (outcome.kind) {
-    case "ok":
-      return jsonResult({ status: "ok", ...outcome.result, ...wiringAdvisories(api) });
-    case "forbidden":
-      return forbiddenResult(api, tool, outcome.reason);
-    case "invalid_request":
-      api.logger.info(`${tool}_invalid_request`, { error: outcome.error });
-      return invalidRequest(outcome.error, outcome.message);
-    case "retryable":
-      api.logger.info(`${tool}_retryable`, outcome.source ? { source: outcome.source } : {});
-      return transient(tool, outcome.source, outcome.detail);
-    case "unauthorized":
-      return mustReregister(tool);
-  }
-}
-
-function mapStoresOutcome(api: PluginAPI, ref: string, outcome: StoresOutcome) {
-  switch (outcome.kind) {
-    case "ok":
-      return jsonResult({ status: "ok", ...outcome.stores, ...wiringAdvisories(api) });
-    case "not_found":
-      api.logger.info("sil_stores_not_found", {});
-      return notFound(ref, outcome.message);
-    case "forbidden":
-      return forbiddenResult(api, "sil_stores", outcome.reason);
-    case "invalid_request":
-      api.logger.info("sil_stores_invalid_request", { error: outcome.error });
-      return invalidRequest(outcome.error, outcome.message);
-    case "retryable":
-      api.logger.info("sil_stores_retryable", outcome.source ? { source: outcome.source } : {});
-      return transient("sil_stores", outcome.source, outcome.detail);
-    case "unauthorized":
-      return mustReregister("sil_stores");
-  }
-}
-
-/** Map a registry-read outcome to the agent-facing envelope. The `ok` arm logs
- * the two numbers an operator needs to tell a licensed mint from an unlicensed
- * one — how many domains the read named, and whether the list was bounded. The
- * ask itself is never logged: it is the buyer's own words. */
-function mapFindOutcome(api: PluginAPI, outcome: DomainFindOutcome) {
-  switch (outcome.kind) {
-    case "ok":
-      api.logger.info("sil_domain_find_read", {
-        match_count: outcome.found.matches.length,
-        capped: outcome.found.capped,
-      });
-      return jsonResult({ status: "ok", ...outcome.found, ...wiringAdvisories(api) });
-    case "forbidden":
-      return forbiddenResult(api, "sil_domain_find", outcome.reason);
-    case "invalid_request":
-      api.logger.info("sil_domain_find_invalid_request", { error: outcome.error });
-      return invalidRequest(outcome.error, outcome.message);
-    case "retryable":
-      api.logger.info(
-        "sil_domain_find_retryable",
-        outcome.source ? { source: outcome.source } : {},
-      );
-      return transient("sil_domain_find", outcome.source, outcome.detail);
-    case "unauthorized":
-      return mustReregister("sil_domain_find");
-  }
-}
-
-function mapMintOutcome(api: PluginAPI, outcome: MintOutcome) {
-  switch (outcome.kind) {
-    case "ok":
-      api.logger.info("sil_domain_create_minted", { spec_count: outcome.domain.specs.length });
-      return jsonResult({ status: "ok", ...outcome.domain, ...wiringAdvisories(api) });
-    case "already_exists":
-      api.logger.info("sil_domain_create_already_exists", {});
-      return alreadyExists(outcome.path, outcome.message);
-    case "forbidden":
-      return forbiddenResult(api, "sil_domain_create", outcome.reason);
-    case "invalid_request":
-      api.logger.info("sil_domain_create_invalid_request", { error: outcome.error });
-      return invalidRequest(outcome.error, outcome.message);
-    case "retryable":
-      api.logger.info(
-        "sil_domain_create_retryable",
-        outcome.source ? { source: outcome.source } : {},
-      );
-      return transient("sil_domain_create", outcome.source, outcome.detail);
-    case "unauthorized":
-      return mustReregister("sil_domain_create");
-  }
-}
-
-/* ── reading the host-validated params ──────────────────────────────────────── */
-
-/**
- * The SDK types `params` as `Record<string, unknown>` and the host has already
- * validated it against the schema above, so these readers narrow TYPES — they do
- * not re-validate semantics. `refs`, `predicates` and `specs` are forwarded as
- * read: this layer never interprets a ref, an op, a value or a spec, and a second
- * opinion on them would be a contract to drift. Nothing is filtered out either — a
- * drifted element must reach the route and be refused BY NAME, not disappear into
- * a shorter list that succeeds.
- */
-function readSearchParams(params: Record<string, unknown>): SearchParams {
-  const predicates = params["predicates"];
-  const destination = params["destination"];
-  return {
-    domain: asString(params["domain"]),
-    query: asString(params["query"]),
-    n: typeof params["n"] === "number" ? params["n"] : 0,
-    ...(Array.isArray(predicates) ? { predicates: predicates as SearchPredicate[] } : {}),
-    ...(typeof destination === "string" ? { destination } : {}),
   };
 }
 
-function readRefs(params: Record<string, unknown>): string[] {
-  const raw = params["refs"];
-  return Array.isArray(raw) ? (raw as string[]) : [];
-}
-
-function readStoresParams(params: Record<string, unknown>): StoresParams {
-  const destination = params["destination"];
-  return {
-    ref: asString(params["ref"]),
-    ...(typeof destination === "string" ? { destination } : {}),
-  };
-}
-
-/** Exactly what the agent sent, and only that. Both keys absent, one present or
- * BOTH present all travel as read: the route owns the exactly-one-of rule and
- * names the parameter at fault, and a local refusal would have to invent a second
- * message that then drifts from the one the agent actually acts on. */
-function readFindParams(params: Record<string, unknown>): DomainFindParams {
-  const q = params["q"];
-  const path = params["path"];
-  return {
-    ...(typeof q === "string" ? { q } : {}),
-    ...(typeof path === "string" ? { path } : {}),
-  };
-}
-
-function readMintParams(params: Record<string, unknown>): DomainMintParams {
-  const specs = params["specs"];
-  return {
-    path: asString(params["path"]),
-    guide: asString(params["guide"]),
-    specs: Array.isArray(specs) ? (specs as SpecDefinitionInput[]) : [],
-  };
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-/* ── the shared envelopes ───────────────────────────────────────────────────── */
-
-/** Not registered: a distinct, actionable outcome naming the recovery tool, with
- * no results field the agent could mistake for an empty answer. */
-function notRegistered(tool: string) {
-  return jsonResult({
-    status: "not_registered",
-    message:
-      `Not registered on sil. Run sil_register to authenticate, then call ${tool} again.`,
-    recovery: "sil_register",
-  });
-}
-
 /**
- * sil refused the request (a 400), surfaced VERBATIM.
- *
- * Every v0 route refuses before it spends and names the offender in its own
- * message, so the message IS the agent's recourse and is never rewritten or
- * matched on here. `sil_search`'s two refusals — an unregistered domain and a
- * predicate the grammar rejects — carry the same `error: "invalid_request"` on
- * the wire, so the plugin cannot tell them apart without matching the sibling's
- * prose, which it refuses to do; the tool's own description carries the remedy
- * for each. No `recovery: sil_register` (auth is fine) and no retry hint
- * (re-sending the same body cannot succeed).
+ * Buffer an `ok` search page for a paired client to pull by this exact `callId`
+ * (`sil.search_results`). A PURE SIDE EFFECT: the result returned to the agent is
+ * byte-identical to what every channel got before this existed. Only a body that
+ * actually carries its `products` list is stored — the pull surface counts it.
  */
-function invalidRequest(error: string, message: string) {
-  return jsonResult({ status: "invalid_request", error, message });
-}
-
-/** sil holds no such ref (a `sil_stores` 404). Terminal but NOT fatal and NOT
- * retryable: no retry and no re-registration can make sil hold it. The submitted
- * ref rides along so the agent can say which pick it could not place. */
-function notFound(ref: string, message: string) {
-  return jsonResult({ status: "not_found", ref, message });
-}
-
-/** The domain is already in the registry (a `sil_domain_create` 409). NOT a
- * failure and never framed as one: it means the vocabulary is already there, so
- * the recovery is to search that SAME path — never to mint a near-path variant,
- * which would split the category for every shopper with no way back. */
-function alreadyExists(path: string, message: string) {
-  return jsonResult({
-    status: "already_exists",
-    path,
-    message:
-      `The domain "${path}" is already in sil's registry, so nothing was written`
-      + ` and nothing needs to be: search that same path. (${message})`,
-    recovery: "sil_search",
-  });
-}
-
-/** Terminal: the session is dead — reached only after the shared refresh-and-retry
- * choreography has exhausted its one refresh + one retry. */
-function mustReregister(tool: string) {
-  return jsonResult({
-    status: "must_reregister",
-    message:
-      `Your sil session has expired. Run sil_register to sign in again, then call ${tool} again.`,
-    recovery: "sil_register",
-  });
-}
-
-/**
- * A 403 — the token is valid but the user is not provisioned (or a principal
- * mismatch). Refreshing cannot help; this is not a 401.
- *
- * The token CLEAR is gated on exactly `user_not_provisioned`: that token maps to
- * no account on this backend and is structurally dead, so clearing it lets the
- * next `sil_register` re-onboard instead of short-circuiting to
- * already-registered. A `principal_mismatch` can be transient and MUST NOT clear
- * — the exact-equality gate is the correctness boundary here, and a truthy or
- * prefix check would wipe a good session.
- */
-function forbiddenResult(api: PluginAPI, tool: string, reason: string) {
-  api.logger.warn(`${tool}_forbidden`, { reason });
-  if (reason === "user_not_provisioned") clearTokens();
-  const message =
-    reason === "user_not_provisioned"
-      ? "Your sil account is not fully set up. Complete onboarding (run"
-        + " sil_register) and try again."
-      : "sil rejected this request (" + reason + "). Run sil_register to"
-        + " re-establish your session, then try again.";
-  return jsonResult({ status: "forbidden", reason, message, recovery: "sil_register" });
-}
-
-/**
- * Transient: retry, NOT a re-register (a false terminal on a transient sends the
- * agent down a recovery that cannot fix it). The two causally distinct failures
- * share `status: "retryable"` and split on ATTRIBUTION — `source` absent means
- * sil or the network is down and the copy names nothing it cannot identify;
- * `source` present means one named source is degraded and sil itself is fine, so
- * the copy must never say "sil is unavailable". `detail` (the upstream cause) is
- * relayed as its own field rather than folded into our sentence.
- */
-function transient(tool: string, source?: string, detail?: string) {
-  if (source === undefined) {
-    return jsonResult({
-      status: "retryable",
-      message: `sil is temporarily unavailable. Please try ${tool} again.`,
-    });
+function bufferPage(api: PluginAPI, callId: string, body: Record<string, unknown>): void {
+  const principal = readConfig()?.user?.id;
+  if (principal === undefined) {
+    skipped(api, callId, "no_principal");
+    return;
   }
-  return jsonResult({
-    status: "retryable",
-    message:
-      `The catalog source "${source}" is temporarily unavailable.`
-      + ` sil itself is fine — retry ${tool} shortly.`,
-    ...(detail !== undefined ? { detail } : {}),
-  });
+  if (!Array.isArray(body["products"])) {
+    skipped(api, callId, "no_products");
+    return;
+  }
+  putSearchResult(callId, body as SearchResultPage, principal);
+}
+
+/** Why this `callId` will resolve nothing, logged where the decision is made. The pull
+ * says only `not_found` — deliberately — so this line is the whole of an operator's
+ * account of a search a client could not render. */
+function skipped(api: PluginAPI, callId: string, reason: string): void {
+  logSearchResults(api, "info", "skipped", { callId, reason });
 }

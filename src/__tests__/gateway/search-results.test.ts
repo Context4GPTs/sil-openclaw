@@ -33,7 +33,7 @@ import { join } from "node:path";
 import { registerSearchResultsMethod, SEARCH_RESULTS_METHOD } from "../../gateway/search-results.js";
 import type { SearchResultPage } from "../../lib/search-results-store.js";
 import { putSearchResult, __resetSearchResultsStore } from "../../lib/search-results-store.js";
-import { resultGolden } from "../helpers/v0-wire.js";
+import { contractResponse } from "../helpers/shopping-wire.js";
 import { getDataDir, getTokensPath } from "../../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -50,12 +50,11 @@ let dataDir: string;
 let priorSilDataDir: string | undefined;
 
 /**
- * A real v0 page — `{ status: "ok" }` over the route's result object, built from
- * the CHECKED-IN GOLDEN. The handler reads `results.length` for its hit log, so
- * a page missing that key answers the uniform not-found and every assertion
- * below would pass for the wrong reason.
+ * A real page — the agent contract's own `shopping_search` 200, which is what the tool
+ * buffers. The handler reads `products.length` for its hit log, so a page missing that
+ * key would make every assertion below pass for the wrong reason.
  */
-const PAGE = { status: "ok", ...resultGolden() } as unknown as SearchResultPage;
+const PAGE = contractResponse("shopping_search") as unknown as SearchResultPage;
 
 function seedSession(id = ACCOUNT): void {
   const dir = getDataDir();

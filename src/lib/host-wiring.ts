@@ -30,7 +30,7 @@ import { fileURLToPath } from "node:url";
 
 import type { PluginAPI } from "openclaw/plugin-sdk";
 
-import { resolveAllowlistScript } from "./creation-entrypoint.js";
+import { resolveAllowlistScript } from "./allowlist-script.js";
 import type { Finding } from "./findings.js";
 
 /** The shipped manifest, resolved relative to this module — two levels up from
@@ -150,7 +150,7 @@ export function detectWiringDrift(config: unknown, facts: SilWiringFacts): Findi
  * plugin id but NOT the published name.
  *
  * Both halves are load-bearing. "Lacks the published name" alone is not drift —
- * a host runs many agents and only one is the shopper, so that would fire on
+ * a host runs many agents and only some reach for sil at all, so that would fire on
  * every unrelated agent. And an agent carrying BOTH tokens is not drift either:
  * the published name attaches, the skill runs, nothing is degraded.
  */
@@ -243,7 +243,7 @@ function findUnadmittedReasons(
  * stays byte-identical to today. Absence of a problem is not a finding, and an
  * always-present key is one consumers start depending on.
  *
- * Additive, never a wrapper: a `sil_search` result carrying an advisory is still
+ * Additive, never a wrapper: a search result carrying an advisory is still
  * the same search result, with the same products in the same order.
  *
  * It recurs on every result while the drift persists — that is the feature, not
@@ -258,6 +258,18 @@ function findUnadmittedReasons(
 export function wiringAdvisories(api: PluginAPI): { advisories?: Finding[] } {
   const drift = detectWiringDrift(api.config, readSilWiringFacts());
   return drift.length === 0 ? {} : { advisories: drift };
+}
+
+/**
+ * The same advisory as its OWN result block, or nothing at all.
+ *
+ * A shopping tool's payload IS the API's 200 body, passed through verbatim, so the
+ * advisory cannot ride as a key beside the contract's — it would either collide with
+ * one or teach a consumer to expect a field sil-services never sends.
+ */
+export function wiringAdvisoryBlocks(api: PluginAPI): [{ advisories: Finding[] }] | [] {
+  const { advisories } = wiringAdvisories(api);
+  return advisories === undefined ? [] : [{ advisories }];
 }
 
 function buildSkillMisattachedFinding(

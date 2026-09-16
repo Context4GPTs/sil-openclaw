@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-product-get-request.schema.json",
+  "title": "sil shopping_product_get — request",
+  "type": "object",
+  "required": [
+    "ids"
+  ],
+  "properties": {
+    "ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "An id sil minted, passed back verbatim."
+      },
+      "minItems": 1,
+      "maxItems": 10,
+      "description": "Sends the variant ids it wants the whole of; one sil cannot place is absent."
+    }
+  },
+  "additionalProperties": false
+}

@@ -8,10 +8,10 @@
  * them rather than ported. What survives is the harness shape, which was right.
  *
  * The surface is FOUR operations over ONE ref scheme (`shopper` | `brief:<slug>`):
- *   sil_doc_find    coordinates only — bodies come from sil_doc_read
- *   sil_doc_read    one whole body; unreadable is never re-minted over
- *   sil_doc_write   the WHOLE reconciled markdown; create/replace, both fail-closed
- *   sil_doc_remove  one document, never a cascade
+ *   shopping_doc_find    coordinates only — bodies come from shopping_doc_read
+ *   shopping_doc_read    one whole body; unreadable is never re-minted over
+ *   shopping_doc_write   the WHOLE reconciled markdown; create/replace, both fail-closed
+ *   shopping_doc_remove  one document, never a cascade
  *
  * Nothing is stubbed but the registration-capture api: these tools are LOCAL (no
  * bearer, no network), so a double would only be testing itself.
@@ -32,10 +32,10 @@ import {
   type MockPluginAPI,
 } from "../helpers/mock-plugin-api.js";
 
-const READ = "sil_doc_read";
-const WRITE = "sil_doc_write";
-const REMOVE = "sil_doc_remove";
-const FIND = "sil_doc_find";
+const READ = "shopping_doc_read";
+const WRITE = "shopping_doc_write";
+const REMOVE = "shopping_doc_remove";
+const FIND = "shopping_doc_find";
 
 let dataDir: string;
 let priorSilDataDir: string | undefined;
@@ -98,7 +98,7 @@ afterEach(() => {
 // `index` / `plugin-load` red on top of that. Duplicate coverage is cost, not safety —
 // and a sixth tool-set mirror is one more place to forget to bump.
 
-describe("G2 — sil_doc_write: whole-body writes, and mode is load-bearing in BOTH directions", () => {
+describe("G2 — shopping_doc_write: whole-body writes, and mode is load-bearing in BOTH directions", () => {
   it("G2 — `body` is the WHOLE reconciled markdown: a replace REPLACES, it never appends", async () => {
     // The stacking failure the whole surface is shaped around. With no append and no
     // section patch, a correction cannot leave the contradicted row sitting above it.
@@ -143,7 +143,7 @@ describe("G2 — sil_doc_write: whole-body writes, and mode is load-bearing in B
   });
 });
 
-describe("G3 — sil_doc_find: coordinates only, composing filters, and unreadable is surfaced", () => {
+describe("G3 — shopping_doc_find: coordinates only, composing filters, and unreadable is surfaced", () => {
   it("G3 — returns COORDINATES and never a body; filters compose; a malformed document surfaces in `unreadable`", async () => {
     await seed();
     // A second Brief, done and in a domain, so `status` and `domain` have something
@@ -166,7 +166,7 @@ describe("G3 — sil_doc_find: coordinates only, composing filters, and unreadab
     const all = await call(FIND, {});
     const briefs = all["briefs"] as Array<Record<string, unknown>>;
     // COORDINATES ONLY. A body reaching the index makes the index the read, and the
-    // agent stops calling sil_doc_read — every listing then costs a whole store.
+    // agent stops calling shopping_doc_read — every listing then costs a whole store.
     expect(JSON.stringify(all)).not.toContain("won't blister");
     expect(briefs.every((b) => !("body" in b))).toBe(true);
     expect(briefs.map((b) => b["slug"]).sort()).toEqual(["chamonix-feb", "office-chair"]);
@@ -196,7 +196,7 @@ describe("G3 — sil_doc_find: coordinates only, composing filters, and unreadab
   });
 });
 
-describe("G4 — sil_doc_read: unreadable is NOT not_found", () => {
+describe("G4 — shopping_doc_read: unreadable is NOT not_found", () => {
   it("G4 — a present-but-corrupt document answers `unreadable` and steers to inspect, never to re-mint", async () => {
     // The distinction is the whole point: an agent that reads "absent" over a corrupt
     // document writes a fresh one, and the buyer's own words are gone. Both halves —
@@ -250,7 +250,7 @@ describe("G5 — a bad slug is rejected BEFORE any path join", () => {
   });
 });
 
-describe("sil_doc_remove — one document, never a cascade", () => {
+describe("shopping_doc_remove — one document, never a cascade", () => {
   it("removes one Brief, leaves every sibling and the shopper alone, and refuses to remove the person", async () => {
     // The cascade failure has no other home on this surface, and it is silent: a
     // removal that also took the shopper document would look like a clean success.
@@ -269,5 +269,56 @@ describe("sil_doc_remove — one document, never a cascade", () => {
     // …and the person is not a document you delete.
     expect((await call(REMOVE, { ref: "shopper" }))["status"]).toBe("invalid_request");
     expect((await call(READ, { ref: "shopper" }))["status"]).toBe("ok");
+  });
+});
+
+describe("no disk path reaches the agent, on any verb", () => {
+  it("no successful payload carries the store's location, under `path` or any other key", async () => {
+    // Contract §5 retires `path` from the document tools. Asserted on the BYTES rather
+    // than on a key name: the store knows every document's absolute path and every one
+    // of these results is built from a resolved target, so the way it comes back is
+    // whichever field somebody re-spreads next — a `path`, a `file`, a whole target
+    // object. An agent that reads one quotes it to the buyer, or pastes it into a shell.
+    await seed();
+    const payloads = [
+      await call(FIND, {}),
+      await call(READ, { ref: "shopper" }),
+      await call(READ, { ref: "brief:chamonix-feb" }),
+      await call(WRITE, { ref: "brief:chamonix-feb", mode: "replace", title: "T", body: BRIEF_BODY }),
+      await call(REMOVE, { ref: "brief:chamonix-feb" }),
+    ];
+    // Guard-of-the-guard: every one of them really succeeded, so this is not five
+    // refusals scanning clean.
+    expect(payloads.map((p) => p["status"])).toEqual(["ok", "ok", "ok", "ok", "removed"]);
+    const leaks = payloads.filter((p) => JSON.stringify(p).includes(dataDir));
+    expect(leaks).toEqual([]);
+    for (const payload of payloads) expect(payload).not.toHaveProperty("path");
+  });
+
+  it("no REFUSAL carries it either — a failure message names the ref, not the file", async () => {
+    // The half a success-only scan is blind to, and the likelier leak: the store builds
+    // its refusals from the resolved target, so `"/tmp/…/briefs/x.md: the document is
+    // present but corrupt"` reads as a perfectly good message right up until an agent
+    // repeats it. Node's own errno strings carry the path too, which is why the cause
+    // reaches the agent as a CODE and the whole of it stays in the log.
+    await seed();
+    plant(briefPath("corrupt"), CORRUPT);
+    const payloads = [
+      await call(FIND, {}), // the corrupt Brief rides `unreadable[]`
+      await call(READ, { ref: "brief:corrupt" }),
+      await call(WRITE, { ref: "brief:corrupt", mode: "replace", title: "T", body: BRIEF_BODY }),
+      await call(READ, { ref: "brief:nothing-here" }),
+      await call(READ, { ref: "brief:Not A Slug" }),
+    ];
+    // Guard-of-the-guard: four real refusals plus a find whose `unreadable[]` is
+    // non-empty — nothing here is a success scanning clean.
+    expect(payloads.slice(1).map((p) => p["status"])).toEqual([
+      "unreadable",
+      "unreadable",
+      "not_found",
+      "invalid_request",
+    ]);
+    expect(payloads[0]!["unreadable"]).not.toEqual([]);
+    expect(payloads.filter((p) => JSON.stringify(p).includes(dataDir))).toEqual([]);
   });
 });

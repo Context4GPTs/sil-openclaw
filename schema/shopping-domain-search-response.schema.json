@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-domain-search-response.schema.json",
+  "title": "sil shopping_domain_search — response",
+  "type": "object",
+  "required": [
+    "status",
+    "matches"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "matches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "about"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Passes it to `shopping_domain_get` and `shopping_search` verbatim."
+          },
+          "about": {
+            "type": "string",
+            "description": "Judges fit before reading the whole guide: adopts it, or descends under a broader one."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 20,
+      "description": "Reads what already stands for this category; an empty list is the one thing that licenses a mint."
+    }
+  },
+  "additionalProperties": false
+}
