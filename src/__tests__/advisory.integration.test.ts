@@ -77,7 +77,6 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerDoctorTools } from "../tools/doctor.js";
 import { registerIdentityTools } from "../tools/identity.js";
-import { registerDocTools } from "../tools/doc.js";
 import { sortFindings, type Finding } from "../lib/findings.js";
 import * as allowlist from "../lib/openclaw-allowlist.js";
 import { setApiUrl, setWebUrl } from "../lib/config.js";
@@ -332,7 +331,6 @@ type Payload = Record<string, unknown> & { advisories?: Finding[] };
 function registerAll(api: PluginAPI): void {
   registerIdentityTools(api);
   registerCatalogTools(api);
-  registerDocTools(api);
   registerDoctorTools(api);
 }
 
@@ -371,10 +369,21 @@ async function runDoctor(config: Config, hostVersion?: string): Promise<DoctorRe
 }
 
 /**
- * The four real `sil_*` success paths this file drives — one per tool group, so
- * "EVERY `sil_*` result" (AC3) is proven across the whole surface rather than on
- * one convenient tool. Each is a genuine success against real state: no stub
- * asserts a stubbed response here.
+ * The CARRIER every bar below that is not about a specific tool drives: `sil_register`
+ * short-circuits on stored tokens (`already_registered`), so it is a genuine success
+ * that opens no socket and needs no catalog fixture — which is what the zero-network
+ * and never-wrote-anything bars are asserted on.
+ */
+async function runCarrier(config: Config, hostVersion?: string): Promise<Payload> {
+  writeTokensFile();
+  return runTool("sil_register", {}, config, hostVersion);
+}
+
+/**
+ * The two real `sil_*` success paths this file drives — one per tool group that folds,
+ * so "EVERY `sil_*` result" (AC3) is proven across the whole surface rather than on one
+ * convenient tool. Each is a genuine success against real state: no stub asserts a
+ * stubbed response here.
  */
 const SUCCESS_PATHS: Array<{
   tool: string;
@@ -382,8 +391,6 @@ const SUCCESS_PATHS: Array<{
   /** Real state the success needs, beyond a temp data dir. */
   setup?: () => void;
 }> = [
-  // documents — an empty store is `status: ok`, zero network.
-  { tool: "shopping_doc_find", params: {} },
   // identity — `already_registered` short-circuits on stored tokens, zero network.
   { tool: "sil_register", params: {}, setup: writeTokensFile },
   // catalog — an empty match IS a success (`status: ok, products: []`).
@@ -469,7 +476,7 @@ describe("AC3 — skill attached by id: the tools are the only surviving messeng
     // AC3: "the finding is byte-identical whichever surface carries it". Both read
     // the EFFECTIVE wiring from the same `api.config`, so anything else would mean
     // two detectors — i.e. two things to drift apart.
-    const payload = await runTool("shopping_doc_find", {}, misattachedConfig());
+    const payload = await runCarrier(misattachedConfig());
     const report = await runDoctor(misattachedConfig());
 
     const fromTool = payload.advisories!.find((a) => a.id === SKILL_MISATTACHED);
@@ -491,9 +498,9 @@ describe("AC3 — skill attached by id: the tools are the only surviving messeng
     // misconfiguration is exactly what a fire-once advisory lets rot — and this one
     // was silent enough to cause incident #1. A cooldown here is a documented
     // regression, not a cleanup.
-    const first = await runTool("shopping_doc_find", {}, misattachedConfig());
-    const second = await runTool("shopping_doc_find", {}, misattachedConfig());
-    const third = await runTool("shopping_doc_find", {}, misattachedConfig());
+    const first = await runCarrier(misattachedConfig());
+    const second = await runCarrier(misattachedConfig());
+    const third = await runCarrier(misattachedConfig());
     expect(advisoryIds(first)).toEqual([SKILL_MISATTACHED]);
     expect(advisoryIds(second)).toEqual([SKILL_MISATTACHED]);
     expect(advisoryIds(third)).toEqual([SKILL_MISATTACHED]);
@@ -526,7 +533,7 @@ describe("AC3 — skill attached by id: the tools are the only surviving messeng
   it("compat NEVER rides a tool result — it is a doctor-only question (the catalogue)", async () => {
     // A gateway-compat gap answers a question nobody asked mid-`shopping_search`. The
     // fold is earned by the self-carry paradox, which applies ONLY to wiring.
-    const payload = await runTool("shopping_doc_find", {}, allDriftConfig());
+    const payload = await runCarrier(allDriftConfig());
     expect(advisoryIds(payload)).not.toContain(GATEWAY_COMPAT);
     for (const advisory of payload.advisories ?? []) {
       expect(advisory.id.startsWith("wiring.")).toBe(true);
@@ -646,7 +653,7 @@ describe("AC6 — a healthy host is SILENT everywhere (absence of a problem is n
     // The auto-load-everything default: sil IS allowed. Flagging it would fire a
     // false advisory on a correctly-working default install — on every sil_* result,
     // forever. This is the easiest false positive in the card to ship.
-    const payload = await runTool("shopping_doc_find", {}, healthyConfig());
+    const payload = await runCarrier(healthyConfig());
     const report = await runDoctor(healthyConfig());
     expect(payload).not.toHaveProperty("advisories");
     expect(wiringFindings(report)).toEqual([]);
@@ -658,7 +665,7 @@ describe("AC6 — a healthy host is SILENT everywhere (absence of a problem is n
       tools: { alsoAllow: [PLUGIN_ID] },
       gateway: { version: HOST_FINE },
     };
-    const payload = await runTool("shopping_doc_find", {}, config);
+    const payload = await runCarrier(config);
     expect(payload).not.toHaveProperty("advisories");
     expect(wiringFindings(await runDoctor(config))).toEqual([]);
   });
@@ -680,7 +687,7 @@ describe("AC6 — a healthy host is SILENT everywhere (absence of a problem is n
   it("is NOT VACUOUS — the same surfaces DO speak when the host is drifted", async () => {
     // Without this, an implementation that folds nothing anywhere passes every
     // silence assertion in this block.
-    const payload = await runTool("shopping_doc_find", {}, allDriftConfig());
+    const payload = await runCarrier(allDriftConfig());
     const report = await runDoctor(allDriftConfig());
     expect(payload.advisories!.length).toBeGreaterThan(0);
     expect(wiringFindings(report).length).toBeGreaterThan(0);
@@ -813,7 +820,8 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
     expect(config).toEqual(before);
 
     registerAll(api);
-    await getTool(api, "shopping_doc_find").execute("call-1", {});
+    writeTokensFile();
+    await getTool(api, "sil_register").execute("call-1", {});
     expect(config).toEqual(before);
 
     await getTool(api, "sil_doctor").execute("call-2", {});
@@ -831,7 +839,8 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
 
     expect(() => capturedRegisterFn!(api)).not.toThrow();
     registerAll(api);
-    await expect(getTool(api, "shopping_doc_find").execute("call-1", {})).resolves.toBeDefined();
+    writeTokensFile();
+    await expect(getTool(api, "sil_register").execute("call-1", {})).resolves.toBeDefined();
     await expect(getTool(api, "sil_doctor").execute("call-2", {})).resolves.toBeDefined();
   });
 
@@ -848,7 +857,8 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
     lastApi = api;
     capturedRegisterFn!(api);
     registerAll(api);
-    await getTool(api, "shopping_doc_find").execute("call-1", {});
+    writeTokensFile();
+    await getTool(api, "sil_register").execute("call-1", {});
     await getTool(api, "sil_doctor").execute("call-2", {});
 
     expect(spy).not.toHaveBeenCalled();
@@ -858,7 +868,7 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
     const config = allDriftConfig();
     const before = structuredClone(config);
     for (let i = 0; i < 3; i += 1) {
-      await runTool("shopping_doc_find", {}, config);
+      await runCarrier(config);
       await runDoctor(config);
     }
     expect(config).toEqual(before);
@@ -887,7 +897,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
       expect(finding.status).toBe("advisory");
     }
 
-    const payload = await runTool("shopping_doc_find", {}, allDriftConfig());
+    const payload = await runCarrier(allDriftConfig());
     for (const advisory of payload.advisories!) {
       expect(advisory.appliedAction).toBeNull();
       expect(advisory.status).toBe("advisory");
@@ -903,7 +913,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     mkdirSync(openclawDir, { recursive: true, mode: 0o700 });
     writeFileSync(join(openclawDir, "openclaw.json"), JSON.stringify(healthyConfig()), { mode: 0o600 });
 
-    const payload = await runTool("shopping_doc_find", {}, misattachedConfig());
+    const payload = await runCarrier(misattachedConfig());
     expect(advisoryIds(payload)).toEqual([SKILL_MISATTACHED]);
   });
 
@@ -916,7 +926,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     mkdirSync(openclawDir, { recursive: true, mode: 0o700 });
     writeFileSync(join(openclawDir, "openclaw.json"), JSON.stringify(allDriftConfig()), { mode: 0o600 });
 
-    const payload = await runTool("shopping_doc_find", {}, healthyConfig());
+    const payload = await runCarrier(healthyConfig());
     const report = await runDoctor(healthyConfig());
     expect(payload).not.toHaveProperty("advisories");
     expect(wiringFindings(report)).toEqual([]);
@@ -933,7 +943,8 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     lastApi = api;
     capturedRegisterFn!(api);
     registerAll(api);
-    await getTool(api, "shopping_doc_find").execute("call-1", {});
+    writeTokensFile();
+    await getTool(api, "sil_register").execute("call-1", {});
     await getTool(api, "sil_doctor").execute("call-2", {});
 
     // No write, no chmod, no new file, and nothing under $HOME touched at all —
@@ -1043,7 +1054,7 @@ describe("AC11 — six flat fields, folded into the doctor's existing determinis
   });
 
   it("the folded advisories on a tool result carry the same six fields", async () => {
-    const payload = await runTool("shopping_doc_find", {}, allDriftConfig());
+    const payload = await runCarrier(allDriftConfig());
     for (const advisory of payload.advisories!) {
       expect(Object.keys(advisory).sort(), advisory.id).toEqual([
         "appliedAction",
@@ -1122,7 +1133,7 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
       expect(emittedStrings(report), secret).not.toContain(secret);
     }
 
-    const payload = await runTool("shopping_doc_find", {}, config);
+    const payload = await runCarrier(config);
     for (const secret of ALL_SECRETS) {
       expect(emittedStrings(payload), secret).not.toContain(secret);
     }
@@ -1147,7 +1158,7 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
     // The agent id IS a wiring fact and is required by the fix string. The agent's
     // `env` block sitting beside it is NOT — a naive implementation that serializes
     // the whole agent entry to name it leaks in the same breath as it helps.
-    const payload = await runTool("shopping_doc_find", {}, secretBearingConfig());
+    const payload = await runCarrier(secretBearingConfig());
     const advisory = payload.advisories!.find((a) => a.id === SKILL_MISATTACHED)!;
 
     expect(advisory.detected).toContain("shopper");
@@ -1158,13 +1169,14 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
   it("the wiring + compat path issues ZERO network calls", async () => {
     // This card is 100% local — a stronger property than "no network on the hot
     // path", and one that falls out of the design rather than being engineered. Two
-    // surfaces that make no request of their own prove it: register(), and a profile
-    // read (local-only by contract).
+    // surfaces that make no request of their own prove it: register(), and the
+    // already-registered short-circuit.
     const api = createMockPluginApi({ config: allDriftConfig() });
     lastApi = api;
     capturedRegisterFn!(api);
     registerAll(api);
-    await getTool(api, "shopping_doc_find").execute("call-1", {});
+    writeTokensFile();
+    await getTool(api, "sil_register").execute("call-1", {});
 
     expect(fetchSpy).not.toHaveBeenCalled();
   });

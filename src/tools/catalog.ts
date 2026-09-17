@@ -98,10 +98,10 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/search",
     label: "Search sil in one settled category",
     description:
-      "Beat 5: the products and variants that fit in one settled category, as"
-      + " shopping_brief_compile builds it from the Brief. Send the domain path, the"
-      + " shopping words as `query`, how many products you want, and that compile's"
-      + " `specs` array UNCHANGED — every value exactly as it was answered, a money value"
+      "Beat 5: the products and variants that fit in one settled category. Send the"
+      + " domain path, the shopping words as `query`, how many products you want, and"
+      + " the Brief's product rows as `specs` — every value exactly as it was answered,"
+      + " a money value"
       + " a decimal STRING (`\"300\"`, never 300 or \"300.00\"), or the row is refused and"
       + " the call is spent. `ship_to` is the LABEL of one of the buyer's addresses as"
       + " sil_whoami lists them, never a country: it localizes the search, and sil uses"
@@ -142,8 +142,8 @@ export const SHOPPING_TOOLS = [
     description:
       "Beat 6, who sells the pick, at what price and on which terms: send 1–10 variant"
       + " ids, the Brief's seller rows as `seller_specs` (the keys the domain read"
-      + " returned under `seller_specs`, which shopping_brief_compile has already built),"
-      + " and `ship_to` — the LABEL of one of the buyer's addresses as sil_whoami lists"
+      + " returned under `seller_specs`), and `ship_to` — the LABEL of one of the"
+      + " buyer's addresses as sil_whoami lists"
       + " them, the default address when you send nothing. You get one entry per variant"
       + " per seller, read live: the seller's name and id, the price exactly as the page"
       + " prints it with its own currency (sil converts nothing), whether it can be"

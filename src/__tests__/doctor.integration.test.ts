@@ -6,10 +6,9 @@
  *
  * **The ONLY thing mocked is `fetch`** — the host/network boundary, and the doctor's
  * one outbound request (the unauthed ClawHub GET; founder ruling, OQ6). Every other
- * seam is real: a real temp data dir, real perms, real malformed artefacts, the real
- * `profile-store` `unreadable[]` surfacing, the real `credentials` module. Nothing
- * here is stubbed (complete-work-is-stub-free): the faults are genuine EACCES /
- * ENOTDIR conditions produced on a real filesystem.
+ * seam is real: a real temp data dir, real perms, real corrupt credentials, the real
+ * `credentials` module. Nothing here is stubbed (complete-work-is-stub-free): the
+ * faults are genuine EACCES / ENOTDIR conditions produced on a real filesystem.
  *
  * **The ClawHub wire shape is NOT invented.** It is transcribed from the shipped
  * `clawhub@0.22.0` CLI's own route + response schema (`dist/schema/routes.js`
@@ -69,7 +68,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { registerDoctorTools } from "../tools/doctor.js";
-import { getDataDir, getTokensPath } from "../lib/credentials.js";
+import { getConfigPath, getDataDir, getTokensPath } from "../lib/credentials.js";
 import {
   createMockPluginApi,
   getTool,
@@ -186,47 +185,26 @@ let dataDir: string;
 let priorSilDataDir: string | undefined;
 let priorXdg: string | undefined;
 
-const shopperDir = (): string => join(getDataDir(), "shopper");
-/** The FLAT store's Brief leaf (AC G9). Was `domains/<slug>/method.md`: the
- * eight-beat card deletes the legacy layout, and the doctor consumes
- * `findDocuments()` — so a legacy-shaped fixture now seeds a tree the doctor no
- * longer scans, and every `unreadable` bar below would go green on an empty read. */
-const briefPath = (slug: string): string => join(shopperDir(), "briefs", `${slug}.md`);
+/** The doctor's walk covers EVERY entry under the data dir, whatever put it there —
+ * the plugin itself writes only tokens.json and config.json — so its fixtures are
+ * ordinary files in an ordinary sub-directory. */
+const subDir = (): string => join(getDataDir(), "sub");
+const subFile = (name: string): string => join(subDir(), name);
 
-/** A well-formed artefact: `--- key: value --- body`, written owner-only like
- * the store itself writes it. */
-function writeArtefact(
-  path: string,
-  fields: Record<string, string>,
-  body = "Prose body.\n",
-): void {
+/** A well-formed, owner-only file — must produce no finding of any kind. */
+function seedHealthyFile(name = "note.md", body = "Prose body.\n"): string {
+  const path = subFile(name);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const fm = Object.entries(fields)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join("\n");
-  writeFileSync(path, `---\n${fm}\n---\n${body}`, { mode: 0o600 });
-}
-
-/** A HEALTHY Brief — must produce no finding of any kind. */
-function seedHealthyBrief(slug = "coffee"): void {
-  writeArtefact(briefPath(slug), {
-    slug,
-    title: `Daily ${slug}`,
-    status: "active",
-    updated_at: "2026-07-17",
-  });
-}
-
-/** A CORRUPT artefact: real bytes on disk, no parseable frontmatter. The store
- * surfaces it as `unreadable`; the doctor must lift it into a finding and must
- * NOT rewrite it. */
-const CORRUPT_BYTES = "this file has no frontmatter fence at all\njust prose\n";
-
-function seedCorruptBrief(slug = "broken"): string {
-  const path = briefPath(slug);
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, CORRUPT_BYTES, { mode: 0o600 });
+  writeFileSync(path, body, { mode: 0o600 });
   return path;
+}
+
+/** Bytes the doctor cannot interpret. It may tighten this file's MODE and must
+ * never touch its contents. */
+const OPAQUE_BYTES = "this file is not anything sil knows how to read\njust prose\n";
+
+function seedOpaqueFile(name = "opaque.bin"): string {
+  return seedHealthyFile(name, OPAQUE_BYTES);
 }
 
 function writeTokensFile(tokens: unknown, mode = 0o600): string {
@@ -425,119 +403,6 @@ describe("AC10 — register() opens nothing and runs NO check", () => {
 });
 
 // ===========================================================================
-// AC1 — `unreadable` artefact → finding, never dropped, never clobbered.
-// ===========================================================================
-
-describe("AC1 — a malformed artefact surfaces as exactly one finding, never clobbered", () => {
-  it("lifts a corrupt Brief into exactly ONE store.unreadable finding", async () => {
-    const corrupt = seedCorruptBrief("broken");
-    const report = await runDoctor();
-    const unreadable = findingsWithPrefix(report, "store.unreadable");
-    expect(unreadable).toHaveLength(1);
-    expect(unreadable[0]!.id).toBe("store.unreadable:brief:broken");
-    expect(unreadable[0]!.severity).toBe("warn");
-    // Report-only: the doctor offers no auto-fix and never re-mints over it.
-    expect(unreadable[0]!.status).toBe("advisory");
-    expect(unreadable[0]!.appliedAction).toBeNull();
-    // `detected` must name the artefact and the corruption — it is what a human
-    // reads to go repair the file.
-    expect(unreadable[0]!.detected).toContain("broken");
-    expect(unreadable[0]!.suggestedAction).not.toBeNull();
-    expect(existsSync(corrupt)).toBe(true);
-  });
-
-  it("NEVER overwrites or removes the corrupt file (delete-first does not apply to user data)", async () => {
-    const corrupt = seedCorruptBrief("broken");
-    const before = snapshot(dataDir);
-    await runDoctor();
-    // Byte-identical, mode-identical, still present. This mirrors the store's
-    // own contract: inspect / repair, do NOT overwrite — it may still be
-    // recoverable.
-    expect(readFileSync(corrupt, "utf8")).toBe(CORRUPT_BYTES);
-    expect(snapshot(dataDir)).toEqual(before);
-  });
-
-  it("healthy sibling artefacts produce NO finding (per-path checks emit only on a problem)", async () => {
-    seedHealthyBrief("coffee");
-    seedHealthyBrief("shoes");
-    seedCorruptBrief("broken");
-    const report = await runDoctor();
-    const unreadable = findingsWithPrefix(report, "store.unreadable");
-    // Exactly one — the corrupt one. A healthy store with 200 artefacts must
-    // emit ZERO findings, not 200 `ok` ones.
-    expect(unreadable.map((f) => f.id)).toEqual(["store.unreadable:brief:broken"]);
-  });
-
-  it("surfaces EVERY unreadable entry — two corrupt artefacts are never aggregated into one", async () => {
-    seedCorruptBrief("broken-one");
-    seedCorruptBrief("broken-two");
-    const report = await runDoctor();
-    const ids = findingsWithPrefix(report, "store.unreadable")
-      .map((f) => f.id)
-      .sort();
-    // PO invariant 2: each entry lifts into EXACTLY one finding, never
-    // aggregated away, never silently dropped.
-    expect(ids).toEqual(["store.unreadable:brief:broken-one", "store.unreadable:brief:broken-two"]);
-  });
-
-  it("surfaces a malformed user_spec.md as exactly ONE finding (the shopper document has two readers, not two problems)", async () => {
-    // ONE corrupt file, ONE finding — the same PO invariant as the two bars above,
-    // in the direction the flat store newly makes reachable. Two findings over one
-    // broken file is "2 problems in your store" when there is one, which is precisely
-    // the doctor lying — the failure this whole suite is built around.
-    const path = join(shopperDir(), "user_spec.md");
-    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    writeFileSync(path, "no frontmatter here\n", { mode: 0o600 });
-    const report = await runDoctor();
-    expect(findingsWithPrefix(report, "store.unreadable").map((f) => f.id)).toHaveLength(1);
-    expect(readFileSync(path, "utf8")).toBe("no frontmatter here\n");
-  });
-
-  it("an unreadable artefact makes the store unhealthy but never throws", async () => {
-    seedCorruptBrief("broken");
-    const report = await runDoctor();
-    expect(report.status).toBe("ok"); // the CALL succeeded
-    expect(report.healthy).toBe(false); // the STORE is degraded
-  });
-
-  it("G9 — shopper presence is read from the FLAT store, and no finding or log names a domain pack or PRD", async () => {
-    // The doctor is a read-only pass, so it never triggers the store's migration —
-    // which means a store still holding legacy residue (the `assets/` bytes the
-    // migration deliberately keeps) is a state it WILL meet in the wild. It must
-    // diagnose the flat store and say nothing about the layout that is gone: prose
-    // naming `method.md` sends an operator to repair a file no code path reads.
-    writeArtefact(join(shopperDir(), "user_spec.md"), { name: "Ioannis" });
-    seedHealthyBrief("chamonix-feb");
-    seedCorruptBrief("broken");
-    // Legacy residue, correctly permissioned so it provokes no incidental fs finding.
-    // Deliberately BYTES, never a corrupt `method.md`: a corrupt legacy file is
-    // reported under its own relative path (`domains/<slug>/method.md`) BY DESIGN —
-    // only the doc tools migrate, the doctor never writes, and silence there would
-    // cost a finding it has today. That path legitimately contains `method.md`, so
-    // seeding one here would make this bar and that design mutually unsatisfiable.
-    // The scan below is about VOCABULARY the doctor authors, not paths it echoes.
-    const residue = join(shopperDir(), "domains", "coffee", "assets", "a1b2c3.png");
-    mkdirSync(dirname(residue), { recursive: true, mode: 0o700 });
-    writeFileSync(residue, "-- pretend image bytes --", { mode: 0o600 });
-
-    const report = await runDoctor();
-
-    // Presence comes off the flat store: the shopper reads, and only the FLAT
-    // document is degraded.
-    expect(findingsWithPrefix(report, "store.unreadable").map((f) => f.id)).toEqual([
-      "store.unreadable:brief:broken",
-    ]);
-
-    const emitted = emittedStrings(report).toLowerCase();
-    expect(
-      ["method.md", "prds/", "domain pack", "sil_learn", "sil_profile"].filter((t) =>
-        emitted.includes(t),
-      ),
-    ).toEqual([]);
-  });
-});
-
-// ===========================================================================
 // AC2a/AC2b/AC2c/AC2d — identity & token health.
 // ===========================================================================
 
@@ -577,7 +442,7 @@ describe("AC2a — not registered is informational, not an error", () => {
  *    guarantee rests on [singleton checks] — `fixed → re-run → ok` needs the same id
  *    to still be there."
  *  - **The emit rule**: it makes ENUMERATED per-path checks problem-only so a healthy
- *    store with 200 artefacts emits zero findings, not 200 `ok` ones. tokens.json is
+ *    data dir with 200 files emits zero findings, not 200 `ok` ones. tokens.json is
  *    not one of 200 — it is ONE fixed, always-the-same path, exactly like the
  *    `fs.data_dir_writable` singleton the architect lists as emitting a stable `ok`.
  *    So a singleton here does not violate the rule; it IS the rule's second case.
@@ -708,7 +573,7 @@ describe("AC2c — a corrupt token is surfaced, NEVER auto-cleared", () => {
   });
 
   it("is report-only: needs_confirmation, appliedAction null, and the BYTES are untouched", async () => {
-    // Clearing a corrupt tokens.json mutates the bytes of an existing artefact
+    // Clearing a corrupt tokens.json mutates the bytes of an existing file
     // ⇒ DESTRUCTIVE ⇒ never auto-run (AC3a). The file may still be recoverable.
     const raw = '{"access_token": "truncated-mid-writ';
     const path = writeTokensFile(raw, 0o600);
@@ -817,22 +682,21 @@ describe("AC2d — an expired token yields a re-register hint, never the token",
 // ===========================================================================
 
 describe("AC3a — a safe dir-mode fix auto-applies", () => {
-  it.skipIf(AS_ROOT)("auto-tightens a too-open shopper dir to 0700 and records it", async () => {
-    seedHealthyBrief("coffee");
-    chmodSync(shopperDir(), 0o755);
+  it.skipIf(AS_ROOT)("auto-tightens a too-open sub-directory to 0700 and records it", async () => {
+    seedHealthyFile();
+    chmodSync(subDir(), 0o755);
     const report = await runDoctor();
-    expect(modeBits(shopperDir())).toBe(0o700);
+    expect(modeBits(subDir())).toBe(0o700);
     const fixed = report.findings.filter((f) => f.status === "fixed");
     expect(fixed.length).toBeGreaterThan(0);
     expect(fixed.some((f) => f.appliedAction?.includes("0700"))).toBe(true);
   });
 
-  it.skipIf(AS_ROOT)("auto-tightens a too-open document FILE to 0600", async () => {
-    seedHealthyBrief("coffee");
-    const brief = briefPath("coffee");
-    chmodSync(brief, 0o644);
+  it.skipIf(AS_ROOT)("auto-tightens a too-open FILE to 0600", async () => {
+    const file = seedHealthyFile();
+    chmodSync(file, 0o644);
     await runDoctor();
-    expect(modeBits(brief)).toBe(0o600);
+    expect(modeBits(file)).toBe(0o600);
   });
 
   it.skipIf(AS_ROOT)("never chmods THROUGH a symlink (the data-dir escape)", async () => {
@@ -851,14 +715,13 @@ describe("AC3a — a safe dir-mode fix auto-applies", () => {
   });
 
   it.skipIf(AS_ROOT)("never chmods a symlink's TARGET even when the target is inside the data dir", async () => {
-    seedHealthyBrief("coffee");
-    const brief = briefPath("coffee");
-    chmodSync(brief, 0o600);
-    symlinkSync(brief, join(getDataDir(), "inside-link"));
+    const file = seedHealthyFile();
+    chmodSync(file, 0o600);
+    symlinkSync(file, join(getDataDir(), "inside-link"));
     await runDoctor();
     // Reached only via lstat on the link itself — the real file keeps its mode
     // and is fixed (if at all) on its own path, once.
-    expect(modeBits(brief)).toBe(0o600);
+    expect(modeBits(file)).toBe(0o600);
   });
 });
 
@@ -889,7 +752,7 @@ const rootModeOwners = (r: DoctorReport): Finding[] =>
 
 describe("AC3a — the $SIL_DATA_DIR ROOT's own mode is checked and tightened", () => {
   it.skipIf(AS_ROOT)("auto-tightens a too-open 0755 data dir to 0700 and records it", async () => {
-    seedHealthyBrief("coffee");
+    seedHealthyFile();
     chmodSync(dataDir, 0o755); // an untarred backup / an older install's umask
     expect(modeBits(dataDir)).toBe(0o755);
 
@@ -992,7 +855,7 @@ describe("AC3a — the $SIL_DATA_DIR ROOT's own mode is checked and tightened", 
 
   it.skipIf(AS_ROOT)("converges on a SYMLINKED $SIL_DATA_DIR — tightens the real dir ONCE", async () => {
     // A symlinked data dir is a legitimate operator setup (sil already writes
-    // every artefact and tokens.json through it), and it is the one place the
+    // tokens.json and config.json through it), and it is the one place the
     // walk's `lstat` rule is WRONG: a symlink's own mode is always 0777 on
     // Linux, and `chmod` follows the link regardless (there is no lchmod). An
     // lstat-based root check therefore reads 0777, tightens the target anyway,
@@ -1053,7 +916,7 @@ describe("AC5 — an entry that cannot be lstat'd never throws out of execute()"
     // a report-first doctor may never do.
     const locked = join(dataDir, "locked");
     mkdirSync(locked, { recursive: true, mode: 0o700 });
-    writeFileSync(join(locked, "artefact.md"), "---\nname: x\n---\n", { mode: 0o600 });
+    writeFileSync(join(locked, "note.md"), "prose\n", { mode: 0o600 });
     chmodSync(locked, 0o400); // r-- : readdir OK, lstat of its entries EACCES
     try {
       const report = await runDoctor();
@@ -1077,20 +940,20 @@ describe("AC3a — a DESTRUCTIVE fix is never auto-run", () => {
     expect(readFileSync(path, "utf8")).toBe(raw);
   });
 
-  it("never deletes a corrupt artefact — it is surfaced, not repaired", async () => {
-    const corrupt = seedCorruptBrief("broken");
+  it("never rewrites a file it cannot interpret — bytes on disk are user data", async () => {
+    const opaque = seedOpaqueFile();
     await runDoctor();
-    expect(existsSync(corrupt)).toBe(true);
-    expect(readFileSync(corrupt, "utf8")).toBe(CORRUPT_BYTES);
+    expect(existsSync(opaque)).toBe(true);
+    expect(readFileSync(opaque, "utf8")).toBe(OPAQUE_BYTES);
   });
 
   it("never deletes an orphaned atomic-write tmp file (bytes on disk are user data)", async () => {
     // A `.tmp` orphan from an interrupted atomic write is surfaced as safe-to-
     // delete, never auto-deleted (PO destructive boundary). The name mirrors what
-    // the store ACTUALLY leaves behind — `<path>.<12 hex>.tmp`, i.e.
-    // randomBytes(6).toString("hex") (profile-store.ts atomicWrite) — so the
+    // sil ACTUALLY leaves behind — `<path>.<12 hex>.tmp`, i.e.
+    // randomBytes(6).toString("hex") (credentials.ts atomicWrite) — so the
     // fixture is a real orphan, not an invented one.
-    const orphan = join(shopperDir(), "user_spec.md.a1b2c3d4e5f6.tmp");
+    const orphan = join(subDir(), "tokens.json.a1b2c3d4e5f6.tmp");
     mkdirSync(dirname(orphan), { recursive: true, mode: 0o700 });
     writeFileSync(orphan, "half-written bytes", { mode: 0o600 });
     const report = await runDoctor();
@@ -1155,8 +1018,8 @@ describe("AC3b — a failed safe fix is NEVER green-washed as fixed", () => {
 
 describe("AC5 — unwritable / not-a-directory data dir is `critical`", () => {
   it("emits a critical finding when $SIL_DATA_DIR is a FILE (ENOTDIR) — no root needed", async () => {
-    // Root-immune fault: the path is occupied by a regular file, so no store
-    // artefact or token could ever persist. Systemic ⇒ critical.
+    // Root-immune fault: the path is occupied by a regular file, so no token
+    // could ever persist. Systemic ⇒ critical.
     const occupied = join(parentDir, "occupied-by-a-file");
     writeFileSync(occupied, "i am a file");
     process.env["SIL_DATA_DIR"] = occupied;
@@ -1201,13 +1064,12 @@ describe("AC5 — unwritable / not-a-directory data dir is `critical`", () => {
 // AC4 — a healthy store returns a clean result and performs no writes.
 // ===========================================================================
 
-/** The canonical HEALTHY store: 0700 data dir, owner-only unexpired token,
- * clean artefacts. */
+/** The canonical HEALTHY data dir: 0700 dir, owner-only unexpired token, and an
+ * owner-only file in a sub-directory so the walk has something to walk. */
 function seedHealthyStore(): void {
   chmodSync(dataDir, 0o700);
   writeTokensFile({ access_token: FRESH_TOKEN(), refresh_token: REFRESH_TOKEN }, 0o600);
-  seedHealthyBrief("coffee");
-  writeArtefact(join(shopperDir(), "user_spec.md"), { name: "Ada" });
+  seedHealthyFile();
 }
 
 describe("AC4 — a healthy, current store is clean, quiet, and write-free", () => {
@@ -1266,9 +1128,11 @@ describe("AC4 — a healthy, current store is clean, quiet, and write-free", () 
 
   it("sorts findings deterministically (severity desc, then id asc)", async () => {
     // The consumer-visible half of AC7b, on the REAL execute() output: a
-    // dashboard renders stably and a run-to-run diff is meaningful.
-    seedCorruptBrief("zzz-broken");
-    seedCorruptBrief("aaa-broken");
+    // dashboard renders stably and a run-to-run diff is meaningful. Two orphaned
+    // tmp files, so the report really carries warns above the infos AND two ids
+    // whose order is the tie-break — a single-severity report proves neither.
+    seedHealthyFile("zzz.json.a1b2c3d4e5f6.tmp", "half-written");
+    seedHealthyFile("aaa.json.f6e5d4c3b2a1.tmp", "half-written");
     const report = await runDoctor();
     const rank = { critical: 0, warn: 1, info: 2 } as const;
     for (let i = 1; i < report.findings.length; i++) {
@@ -1328,7 +1192,7 @@ describe("AC6 — the installed version is UNCONDITIONAL report context", () => 
   });
 
   it("reports it on a BROKEN store too — the first datum of any bug report", async () => {
-    seedCorruptBrief("broken");
+    writeTokensFile("{corrupt", 0o600);
     chmodSync(dataDir, 0o700);
     const report = await runDoctor();
     expect(report.installedVersion).toBe(INSTALLED);
@@ -1497,8 +1361,9 @@ describe("AC6c — the probe is bounded, fail-soft, and SILENT on failure", () =
 
   it("a failed probe still lets EVERY other check report normally", async () => {
     // The identity of the tool: a doctor is needed MOST when things are broken,
-    // and "broken" often includes the network.
-    seedCorruptBrief("broken");
+    // and "broken" often includes the network. Both local families must still
+    // report — the filesystem walk and identity.
+    seedHealthyFile("stale.json.a1b2c3d4e5f6.tmp", "half-written");
     writeTokensFile({ access_token: EXPIRED_TOKEN(), refresh_token: REFRESH_TOKEN }, 0o600);
     installFetch(async () => {
       throw new TypeError("fetch failed");
@@ -1506,7 +1371,7 @@ describe("AC6c — the probe is bounded, fail-soft, and SILENT on failure", () =
 
     const report = await runDoctor();
 
-    expect(findingsWithPrefix(report, "store.unreadable")).toHaveLength(1);
+    expect(findingsWithPrefix(report, "fs.stale_tmp")).toHaveLength(1);
     expect(report.findings.some((f) => f.id === "identity.token_expiry")).toBe(true);
     expect(versionFindings(report)).toEqual([]);
     expect(report.installedVersion).toBe(INSTALLED);
@@ -1551,7 +1416,7 @@ describe("AC6c — the probe is bounded, fail-soft, and SILENT on failure", () =
   });
 
   it("a stalling channel does not block the local diagnosis either", async () => {
-    seedCorruptBrief("broken");
+    seedHealthyFile("stale.json.a1b2c3d4e5f6.tmp", "half-written");
     installFetch(
       (_url, init) =>
         new Promise<Response>((_resolve, reject) => {
@@ -1561,7 +1426,7 @@ describe("AC6c — the probe is bounded, fail-soft, and SILENT on failure", () =
         }),
     );
     const report = await runDoctor();
-    expect(findingsWithPrefix(report, "store.unreadable")).toHaveLength(1);
+    expect(findingsWithPrefix(report, "fs.stale_tmp")).toHaveLength(1);
   });
 });
 
@@ -1604,10 +1469,14 @@ describe("the ClawHub probe — one declared host, no credentials, nothing else"
     expect(headers.has("cookie")).toBe(false);
   });
 
-  it("carries NO token, NO PII, and NO store contents on the wire", async () => {
+  it("carries NO token, NO PII, and NO data-dir contents on the wire", async () => {
     const accessToken = FRESH_TOKEN();
     writeTokensFile({ access_token: accessToken, refresh_token: REFRESH_TOKEN }, 0o600);
-    writeArtefact(join(shopperDir(), "user_spec.md"), { name: "Ada" });
+    // The identity the doctor DOES parse, so "no PII" is a real claim about a value
+    // it holds in memory during the run — not about bytes nothing ever read.
+    writeFileSync(getConfigPath(), JSON.stringify({ user: { id: "u1", name: "Ada" } }), {
+      mode: 0o600,
+    });
 
     await runDoctor();
 

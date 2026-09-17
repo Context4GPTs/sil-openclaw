@@ -107,11 +107,7 @@ describe("docs needle DERIVATION — a needle that names live code is not a docs
       "applied",
       "canonical",
       "capped",
-      "domainslug",
-      "method.md",
-      "prd",
       "sil_search",
-      "unset",
     ]);
     expect([...docsNeedleExclusions().map((e) => e.needle)].sort()).toEqual([
       ...DOCS_EXCLUDED_NEEDLES,

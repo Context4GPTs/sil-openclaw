@@ -13,9 +13,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { registerIdentityTools } from "../tools/identity.js";
-import { registerBriefCompileTool } from "../tools/brief-compile.js";
 import { registerCatalogTools } from "../tools/catalog.js";
-import { registerDocTools } from "../tools/doc.js";
 import { registerDoctorTools } from "../tools/doctor.js";
 import {
   createMockPluginApi,
@@ -101,8 +99,6 @@ function registeredTools(): string[] {
   const api = createMockPluginApi();
   registerIdentityTools(api);
   registerCatalogTools(api);
-  registerDocTools(api);
-  registerBriefCompileTool(api);
   registerDoctorTools(api);
   return [...registeredToolNames(api)];
 }

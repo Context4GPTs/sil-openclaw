@@ -2,11 +2,8 @@
  * sil OpenClaw plugin — entry point.
  *
  * A UCP commerce plugin for sil. It registers its real tool groups — the account
- * tools (`sil_register`, `sil_whoami`, `sil_doctor`), the seven `shopping_*`
- * catalog tools, the shopper's own documents (`shopping_doc_find`,
- * `shopping_doc_read`, `shopping_doc_write`, `shopping_doc_remove`) and
- * `shopping_brief_compile`, which turns a Brief item into the two calls it makes —
- * so they load in an OpenClaw host.
+ * tools (`sil_register`, `sil_whoami`, `sil_doctor`) and the seven `shopping_*`
+ * catalog tools — so they load in an OpenClaw host.
  * There is no transport, no persistent service, and no background work at
  * register time — `register()` is strictly synchronous and opens nothing.
  *
@@ -40,9 +37,7 @@ import {
 import { ensureDataDir, getDataDir } from "./lib/credentials.js";
 import { registerSearchResultsMethod } from "./gateway/search-results.js";
 import { detectWiringDrift, readSilWiringFacts } from "./lib/host-wiring.js";
-import { registerBriefCompileTool } from "./tools/brief-compile.js";
 import { registerCatalogTools } from "./tools/catalog.js";
-import { registerDocTools } from "./tools/doc.js";
 import { registerDoctorTools } from "./tools/doctor.js";
 import { registerIdentityTools } from "./tools/identity.js";
 
@@ -58,10 +53,10 @@ export default definePluginEntry({
     );
 
     // Guarantee the data home exists from the instant register() returns — not
-    // lazily on first write — so tokens, config, and the shopper's documents have
-    // one consistent home from load. One-shot synchronous mkdir (recursive,
-    // 0700): it returns immediately and holds no resource open, so the
-    // register()-stays-synchronous / opens-nothing invariant is preserved.
+    // lazily on first write — so tokens and config have one consistent home from
+    // load. One-shot synchronous mkdir (recursive, 0700): it returns immediately
+    // and holds no resource open, so the register()-stays-synchronous /
+    // opens-nothing invariant is preserved.
     //
     // Fail-closed: an uncreatable home (parent unwritable, path occupied by a
     // file → ENOTDIR, no space) is logged LOUDLY and DISTINCTLY (the path + OS
@@ -76,10 +71,10 @@ export default definePluginEntry({
       const cause = err instanceof Error ? err.message : String(err);
       api.logger.error("sil_plugin_data_dir_failed", {
         message:
-          "sil could NOT create its data directory at registration, so tokens,"
-          + " config, and documents have no home. Fix the data directory (it must"
-          + " be writable — check permissions / free space / that $SIL_DATA_DIR"
-          + " is a directory), then reload the plugin.",
+          "sil could NOT create its data directory at registration, so its tokens"
+          + " and config have no home. Fix the data directory (it must be writable"
+          + " — check permissions / free space / that $SIL_DATA_DIR is a"
+          + " directory), then reload the plugin.",
         data_dir: getDataDir(),
         cause,
       });
@@ -88,8 +83,6 @@ export default definePluginEntry({
 
     registerIdentityTools(api);
     registerCatalogTools(api);
-    registerDocTools(api);
-    registerBriefCompileTool(api);
     registerDoctorTools(api);
 
     // The pull surface a paired client resolves a search page from. Registering

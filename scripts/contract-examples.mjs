@@ -32,7 +32,6 @@ const SECTIONS = [
   ["3.5", "shopping_product_get"],
   ["3.6", "shopping_offers"],
   ["3.7", "shopping_seller_get"],
-  ["3.9", "shopping_brief_compile"],
 ];
 
 const source = process.argv[2];

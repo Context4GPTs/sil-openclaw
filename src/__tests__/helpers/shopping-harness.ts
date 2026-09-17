@@ -33,7 +33,6 @@ import { join } from "node:path";
 
 import { setApiUrl, setWebUrl } from "../../lib/config.js";
 import { getDataDir, getTokensPath } from "../../lib/credentials.js";
-import { registerBriefCompileTool } from "../../tools/brief-compile.js";
 import { registerCatalogTools } from "../../tools/catalog.js";
 import { createMockPluginApi, type MockPluginAPI } from "./mock-plugin-api.js";
 
@@ -255,7 +254,6 @@ export function useShoppingHarness(label: string): { api: MockPluginAPI } {
     setApiUrl(SIL_API);
     harness.api = createMockPluginApi();
     registerCatalogTools(harness.api);
-    registerBriefCompileTool(harness.api);
   });
 
   afterEach(() => {

@@ -7,9 +7,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { registerIdentityTools } from "../../tools/identity.js";
-import { registerBriefCompileTool } from "../../tools/brief-compile.js";
 import { registerCatalogTools } from "../../tools/catalog.js";
-import { registerDocTools } from "../../tools/doc.js";
 import { registerDoctorTools } from "../../tools/doctor.js";
 import {
   createMockPluginApi,
@@ -19,7 +17,6 @@ import {
 } from "../helpers/mock-plugin-api.js";
 import { perNicheExpertOffenders } from "../helpers/per-niche-expert.js";
 import {
-  ARTIFACT_TOOLS,
   SHOPPING_TOOLS,
   artifact,
   artifactParameters,
@@ -30,7 +27,6 @@ import {
   overPromiseOffenders,
   overTriggerOffenders,
   retiredV0Offenders,
-  statesQualifiedNotFound,
   RETIRED_V0_TOKENS,
 } from "../helpers/honesty-vocabulary.js";
 
@@ -159,9 +155,9 @@ describe("TypeBox introspection metadata never leaks into the agent-visible sche
  * model it is driving almost entirely from these descriptions. This guard runs the SHARED whole-word
  * `\bexperts?\b` + 28-char retro-allowance check (`perNicheExpertOffenders`, the
  * very check the skill-prose guard uses, so the discipline can never drift) over
- * EVERY registered tool description — the four pivot-untouched tools and the four
- * `shopping_doc_*` document verbs. Green on the current tree; a future `expert`
- * reintroduction into any description turns it RED.
+ * EVERY registered tool description, the pivot-untouched account tools included.
+ * Green on the current tree; a future `expert` reintroduction into any description
+ * turns it RED.
  *
  * This is a VOCABULARY guard, DISTINCT from the exact-tool-SET guards (the identity
  * set assertion above, index.test.ts, manifest-contract): it pins HOW a description
@@ -175,14 +171,12 @@ function allRegisteredTools(): MockPluginAPI {
   const api = createMockPluginApi();
   registerIdentityTools(api);
   registerCatalogTools(api);
-  registerDocTools(api);
-  registerBriefCompileTool(api);
   registerDoctorTools(api);
   return api;
 }
 
 describe("registered tool descriptions carry NO per-niche-expert vocabulary (whole-word `expert`, retro-allowance)", () => {
-  it("every registered tool description scans clean — incl. the four pivot-untouched tools and the four document verbs", () => {
+  it("every registered tool description scans clean — the pivot-untouched account tools included", () => {
     const tools = [...allRegisteredTools()._tools.entries()];
     // Guard against a vacuous green: descriptions must actually exist AND be
     // non-blank to be scanned. (NOT a tool count/set pin — passes for any tool set.)
@@ -233,7 +227,7 @@ function wholeSurface(api: MockPluginAPI): [string, string][] {
 }
 
 describe("the shopping tools' parameters ARE the committed request artifacts", () => {
-  it.each(ARTIFACT_TOOLS)(
+  it.each(SHOPPING_TOOLS)(
     "%s publishes its artifact verbatim, minus the three FILE annotations",
     (tool) => {
       // The one bar that makes "the plugin adds no shape of its own" checkable. A
@@ -248,7 +242,7 @@ describe("the shopping tools' parameters ARE the committed request artifacts", (
     },
   );
 
-  it.each(ARTIFACT_TOOLS)("%s strips `$schema` / `$id` / `title` before the host sees it", (tool) => {
+  it.each(SHOPPING_TOOLS)("%s strips `$schema` / `$id` / `title` before the host sees it", (tool) => {
     // They describe the FILE, not the argument the model has to build, and a `$id` on a
     // tool input invites a host to resolve a URL nobody serves.
     const registered = getTool(allRegisteredTools(), tool).parameters as unknown as Record<
@@ -265,7 +259,7 @@ describe("the shopping tools' parameters ARE the committed request artifacts", (
     }
   });
 
-  it.each(ARTIFACT_TOOLS)("%s's description is bounded — enough to act on, short enough to read", (tool) => {
+  it.each(SHOPPING_TOOLS)("%s's description is bounded — enough to act on, short enough to read", (tool) => {
     // An agent reads this at pick-time under context pressure; the clause that survives
     // is the short one. The ceiling is generous — it fails a parameter tutorial, not
     // tight prose — and the floor fails a one-liner that teaches nothing.
@@ -300,7 +294,7 @@ describe("the retired tool NAMES cannot come back", () => {
       "sil_register",
       "sil_whoami",
     ]);
-    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(12);
+    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(7);
   });
 });
 
@@ -322,7 +316,7 @@ describe("no honesty field is ever framed as an exclusion", () => {
   it("NO registered tool teaches dropping / filtering / hiding on `unknown`, an absent `fit` key, an empty `variants` or `webpage_info`", () => {
     // The named prior failure: a seller tool leading the agent to drop `unknown` sellers
     // undoes the route's fail-closed design one layer up, and the shortlist collapses
-    // while looking like it filtered. The scan runs over the WHOLE surface — a document
+    // while looking like it filtered. The scan runs over the WHOLE surface — an account
     // tool that learned the habit would be just as wrong.
     const offenders: string[] = [];
     for (const [name, text] of wholeSurface(allRegisteredTools())) {
@@ -367,15 +361,7 @@ describe("each shopping tool carries its discipline clause", () => {
    * deleted a 1341-line prose test that pinned wording and stayed green through a live
    * behavioural bug. Each entry is the one thing an agent that loses it gets wrong.
    */
-  const DISCIPLINE: Record<(typeof ARTIFACT_TOOLS)[number], RegExp[]> = {
-    // Where each of the two lists goes, and that a widening is a Brief edit.
-    shopping_brief_compile: [
-      /shopping_search/,
-      /shopping_offers/,
-      /ship_to/,
-      /widen/i,
-      /hard rows first/i,
-    ],
+  const DISCIPLINE: Record<(typeof SHOPPING_TOOLS)[number], RegExp[]> = {
     // The read that licenses the mint, and the bound on how often it is taken.
     shopping_domain_search: [/matches: \[\]/, /licens/i, /\b(2|two)\b/],
     // What the keys are for, and which of them identify a purchasable option.
@@ -403,7 +389,7 @@ describe("each shopping tool carries its discipline clause", () => {
     shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i, /nothing else/i],
   };
 
-  it.each(ARTIFACT_TOOLS)("%s's description carries every load-bearing token of its clause", (tool) => {
+  it.each(SHOPPING_TOOLS)("%s's description carries every load-bearing token of its clause", (tool) => {
     const description = getTool(allRegisteredTools(), tool).description ?? "";
     const missing = DISCIPLINE[tool].filter((re) => !re.test(description)).map((re) => re.source);
     expect(missing).toEqual([]);
@@ -430,69 +416,16 @@ describe("each shopping tool carries its discipline clause", () => {
   });
 });
 
-/**
- * The four DOCUMENT tools' discipline clauses, verbatim from
- * `SIL-DOMAINS-AND-SPECS.md` §8 ("the plugin implements them verbatim"). Same shape
- * and same reason as the V0_TOOLS map above: pinned on the clause's LOAD-BEARING
- * tokens, never on the wording.
- *
- * Why a clause at all — a model picks tools at the moment of use, and the clause is
- * what survives context pressure. `shopping_doc_write`'s is the one that costs data if it
- * is lost: an agent that does not know `body` is the WHOLE reconciled markdown sends
- * a fragment, and the rest of the person is gone in one call.
- */
-const DOC_TOOLS = ["shopping_doc_find", "shopping_doc_read", "shopping_doc_write", "shopping_doc_remove"] as const;
-
-const DOC_DISCIPLINE: Record<(typeof DOC_TOOLS)[number], RegExp[]> = {
-  // coordinates only — bodies come from shopping_doc_read
-  shopping_doc_find: [/coordinates only/i, /shopping_doc_read/],
-  // one whole body; unreadable is never re-minted over
-  shopping_doc_read: [/whole (document )?body|one whole/i, /unreadable/i, /never (write|re-?mint)/i],
-  // the WHOLE reconciled markdown — never append, never patch a section; create
-  // fails if the ref exists, replace fails if it does not
-  shopping_doc_write: [
-    /whole reconciled/i,
-    /no append|never append/i,
-    /create fails/i,
-    /replace fails/i,
-  ],
-  // one document, never a cascade
-  shopping_doc_remove: [/one document/i, /never a cascade|no cascade/i],
-};
-
-describe("AC G8 — each document tool carries its DOMAINS §8 discipline clause", () => {
-  it("G8 — every load-bearing token of every clause is present, on all four", () => {
-    // ONE bar over four tools rather than four near-identical `it.each` rows: the
-    // failure mode is the same for each, and the offender list names which tool lost
-    // which clause. The BANNED-VOCABULARY half of G8 needs no bar of its own — the
-    // honesty / over-promise / over-trigger / retired-v0 scans above already run over
-    // `wholeSurface(allRegisteredTools())`, which now enumerates these four.
-    const api = allRegisteredTools();
-    const missing: string[] = [];
-    for (const name of DOC_TOOLS) {
-      const description = getTool(api, name).description ?? "";
-      // Guard-of-the-guard: an absent description satisfies nothing, but a BLANK one
-      // would make the `missing` list read as if the tool were simply unregistered.
-      expect(description.length).toBeGreaterThan(150);
-      for (const re of DOC_DISCIPLINE[name]) {
-        if (!re.test(description)) missing.push(`${name} → ${re.source}`);
-      }
-    }
-    expect(missing).toEqual([]);
-  });
-});
-
-describe("AC15 — `not_found` is stated as a claim sil can only make from a listing", () => {
-  it("AC15 — no registered description hands out the re-mint licence, and the two doc verbs still teach the rule", () => {
-    // The agent decides whether to re-mint from these descriptions alone, and
-    // `not_found` is the one status that instructs it to. Over a directory the store
-    // merely could not read, that instruction costs the buyer's own words in one
-    // call — the same loss the `unreadable` contract exists to prevent, arriving
-    // through prose instead of through code.
+describe("AC15 — `not_found` is never stated as a bare licence to write", () => {
+  it("AC15 — no registered description hands out the re-mint licence, and one still explains the status", () => {
+    // The agent decides what to do next from these descriptions alone, and
+    // `not_found` is the one status that can read as "so make a fresh one". Stated
+    // bare over a read sil merely could not complete, that instruction writes over
+    // whatever was there.
     //
     // Runs over the WHOLE registered surface (descriptions AND parameter
-    // descriptions), derived from the live registration, so a fifth verb that learns
-    // the habit is caught for free.
+    // descriptions), derived from the live registration, so a tool that learns the
+    // habit is caught for free.
     const api = allRegisteredTools();
     const offenders: string[] = [];
     for (const [name, text] of wholeSurface(api)) {
@@ -502,12 +435,13 @@ describe("AC15 — `not_found` is stated as a claim sil can only make from a lis
 
     // Guard-of-the-guard: the cheapest way to pass a forbid-scan is to stop naming
     // `not_found` anywhere, which leaves the agent reading a wire status no
-    // description explains. The two verbs that can answer it must still state the
-    // condition under which sil is entitled to.
-    const qualified = wholeSurface(api)
-      .filter(([, text]) => statesQualifiedNotFound(text))
+    // description explains. The registry read answers it, so it must keep saying so.
+    // NOT `statesQualifiedNotFound` — that qualifier is a DIRECTORY LISTING, which no
+    // surviving tool does; asserting it here would only be satisfiable by a lie.
+    const names = wholeSurface(api)
+      .filter(([, text]) => /\bnot_found\b/.test(text))
       .map(([name]) => name);
-    expect(qualified).toEqual(expect.arrayContaining(["shopping_doc_read", "shopping_doc_remove"]));
+    expect(names).toContain("shopping_domain_get");
   });
 });
 

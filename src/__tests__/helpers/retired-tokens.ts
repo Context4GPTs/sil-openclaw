@@ -37,17 +37,16 @@ export const retiredTokenOffenders = (body: string): string[] => {
  * so without this literal a new live identifier containing a needle switches it
  * off across all of `docs/` with no red. */
 export const DOCS_EXCLUDED_NEEDLES = [
-  "canonical",
-  "method.md",
-  "prd",
-  "domainslug",
-  // The agent contract's retirements whose STRING survives in live source for an
-  // unrelated reason: `appliedAction` on a finding, `capped` in the store's eviction
-  // prose, `unset` in the document store's, and the `sil_search_results_*` markers of
-  // the `sil.search_results` gateway method. The BUNDLE still forbids all four.
+  // Needles whose STRING survives in live source for an unrelated reason:
+  // `appliedAction` on a finding, `canonical` in the search-results store's prose,
+  // `capped` in its eviction prose, and the `sil_search_results_*` markers of the
+  // `sil.search_results` gateway method. The BUNDLE still forbids all four.
+  //
+  // `method.md`, `prd`, `domainslug` and `unset` left this list when the local
+  // document store was deleted — exactly the self-healing the derivation promises.
   "applied",
+  "canonical",
   "capped",
-  "unset",
   "sil_search",
 ];
 

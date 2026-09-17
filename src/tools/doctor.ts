@@ -6,7 +6,7 @@
  * a complete, successful run. Mutation is a bounded side-effect — the ONLY
  * writes are the two safe auto-fixes (tighten a too-open mode, create the
  * missing data dir), both under `getDataDir()`. Destructive fixes (anything that
- * mutates the BYTES of an existing artefact, including clearing a corrupt
+ * mutates the BYTES of an existing file, including clearing a corrupt
  * `tokens.json`) are surfaced as `needs_confirmation` and never run: delete-first
  * does not apply to user data.
  *
@@ -49,13 +49,12 @@ import {
   readConfig,
   readTokens,
 } from "../lib/credentials.js";
-import { sortFindings, type Finding, type Severity } from "../lib/findings.js";
+import { sortFindings, type Finding } from "../lib/findings.js";
 import {
   detectWiringDrift,
   readHostVersion,
   readSilWiringFacts,
 } from "../lib/host-wiring.js";
-import { findDocuments } from "../lib/doc-store.js";
 import { jsonResult } from "../lib/tool-result.js";
 import {
   buildGatewayCompatFinding,
@@ -66,12 +65,12 @@ import {
 } from "../lib/version-advisory.js";
 
 /** Owner-only file mode. `DIR_MODE` (0o700) is owned by `credentials.ts` and
- * imported; the file mode is private per-module there and in `doc-store.ts`,
- * so this mirrors that pattern rather than exporting a fourth copy. */
+ * imported; the file mode is private per-module there, so this mirrors that
+ * pattern rather than exporting a third copy. */
 const FILE_MODE = 0o600;
 
 /** An interrupted atomic write leaves `<path>.<hex>.tmp` behind
- * (`doc-store.ts`'s tmp → rename). The hex length is not pinned: it is a
+ * (`credentials.ts`'s tmp → rename). The hex length is not pinned: it is a
  * detail of one call site's `randomBytes(n)`, and an orphan is an orphan.
  * Bytes on disk ⇒ surfaced, never deleted. */
 const STALE_TMP_RE = /\.[0-9a-f]+\.tmp$/;
@@ -108,7 +107,7 @@ export function registerDoctorTools(
     label: "Diagnose sil",
     description:
       "Diagnose this sil install: check the local data directory, file"
-      + " permissions, stored identity/token health, and behaviour artefacts,"
+      + " permissions and stored identity/token health,"
       + " and report whether a newer sil plugin is published. Returns a"
       + " machine-readable findings array. Safe permission fixes apply"
       + " automatically; anything that could lose data is only reported, never"
@@ -121,10 +120,7 @@ export function registerDoctorTools(
 
       const dir = checkDataDir(dataDir);
       findings.push(...dir.findings);
-      if (dir.usable) {
-        findings.push(...walkDataDir(dataDir));
-        findings.push(...checkStore());
-      }
+      if (dir.usable) findings.push(...walkDataDir(dataDir));
       findings.push(...checkIdentity());
 
       // Host wiring + host compat: both read the tree already in memory, so they
@@ -174,7 +170,7 @@ export function buildDoctorReport(input: {
 // ===========================================================================
 
 /** The data dir gates every other filesystem check: an unwritable or
- * non-directory home means no artefact and no token can EVER persist. */
+ * non-directory home means no token can EVER persist. */
 function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean } {
   const id = "fs.data_dir_writable";
 
@@ -220,7 +216,7 @@ function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean }
         status: "advisory",
         detected:
           `The sil data directory path ${dataDir} exists but is not a`
-          + " directory, so no token or artefact can be stored.",
+          + " directory, so no token can be stored.",
         suggestedAction:
           `Move or remove the file at ${dataDir}, or point $SIL_DATA_DIR at a`
           + " writable directory.",
@@ -230,7 +226,7 @@ function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean }
     };
   }
 
-  // Prove writability the way the store actually writes — an atomic tmp file —
+  // Prove writability the way sil actually writes — an atomic tmp file —
   // rather than trusting the mode bits (a read-only mount passes a mode check).
   const probe = join(dataDir, `.doctor.${randomBytes(6).toString("hex")}.tmp`);
   try {
@@ -244,7 +240,7 @@ function checkDataDir(dataDir: string): { findings: Finding[]; usable: boolean }
         status: "advisory",
         detected:
           `The sil data directory ${dataDir} is not writable, so every token`
-          + ` and artefact write would fail: ${causeOf(err)}`,
+          + ` write would fail: ${causeOf(err)}`,
         suggestedAction:
           `Make ${dataDir} writable by its owner (mode 0700), or point`
           + " $SIL_DATA_DIR at a writable directory.",
@@ -307,8 +303,8 @@ function checkDataDirMode(dataDir: string): Finding {
     expected: DIR_MODE,
     detected:
       `The sil data directory ${dataDir} is mode ${oct(mode)} — readable beyond`
-      + " its owner. It holds this install's stored credentials and behaviour"
-      + ` artefacts, so it must be owner-only ${oct(DIR_MODE)}.`,
+      + " its owner. It holds this install's stored credentials, so it must be"
+      + ` owner-only ${oct(DIR_MODE)}.`,
   }) ?? {
     id,
     severity: "info",
@@ -322,8 +318,8 @@ function checkDataDirMode(dataDir: string): Finding {
 /**
  * Walk `$SIL_DATA_DIR` for too-open modes and orphaned tmp files.
  *
- * Enumerated ⇒ emits ONLY on a problem: a healthy store with 200 artefacts
- * yields zero findings, not 200 `ok` ones.
+ * Enumerated ⇒ emits ONLY on a problem: a healthy dir with 200 files yields
+ * zero findings, not 200 `ok` ones.
  *
  * `lstat`, never `stat`: a symlink under the data dir is REPORTED, never
  * chmod'd-through — chmod follows the link and would mutate a file outside
@@ -360,10 +356,10 @@ function walkDataDir(dataDir: string): Finding[] {
       try {
         stats = lstatSync(path);
       } catch {
-        // This repo MANUFACTURES this race: the store's own atomic writes create
-        // `<path>.<hex>.tmp` and rename it away, and the shopper can be writing
-        // while the agent self-diagnoses. An entry that vanished between readdir
-        // and lstat is not a finding — and must never throw out of execute().
+        // This repo MANUFACTURES this race: sil's own atomic writes create
+        // `<path>.<hex>.tmp` and rename it away, so a token write can land while
+        // the agent self-diagnoses. An entry that vanished between readdir and
+        // lstat is not a finding — and must never throw out of execute().
         continue;
       }
 
@@ -405,7 +401,7 @@ function walkDataDir(dataDir: string): Finding[] {
           // Bytes on disk ⇒ destructive to remove ⇒ the doctor only reports it.
           suggestedAction:
             "Safe to delete once you have confirmed nothing else is writing"
-            + " it — sil does not delete artefact bytes itself.",
+            + " it — sil does not delete file bytes itself.",
           appliedAction: null,
         });
       }
@@ -464,7 +460,7 @@ function tightenMode(input: {
   }
 }
 
-/** Enumerated ⇒ silence when healthy: 200 clean artefacts emit zero findings. */
+/** Enumerated ⇒ silence when healthy: 200 clean files emit zero findings. */
 function checkMode(
   dataDir: string,
   path: string,
@@ -515,7 +511,7 @@ function checkIdentity(): Finding[] {
     appliedAction: null,
   });
 
-  // tokens.json is a SINGLETON artefact, so its mode carries a STABLE id every
+  // tokens.json is a SINGLETON file, so its mode carries a STABLE id every
   // run — that is what makes the fix's idempotence observable to a consumer:
   // `fixed → re-run → ok` needs the same id to still be there. The enumerated
   // `fs.mode:` walk could not provide that: it emits only on a problem, so it
@@ -668,33 +664,8 @@ function configFinding(): Finding {
 }
 
 // ===========================================================================
-// The shopper's document store
-// ===========================================================================
 
-/** Consume the store's OWN fail-closed `unreadable[]` surfacing — never re-parse
- * the documents, never aggregate entries away, and never overwrite one. ONE reader,
- * so one corrupt file is one finding. A read-only pass: doctor reports on the store
- * it finds, so it never triggers the store's migration. */
-function checkStore(): Finding[] {
-  const found = findDocuments();
-  return (found.ok ? found.unreadable : []).map(({ id, error }) => ({
-    id: `store.unreadable:${id}`,
-    severity: "warn" as Severity,
-    status: "advisory" as const,
-    // Name the document AND the corruption — this is what a human reads to go
-    // repair the file. The store's own error text describes only the corruption.
-    detected: `${id}: ${error}`,
-    suggestedAction:
-      "Inspect and repair the document by hand — sil never overwrites a corrupt"
-      + " document, because it may still be recoverable.",
-    appliedAction: null,
-  }));
-}
-
-// ===========================================================================
-
-/** The OS cause, never a token or PII — mirrors the store's
- * `persistence_failed.error` discipline. */
+/** The OS cause, never a token or PII. */
 function causeOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }

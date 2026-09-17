@@ -128,20 +128,14 @@ describe("plugin entry — registration contract", () => {
     // register() runs the real tool groups (no mock), so it populates the
     // api with exactly the real tools and NO example stub. This pins the
     // wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
-    // 13 → 12: the eight-beat card REPLACES the five profile verbs with the four
-    // `shopping_doc_*` document tools (a GROUP swap — `registerProfileTools` is gone from
-    // src/index.ts and `registerDocTools` is wired in its place), so this literal
-    // moves in BOTH directions at once. Exact on purpose: loosening it to `toContain`
-    // stops it catching a silent removal, which is how a shipped tool disappears
-    // under a green suite.
+    // 15 → 10: the local document store and its Brief compile are deleted (a GROUP
+    // removal — `registerDocTools` / `registerBriefCompileTool` are gone from
+    // src/index.ts), so nothing of the buyer's is kept on the agent's disk. Exact on
+    // purpose: loosening it to `toContain` stops it catching a silent removal, which
+    // is how a shipped tool disappears under a green suite.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
-      "shopping_brief_compile",
-      "shopping_doc_find",
-      "shopping_doc_read",
-      "shopping_doc_remove",
-      "shopping_doc_write",
       "shopping_domain_create",
       "shopping_domain_get",
       "shopping_domain_search",

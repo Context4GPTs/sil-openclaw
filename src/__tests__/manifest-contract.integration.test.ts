@@ -29,10 +29,9 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals the FIFTEEN tools: the seven `shopping_*` catalog tools
- *     1:1 with the sil-api routes, the four `shopping_doc_*` document tools,
- *     `shopping_brief_compile`, and the three account tools that keep the `sil_`
- *     name. A GROUP swap is not picked up for free — `codeRegisteredNames()`
+ *     both sides equals the TEN tools: the seven `shopping_*` catalog tools
+ *     1:1 with the sil-api routes, and the three account tools that keep the
+ *     `sil_` name. A GROUP swap is not picked up for free — `codeRegisteredNames()`
  *     below has to be rewired or it silently narrows instead of going red.
  */
 
@@ -41,9 +40,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIdentityTools } from "../tools/identity.js";
-import { registerBriefCompileTool } from "../tools/brief-compile.js";
 import { registerCatalogTools } from "../tools/catalog.js";
-import { registerDocTools } from "../tools/doc.js";
 import { registerDoctorTools } from "../tools/doctor.js";
 import {
   createMockPluginApi,
@@ -86,8 +83,6 @@ function codeRegisteredNames(): Set<string> {
   const api = createMockPluginApi();
   registerIdentityTools(api);
   registerCatalogTools(api);
-  registerDocTools(api);
-  registerBriefCompileTool(api);
   registerDoctorTools(api);
   return registeredToolNames(api);
 }
@@ -127,17 +122,12 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(sorted(codeRegisteredNames())).toEqual(sorted(manifestToolNames()));
   });
 
-  it("both sides equal exactly the FIFTEEN tools of the agent contract", () => {
+  it("both sides equal exactly the TEN tools of the agent contract", () => {
     // The spine, pinned by literal so a re-introduction on EITHER side flips RED rather
     // than merely staying symmetric. A GROUP swap is not picked up for free: the code
     // side reads `codeRegisteredNames()`, which must be rewired when a group moves, and
     // had that been missed this guard would have silently narrowed.
     const expected = [
-      "shopping_brief_compile",
-      "shopping_doc_find",
-      "shopping_doc_read",
-      "shopping_doc_remove",
-      "shopping_doc_write",
       "shopping_domain_create",
       "shopping_domain_get",
       "shopping_domain_search",
@@ -182,6 +172,11 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
       "sil_doc_read",
       "sil_doc_write",
       "sil_doc_remove",
+      "shopping_doc_find", // ↓ the local document store, deleted: nothing of the
+      "shopping_doc_read", //   buyer's is kept on the agent's disk any more
+      "shopping_doc_write",
+      "shopping_doc_remove",
+      "shopping_brief_compile", // compiled the Brief off that same store
     ];
     const code = codeRegisteredNames();
     const manifest = manifestToolNames();
