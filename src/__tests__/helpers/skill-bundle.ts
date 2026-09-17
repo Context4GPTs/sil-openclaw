@@ -1,7 +1,7 @@
 /**
  * Reading + SCOPING primitives for the `sil-shopping` bundle, shared by the two
  * files that guard its prose — `skill-bundle-contract.integration.test.ts` (the
- * load-bearing contract) and `eight-beat-loop.integration.test.ts` (the beats).
+ * load-bearing contract) and `three-step-loop.integration.test.ts` (the loop).
  * Same reason as `honesty-vocabulary.ts` and `per-niche-expert.ts`: one module,
  * so the two surfaces carrying the same rule cannot drift apart.
  *
@@ -68,24 +68,18 @@ export const unsatisfied = (candidates: string[], rule: (s: string) => boolean):
   candidates.some(rule) ? [] : candidates;
 
 // ===========================================================================
-// Beat sections — the scope every eight-beat bar is asserted inside.
+// Loop sections — the scope every loop bar is asserted inside.
 // ===========================================================================
 
-/** The eight beats of `SIL-DOMAINS-AND-SPECS.md` §5, in order. The NAME is part of
- * the contract: an agent routes on it, and a renamed beat is a beat it cannot find. */
-export const BEAT_NAMES = [
-  "BRIEF",
-  "DOMAIN",
-  "FILL",
-  "ASK",
-  "SEARCH",
-  "REFLECT",
-  "FEEDBACK",
-  "VERDICT",
-] as const;
+/** The loop's sections, in order. The NAME is part of the contract: the agent routes
+ * on it, and a renamed section is one it cannot find. Matched CASE-SENSITIVELY —
+ * `find`, `price` and `open` are ordinary English words, and a case-insensitive scan
+ * would hand a section to whichever paragraph happened to use the verb first. */
+export const LOOP_SECTIONS = ["OPEN", "GATHER", "FIND", "PRICE", "DECIDE"] as const;
+export type LoopSection = (typeof LOOP_SECTIONS)[number];
 
-export interface BeatSection {
-  /** Bundle-relative path of the file whose heading opens the beat. */
+export interface LoopSectionBody {
+  /** Bundle-relative path of the file whose heading opens the section. */
   file: string;
   heading: string;
   /** The heading line plus everything under it, to the next same-or-higher heading. */
@@ -93,26 +87,22 @@ export interface BeatSection {
 }
 
 /**
- * Map beat number → the section that owns it, derived from HEADINGS on disk.
+ * Map section → the prose that owns it, derived from HEADINGS on disk.
  *
- * THE ONE FORMAT CONTRACT this helper imposes: each beat is opened by a markdown
- * heading naming `Beat <n>`. That is already the bundle's own convention, and it is
- * what makes "the decision lives at the beat that owns it" a checkable claim rather
- * than a corpus-wide grep.
+ * THE ONE FORMAT CONTRACT this helper imposes: each section is opened by a markdown
+ * heading naming it in upper case. That makes "the decision lives in the step that
+ * owns it" a checkable claim rather than a corpus-wide grep.
  *
- * THE MOST SPECIFIC heading wins. `# Beats 3 (FILL), 4 (ASK), 7 and 8` is a FILE
- * index whose section runs to EOF, so taking it would hand beat 3 the whole file —
- * and the C7 bar, which forbids an ask inside FILL, would read beat 4's own prose as
- * its offender. So each beat keeps only the sections naming the FEWEST beats, and
- * several equally-specific sections (a beat discussed in two references) concatenate.
+ * THE MOST SPECIFIC heading wins, and equally-specific ones concatenate: GATHER is
+ * deliberately written in two files (the category, then the brief), while a heading
+ * naming several sections is an index whose body would otherwise swallow them all.
  *
- * `examples/` is EXCLUDED. A worked run DEMONSTRATING a beat is not the reference
+ * `examples/` is EXCLUDED. A worked run DEMONSTRATING a step is not the reference
  * that STATES its discipline: the agent loads the reference at the moment of use and
- * may never open the example. Without this the walkthrough — one file naming all
- * eight beats — would satisfy every beat-scoped bar on its own.
+ * may never open the example.
  */
-export function beatSections(): Map<number, BeatSection> {
-  const candidates = new Map<number, Array<BeatSection & { breadth: number }>>();
+export function loopSections(): Map<LoopSection, LoopSectionBody> {
+  const candidates = new Map<LoopSection, Array<LoopSectionBody & { breadth: number }>>();
   for (const rel of bundleFiles().filter((p) => !p.startsWith("examples/"))) {
     const lines = read(rel).split(/\r?\n/);
     for (let i = 0; i < lines.length; i += 1) {
@@ -120,14 +110,8 @@ export function beatSections(): Map<number, BeatSection> {
       if (!h) continue;
       const level = (h[1] as string).length;
       const heading = h[2] as string;
-      // A PLURAL heading is a beat LIST — `# Beats 3 (FILL), 4 (ASK), 7 and 8` repeats
-      // no "Beat" before the later numbers, so anchoring on the word would read it as
-      // beat 3 alone, at breadth 1, and it would tie with (and swallow) beat 3's own
-      // section. Every bare 1–8 in a plural heading is one of its beats.
-      const numbers = /\bbeats\b/i.test(heading)
-        ? [...new Set([...heading.matchAll(/\b([1-8])\b/g)].map((m) => Number(m[1])))]
-        : [...new Set([...heading.matchAll(/\bbeat\s+([1-8])\b/gi)].map((m) => Number(m[1])))];
-      if (numbers.length === 0) continue;
+      const named = LOOP_SECTIONS.filter((name) => new RegExp(`\\b${name}\\b`).test(heading));
+      if (named.length === 0) continue;
       let end = i + 1;
       while (end < lines.length) {
         const next = /^(#{1,6})\s+/.exec(lines[end] as string);
@@ -135,47 +119,40 @@ export function beatSections(): Map<number, BeatSection> {
         end += 1;
       }
       const body = lines.slice(i, end).join("\n");
-      for (const n of numbers) {
-        const list = candidates.get(n) ?? [];
-        list.push({ file: rel, heading, body, breadth: numbers.length });
-        candidates.set(n, list);
+      for (const name of named) {
+        const list = candidates.get(name) ?? [];
+        list.push({ file: rel, heading, body, breadth: named.length });
+        candidates.set(name, list);
       }
     }
   }
 
-  const found = new Map<number, BeatSection>();
-  for (const [n, list] of candidates) {
+  const found = new Map<LoopSection, LoopSectionBody>();
+  for (const [name, list] of candidates) {
     const breadth = Math.min(...list.map((c) => c.breadth));
     const best = list.filter((c) => c.breadth === breadth);
-    found.set(n, {
-      file: (best[0] as BeatSection).file,
-      heading: (best[0] as BeatSection).heading,
+    found.set(name, {
+      file: (best[0] as LoopSectionBody).file,
+      heading: (best[0] as LoopSectionBody).heading,
       body: best.map((c) => c.body).join("\n"),
     });
   }
   return found;
 }
 
-/** The beat's own section, or a LOUD throw. Never "" — an empty scope makes every
+/** The section's own prose, or a LOUD throw. Never "" — an empty scope makes every
  * `unsatisfied()` bar below it pass vacuously, which is worse than a red. */
-export function beatBody(n: number): string {
-  const section = beatSections().get(n);
+export function sectionBody(name: LoopSection): string {
+  const section = loopSections().get(name);
   if (section === undefined) {
     throw new Error(
-      `no bundle heading opens beat ${n} (expected a markdown heading naming "Beat ${n}") —`
-        + ` found: ${[...beatSections().keys()].sort((a, b) => a - b).join(", ") || "none"}`,
+      `no bundle heading opens the ${name} section (expected a markdown heading naming`
+        + ` "${name}") — found: ${[...loopSections().keys()].join(", ") || "none"}`,
     );
   }
   return section.body;
 }
 
-/** Bundle-relative path of the file that owns a beat — so a bar can name WHERE a
- * decision must live without hardcoding a filename the next rename invalidates. */
-export function beatFile(n: number): string {
-  const section = beatSections().get(n);
-  if (section === undefined) throw new Error(`no bundle heading opens beat ${n}`);
-  return section.file;
-}
-
-/** The beat's section, cut into statements. */
-export const beatStatements = (n: number): string[] => splitStatements(beatBody(n));
+/** The section, cut into statements. */
+export const sectionStatements = (name: LoopSection): string[] =>
+  splitStatements(sectionBody(name));
