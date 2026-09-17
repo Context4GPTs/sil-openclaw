@@ -25,6 +25,11 @@ export const RETIRED_TOKENS = [
   "sil_doc_", "maturity", "unset", "predicates", "applied", "option_set",
   "charged_currency", "handoff", "data_type", "level:", "axis:", "capped",
   "validated_at", "value_set",
+  // The local document store and the loop it drove. The brief and the profile are
+  // sil's now, one spec vocabulary with no hardness on it — prose that still writes a
+  // document, compiles a Brief or sorts a want into `## Hard constraints` is prose
+  // driving tools the wire does not have.
+  "shopping_doc_", "shopping_brief_compile", "eight-beat", "hard constraint",
 ];
 
 /** The bundle rule: a blanket forbid, no allowance, every needle. */
