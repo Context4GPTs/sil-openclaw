@@ -206,11 +206,17 @@ describe("retiredV0Offenders — the retired request surface's dead strings", ()
   });
 
   it("spares the innocent English words the pre-v0 PARAMETERS were named after", () => {
-    // `category` / `condition` / `cursor` are guarded STRUCTURALLY: each tool's
-    // parameters ARE its committed artifact, so a resurrected one cannot register at
-    // all. A bare-word forbid would fail the mint description, which must say "research
-    // how the category is bought".
-    expect(retiredV0Offenders("research how the category is bought in that condition")).toEqual([]);
+    // `category` / `cursor` are guarded STRUCTURALLY: each tool's parameters ARE its
+    // committed artifact, so a resurrected one cannot register at all. A bare-word
+    // forbid would fail the mint description, which must say "research how the category
+    // is bought".
+    expect(retiredV0Offenders("research how the category is bought")).toEqual([]);
+  });
+
+  it("spares `condition` backticked — the contract's own product spec, not a dead field", () => {
+    // It was a retired pre-v0 filter AND is a live key at the `product` root. The brief
+    // writes `condition eq new`; a needle here would red the sentence that teaches it.
+    expect(retiredV0Offenders("*\"not used\"* is the product spec `condition eq new`")).toEqual([]);
   });
 
   it("bites the BACKTICKED parameter form — how prose names a parameter", () => {

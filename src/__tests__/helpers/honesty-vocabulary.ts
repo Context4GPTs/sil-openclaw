@@ -275,12 +275,16 @@ export function notFoundLicenceOffenders(body: string): string[] {
  * `ship_to` is deliberately NOT here any more: the search and the offers take it as a
  * request field, so forbidding the word would fight the wire it guards.
  *
- * The retired PARAMETER names that ARE innocent words (`category`, `condition`,
- * `cursor`) are deliberately absent: they are guarded STRUCTURALLY instead, off
- * each tool's own `parameters` schema (exact, and free of the false RED a bare
- * "category" would cause in prose that legitimately says "research how the
- * category is bought"). In prose they are caught in their BACKTICKED form
- * below — backticks are how prose names a parameter.
+ * The retired PARAMETER names that ARE innocent words (`category`, `cursor`) are
+ * deliberately absent: they are guarded STRUCTURALLY instead, off each tool's own
+ * `parameters` schema (exact, and free of the false RED a bare "category" would
+ * cause in prose that legitimately says "research how the category is bought"). In
+ * prose they are caught in their BACKTICKED form below — backticks are how prose
+ * names a parameter.
+ *
+ * `` `condition` `` left this list when the contract made it a live product spec at
+ * the `product` root: the brief legitimately writes `condition eq new`, so forbidding
+ * the backticked key would fight the registry it guards.
  *
  * Lower-case only: bodies are lowered before matching, so an upper-case needle
  * would sit here looking protective while matching nothing. Guarded by a
@@ -300,7 +304,6 @@ export const RETIRED_V0_TOKENS = [
   "mint_domain",
   "`cursor`",
   "`category`",
-  "`condition`",
 ];
 
 /** Retired tokens present in `body`, in the order listed. Empty ⇒ clean. */
