@@ -1,6 +1,6 @@
 /**
  * Typed HTTP wrappers for every endpoint the plugin calls — the two sil-web auth
- * endpoints, the sil-api identity read and the seven shopping routes — each returning
+ * endpoints, the sil-api identity read and the eleven shopping routes — each returning
  * a DISCRIMINATED UNION over the documented outcomes so the status taxonomy lives in
  * exactly one place and the caller switches on `kind` rather than re-deriving meaning
  * from `res.status` at every site.
@@ -36,7 +36,7 @@
  * request body:
  *
  *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
- *     200 { name, country?, addresses }                   → ok (carries identity)
+ *     200 { name, country?, addresses, measurements?, preferences? } → ok
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     5xx / network / abort                               → retryable
