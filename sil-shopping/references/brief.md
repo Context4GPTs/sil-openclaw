@@ -15,9 +15,13 @@ those two alike — and `shopping_brief_read` with no `id` lists the briefs that
 
 **A spec is `key · op · value · currency? · reason?`** — the key and the operator from the
 domain read, the value typed as that key types it, `currency` on money, and `reason`, the
-buyer's **own words** behind it. That is the whole vocabulary: no spec outranks another
-and none is dropped for a single call. You change what is asked by changing the brief, and
-a change the buyer decided is logged as a `decision`.
+buyer's **own words** behind it, quoted verbatim: *"I am advanced skier"*, *"I don't want
+used"*, or the measurement the guide converted, *"length 27.2 cm"*. Never a paraphrase and
+never first-person words they did not say, because that line is what the next session reads
+to know what they actually asked for. A want they never stated gets no spec at all: ask, or
+say the assumption out loud — *"I'm assuming new, not used"* — and write it on their answer.
+That is the whole vocabulary: no spec outranks another and none is dropped for a single
+call.
 
 **Write before you search.** Every want the buyer states is a spec in the brief **before**
 the next search, and every lasting fact about them is on the profile before it too. A
@@ -30,6 +34,12 @@ repeat.
 `measurements[]` — a number with its unit, or a size as it is printed — and
 `preferences[]`, a lasting taste in their own words. `sil_whoami` reads them back, which
 is why they are never asked twice.
+
+**Only what the buyer stated unambiguously about themselves reaches it.** *"wide forefoot
+and bit short"* is the foot or the person and you cannot tell which: ask, or leave it in
+the narrative in their own words until they settle it. A lasting fact written wrong follows
+them into every category they ever shop. Every `name` is lower snake_case — `foot_length`,
+never *"foot length"*, which the write refuses.
 
 **A measurement is the buyer's; the spec it becomes is the brief's.** The category's guide
 is what converts one into the other: a 27.2 cm foot becomes `mondo_size in [27, 27.5]`
@@ -48,8 +58,9 @@ the person — it is a spec.
   `country in ["GR"]`, and it belongs to the whole brief rather than to one category.
 - **`ship_to` is the label of an address on file** (as `sil_whoami` lists them): it
   localizes the search to that address and excludes no seller anywhere, so it is never a
-  market filter and never where a *buy-in-Greece* want belongs — omit it and sil uses the
-  buyer's default address.
+  market filter and never where a *buy-in-Greece* want belongs — leave it out and sil uses
+  the buyer's default address, and never send a word like *"default"*, which is no label
+  and is refused.
 
 ## The narrative, and what no spec can carry
 
@@ -63,7 +74,9 @@ something a key holds.
 
 `shopping_brief_edit` takes the replacing specs (or `remove`, for keys whose specs go) and
 a one-sentence `decision` saying **what changed and why**, logged with the time:
-*"Ceiling raised 350 → 400 EUR: nothing in 27.5 at 100 mm or wider under 350."* A
+*"Ceiling raised 350 → 400 EUR: nothing in 27.5 at 100 mm or wider under 350."* It is
+written only where the buyer **changed their mind**: an answer to a question you asked is
+not a change, and a list of what you have just written down is not a decision. A
 rejection is a decision too — *"not the Salomon"* is `brand nin ["Salomon"]` and the
 sentence that says why — and where no key carries it, it is the narrative and the
 `decision` alone.

@@ -30,8 +30,14 @@ shopping_brief_create
 ```
 
 `skill_level` is a key this domain does not hold. It is written anyway: the brief keeps it
-and the search records it. *Wide* and *bit short* are not numbers yet, so the agent asks
-for the two the guide says decide the fit — foot length and forefoot width.
+and the search records it. Its `reason` is the buyer's five words as they typed them —
+not *"I am an advanced skier and want supportive performance flex"*, which is the agent
+talking.
+
+*Wide* and *bit short* are not numbers yet, and *bit short* could be the foot or the
+buyer — so neither reaches the profile. The agent asks: *"When you say a bit short, do you
+mean the foot? And the two numbers the fit turns on — length, and forefoot width at the
+widest point?"*
 
 ## *"length 27.2 cm, forefoot 101 mm, for sneakers I wear a US 9 size"*
 
@@ -117,7 +123,32 @@ shopping_brief_edit
 ```
 
 The spec on `price` is replaced, the decision is logged with its time, and step 1 runs
-again with the brief as it now stands.
+again with the brief as it now stands. The `decision` says what the buyer changed and why.
+The measurements they gave earlier were an answer to a question, not a change of mind, so
+no `decision` was logged for them.
+
+## Step 1 again, and the price before the recommendation
+
+The same five specs with the €400 ceiling. `v1` and `v6` come back as before, and with them
+a product sil has not read — `fit: {}`, `variants: []`, and a `webpage_info` block whose
+text prints *"Last: 102 mm, Flex: 110, sizes 24–31"*. That one is not the pick: its numbers
+are the seller's page's own words and sil has not verified them, and with no listed variant
+there is nothing to price, because `shopping_offers` takes variant ids.
+
+So the pick is priced first, and the recommendation comes after it:
+
+```
+shopping_offers
+{ "brief": "b1", "ids": ["v6"],
+  "seller_specs": [ { "key": "country", "op": "in", "value": ["GR"] } ] }
+```
+
+*"The Hawx Prime 100 in 27.5, $237.67 at geartrade as sil read it at 10:02Z — a dollar
+price sil cannot test against your €400 ceiling. `seller_fit` carries no `country`, so sil
+has not read where that seller is, and `ships` came back `unknown`: I could not confirm it
+reaches Greece, so here is the listing. There is a third boot whose page says 102 mm last
+and flex 110 — that is the seller's page talking, sil has not verified it, and sil saw no
+listed 27.5 on it, so the 24–31 the page prints is not stock."*
 
 ## The next morning — *"Boots again."*
 

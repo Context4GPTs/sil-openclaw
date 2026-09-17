@@ -11,11 +11,11 @@ The brief is written first ([`brief.md`](brief.md)) and the category settled
 ## Step 1 — FIND: the products that fit the brief's product specs
 
 `shopping_search` takes `brief` (the id, so sil links the search to the job), `domain`,
-`query`, `n`, and `specs` — **all** of the brief's product specs under that category, the
-same ones it holds, each typed as the domain read types it and with the operator that read
-listed. You write them yourself from the brief, like flags on a command line; nothing
-compiles them for you, and a spec left out of a call is a want the buyer has to state
-twice.
+`query`, `n`, and `specs` — **all** of the brief's product specs under that category,
+unchanged: the same keys, the same operators, the same values it holds, never a looser
+bound and never a spec the brief does not hold. You write them yourself from the brief,
+like flags on a command line; nothing compiles them for you, and a spec left out of a call
+is a want the buyer has to state twice.
 
 **`query` is the shopping words**: the category as a shop lists it, then the numbers that
 pick the product — `ski boots 27.5 flex 110` — never a sentence and never the buyer's ask
@@ -38,8 +38,9 @@ best-first as returned, and never re-rank.
 ## Step 2 — PRICE: who sells them, and which sellers the brief will buy from
 
 `shopping_offers` takes `brief`, 1–10 variant `ids`, and `seller_specs` — **all** of the
-brief's seller specs, written the same way you wrote the product ones. `ship_to` is an
-address label when the buyer named one, and omitted otherwise.
+brief's seller specs, unchanged, and nothing else: a brief holding none sends none, and a
+market the buyer never named is never one you read off the sellers you have just seen.
+`ship_to` is an address label when the buyer named one, left out otherwise.
 
 Each offer answers `seller_fit`, and your turn says **which sellers meet the brief and
 which sil has not read**:
@@ -68,10 +69,13 @@ spec (or `remove` for a want they dropped) **and** a one-sentence `decision` say
 changed and why — then step 1 runs again with the brief as it now stands. A spec relaxed
 on the wire and not in the brief is a widening that dies with the turn.
 
-**When something does fit**, lead with one recommendation and the *why* — a met spec, a
+**When something does fit**, price it first: `shopping_offers` on the pick itself, with the
+brief's seller specs, before you recommend anything — a recommendation with no dated price
+behind it is a guess. Then lead with one recommendation and the *why* — a met spec, a
 sentence from the guide, a fact sil already held — then one or two alternatives with a line
-each. A price is quoted with the moment sil read it, and a bound sil could not test is said
-out loud.
+each. The price is quoted with the moment sil read it, whether that seller reaches the
+buyer is said, a bound sil could not test is said out loud, and a number that came off a
+page sil has not read is quoted as *"the seller's page says …"*.
 
 A non-`ok` status is not an empty result: follow that tool's own `recovery` and never relax
 the brief to route around it.
