@@ -119,7 +119,7 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 256,
-                        "description": "Writes the buyer's own words behind the row, and reads them back before proposing to relax it."
+                        "description": "Quotes the buyer's own words behind the spec, verbatim — never a paraphrase, never a sentence they did not say; a spec the guide derives from a measurement quotes the measurement. Reads them back before proposing to relax it."
                       }
                     },
                     "additionalProperties": false

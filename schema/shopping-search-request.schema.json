@@ -99,7 +99,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 64,
-      "description": "Localizes the search to one of the buyer's addresses on file, named by its label; the default address when absent. It excludes no seller anywhere else — where the seller is, is the seller spec `country`, on the offers."
+      "description": "Leave this out: sil then localizes the search to the buyer's default address. Send it only when the buyer named another address, as the exact `label` `sil_whoami` lists — never a word like \"default\", never a country. It excludes no seller anywhere else — where the seller is, is the seller spec `country`, on the offers."
     }
   },
   "additionalProperties": false

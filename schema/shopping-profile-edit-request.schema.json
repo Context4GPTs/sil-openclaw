@@ -18,7 +18,7 @@
             "pattern": "^[a-z0-9_]+$",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Names the measurement; writing the same name again replaces it."
+            "description": "Names the measurement in lower snake_case (`foot_length`, never \"foot length\"); writing the same name again replaces it."
           },
           "value": {
             "anyOf": [
@@ -59,7 +59,7 @@
             "pattern": "^[a-z0-9_]+$",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Names the preference; writing the same name again replaces it."
+            "description": "Names the preference in lower snake_case (`boot_closure`, never \"boot closure\"); writing the same name again replaces it."
           },
           "value": {
             "type": "string",

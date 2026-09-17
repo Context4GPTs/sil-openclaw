@@ -30,7 +30,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 64,
-      "description": "Reads every seller's `ships` and shipping terms against one of the buyer's addresses on file, named by its label; the default address when absent."
+      "description": "Leave this out: every seller's `ships` and shipping terms are then read against the buyer's default address. Send it only when the buyer named another address, as the exact `label` `sil_whoami` lists — never a word like \"default\"."
     },
     "seller_specs": {
       "type": "array",
