@@ -266,3 +266,116 @@ describe("the loop the bundle drives", () => {
     expect(unsatisfied(currency, (s) => /could not test/i.test(s))).toEqual([]);
   });
 });
+
+/**
+ * The always-on contract, scoped to SKILL.md ALONE. The founder's live session of
+ * 2026-09-17 read `SKILL.md` and opened no reference file — so a rule that holds on every
+ * shopping turn and lives only in `references/` is a rule the agent never sees. Each bar
+ * below is one measured defect from that session, pinned inside the file the model reads.
+ */
+describe("the rules SKILL.md itself must carry, because a live session read nothing else", () => {
+  it("9 — a spec traces to the buyer: `reason` QUOTES their words, and a want they never stated gets no spec", () => {
+    // Measured: every `reason` was a first-person paraphrase ("My forefoot is wide;
+    // prioritize a wide/high-volume last."), and `condition eq new` was written with the
+    // reason "I want to buy a new ski boot." — a want the buyer never uttered.
+    const units = splitStatements(skillSrc());
+
+    const reason = units.filter((s) => /`reason`/.test(s));
+    expect(reason.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(reason, (s) => /verbatim/i.test(s) && /never a paraphrase/i.test(s)),
+    ).toEqual([]);
+
+    // …and the other half: nothing said, no spec. An assumption is said OUT LOUD and
+    // written only on the answer, which is the only route a spec has to a silent want.
+    const assuming = units.filter((s) => /assum/i.test(s));
+    expect(assuming.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(assuming, (s) => /\bask/i.test(s) && /their (?:answer|word)/i.test(s)),
+    ).toEqual([]);
+  });
+
+  it("10 — an ambiguous phrase is asked about, never written to the profile as a lasting fact", () => {
+    // Measured: "wide forefoot and bit short" became the profile entry `stature: "a bit
+    // short"` and the narrative "I am a bit short". The buyer meant the foot. A lasting
+    // fact written wrong follows them into every category the account ever opens.
+    const units = splitStatements(skillSrc());
+    const ambiguous = units.filter((s) => /ambiguous/i.test(s));
+    expect(ambiguous.length).toBeGreaterThan(0); // guard-of-the-guard
+
+    expect(
+      unsatisfied(
+        ambiguous,
+        (s) => /\bask/i.test(s) && /narrative|own words/i.test(s) && /\bnever\b/i.test(s),
+      ),
+    ).toEqual([]);
+    // The profile's own half: it holds ONLY the unambiguous. Separate, because a rule
+    // about what to ask says nothing about what may be written when nobody asked.
+    expect(unsatisfied(ambiguous, (s) => /profile/i.test(s) && /\bonly\b/i.test(s))).toEqual([]);
+  });
+
+  it("11 — a call carries the brief's specs UNCHANGED, and a want changes in the brief or not at all", () => {
+    // Measured: the brief held `flex gte 110` and the next search sent `flex gte 100` —
+    // no word from the buyer, no `shopping_brief_edit`, no decision. A bound relaxed on
+    // the wire is a want the buyer still believes is being asked for.
+    const units = splitStatements(skillSrc());
+
+    const carrying = units.filter((s) => /unchanged/i.test(s));
+    expect(carrying.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(
+        carrying,
+        (s) => /brief/i.test(s) && /looser|relax/i.test(s) && /\bnever\b/i.test(s),
+      ),
+    ).toEqual([]);
+
+    // …and the route a change DOES take: their word, the write, then step 1 again.
+    const changing = units.filter((s) => /shopping_brief_edit/.test(s) && /again/i.test(s));
+    expect(changing.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(changing, (s) => /`decision`/.test(s) && /buyer/i.test(s))).toEqual([]);
+  });
+
+  it("12 — a `decision` is the buyer changing their mind, never a log of what was just written down", () => {
+    // Measured: `decision` was used as narration — "Added my measured 27.2 cm length,
+    // 102 mm width, and 90 kg weight; target 27.5 mondo…". The buyer changed nothing;
+    // they answered a question. The next session then reads a decision nobody took.
+    const units = splitStatements(skillSrc());
+    const decision = units.filter((s) => /`decision`/.test(s));
+    expect(decision.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(
+        decision,
+        (s) => /mind/i.test(s) && /chang/i.test(s) && /never a log|not a log/i.test(s),
+      ),
+    ).toEqual([]);
+  });
+
+  it("13 — the pick is priced by shopping_offers BEFORE it is recommended", () => {
+    // Measured: the recommended boot was presented with a price and a size range taken
+    // off a page sil had not read, and `shopping_offers` was never called for it — no
+    // dated price, no seller country, no `ships`. One turn earlier the agent did all of
+    // this correctly, so the rule has to hold on every turn, not on a remembered one.
+    const units = splitStatements(skillSrc());
+    const recommending = units.filter((s) => /recommend/i.test(s));
+    expect(recommending.length).toBeGreaterThan(0); // guard-of-the-guard
+
+    expect(
+      unsatisfied(recommending, (s) => /shopping_offers/.test(s) && /observed_at/.test(s)),
+    ).toEqual([]);
+    // …and whether that seller reaches the buyer, which is the other half of a price.
+    expect(unsatisfied(recommending, (s) => /reach/i.test(s) && /seller/i.test(s))).toEqual([]);
+  });
+
+  it("14 — an empty `variants` is SAID, and a size range a page prints is not stock", () => {
+    // Measured: the pick came back `variants: []` with a page saying "sizes 24-31", and
+    // the agent told the buyer "sizes listed 24–31, including your likely 27.5". Bar 8
+    // holds `webpage_info`'s own honesty; this holds the two readings that turn a page
+    // sil has not read into a fitting size the buyer can buy.
+    const units = splitStatements(skillSrc());
+    const listed = units.filter((s) => /`variants`/.test(s));
+    expect(listed.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(listed, (s) => /\bsay\b/i.test(s) && /range/i.test(s) && /stock/i.test(s)),
+    ).toEqual([]);
+  });
+});
