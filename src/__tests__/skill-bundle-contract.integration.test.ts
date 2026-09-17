@@ -31,7 +31,6 @@ import {
   overTriggerOffenders,
   retiredPhraseOffenders,
   retiredV0Offenders,
-  statesQualifiedNotFound,
   RETIRED_V0_PHRASES,
   RETIRED_V0_TOKENS,
 } from "./helpers/honesty-vocabulary.js";
@@ -201,21 +200,23 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     expect(offenders).toEqual([]);
   });
 
-  it("AC16 — the bundle states `not_found` as a claim from a listing, never as a bare licence to mint", () => {
+  it("AC16 — no bundle file reads `not_found` as an absence that licenses a write", () => {
     // AC15's other surface, through the ONE shared needle
     // (`helpers/honesty-vocabulary.ts`): the skill is what the agent reads before it
     // ever sees a tool description, so a perfectly qualified `shopping_brief_read`
     // description is undone by a reference file that still reads `not_found` as "the
-    // brief is gone". Two guards, one rule — the same discipline that keeps the
-    // honesty scans from drifting apart.
+    // brief is gone, so open another". Two guards, one rule — the same discipline that
+    // keeps the honesty scans from drifting apart.
+    //
+    // The floor that keeps it from passing vacuously is S2/BR-8 below, which requires
+    // the corpus to name `not_found` at all. It is NOT a listing qualifier: sil scopes
+    // every lookup to the account and lists nothing to decide a 404, so a bar demanding
+    // the bundle say it listed would only be satisfiable by a lie.
     const offenders: string[] = [];
     for (const rel of bundleFiles()) {
       for (const s of notFoundLicenceOffenders(read(rel))) offenders.push(`${rel}: ${s}`);
     }
     expect(offenders).toEqual([]);
-    // Guard-of-the-guard: deleting the vocabulary passes the scan above vacuously.
-    // The bundle reads briefs back, so it must still teach the rule.
-    expect(bundleFiles().filter((rel) => statesQualifiedNotFound(read(rel)))).not.toEqual([]);
   });
 
   it("guard-of-the-guard: the scanned corpus is non-trivial", () => {

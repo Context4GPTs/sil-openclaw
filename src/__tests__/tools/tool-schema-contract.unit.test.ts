@@ -447,8 +447,8 @@ describe("AC15 — `not_found` is never stated as a bare licence to write", () =
     // Guard-of-the-guard: the cheapest way to pass a forbid-scan is to stop naming
     // `not_found` anywhere, which leaves the agent reading a wire status no
     // description explains. The registry read answers it, so it must keep saying so.
-    // NOT `statesQualifiedNotFound` — that qualifier is a DIRECTORY LISTING, which no
-    // surviving tool does; asserting it here would only be satisfiable by a lie.
+    // The floor is NAMING it, never a listing qualifier: sil scopes every lookup to
+    // the account and lists nothing to decide a 404.
     const names = wholeSurface(api)
       .filter(([, text]) => /\bnot_found\b/.test(text))
       .map(([name]) => name);

@@ -10,8 +10,8 @@ conversation share it: each category's product specs sit under its own domain pa
 the seller specs belong to the whole brief. `shopping_brief_create` opens it on the
 buyer's first shopping message; `shopping_brief_edit` changes it; every `shopping_search`
 and `shopping_offers` call names its `id` as `brief`, so sil links the call to the job it
-serves. `shopping_brief_read { id }` answers `not_found` when sil listed the briefs on
-this account and that id was not one of them.
+serves. An id that is not this buyer's answers `not_found` — on the brief calls and on
+those two alike — and `shopping_brief_read` with no `id` lists the briefs that are.
 
 **A spec is `key · op · value · currency? · reason?`** — the key and the operator from the
 domain read, the value typed as that key types it, `currency` on money, and `reason`, the

@@ -27,7 +27,6 @@ import {
   overTriggerOffenders,
   retiredPhraseOffenders,
   retiredV0Offenders,
-  statesQualifiedNotFound,
   RETIRED_V0_PHRASES,
   RETIRED_V0_TOKENS,
 } from "../helpers/honesty-vocabulary.js";
@@ -300,16 +299,4 @@ describe("notFoundLicenceOffenders — `not_found` is a positive claim, never a 
     expect(notFoundLicenceOffenders(prose)).toEqual([]);
   });
 
-  it("statesQualifiedNotFound separates teaching the rule from deleting the vocabulary", () => {
-    // The cheapest way to pass a forbid-scan is to stop naming `not_found` at all,
-    // which leaves the agent reading a status nothing explains. AC15/AC16 use this
-    // as their floor, so it has to be false on the bare form.
-    expect(
-      statesQualifiedNotFound(
-        "not_found is reported only when sil could list the directory that would hold it.",
-      ),
-    ).toBe(true);
-    expect(statesQualifiedNotFound("An absent document answers not_found.")).toBe(false);
-    expect(statesQualifiedNotFound("The document surface is local-only.")).toBe(false);
-  });
 });
