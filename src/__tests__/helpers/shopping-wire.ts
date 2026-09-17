@@ -124,6 +124,13 @@ export const SPEC_400 = {
   message: 'spec "flex_index": operator "in" needs an enum key, not a number',
 } as const;
 
+/** The one 404 the brief, the search and the offers answer: an id that is not the
+ * caller's. An unknown id gets the same sentence, so neither says the other exists. */
+export const BRIEF_404 = {
+  error: "not_found",
+  message: 'no brief "b1" on this account — `shopping_brief_read` with no `id` lists them',
+} as const;
+
 export const DOMAIN_GET_404 = {
   error: "not_found",
   message: 'domain "product.sports.winter.ski.boots.freeride" does not stand',

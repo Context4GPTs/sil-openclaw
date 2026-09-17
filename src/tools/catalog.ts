@@ -171,6 +171,9 @@ export const SHOPPING_TOOLS = [
     method: "POST",
     path: "/catalog/search",
     label: "Search sil in one settled category",
+    // A 404 here is the `brief` id and nothing else: a domain that does not stand is
+    // refused as `invalid_request`, naming the path.
+    recovery: { not_found: "shopping_brief_read" },
     description:
       "FIND: the products and variants that fit the brief, in one settled category. Send"
       + " `brief`, the session's brief id, on EVERY call, then the domain path, the"
@@ -213,6 +216,9 @@ export const SHOPPING_TOOLS = [
     method: "POST",
     path: "/catalog/offers",
     label: "List who sells a variant, at what price and on what terms",
+    // Same as the search: the only 404 this route answers is a brief that is not
+    // the buyer's.
+    recovery: { not_found: "shopping_brief_read" },
     description:
       "PRICE: who sells the pick, at what price and on which terms. Send `brief` — the id"
       + " of the session's brief, on EVERY call — 1–10 variant ids, `seller_specs` (every"
