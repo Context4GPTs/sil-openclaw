@@ -19,11 +19,12 @@ twice.
 
 **`query` is the shopping words**: the category as a shop lists it, then the numbers that
 pick the product — `ski boots 27.5 flex 110` — never a sentence and never the buyer's ask
-restated. The budget, the level and the occasion are specs and narrative, not words for
-the index.
+restated. The budget, the ability and the trip are specs and narrative, not words for the
+index.
 
 **At most 4 `shopping_search` calls per category, per turn.** Call 1 is the brief as it
-stands; any further call is a deliberate widening you can name. The bound is per category:
+stands; a further call re-words `query` for recall and never relaxes a spec, because a
+spec changes only when the buyer says so — that is step 3. The bound is per category:
 a two-category brief gets two fan-outs of up to four, and spending one category's budget
 on another is a defect, not a trade.
 

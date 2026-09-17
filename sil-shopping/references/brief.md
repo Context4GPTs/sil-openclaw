@@ -15,9 +15,9 @@ this account and that id was not one of them.
 
 **A spec is `key · op · value · currency? · reason?`** — the key and the operator from the
 domain read, the value typed as that key types it, `currency` on money, and `reason`, the
-buyer's **own words** behind it. That is the whole vocabulary: there is no hardness on a
-spec and no dropping one for a single call. You change what is asked by changing the
-brief, and a change the buyer decided is logged as a `decision`.
+buyer's **own words** behind it. That is the whole vocabulary: no spec outranks another
+and none is dropped for a single call. You change what is asked by changing the brief, and
+a change the buyer decided is logged as a `decision`.
 
 **Write before you search.** Every want the buyer states is a spec in the brief **before**
 the next search, and every lasting fact about them is on the profile before it too. A
