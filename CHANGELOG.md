@@ -39,20 +39,21 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   as `specs`.
 - **A key the domain does not hold is recorded, never refused.** The search takes any
   well-formed key, answers the products it found and leaves that key absent from `fit`,
-  writing the ask on the search row so research can coin what buyers need. The skill sends
-  it and also keeps it as a `## Notes / open` row, judged at beat 6 from what pages print.
+  writing the ask on the search row so research can coin what buyers need. The skill keeps
+  it in the brief exactly as the buyer stated it and sends it with every other spec.
 - **`shopping_domain_create` coins PRODUCT keys, marked `variant_spec` or
   `product_spec`** — what identifies a purchasable variant, and what tells one product
   from the next. The registry derives each key's operators from its `type`. A key an
   ancestor already defines with the same type and unit is not coined again: the mint
   answers `ok` and reports it `inherited: true`, so the agent may filter on it.
-- **The skill drives the eight beats** at their real cadences — BRIEF once per job,
-  DOMAIN…FEEDBACK per item, VERDICT out of band per bought item. BRIEF and DOMAIN are
-  split (a job is scoped in the buyer's words before any category is settled, and an
-  unclassified item is a legal state); **ASK is its own beat**, so `## Notes / open` is
-  read back as its input rather than written as sediment; and **VERDICT** is the
-  out-of-band *did it work?* read that writes `## Past purchases`, `## Fit` and any
-  `## Shopping` section it contradicts.
+- **The skill drives one loop over the brief sil holds.** Every chat opens on
+  `sil_whoami` and a bare `shopping_brief_read`, so a size, a width, a budget or a market
+  already on file is never asked again. Then: settle the category, write every want as a
+  spec and every lasting fact to the profile **before** the next search, find the products
+  that fit the brief's product specs, price them and read the sellers against its seller
+  specs, and — when nothing fits — name the spec in the way, propose ONE relaxation, wait,
+  and write the buyer's word as a spec plus the one-sentence `decision` that says why.
+  One brief per conversation, never one per category.
 
 ### Changed
 
@@ -77,15 +78,16 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   listed option fits. A price in another currency is a bound sil could not test. On an
   offer's `seller_fit`, `ships: unknown` keeps that offer and a requested seller key
   absent is a term sil has not read — never a term the seller lacks.
-- **The `≤4` search-call bound is PER ITEM**, not per request. On a two-item job the old
-  reading either halved the second item's budget or blew the bound.
+- **The `≤4` search-call bound is PER CATEGORY**, not per request. On a brief covering
+  boots and a helmet the old reading either halved the second category's budget or blew
+  the bound.
 - **`sil.search_results` carries the `shopping_search` body** (`{status, products}`). The
   method name, its two-layer authz and its one not-found body are untouched.
 - **`openclaw.build.openclawVersion` / `pluginSdkVersion` record `2026.9.3`**, the host
   this plugin is verified against. Diagnostics only; the `compat` floor stays
   `>=2026.7.1` — nothing here needs a newer API.
 - **A category inherits every ancestor key and may RE-DECLARE one for its own subtree.**
-  `shopping_domain_create`'s description and the beat-2 reference carry the signed rule:
+  `shopping_domain_create`'s description and the category reference carry the signed rule:
   a key is never renamed; declaring an ancestor's key with another unit, allowed-value set
   or variant/product mark makes that definition win below the new path, converting
   nothing; declaring it with nothing the ancestor does not already say is not a second
@@ -106,8 +108,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   `sil-openclaw-create-shopper` bin and its engine, the onboarding ladder and its
   per-search pitch, `sil_register`'s `next_step: "offer_shopper"` breadcrumb (contract
   §5), and `sil_doctor`'s `creationEntrypoint` field and `creation.entrypoint_present`
-  finding. A shopping intent runs the eight beats on whatever agent holds the plugin,
-  with nothing to set up first.
+  finding. A shopping intent runs the loop on whatever agent holds the plugin, with
+  nothing to set up first.
 - **BREAKING — `sil_search`, `sil_product_get`, `sil_stores`, `sil_domain_find`,
   `sil_domain_create` and the four `sil_doc_*` verbs.** Renamed, never aliased: the old
   names do not register, and there is no deprecation stub.
