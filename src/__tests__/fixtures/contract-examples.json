@@ -95,6 +95,23 @@
           ]
         },
         {
+          "key": "condition",
+          "display_name": "Condition",
+          "description": "Whether the item is sold new, used or refurbished.",
+          "type": "enum",
+          "allowed_values": [
+            "new",
+            "used",
+            "refurbished"
+          ],
+          "operators": [
+            "eq",
+            "in",
+            "neq",
+            "nin"
+          ]
+        },
+        {
           "key": "weight",
           "display_name": "Weight",
           "type": "number",
@@ -106,6 +123,18 @@
         }
       ],
       "seller_specs": [
+        {
+          "key": "country",
+          "display_name": "Seller country",
+          "description": "Where the seller is, as its own pages print it: an ISO 3166-1 alpha-2 code, as `sil_whoami` prints the buyer's.",
+          "type": "enum",
+          "operators": [
+            "eq",
+            "in",
+            "neq",
+            "nin"
+          ]
+        },
         {
           "key": "return_window_days",
           "display_name": "Return window",
@@ -543,6 +572,157 @@
           "country": "AT",
           "ships": "unknown",
           "specs": {}
+        }
+      ]
+    }
+  },
+  "shopping_brief_create": {
+    "response": {
+      "status": "ok",
+      "id": "b1"
+    },
+    "request": {
+      "title": "Ski boots",
+      "narrative": "Advanced skier, short wide foot. Fit decides before brand.",
+      "domain": "product.sports.winter.ski.boots",
+      "specs": [
+        {
+          "key": "skill_level",
+          "op": "eq",
+          "value": "advanced",
+          "reason": "I am advanced skier"
+        }
+      ]
+    }
+  },
+  "shopping_brief_edit": {
+    "response": {
+      "status": "ok",
+      "id": "b1"
+    },
+    "alternate": {
+      "status": "ok",
+      "id": "b1"
+    },
+    "request": {
+      "id": "b1",
+      "domain": "product.sports.winter.ski.boots",
+      "narrative": "Advanced skier, short wide foot. Buying online, new only, from Greece. Fit decides before brand.",
+      "specs": [
+        {
+          "key": "price",
+          "op": "lte",
+          "value": "350",
+          "currency": "EUR",
+          "reason": "my top of the budget range is 350 euros"
+        },
+        {
+          "key": "condition",
+          "op": "eq",
+          "value": "new",
+          "reason": "I don't want used"
+        }
+      ]
+    }
+  },
+  "shopping_brief_read": {
+    "response": {
+      "status": "ok",
+      "brief": {
+        "id": "b1",
+        "title": "Ski boots",
+        "status": "active",
+        "narrative": "Advanced skier, short wide foot. Buying online, new only, from Greece. Fit decides before brand.",
+        "specs": {
+          "product.sports.winter.ski.boots": [
+            {
+              "key": "mondo_size",
+              "op": "in",
+              "value": [
+                27,
+                27.5
+              ],
+              "reason": "length 27.2 cm"
+            },
+            {
+              "key": "last_width",
+              "op": "gte",
+              "value": 100,
+              "reason": "forefoot 101 mm"
+            },
+            {
+              "key": "skill_level",
+              "op": "eq",
+              "value": "advanced",
+              "reason": "I am advanced skier"
+            },
+            {
+              "key": "price",
+              "op": "lte",
+              "value": "400",
+              "currency": "EUR",
+              "reason": "Actually, 400 euros."
+            },
+            {
+              "key": "condition",
+              "op": "eq",
+              "value": "new",
+              "reason": "I don't want used"
+            }
+          ],
+          "seller": [
+            {
+              "key": "country",
+              "op": "in",
+              "value": [
+                "GR"
+              ],
+              "reason": "options that I can buy in Greece only"
+            }
+          ]
+        },
+        "decisions": [
+          {
+            "at": "2026-09-17T10:41:07Z",
+            "text": "Ceiling raised 350 → 400 EUR: nothing in 27.5 at 100 mm or wider under 350."
+          }
+        ]
+      }
+    },
+    "alternate": {
+      "status": "ok",
+      "briefs": [
+        {
+          "id": "b1",
+          "title": "Ski boots",
+          "status": "active",
+          "domains": [
+            "product.sports.winter.ski.boots"
+          ],
+          "updated_at": "2026-09-17T10:41:07Z"
+        }
+      ]
+    }
+  },
+  "shopping_profile_edit": {
+    "response": {
+      "status": "ok"
+    },
+    "request": {
+      "measurements": [
+        {
+          "name": "foot_length",
+          "value": 27.2,
+          "unit": "cm"
+        },
+        {
+          "name": "forefoot_width",
+          "value": 101,
+          "unit": "mm"
+        },
+        {
+          "name": "shoe_size_us",
+          "value": 9
         }
       ]
     }

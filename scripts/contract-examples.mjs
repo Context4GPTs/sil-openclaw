@@ -23,16 +23,21 @@ const OUT = join(
   "contract-examples.json",
 );
 
-/** §3.N heading → the key the fixture is filed under, in the contract's own order. */
+/** §3.N heading → the tools it defines, in the contract's own order. §3.8 defines three
+ * under one heading, and its blocks name which one they are. */
 const SECTIONS = [
-  ["3.1", "shopping_domain_search"],
-  ["3.2", "shopping_domain_get"],
-  ["3.3", "shopping_domain_create"],
-  ["3.4", "shopping_search"],
-  ["3.5", "shopping_product_get"],
-  ["3.6", "shopping_offers"],
-  ["3.7", "shopping_seller_get"],
+  ["3.1", ["shopping_domain_search"]],
+  ["3.2", ["shopping_domain_get"]],
+  ["3.3", ["shopping_domain_create"]],
+  ["3.4", ["shopping_search"]],
+  ["3.5", ["shopping_product_get"]],
+  ["3.6", ["shopping_offers"]],
+  ["3.7", ["shopping_seller_get"]],
+  ["3.8", ["shopping_brief_create", "shopping_brief_edit", "shopping_brief_read"]],
+  ["3.9", ["shopping_profile_edit"]],
 ];
+
+const TOOLS = SECTIONS.flatMap(([, tools]) => tools);
 
 const source = process.argv[2];
 if (source === undefined) {
@@ -56,8 +61,29 @@ function fences(body) {
 }
 
 /**
- * Every top-level `{…}` in a fence, in order. §3.3 puts a request and its reply in one
- * block separated by `→`, so a block is scanned by brace depth rather than parsed whole.
+ * A fence cut into the calls it prints, each under the tool it belongs to. A line that is
+ * a bare tool name opens a call and names it (§3.8 prints two writes of one buyer turn in
+ * one block); a fence that names nothing belongs to the section's READ, which is the only
+ * one a bare `json` body can be.
+ */
+function chunks(block, tools) {
+  const fallback = tools.length === 1 ? tools[0] : tools.find((t) => t.endsWith("_read"));
+  if (fallback === undefined) throw new Error(`§ for ${tools.join(", ")} has no read`);
+  const calls = [];
+  for (const line of block.split("\n")) {
+    const named = TOOLS.includes(line.trim());
+    if (named || calls.length === 0) {
+      calls.push({ tool: named ? line.trim() : fallback, lines: [] });
+    }
+    if (!named) calls[calls.length - 1].lines.push(line);
+  }
+  return calls.map((c) => ({ tool: c.tool, text: c.lines.join("\n") }));
+}
+
+/**
+ * Every top-level `{…}` in a chunk, in order. A request and its reply share one block
+ * either side of a `→`, so a chunk is scanned by brace depth rather than parsed whole —
+ * which is also what keeps the `→` inside a `decision` sentence out of the way.
  */
 function objectsIn(text) {
   const found = [];
@@ -86,17 +112,24 @@ function objectsIn(text) {
 }
 
 const examples = {};
-for (const [number, tool] of SECTIONS) {
-  const bodies = fences(sectionBody(number)).flatMap(objectsIn);
-  // A response states `status`; anything else in these sections is the request beside it.
-  const responses = bodies.filter((b) => b.status === "ok");
-  const requests = bodies.filter((b) => b.status === undefined);
-  if (responses.length === 0) throw new Error(`§${number}: no example response`);
-  examples[tool] = {
-    response: responses[0],
-    ...(responses.length > 1 ? { alternate: responses[1] } : {}),
-    ...(requests.length > 0 ? { request: requests[0] } : {}),
-  };
+for (const [number, tools] of SECTIONS) {
+  const bodies = {};
+  for (const tool of tools) bodies[tool] = [];
+  for (const block of fences(sectionBody(number))) {
+    for (const chunk of chunks(block, tools)) bodies[chunk.tool].push(...objectsIn(chunk.text));
+  }
+  for (const tool of tools) {
+    // A response states `status`; anything else beside it is the request. Only `ok` is an
+    // artifact instance — §3.8 prints an `invalid_request` to show what the registry refuses.
+    const responses = bodies[tool].filter((b) => b.status === "ok");
+    const requests = bodies[tool].filter((b) => b.status === undefined);
+    if (responses.length === 0) throw new Error(`§${number}: no example response for ${tool}`);
+    examples[tool] = {
+      response: responses[0],
+      ...(responses.length > 1 ? { alternate: responses[1] } : {}),
+      ...(requests.length > 0 ? { request: requests[0] } : {}),
+    };
+  }
 }
 
 writeFileSync(OUT, `${JSON.stringify(examples, null, 2)}\n`);

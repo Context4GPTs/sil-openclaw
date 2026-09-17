@@ -166,11 +166,15 @@ describe("plugin load — data dir is created by the FULL real register() (card 
     // purpose — loosening it to `toContain` stops it catching a silent removal,
     // which is how a shipped tool disappears under a green suite.
     expect([...api._tools.keys()].sort()).toEqual([
+      "shopping_brief_create",
+      "shopping_brief_edit",
+      "shopping_brief_read",
       "shopping_domain_create",
       "shopping_domain_get",
       "shopping_domain_search",
       "shopping_offers",
       "shopping_product_get",
+      "shopping_profile_edit",
       "shopping_search",
       "shopping_seller_get",
       "sil_doctor",

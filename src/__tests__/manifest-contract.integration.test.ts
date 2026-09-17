@@ -29,7 +29,7 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals the TEN tools: the seven `shopping_*` catalog tools
+ *     both sides equals the FOURTEEN tools: the eleven `shopping_*` tools
  *     1:1 with the sil-api routes, and the three account tools that keep the
  *     `sil_` name. A GROUP swap is not picked up for free — `codeRegisteredNames()`
  *     below has to be rewired or it silently narrows instead of going red.
@@ -122,17 +122,21 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     expect(sorted(codeRegisteredNames())).toEqual(sorted(manifestToolNames()));
   });
 
-  it("both sides equal exactly the TEN tools of the agent contract", () => {
+  it("both sides equal exactly the FOURTEEN tools of the agent contract", () => {
     // The spine, pinned by literal so a re-introduction on EITHER side flips RED rather
     // than merely staying symmetric. A GROUP swap is not picked up for free: the code
     // side reads `codeRegisteredNames()`, which must be rewired when a group moves, and
     // had that been missed this guard would have silently narrowed.
     const expected = [
+      "shopping_brief_create",
+      "shopping_brief_edit",
+      "shopping_brief_read",
       "shopping_domain_create",
       "shopping_domain_get",
       "shopping_domain_search",
       "shopping_offers",
       "shopping_product_get",
+      "shopping_profile_edit",
       "shopping_search",
       "shopping_seller_get",
       "sil_doctor",
@@ -188,6 +192,10 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
     "shopping_domain_search",
     "shopping_domain_get",
     "shopping_domain_create",
+    "shopping_brief_create",
+    "shopping_brief_edit",
+    "shopping_brief_read",
+    "shopping_profile_edit",
     "shopping_search",
     "shopping_product_get",
     "shopping_offers",

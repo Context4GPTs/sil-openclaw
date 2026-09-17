@@ -54,7 +54,7 @@ import {
 // unit core takes them as an argument so the test pins behaviour, not wiring).
 const SIL: SilAllowlistFacts = {
   id: "sil",
-  // The real ten-tool set — the seven `shopping_*` catalog tools and the three
+  // The real fourteen-tool set — the eleven `shopping_*` tools and the three
   // account tools.
   //
   // THIS CARRIER IS THE SILENT ONE, and it has gone stale before. Nothing here goes RED
@@ -63,11 +63,15 @@ const SIL: SilAllowlistFacts = {
   // the canonical set can sit here indefinitely. Bumped in lockstep with the mirrors
   // that do bite (`manifest-contract`, `index.test`).
   tools: [
-    "shopping_domain_create",
+    "shopping_brief_create",
+  "shopping_brief_edit",
+  "shopping_brief_read",
+  "shopping_domain_create",
     "shopping_domain_get",
     "shopping_domain_search",
     "shopping_offers",
     "shopping_product_get",
+  "shopping_profile_edit",
     "shopping_search",
     "shopping_seller_get",
     "sil_doctor",

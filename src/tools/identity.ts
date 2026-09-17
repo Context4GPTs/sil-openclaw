@@ -133,11 +133,14 @@ function registerWhoami(api: PluginAPI): void {
     name: "sil_whoami",
     label: "Who am I on sil",
     description:
-      "The buyer's name, country and the addresses on file, read live from sil"
-      + " with the credentials sil_register stored — a stale session token is"
-      + " refreshed once and the read retried. Use it to know where the buyer is:"
-      + " never ask them for what this answers. If they are not registered, or the"
-      + " session is past refreshing, the result names the recovery (sil_register).",
+      "The buyer's name, country and the addresses on file, and the `measurements`"
+      + " and `preferences` sil already holds for them — read live from sil with the"
+      + " credentials sil_register stored, a stale session token refreshed once and"
+      + " the read retried. Call it at the start of a chat: it says where the buyer"
+      + " is, how they measure and what they lastingly prefer, and you never ask"
+      + " them for anything it answers. shopping_profile_edit is what writes those"
+      + " two back. If they are not registered, or the session is past refreshing,"
+      + " the result names the recovery (sil_register).",
     parameters: Type.Object({}),
     async execute() {
       // 1 — no tokens on disk is the SAME state for a never-registered buyer and

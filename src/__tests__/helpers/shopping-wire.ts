@@ -26,7 +26,7 @@ const SCHEMA_DIR = join(HERE, "..", "..", "..", "schema");
 const EXAMPLES = join(HERE, "..", "fixtures", "contract-examples.json");
 
 /**
- * The seven names, in the contract's own order — DERIVED from the production route
+ * The eleven names, in the contract's own order — DERIVED from the production route
  * table, never restated. A second list here is a list that quietly covers six. Every one
  * of them is a committed artifact, so this is also the artifact set.
  */

@@ -1,10 +1,10 @@
 /**
- * The seven `shopping_*` tools, 1:1 with the sil-api catalog routes.
+ * The eleven `shopping_*` tools, 1:1 with the sil-api catalog, brief and profile routes.
  *
  * A projection on the way back would drop exactly the fields the agent's honesty reading
  * is computed from (`fit`, `variants`, `webpage_info`) while looking healthy, so the body
  * crosses verbatim. A new `registerXTools` group has to be hand-wired into three guards
- * or it silently NARROWS them (CLAUDE.md), which is why all seven live in one group.
+ * or it silently NARROWS them (CLAUDE.md), which is why all eleven live in one group.
  */
 
 import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk";
@@ -33,7 +33,7 @@ export const SHOPPING_TOOLS = [
     query: ["q"],
     label: "Read sil's registry for a category",
     description:
-      "Beat 2, what already stands: read sil's shared registry in the buyer's own words"
+      "GATHER, what already stands: read sil's shared registry in the buyer's own words"
       + " and get back the categories that match, each with its path and a line on how"
       + " the thing is bought. Judge fit on `about`, then take that path verbatim, or"
       + " descend under a broader one — never a sibling of a path that already stands."
@@ -49,12 +49,13 @@ export const SHOPPING_TOOLS = [
     label: "Read a category's buying guide and keys",
     recovery: { not_found: "shopping_domain_search" },
     description:
-      "Beats 2 and 3, the category's guide and its two vocabularies: send one standing"
+      "GATHER, the category's guide and its two vocabularies: send one standing"
       + " path and get the buying guide, every key the category is bought by as `specs`,"
       + " and the seller terms it is bought with as `seller_specs` — the base every"
       + " category shares (returns, restocking, the shipping terms of a route) plus this"
-      + " category's own branch. One read hands you both. Copy the guide into the Brief"
-      + " and translate the buyer's facts through it. Each key states the operators it"
+      + " category's own branch. One read hands you both. Translate the buyer's facts"
+      + " through the guide and write each one into the brief as a spec, with their own"
+      + " words as its `reason`. Each key states the operators it"
       + " takes, its type, its unit and any closed set of values — send that key and one"
       + " of those operators, never a synonym you coined: a `specs` key goes to"
       + " shopping_search, a `seller_specs` key to shopping_offers. A key marked"
@@ -73,7 +74,7 @@ export const SHOPPING_TOOLS = [
     // A colliding path means the vocabulary is already there, so search that same path.
     recovery: { already_exists: "shopping_search" },
     description:
-      "Beat 2's mint, the one permanent global write in sil: coin a NEW category — its"
+      "GATHER's mint, the one permanent global write in sil: coin a NEW category — its"
       + " path, a buying guide from research, and the first keys it is bought by. Two things"
       + " must hold first: a shopping_domain_search read came back `matches: []`, and you have"
       + " read up on the web how the category is bought (never on products). Mark variant_spec"
@@ -93,30 +94,103 @@ export const SHOPPING_TOOLS = [
       + " it.",
   },
   {
+    name: "shopping_brief_create",
+    method: "POST",
+    path: "/briefs/create",
+    label: "Open the session's brief",
+    description:
+      "GATHER, once per SESSION: open the one brief this conversation works from — across"
+      + " every category the buyer asks about, never one per category — and hold the `id`"
+      + " it answers for the rest of the session, because every search and every offers"
+      + " call names it. `title` names the job in a few words. `narrative` is what the"
+      + " buyer is after in their own terms, and a want no spec can carry lives there. An"
+      + " optional first `domain` with `specs` writes what they have already said: a"
+      + " category path carries that category's product specs, `seller` carries the seller"
+      + " specs, and each spec is a key and an operator shopping_domain_get listed, with"
+      + " the buyer's own words as its `reason`. Everything after this is"
+      + " shopping_brief_edit. A job the buyer may already have running is"
+      + " shopping_brief_read's to answer first — read before you open a second one.",
+  },
+  {
+    name: "shopping_brief_edit",
+    method: "POST",
+    path: "/briefs/edit",
+    label: "Write a want or a decision into the brief",
+    // The id is the only thing a 404 can be about here, and the bare read lists what is.
+    recovery: { not_found: "shopping_brief_read" },
+    description:
+      "GATHER and DECIDE, the write: put every want the buyer states into the brief BEFORE"
+      + " the next search, with `reason` carrying their own words — a want that reaches no"
+      + " brief is a want sil never sees. One write per `domain`: a category path carries"
+      + " that category's product specs, `price` among them, and `seller` carries the"
+      + " seller specs, which belong to the whole brief. `specs` REPLACE every spec on the"
+      + " keys they name — a range is the two rows on its key — `remove` names the keys"
+      + " whose specs go, and `narrative` replaces the whole narrative. When the buyer"
+      + " changes their mind, send the new spec together with `decision`: one sentence"
+      + " saying what they changed and why, so the next session reads the reasoning"
+      + " instead of asking again. Send `status: \"closed\"` when the job is over. An"
+      + " invalid_request names the key and shows a spec on it that passes — fix that row"
+      + " and send it again, and never give the want up. A brief id that is not the"
+      + " buyer's answers not_found; shopping_brief_read with no `id` lists their briefs.",
+  },
+  {
+    name: "shopping_brief_read",
+    method: "POST",
+    path: "/briefs/read",
+    label: "Read the brief, or list the buyer's briefs",
+    description:
+      "OPEN, the first read of a new chat: with no `id` it answers the buyer's briefs,"
+      + " newest first, each with its title, its domains and when it was last written."
+      + " Call it with sil_whoami before you ask the buyer anything, so a job already"
+      + " under way is continued rather than interviewed a second time. With an `id` it"
+      + " answers that brief whole: the title, the narrative, every spec under the domain"
+      + " it sits on (`seller` for the seller specs), and the decisions already taken with"
+      + " the time of each. Write the next search and offers call from what comes back,"
+      + " and never ask what it already answers. New wants go in through"
+      + " shopping_brief_edit; a job the buyer has not started is shopping_brief_create's.",
+  },
+  {
+    name: "shopping_profile_edit",
+    method: "POST",
+    path: "/profile/edit",
+    label: "Write what is true of the buyer",
+    description:
+      "GATHER, the person rather than the job: write what is true of the buyer whatever"
+      + " they are buying, the moment they say it and BEFORE the next search. A"
+      + " `measurements` entry is a number with its `unit`, or a size exactly as it is"
+      + " printed; a `preferences` entry is a lasting taste in the buyer's own words."
+      + " An entry replaces the one of the same `name`, and `remove` names the entries"
+      + " that stopped being true. sil_whoami reads all of it back, so a fact written here"
+      + " is one you never ask for again. What belongs to THIS job — a budget, a size for"
+      + " these boots — is the brief's, through shopping_brief_edit: a measurement is the"
+      + " buyer's, and the spec the category's guide turns it into carries that"
+      + " measurement as its `reason`.",
+  },
+  {
     name: SEARCH_TOOL,
     method: "POST",
     path: "/catalog/search",
     label: "Search sil in one settled category",
     description:
-      "Beat 5: the products and variants that fit in one settled category. Send the"
-      + " domain path, the shopping words as `query`, how many products you want, and"
-      + " the Brief's product rows as `specs` — every value exactly as it was answered,"
-      + " a money value"
-      + " a decimal STRING (`\"300\"`, never 300 or \"300.00\"), or the row is refused and"
-      + " the call is spent. `ship_to` is the LABEL of one of the buyer's addresses as"
-      + " sil_whoami lists them, never a country: it localizes the search, and sil uses"
-      + " the default address when you send nothing. Seller terms are shopping_offers'"
-      + " ask, answered per seller. `price`"
-      + " is a key every domain has and its currency is required: sil holds no exchange"
-      + " rate, so a bound in another currency is one sil could not test — say so, never"
-      + " drop the product. Present the products in the order returned, never re-ranked."
-      + " `fit` answers the ask key by key with what sil verified, so a key"
-      + " absent from it is a gap to name, never a miss — a key the domain does not hold"
-      + " included: recorded for research, answered absent, never refused. An empty"
-      + " `variants` says no listed option fits."
-      + " `webpage_info` means sil has not read that page yet: the merchant's own words,"
-      + " good for a provisional pick, never verified; its absence means they were. At"
-      + " most 4 calls per item, widening soft rows only; a hard row is never relaxed.",
+      "FIND: the products and variants that fit the brief, in one settled category. Send"
+      + " `brief`, the session's brief id, on EVERY call, then the domain path, the"
+      + " shopping words as `query` (the category as a shop lists it and the numbers that"
+      + " pick the product, never a sentence), how many products you want, and `specs`:"
+      + " every one of the brief's product specs for this category, as the brief holds"
+      + " them, a money value a decimal STRING (`\"300\"`, never 300). The brief's"
+      + " `seller` specs — `country` among them — ride on shopping_offers and never on"
+      + " the search. `ship_to` is the LABEL of one of the buyer's addresses as"
+      + " sil_whoami lists them: it localizes the search, is never a market filter, and"
+      + " the default one is used when you send none. `price` is a key every domain"
+      + " has, its currency required: a bound in another currency is one sil could not"
+      + " test — say so. Present them in the order returned, never re-rank. `fit`"
+      + " answers the ask key by key with what sil verified: a key absent from it is a"
+      + " gap to name, never a miss — a key the domain does not hold included, recorded"
+      + " for research. An empty `variants` says no listed option fits. `webpage_info`"
+      + " means sil has not read that page yet: the merchant's words, good for a"
+      + " provisional pick, never verified; its absence means they were. At most 4 calls"
+      + " per CATEGORY; to change what is asked, change the brief with the buyer's"
+      + " decision — never leave a spec out.",
   },
   {
     name: "shopping_product_get",
@@ -124,7 +198,7 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/product",
     label: "Read the whole dossier on a shortlisted variant",
     description:
-      "Beat 6, the dossier: send 1–10 variant ids from a shopping_search answer and get"
+      "FIND's dossier: send 1–10 variant ids from a shopping_search answer and get"
       + " the whole of what sil holds for each — the title, the maker, the page's own"
       + " description, the images, every key sil holds for it (not only the ones you"
       + " asked about), and `sources` naming which site each reading came from and when."
@@ -140,16 +214,17 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/offers",
     label: "List who sells a variant, at what price and on what terms",
     description:
-      "Beat 6, who sells the pick, at what price and on which terms: send 1–10 variant"
-      + " ids, the Brief's seller rows as `seller_specs` (the keys the domain read"
-      + " returned under `seller_specs`), and `ship_to` — the LABEL of one of the"
-      + " buyer's addresses as sil_whoami lists"
+      "PRICE: who sells the pick, at what price and on which terms. Send `brief` — the id"
+      + " of the session's brief, on EVERY call — 1–10 variant ids, `seller_specs` (every"
+      + " one of the brief's `seller` specs, `country` among them, keyed as the domain"
+      + " read returned them under `seller_specs`), and `ship_to` — the LABEL of one of"
+      + " the buyer's addresses as sil_whoami lists"
       + " them, the default address when you send nothing. You get one entry per variant"
       + " per seller, read live: the seller's name and id, the price exactly as the page"
       + " prints it with its own currency (sil converts nothing), whether it can be"
       + " bought now, the listing URL, `observed_at` — the moment sil read it, which is"
       + " what dates the price for the buyer — and `seller_fit`. `seller_fit` answers the"
-      + " seller rows the way `fit` answers product rows, per offer: `ships` is always"
+      + " brief's seller specs the way `fit` answers its product specs, per offer: `ships` is always"
       + " there — serviceable, not_serviceable or unknown for that address — and each"
       + " requested key carries that seller's value where sil holds one. `unknown` is an"
       + " ordinary answer that keeps the offer: say sil could not confirm shipping and"
@@ -164,7 +239,7 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/sellers",
     label: "Read one seller's whole terms",
     description:
-      "Beat 6, one seller's WHOLE terms: send 1–10 seller ids from shopping_offers, and"
+      "PRICE, one seller's WHOLE terms: send 1–10 seller ids from shopping_offers, and"
       + " nothing else. Each seller comes back with its name, host and country, `specs` —"
       + " every seller key sil holds a value for, base and branch, as the dossier's `specs`"
       + " are a product's — and `ships`, which answers for the buyer's default address:"
@@ -182,14 +257,14 @@ export const SHOPPING_TOOLS = [
   },
 ] as const satisfies readonly ShoppingTool[];
 
-/** The seven names, as a literal union — so a table of one-per-tool anything is forced
- * to cover them all rather than quietly covering six. */
+/** The eleven names, as a literal union — so a table of one-per-tool anything is forced
+ * to cover them all rather than quietly covering ten. */
 export type ShoppingToolName = (typeof SHOPPING_TOOLS)[number]["name"];
 
 /**
- * Registers the seven, reading each one's request artifact off disk as it goes.
+ * Registers the eleven, reading each one's request artifact off disk as it goes.
  *
- * That read is the ONE exception to "register() opens nothing": seven synchronous
+ * That read is the ONE exception to "register() opens nothing": eleven synchronous
  * `readFileSync`s that return immediately and hold no resource open, exactly as
  * `ensureDataDir`'s `mkdirSync` does. It is deliberately eager — an unreadable artifact
  * is a broken build, and failing loud at load beats a tool whose `parameters` the host

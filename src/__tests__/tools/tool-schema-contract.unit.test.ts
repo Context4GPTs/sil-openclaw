@@ -56,11 +56,14 @@ const TOOL_CONTRACT = {
   sil_whoami: {
     label: "Who am I on sil",
     description:
-      "The buyer's name, country and the addresses on file, read live from sil"
-      + " with the credentials sil_register stored — a stale session token is"
-      + " refreshed once and the read retried. Use it to know where the buyer is:"
-      + " never ask them for what this answers. If they are not registered, or the"
-      + " session is past refreshing, the result names the recovery (sil_register).",
+      "The buyer's name, country and the addresses on file, and the `measurements`"
+      + " and `preferences` sil already holds for them — read live from sil with the"
+      + " credentials sil_register stored, a stale session token refreshed once and"
+      + " the read retried. Call it at the start of a chat: it says where the buyer"
+      + " is, how they measure and what they lastingly prefer, and you never ask"
+      + " them for anything it answers. shopping_profile_edit is what writes those"
+      + " two back. If they are not registered, or the session is past refreshing,"
+      + " the result names the recovery (sil_register).",
     parameters: EMPTY_OBJECT_SCHEMA,
   },
 } as const;
@@ -294,7 +297,7 @@ describe("the retired tool NAMES cannot come back", () => {
       "sil_register",
       "sil_whoami",
     ]);
-    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(7);
+    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(11);
   });
 });
 
@@ -379,12 +382,20 @@ describe("each shopping tool carries its discipline clause", () => {
       /inherited/,
       /shopping_domain_get/,
     ],
-    // The honesty the whole answer turns on, and the fan-out bound.
-    shopping_search: [/\b4\b|\bfour\b/, /widen/i, /hard row is never relaxed/i, /webpage_info/, /gap/i],
+    // One brief for the whole session, and the id the rest of it is named by.
+    shopping_brief_create: [/per SESSION/i, /never one per category/i, /`id`/],
+    // The want is written BEFORE the search, and a write REPLACES rather than appends.
+    shopping_brief_edit: [/before\b[^.]{0,20}next search/i, /replace/i, /`decision`/],
+    // The bare read is a listing, and it comes before the first question.
+    shopping_brief_read: [/newest first/i, /before you ask/i],
+    // An entry is keyed by its name, and writing that name again replaces it.
+    shopping_profile_edit: [/same `name`/, /before the next search/i],
+    // The brief rides on every call, the honesty the whole answer turns on, the bound.
+    shopping_search: [/`brief`/, /never on the search/i, /\b4\b|\bfour\b/, /per CATEGORY/, /webpage_info/, /gap/i],
     // What the dossier adds over the shortlist, and that a miss is an absence.
     shopping_product_get: [/sources/, /absent/i, /opaque/i],
-    // What dates a price, and why the spread is the answer.
-    shopping_offers: [/observed_at/, /spread/i, /convert/i],
+    // The brief rides here too, what dates a price, and why the spread is the answer.
+    shopping_offers: [/`brief`/, /observed_at/, /spread/i, /convert/i],
     // The three states, that the third one keeps its seller, and that ids are the whole ask.
     shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i, /nothing else/i],
   };

@@ -84,15 +84,6 @@ const CORE_TOOLS = [
   "shopping_seller_get",
 ];
 
-/** The tools the signed agent contract defines that the plugin has not registered YET
- * (§3.8/§3.9). The bundle names them deliberately; everything else it names has to be a
- * tool that actually answers. */
-const CONTRACTED_NOT_YET_REGISTERED = [
-  "shopping_brief_create",
-  "shopping_brief_edit",
-  "shopping_brief_read",
-  "shopping_profile_edit",
-];
 /** The retired NAMES this card's AC G7 enumerates, as a separate list so the bite
  * proof below drives the same scan the bundle does with each one in turn. */
 const G7_RETIRED_NAMES = [
@@ -147,9 +138,9 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
   it("the bundle names NO tool outside the contract's surface — a dangling name is one the agent calls, fails, and has no recovery from", () => {
     // The reverse of the scan above, and the one it cannot do: a `shopping_reviews` or a
     // `sil_learn` invented in prose reads exactly like a real tool to the agent. Derived
-    // from the registration code plus the four the contract has signed but not shipped,
-    // so a tool registered later needs no edit here and a name nobody registers reds.
-    const allowed = new Set([...registeredTools(), ...CONTRACTED_NOT_YET_REGISTERED]);
+    // from the registration code ALONE — every tool the contract signs is registered now,
+    // so a name nobody registers reds with no allowance to hide behind.
+    const allowed = new Set(registeredTools());
     const named = new Set(
       [...bundleCorpus().matchAll(/\b(?:sil|shopping)_[a-z_]+\b/g)].map((m) => m[0]),
     );

@@ -1,5 +1,5 @@
 /**
- * The shared shopping test harness — ONE `fetch` double for the seven routes.
+ * The shared shopping test harness — ONE `fetch` double for every shopping route.
  *
  * Four copies of a router is four places for the origin/path assertions to drift apart,
  * and the whole point of the tools being 1:1 with the routes is that they share one
@@ -42,7 +42,7 @@ export const SIL_WEB = "https://sil-web.test.example.com";
 export const SIL_API = "https://sil-api.test.example.com";
 
 /**
- * The four POST routes, at the bare paths the architecture pins (no `/api/v1`). A 1:1
+ * The POST routes, at the bare paths the architecture pins (no `/api/v1`). A 1:1
  * name→path map, which is exactly why the two GETs are NOT in it: `/catalog/domains` is
  * a path root carrying three kinds, and one map key cannot hold them.
  */
@@ -52,6 +52,10 @@ const ROUTE_PATH = {
   offers: "/catalog/offers",
   sellers: "/catalog/sellers",
   domains: "/catalog/domains",
+  briefCreate: "/briefs/create",
+  briefEdit: "/briefs/edit",
+  briefRead: "/briefs/read",
+  profileEdit: "/profile/edit",
 } as const;
 
 /** `GET /catalog/domains` — the registry search, sharing the mint's path. Kept as its
@@ -94,6 +98,10 @@ export interface Router {
   domainSearch: Recorded[];
   /** `GET /catalog/domains/<path>` — the guide read. */
   domainGet: Recorded[];
+  briefCreate: Recorded[];
+  briefEdit: Recorded[];
+  briefRead: Recorded[];
+  profileEdit: Recorded[];
   refresh: Recorded[];
   /** Anything that matched no known path. Always assert this is empty. */
   other: Recorded[];
@@ -119,6 +127,10 @@ export function installRouter(
     domains: [],
     domainSearch: [],
     domainGet: [],
+    briefCreate: [],
+    briefEdit: [],
+    briefRead: [],
+    profileEdit: [],
     refresh: [],
     other: [],
   };
