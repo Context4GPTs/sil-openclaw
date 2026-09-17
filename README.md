@@ -135,17 +135,26 @@ agent  Different niche — camping. Learning how to buy a backpacking
 
 ## Tools
 
-Ten tools. The seven the shopping loop calls are named `shopping_*` — for what they
-do for you — and the three account tools keep the `sil_` name. Your agent calls them for
-you; you just say what you want.
+Fourteen tools. The eleven the shopping loop calls are named `shopping_*` — for what
+they do for you — and the three account tools keep the `sil_` name. Your agent calls them
+for you; you just say what you want.
 
 **Your account**
 
 | Tool | What it does |
 |---|---|
 | `sil_register` | Start a browser sign-in and link your agent to your sil identity. Takes no arguments. |
-| `sil_whoami` | Read your sil identity — name, country and saved addresses — as the agent sees it. Takes no arguments. |
+| `sil_whoami` | Read your sil identity — name, country, saved addresses, and the measurements and preferences sil holds for you — as the agent sees it. Takes no arguments. |
 | `sil_doctor` | Check the install: file modes, credential health, host wiring, and whether a newer plugin is published. Reports; repairs only what is safe. |
+
+**Your brief and your profile**
+
+| Tool | What it does |
+|---|---|
+| `shopping_brief_create` | Open the shopping job this conversation works from — a title and what you are after in your own words, plus any wants you have already stated. One brief per conversation, across every category it covers. |
+| `shopping_brief_edit` | Write a want, a change of mind or the end of the job into that brief: the values you want under the category they belong to, the seller terms under `seller`, the keys you have given up, and one sentence saying what you changed and why. |
+| `shopping_brief_read` | With no arguments, your shopping jobs, newest first — so a new chat carries on where the last one stopped. With an `id`, that whole brief: what you are after, every want under its category, and the decisions you have already taken. |
+| `shopping_profile_edit` | Write what is true of you whatever you are buying: a measurement with its unit, a size as it is printed, or a lasting taste in your own words. Writing the same name again replaces it; `sil_whoami` reads it all back. |
 
 **Shopping**
 
@@ -154,9 +163,9 @@ you; you just say what you want.
 | `shopping_domain_search` | Read sil's shared registry in your own words and get back the categories that match, each with a line on how the thing is bought. An empty list is the one answer that licenses a mint. |
 | `shopping_domain_get` | Read one standing category: its buying guide, and every key it is bought by with the operators, unit and allowed values each takes. |
 | `shopping_domain_create` | Coin a NEW category — its path, a guide written from research, and its first keys. The one permanent, global write in sil; an existing path is refused and nothing is written. |
-| `shopping_search` | Search one settled category. Send the domain, your own words, how many products you want, the values you want as `specs`, and `ship_to` — the label of one of your saved addresses, which localizes the search (your default one when it is left off). Products come back best-first with `fit` (what sil verified), their variants, a price range, and `webpage_info` where sil has not read the page yet. |
+| `shopping_search` | Search one settled category, under the brief this conversation is working from. Send the brief's id, the domain, your own shopping words, how many products you want, the brief's own values for that category as `specs`, and `ship_to` — the label of one of your saved addresses, which localizes the search (your default one when it is left off) and rules no seller out. Products come back best-first with `fit` (what sil verified), their variants, a price range, and `webpage_info` where sil has not read the page yet. |
 | `shopping_product_get` | Open the whole of what sil holds on 1–10 shortlisted variants: the description, the images, every key sil holds, and where each reading came from and when. |
-| `shopping_offers` | Price 1–10 variants live, on your own terms: send your `seller_specs` and a `ship_to` label, and each offer comes back with the price exactly as the page prints it, its currency, availability, the listing URL, the moment sil read it, and `seller_fit` — whether that seller ships to that address (`serviceable`, `not_serviceable` or `unknown`) and what it holds for each term you asked about. |
+| `shopping_offers` | Price 1–10 variants live, on your own terms: send the brief's id, its `seller` terms as `seller_specs` (where the seller is among them) and a `ship_to` label, and each offer comes back with the price exactly as the page prints it, its currency, availability, the listing URL, the moment sil read it, and `seller_fit` — whether that seller ships to that address (`serviceable`, `not_serviceable` or `unknown`) and what it holds for each term you asked about. |
 | `shopping_seller_get` | One seller's whole terms, for 1–10 of them: `specs` (every seller key sil holds a value for), whether it ships to you, and the shipping routes and return terms sil has read. `unknown` keeps the seller; it just means sil has not read that policy. |
 
 **The wire is a contract, not a convention.** Each shopping tool's input schema IS the
@@ -169,7 +178,7 @@ is the API's own 200 body handed over untouched.
 
 The plugin ships one bundled skill — **`sil-shopping`** 🛒 — that your agent loads automatically the first time you express a shopping intent. You don't invoke it; it's the playbook that makes the tools work well together:
 
-- **Routes intent to the right tool.** *"find me a keyboard"* → `shopping_search`, *"what does it cost?"* → `shopping_offers`, *"will it reach me?"* → `shopping_seller_get`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`.
+- **Routes intent to the right tool.** *"find me a keyboard"* → `shopping_search`, *"what does it cost?"* → `shopping_offers`, *"will it reach me?"* → `shopping_seller_get`, *"what was I shopping for?"* → `shopping_brief_read`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`.
 - **Many niches, minted on the fly, with no preparation.** A shopping intent runs the loop on whatever agent holds the plugin: it classifies what you're buying, reuses a niche it has already learned or **researches a new one on the spot** (announced, so you can correct it), and derives how to decompose every request — learning your facts and taste as it goes.
 - **Recovers the right way.** Every tool reports a status; the skill follows that tool's own recovery hint — re-register, fix the query, or retry — instead of guessing a fix that won't work.
 - **Keeps prices honest.** A price is dated only where sil dated it, so the skill re-reads an item's offers right before you buy and quotes the moment they were read.

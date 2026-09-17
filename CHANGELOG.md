@@ -12,7 +12,7 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
-- **The seven `shopping_*` tools, on the agent contract.** 1:1 with the sil-api routes —
+- **The eleven `shopping_*` tools, on the agent contract.** 1:1 with the sil-api routes —
   `shopping_domain_search` (read the registry in the buyer's words),
   `shopping_domain_get` (a category's buying guide and the keys it is bought by),
   `shopping_domain_create` (coin a new one), `shopping_search`, `shopping_product_get`
@@ -20,7 +20,20 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   terms you asked for, per offer, read live) and `shopping_seller_get` (one seller's
   whole terms). Every tool the loop calls is named for what it does for the shopper;
   only `sil_register`, `sil_whoami` and `sil_doctor` keep the `sil_` name.
-- **The fourteen schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
+- **The brief and the profile are tools now: `shopping_brief_create`,
+  `shopping_brief_edit`, `shopping_brief_read` and `shopping_profile_edit`.** One brief
+  per session, held in sil under the buyer's account and named by `brief` on every
+  search and offers call: a title, a narrative in their own terms, the product specs by
+  category and the seller specs under `seller`, and the `decision` sentence behind each
+  change. A spec is `key · op · value · currency? · reason?` — there is no hard or soft
+  on it, and a want no spec can carry stays in the narrative. `shopping_brief_read` with
+  no `id` lists the buyer's briefs, newest first, which is what a new chat opens on.
+  `shopping_profile_edit` writes what is true of them whatever they buy — a measurement
+  with its unit, a size as printed, a lasting taste — and an entry replaces the one of
+  the same `name`.
+- **`sil_whoami` answers the buyer's `measurements` and `preferences`**, beside the name,
+  country and addresses, so a foot length written last session is never asked for again.
+- **The twenty-two schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
   its committed request artifact, copied verbatim from `sil-services`
   (`schema/PROVENANCE.md` names the commit), and each `ok` result IS the API's 200 body,
   handed over untouched. The plugin adds no shape of its own in either direction, so
@@ -46,9 +59,9 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   from the next. The registry derives each key's operators from its `type`. A key an
   ancestor already defines with the same type and unit is not coined again: the mint
   answers `ok` and reports it `inherited: true`, so the agent may filter on it.
-- **The skill drives one loop over the brief sil holds.** Every chat opens on
-  `sil_whoami` and a bare `shopping_brief_read`, so a size, a width, a budget or a market
-  already on file is never asked again. Then: settle the category, write every want as a
+- **The skill drives one loop over the brief sil holds, and every tool it names now
+  answers.** Every chat opens on `sil_whoami` and a bare `shopping_brief_read`, so a
+  size, a width, a budget or a market already on file is never asked again. Then: settle the category, write every want as a
   spec and every lasting fact to the profile **before** the next search, find the products
   that fit the brief's product specs, price them and read the sellers against its seller
   specs, and — when nothing fits — name the spec in the way, propose ONE relaxation, wait,
@@ -66,8 +79,17 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   plugin still mints the session id and claims with it.
 - **`sil_whoami` carries the buyer's `country` inside `identity`**, beside `name`, when the
   read has one — absent when nothing on file says it, never inferred from an address.
+- **BREAKING — `shopping_search` and `shopping_offers` name the brief.** `brief` is
+  required on both: the agent writes each call's specs FROM the brief's — all of them,
+  the same ones — and sil records the call against the want behind it. The brief's
+  product specs ride on the search; its `seller` specs, `country` among them, ride on
+  the offers and never on the search. `ship_to` stays what it was, the label of an
+  address that localizes and rules no seller out — never a market filter. To change what
+  is asked, change the brief with the buyer's decision; a spec is never left out of one
+  call.
 - **BREAKING — the catalog answer is the agent contract's, and the pre-contract one is
-  deleted.** `shopping_search` takes `domain` · `query` · `n` · `specs` · `ship_to` and
+  deleted.** `shopping_search` takes `brief` · `domain` · `query` · `n` · `specs` ·
+  `ship_to` and
   answers with `products[]`, each carrying `fit` (only what sil verified — a key absent
   from it is a gap to name, never a miss), the `variants` that fit, a price range per
   currency, and `webpage_info` where sil has not read the page yet. It asks nothing about

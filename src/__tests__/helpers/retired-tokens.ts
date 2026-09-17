@@ -28,8 +28,9 @@ export const RETIRED_TOKENS = [
   // The local document store and the loop it drove. The brief and the profile are
   // sil's now, one spec vocabulary with no hardness on it — prose that still writes a
   // document, compiles a Brief or sorts a want into `## Hard constraints` is prose
-  // driving tools the wire does not have.
-  "shopping_doc_", "shopping_brief_compile", "eight-beat", "hard constraint",
+  // driving tools the wire does not have. A spec is `key · op · value`: prose that
+  // still grades one as relaxable or not sends the agent widening on its own.
+  "shopping_doc_", "shopping_brief_compile", "eight-beat", "hard constraint", "hard row",
 ];
 
 /** The bundle rule: a blanket forbid, no allowance, every needle. */
