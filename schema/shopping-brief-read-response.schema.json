@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-brief-read-response.schema.json",
+  "title": "sil shopping_brief_read — response",
+  "anyOf": [
+    {
+      "type": "object",
+      "required": [
+        "status",
+        "brief"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "ok",
+          "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+        },
+        "brief": {
+          "type": "object",
+          "required": [
+            "id",
+            "title",
+            "status",
+            "narrative",
+            "specs",
+            "decisions"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Names it on every search and offers call."
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Tells the buyer which job this is."
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "active"
+                },
+                {
+                  "type": "string",
+                  "const": "closed"
+                }
+              ],
+              "description": "Reads whether the job is still open; a closed brief is history, not a session."
+            },
+            "narrative": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000,
+              "description": "Reads what the buyer is after before writing the next call."
+            },
+            "specs": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "key",
+                      "op",
+                      "value"
+                    ],
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "description": "Names the key from the domain read; `price` is a key every domain has."
+                      },
+                      "op": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "const": "eq"
+                          },
+                          {
+                            "type": "string",
+                            "const": "neq"
+                          },
+                          {
+                            "type": "string",
+                            "const": "gte"
+                          },
+                          {
+                            "type": "string",
+                            "const": "lte"
+                          },
+                          {
+                            "type": "string",
+                            "const": "in"
+                          },
+                          {
+                            "type": "string",
+                            "const": "nin"
+                          }
+                        ],
+                        "description": "Sends the operator the domain read listed for this key."
+                      },
+                      "value": {
+                        "description": "Sends the desired value, typed by the key's type."
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$",
+                        "minLength": 3,
+                        "maxLength": 3,
+                        "description": "Required on money: sil holds no exchange rate, so the bound is tested against offers in this currency only, and `eur` matches no offer sil stores."
+                      },
+                      "reason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256,
+                        "description": "Writes the buyer's own words behind the row, and reads them back before proposing to relax it."
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "description": "Writes each call's specs from these — the key is the domain they sit under, `seller` for the seller specs."
+            },
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "text"
+                ],
+                "properties": {
+                  "at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Says when the buyer decided it."
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "Reads back what they changed and why."
+                  }
+                },
+                "additionalProperties": false
+              },
+              "description": "Reads what the buyer has already settled, newest last, and never re-asks it."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Reads the whole job back, and writes the next search and offers call from it."
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "status",
+        "briefs"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "ok",
+          "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+        },
+        "briefs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "status",
+              "domains",
+              "updated_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Sends it back as `id` to read the whole brief."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "description": "Tells the buyer which job this is."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "active"
+                  },
+                  {
+                    "type": "string",
+                    "const": "closed"
+                  }
+                ],
+                "description": "Reads whether the job is still open; a closed brief is history, not a session."
+              },
+              "domains": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+                  "maxLength": 255,
+                  "description": "Names a domain the brief already holds specs under."
+                },
+                "description": "Reads what this job already covers without opening it."
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Picks up the job the buyer worked on last."
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Reads the buyer's briefs, newest first, and asks which one this is."
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "type": "object"
+}

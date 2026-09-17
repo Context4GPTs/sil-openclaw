@@ -128,7 +128,7 @@
           "product_spec": {
             "type": "boolean",
             "const": true,
-            "description": "Sends it as a hard row when the buyer names it; never treats two products that differ on it as one."
+            "description": "Writes it into the brief when the buyer names it; never treats two products that differ on it as one."
           }
         },
         "additionalProperties": false

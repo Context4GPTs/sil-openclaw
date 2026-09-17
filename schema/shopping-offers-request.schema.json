@@ -4,9 +4,16 @@
   "title": "sil shopping_offers — request",
   "type": "object",
   "required": [
+    "brief",
     "ids"
   ],
   "properties": {
+    "brief": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Names the session's brief, so sil records this call against the want behind it. A brief that is not the buyer's answers `not_found`."
+    },
     "ids": {
       "type": "array",
       "items": {
@@ -84,7 +91,7 @@
         "additionalProperties": false
       },
       "maxItems": 32,
-      "description": "Sends the desired seller terms — keys of the domain read's `seller_specs` — one per hard row or preference."
+      "description": "Sends the seller specs this call asks, written by the agent from the brief's — keys of the domain read's `seller_specs`, base and branch."
     }
   },
   "additionalProperties": false

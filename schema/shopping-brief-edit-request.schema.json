@@ -1,38 +1,35 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.sil.com/shopping-search-request.schema.json",
-  "title": "sil shopping_search — request",
+  "$id": "https://schemas.sil.com/shopping-brief-edit-request.schema.json",
+  "title": "sil shopping_brief_edit — request",
   "type": "object",
   "required": [
-    "brief",
-    "domain",
-    "query",
-    "n"
+    "id"
   ],
   "properties": {
-    "brief": {
+    "id": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Names the session's brief, so sil records this call against the want behind it. A brief that is not the buyer's answers `not_found`."
+      "description": "Names the brief to write to; one that is not the buyer's answers `not_found`."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Renames the job."
+    },
+    "narrative": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "description": "Replaces the whole narrative, never appends to it."
     },
     "domain": {
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Sends the path the domain read returned."
-    },
-    "query": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 512,
-      "description": "Sends the shopping words: the category as a shop lists it and the numbers that pick the product, never a sentence."
-    },
-    "n": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 50,
-      "description": "Asks for this many products."
+      "description": "Names the domain `specs` and `remove` below sit under."
     },
     "specs": {
       "type": "array",
@@ -88,18 +85,40 @@
             "minLength": 3,
             "maxLength": 3,
             "description": "Required on money: sil holds no exchange rate, so the bound is tested against offers in this currency only, and `eur` matches no offer sil stores."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Writes the buyer's own words behind the row, and reads them back before proposing to relax it."
           }
         },
         "additionalProperties": false
       },
       "maxItems": 32,
-      "description": "Sends the product specs this search asks, written by the agent from the brief's; a key the domain does not hold is recorded, never refused."
+      "description": "Replaces every spec on the keys they name under that domain; a range is the two rows on its key."
     },
-    "ship_to": {
+    "remove": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "description": "Names a key whose specs go."
+      },
+      "maxItems": 32,
+      "description": "Drops the specs on these keys when the buyer gives a row up."
+    },
+    "decision": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 64,
-      "description": "Localizes the search to one of the buyer's addresses on file, named by its label; the default address when absent. It excludes no seller anywhere else — where the seller is, is the seller spec `country`, on the offers."
+      "maxLength": 512,
+      "description": "Logs in one sentence what the buyer changed and why; sil stamps it with the time, and the next session reads the reasoning rather than re-asking."
+    },
+    "status": {
+      "type": "string",
+      "const": "closed",
+      "description": "Closes the brief when the job is over."
     }
   },
   "additionalProperties": false

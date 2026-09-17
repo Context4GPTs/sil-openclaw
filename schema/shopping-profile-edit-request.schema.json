@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-profile-edit-request.schema.json",
+  "title": "sil shopping_profile_edit — request",
+  "type": "object",
+  "properties": {
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Names the measurement; writing the same name again replaces it."
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            ],
+            "description": "Reads a number to translate through the guide, or a size as it is printed."
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16,
+            "description": "Reads which unit the number is in before comparing it with a spec."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 32,
+      "description": "Writes what the buyer said about their body before the next search; an entry replaces the one of the same `name`."
+    },
+    "preferences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Names the preference; writing the same name again replaces it."
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Reads the taste in the buyer's own words, and never asks what it answers."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 32,
+      "description": "Writes a taste that will still be true next session, in the buyer’s words."
+    },
+    "remove": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$",
+        "minLength": 1,
+        "maxLength": 64,
+        "description": "Names an entry that goes."
+      },
+      "maxItems": 32,
+      "description": "Drops what stopped being true of the buyer."
+    }
+  },
+  "additionalProperties": false
+}
