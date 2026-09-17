@@ -129,7 +129,7 @@ agent  Different niche — camping. Learning how to buy a backpacking
 
 > **You teach it once; it stays sharp.** How a category is bought comes from sil's shared registry — read before the web, so it is current without you teaching it twice — and your own facts, taste and shopping jobs belong to your sil account rather than to one agent. Nothing to re-answer, and sharper every session.
 
-**What it keeps on your machine: nothing of yours.** The plugin stores your sil credentials and its own configuration under `$SIL_DATA_DIR` (owner-only `0600`) and writes nothing else there — no notes about you, no shopping jobs, no measurements. What your agent learns about you lives in your sil account, is **never pooled across users**, and is never used for training or aggregation. Research reads public sources to learn how a *category* is bought; it does not upload anything about you. If an earlier version left a `shopper/` folder under that directory, nothing reads it any more and you can delete it.
+**What it keeps on your machine: nothing of yours.** The plugin stores your sil credentials and its own configuration under `$SIL_DATA_DIR` (owner-only `0600`), and no shopping tool writes there at all — no notes about you, no shopping jobs, no measurements. What your agent learns about you lives in your sil account, is **never pooled across users**, and is never used for training or aggregation. Research reads public sources to learn how a *category* is bought; it does not upload anything about you. If an earlier version left a `shopper/` folder under that directory, nothing reads it any more and you can delete it.
 
 ---
 
