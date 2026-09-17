@@ -22,11 +22,12 @@ pick the product — `ski boots 27.5 flex 110` — never a sentence and never th
 restated. The budget, the ability and the trip are specs and narrative, not words for the
 index.
 
-**At most 4 `shopping_search` calls per category, per turn.** Call 1 is the brief as it
-stands; a further call re-words `query` for recall and never relaxes a spec, because a
-spec changes only when the buyer says so — that is step 3. The bound is per category:
-a two-category brief gets two fan-outs of up to four, and spending one category's budget
-on another is a defect, not a trade.
+**At most 4 `shopping_search` calls per category before you ask the buyer** — four
+between one decision of theirs and the next. Call 1 is the brief as it stands; a further
+call re-words `query` for recall and never relaxes a spec, because a spec changes only
+when the buyer says so — that is step 3. The bound is per category: a two-category brief
+gets two fan-outs of up to four, and spending one category's budget on another is a
+defect, not a trade.
 
 **Then read what came back.** `fit` carries the value sil holds for each product spec you
 asked; a key absent from it is a gap you name, never a reason to drop a product.

@@ -178,22 +178,22 @@ export const SHOPPING_TOOLS = [
       "FIND: the products and variants that fit the brief, in one settled category. Send"
       + " `brief`, the session's brief id, on EVERY call, then the domain path, the"
       + " shopping words as `query` (the category as a shop lists it and the numbers that"
-      + " pick the product, never a sentence), how many products you want, and `specs`:"
+      + " pick the product, never a sentence), how many products, and `specs`:"
       + " every one of the brief's product specs for this category, as the brief holds"
       + " them, a money value a decimal STRING (`\"300\"`, never 300). The brief's"
-      + " `seller` specs — `country` among them — ride on shopping_offers and never on"
+      + " `seller` specs — `country` among them — ride on shopping_offers, never on"
       + " the search. `ship_to` is the LABEL of one of the buyer's addresses as"
       + " sil_whoami lists them: it localizes the search, is never a market filter, and"
-      + " the default one is used when you send none. `price` is a key every domain"
-      + " has, its currency required: a bound in another currency is one sil could not"
+      + " the default is used when you send none. `price` is a key every domain"
+      + " has, currency required: a bound in another currency is one sil could not"
       + " test — say so. Present them in the order returned, never re-rank. `fit`"
       + " answers the ask key by key with what sil verified: a key absent from it is a"
       + " gap to name, never a miss — a key the domain does not hold included, recorded"
       + " for research. An empty `variants` says no listed option fits. `webpage_info`"
       + " means sil has not read that page yet: the seller's words, good for a"
       + " provisional pick, never verified; its absence means they were. At most 4 calls"
-      + " per CATEGORY; to change what is asked, change the brief with the buyer's"
-      + " decision — never leave a spec out.",
+      + " per CATEGORY before you ask the buyer; to change what is asked, change the"
+      + " brief with their decision — never leave a spec out.",
   },
   {
     name: "shopping_product_get",
