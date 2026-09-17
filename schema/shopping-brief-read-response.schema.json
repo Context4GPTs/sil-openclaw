@@ -225,7 +225,7 @@
             },
             "additionalProperties": false
           },
-          "description": "Reads the buyer's briefs, newest first, and asks which one this is."
+          "description": "Reads the buyer's briefs, the one worked on last first, and asks which one this is."
         }
       },
       "additionalProperties": false
