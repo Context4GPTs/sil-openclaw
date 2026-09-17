@@ -193,10 +193,10 @@ describe("retiredV0Offenders — the retired request surface's dead strings", ()
     }
   });
 
-  it("a phrase needle never reaches a tool description — `query` IS a free-text substring", () => {
+  it("a phrase needle never reaches a tool description — the registry read's `q` IS free text", () => {
     // The admission rule above is "a dead string that cannot appear innocently", and
-    // these two are ordinary English. Scoped to the bundle, `shopping_doc_find` can say
-    // what its filter does, hyphen or no hyphen.
+    // these two are ordinary English. Scoped to the bundle, `shopping_domain_search` can
+    // say what its `q` matches against, hyphen or no hyphen.
     expect(retiredV0Offenders("Free text substring over slugs and titles.")).toEqual([]);
     expect(retiredPhraseOffenders("Each subsection is the buyer's own\nsentence.")).toEqual([]);
   });
@@ -243,30 +243,30 @@ describe("retiredV0Offenders — the retired request surface's dead strings", ()
  */
 describe("notFoundLicenceOffenders — `not_found` is a positive claim, never a bare licence", () => {
   const MUST_BITE: [string, string][] = [
-    ["shopping_doc_read's shipped line, verbatim", "An absent document answers not_found."],
+    ["the status read as a real absence", "An absent brief answers not_found."],
     [
-      "shopping_doc_remove's shipped line, verbatim — `not_found` as proof a delete landed",
-      "An already-gone document answers not_found, so a repeat call is safe.",
+      "`not_found` as proof a write landed",
+      "An already-gone brief answers not_found, so a repeat call is safe.",
     ],
     [
-      "the bundle's shipped line, verbatim",
-      "An absent document is `not_found`; a present-but-corrupt one is `unreadable`.",
+      "the absence stated as the wire's own definition",
+      "An absent brief is `not_found`; one sil could not read is `unreadable`.",
     ],
     [
       "the re-mint instruction spelled out",
-      "If a Brief reads not_found, mint a fresh one with shopping_doc_write (mode: create).",
+      "If the path reads not_found, mint a fresh one with shopping_domain_create.",
     ],
     [
-      "the delete believed to have landed",
-      "A repeat shopping_doc_remove answers not_found, which is proof the document is gone.",
+      "the second brief opened over the buyer's own",
+      "A brief id that answers not_found is gone — create another with shopping_brief_create.",
     ],
     [
       "sentence scope — a qualifier in the NEXT sentence does not reach it",
-      "not_found means the Brief is gone. sil reports it only when it could list the directory.",
+      "not_found means the brief is gone. sil reports it only when it could list the briefs.",
     ],
     [
       "bullet scope — a qualifier in the bullet BELOW does not reach it either",
-      "- An absent document answers not_found\n- sil could list the directory that would hold it",
+      "- An absent brief answers not_found\n- sil could list the briefs that would hold it",
     ],
   ];
 

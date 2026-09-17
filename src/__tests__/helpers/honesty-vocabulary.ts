@@ -314,8 +314,8 @@ export function retiredV0Offenders(body: string): string[] {
 
 /**
  * The wordings two live draws failed under. They are ordinary English, not dead
- * strings — `shopping_doc_find`'s `query` IS a free-text substring — so they are
- * scanned over the BUNDLE alone, never over a tool description.
+ * strings — `shopping_domain_search`'s `q` IS free text — so they are scanned over
+ * the BUNDLE alone, never over a tool description.
  */
 export const RETIRED_V0_PHRASES = ["free text", "filled understanding"];
 
