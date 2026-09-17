@@ -12,29 +12,19 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
-- **The twelve `shopping_*` tools, on the agent contract.** Seven catalog tools 1:1 with
-  the sil-api routes — `shopping_domain_search` (read the registry in the buyer's words),
+- **The seven `shopping_*` tools, on the agent contract.** 1:1 with the sil-api routes —
+  `shopping_domain_search` (read the registry in the buyer's words),
   `shopping_domain_get` (a category's buying guide and the keys it is bought by),
   `shopping_domain_create` (coin a new one), `shopping_search`, `shopping_product_get`
   (the whole dossier on 1–10 variants), `shopping_offers` (dated prices and the seller
   terms you asked for, per offer, read live) and `shopping_seller_get` (one seller's
-  whole terms) — plus the four document verbs, renamed `shopping_doc_find` / `read` / `write` /
-  `remove`, and `shopping_brief_compile`. Every tool the loop calls is named for what it
-  does for the shopper; only `sil_register`, `sil_whoami` and `sil_doctor` keep the
-  `sil_` name.
-- **The sixteen schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
+  whole terms). Every tool the loop calls is named for what it does for the shopper;
+  only `sil_register`, `sil_whoami` and `sil_doctor` keep the `sil_` name.
+- **The fourteen schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
   its committed request artifact, copied verbatim from `sil-services`
   (`schema/PROVENANCE.md` names the commit), and each `ok` result IS the API's 200 body,
   handed over untouched. The plugin adds no shape of its own in either direction, so
   there is nothing here for the contract to drift from.
-- **`shopping_brief_compile`, the Brief as the calls it makes.** Name a Brief and one of
-  its `## Items` rows and get that item's `domain`, its own subsection prose as `query`,
-  its `## Hard constraints` and `## Preferences` rows as `specs`, and its `seller` rows as
-  `seller_specs` — hard rows first, each value typed by the key the domain read holds. One
-  registry read, no catalog call, nothing written. `specs` goes to `shopping_search` with
-  `n` and `ship_to`; `seller_specs` goes to `shopping_offers` with the shortlisted variant
-  ids. A row the registry cannot take is refused by name before any spend; a key the
-  registry does not hold travels as written.
 - **`ship_to` is the LABEL of an address the buyer has on file**, as `sil_whoami` lists
   them — never a country. It localizes a search to that address and is what
   `shopping_offers` reads `ships` against; absent, sil uses the buyer's default address.
@@ -56,11 +46,6 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   from the next. The registry derives each key's operators from its `type`. A key an
   ancestor already defines with the same type and unit is not coined again: the mint
   answers `ok` and reports it `inherited: true`, so the agent may filter on it.
-- **The shopper's documents, four operations over one ref scheme.** `ref` is `"shopper"`
-  (the person) or `"brief:<slug>"` (one shopping job, many items, many domains). `find`
-  returns coordinates only, never bodies. `write` takes the WHOLE reconciled markdown —
-  no append, no section patch — with `mode: create` failing if the ref exists and
-  `mode: replace` failing if it does not. `remove` takes one Brief and never cascades.
 - **The skill drives the eight beats** at their real cadences — BRIEF once per job,
   DOMAIN…FEEDBACK per item, VERDICT out of band per bought item. BRIEF and DOMAIN are
   split (a job is scoped in the buyer's words before any category is settled, and an
@@ -92,11 +77,6 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   listed option fits. A price in another currency is a bound sil could not test. On an
   offer's `seller_fit`, `ships: unknown` keeps that offer and a requested seller key
   absent is a term sil has not read — never a term the seller lacks.
-- **BREAKING — the shopper's store is FLAT, and the pre-0.5 layout migrates in one hop on
-  first touch of a document tool.** `shopper/user_spec.md` + `shopper/briefs/<slug>.md`
-  replace `shopper/domains/<slug>/`. A legacy source file is deleted **only once its own
-  section is in the re-read document**; one that will not parse is reported and left in
-  place, and bytes under a legacy `assets/` directory are never deleted.
 - **The `≤4` search-call bound is PER ITEM**, not per request. On a two-item job the old
   reading either halved the second item's budget or blew the bound.
 - **`sil.search_results` carries the `shopping_search` body** (`{status, products}`). The
@@ -114,13 +94,20 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Removed
 
+- **BREAKING — the local document store, its four verbs and `shopping_brief_compile`.**
+  The buyer's brief and measurements live in sil's backend under their account, so the
+  plugin keeps NOTHING of theirs on the agent's disk: `shopping_doc_find` / `read` /
+  `write` / `remove` and `shopping_brief_compile` do not register, there is no
+  deprecation stub and no read path for the old store. `$SIL_DATA_DIR` holds
+  `tokens.json` and `config.json` alone, and `sil_doctor` no longer reports
+  `store.unreadable:*`. A `shopper/` folder an earlier version left behind is read by
+  nothing and can be deleted.
 - **BREAKING — the shopper-creation ceremony, whole.** Gone: the
   `sil-openclaw-create-shopper` bin and its engine, the onboarding ladder and its
   per-search pitch, `sil_register`'s `next_step: "offer_shopper"` breadcrumb (contract
   §5), and `sil_doctor`'s `creationEntrypoint` field and `creation.entrypoint_present`
   finding. A shopping intent runs the eight beats on whatever agent holds the plugin,
-  and the shopper document is created by the first
-  `shopping_doc_write { ref: "shopper", mode: "create" }` a saved fact makes.
+  with nothing to set up first.
 - **BREAKING — `sil_search`, `sil_product_get`, `sil_stores`, `sil_domain_find`,
   `sil_domain_create` and the four `sil_doc_*` verbs.** Renamed, never aliased: the old
   names do not register, and there is no deprecation stub.
@@ -151,15 +138,6 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   renamed `agents.list` (an array) to `agents.entries` (a map keyed by id), and the
   detector went blind on it — reporting a healthy install as mis-wired, or the reverse.
   It reads both shapes now.
-- **A directory sil cannot list no longer reads as an absent document.** The document
-  verbs decided absence with `existsSync` — a boolean over a stat that swallows every
-  errno, so an unlistable `briefs/` answered `not_found` for a Brief sitting on disk. The
-  answer *was* the re-mint instruction, and the buyer's own words went with it; on a
-  remove it claimed a delete that never happened. Every gate that decides absence now
-  runs one probe — **ENOENT alone is absence**; every other errno leaves presence
-  unknown, and unknown is stated as `unreadable` (`recovery: "inspect_document"`), never
-  guessed. `sil_doctor` inherits the new `unreadable[]` entries, so the operator and
-  agent surfaces describe one state.
 - **A delivery miss says WHICH callId and WHY, where an operator reads it.** The host
   writes a plugin's structured fields to the log file and renders the console line from
   the message alone, so a container log showed `[plugins] sil_search_results_miss` and
