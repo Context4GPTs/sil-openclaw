@@ -128,6 +128,19 @@ export interface Identity {
   name: string;
   country?: string;
   addresses: IdentityAddress[];
+  /** What `shopping_profile_edit` wrote: a number with its unit, or a size as
+   * printed. Opaque, exactly as `addresses` are — empty is a real answer. */
+  measurements: ProfileEntry[];
+  /** A lasting taste in the buyer's own words. Same opacity. */
+  preferences: ProfileEntry[];
+}
+
+/** A profile entry as the identity read returns it. The named fields are HINTS —
+ * the entries pass through opaque, and extra fields ride along untyped. */
+export interface ProfileEntry extends Record<string, unknown> {
+  name?: string;
+  value?: unknown;
+  unit?: string;
 }
 
 /**
@@ -591,10 +604,24 @@ function extractIdentity(body: unknown): Identity | null {
     (a): a is IdentityAddress => asRecord(a) !== null,
   );
 
+  // The profile halves are NOT a gate: a read that carries neither is a buyer who
+  // has told sil nothing yet, and `[]` says exactly that — refusing here would
+  // strand them on a `retryable` no retry can clear.
+  const measurements = plainObjects(source["measurements"]);
+  const preferences = plainObjects(source["preferences"]);
+
   // `country` is optional on the read and is passed through only as a string —
   // an absent or non-string one is dropped, never coerced or inferred.
   const country = source["country"];
-  return typeof country === "string" ? { name, country, addresses } : { name, addresses };
+  const identity = { name, addresses, measurements, preferences };
+  return typeof country === "string" ? { ...identity, country } : identity;
+}
+
+/** The elements of `value` that are plain objects, as `addresses` are filtered:
+ * absent or shapeless is `[]`, never a partial read of a malformed entry. */
+function plainObjects(value: unknown): ProfileEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((e): e is ProfileEntry => asRecord(e) !== null);
 }
 
 /** Pull the actionable reason out of a 403 body (`user_not_provisioned` /

@@ -234,8 +234,8 @@ function identityOutcomeToResult(
   }
 }
 
-/** Success: `identity` carries the buyer's name, country (when the read has one)
- * and addresses — no token, no Bearer header. */
+/** Success: `identity` carries the buyer's name, country (when the read has one),
+ * addresses, measurements and preferences — no token, no Bearer header. */
 function identityResult(
   api: PluginAPI,
   identity: Identity,
