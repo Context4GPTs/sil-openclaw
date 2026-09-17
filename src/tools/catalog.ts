@@ -190,7 +190,7 @@ export const SHOPPING_TOOLS = [
       + " answers the ask key by key with what sil verified: a key absent from it is a"
       + " gap to name, never a miss — a key the domain does not hold included, recorded"
       + " for research. An empty `variants` says no listed option fits. `webpage_info`"
-      + " means sil has not read that page yet: the merchant's words, good for a"
+      + " means sil has not read that page yet: the seller's words, good for a"
       + " provisional pick, never verified; its absence means they were. At most 4 calls"
       + " per CATEGORY; to change what is asked, change the brief with the buyer's"
       + " decision — never leave a spec out.",

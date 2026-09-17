@@ -182,7 +182,7 @@ The plugin ships one bundled skill — **`sil-shopping`** 🛒 — that your age
 - **Many niches, minted on the fly, with no preparation.** A shopping intent runs the loop on whatever agent holds the plugin: it classifies what you're buying, reuses a niche it has already learned or **researches a new one on the spot** (announced, so you can correct it), and derives how to decompose every request — learning your facts and taste as it goes.
 - **Recovers the right way.** Every tool reports a status; the skill follows that tool's own recovery hint — re-register, fix the query, or retry — instead of guessing a fix that won't work.
 - **Keeps prices honest.** A price is dated only where sil dated it, so the skill re-reads an item's offers right before you buy and quotes the moment they were read.
-- **Says what sil verified, and says the rest as what it is.** A key sil holds no value for is named as a gap, not passed off as a miss; a page sil has not read yet is quoted as the merchant's own words; a seller sil knows nothing about keeps its place.
+- **Says what sil verified, and says the rest as what it is.** A key sil holds no value for is named as a gap, not passed off as a miss; a page sil has not read yet is quoted as the seller's own words; a seller sil knows nothing about keeps its place.
 
 Because the skill ships inside the plugin, installing the plugin installs the skill — there's nothing extra to set up.
 
