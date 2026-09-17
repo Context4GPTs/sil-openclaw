@@ -382,20 +382,42 @@ describe("each shopping tool carries its discipline clause", () => {
       /inherited/,
       /shopping_domain_get/,
     ],
-    // One brief for the whole session, and the id the rest of it is named by.
-    shopping_brief_create: [/per SESSION/i, /never one per category/i, /`id`/],
-    // The want is written BEFORE the search, and a write REPLACES rather than appends.
-    shopping_brief_edit: [/before\b[^.]{0,20}next search/i, /replace/i, /`decision`/],
+    // One brief for the whole session, the id the rest of it is named by, and the quote
+    // every `reason` is — the founder's live session wrote four first-person paraphrases,
+    // one of them a want ("new") the buyer never stated.
+    shopping_brief_create: [/per SESSION/i, /never one per category/i, /`id`/, /verbatim/i],
+    // The want is written BEFORE the search, a write REPLACES rather than appends, the
+    // `reason` is the buyer's words verbatim, and a `decision` is a mind changed — not a
+    // note of what was just written down.
+    shopping_brief_edit: [
+      /before\b[^.]{0,20}next search/i,
+      /replace/i,
+      /`decision`/,
+      /verbatim/i,
+      /their mind/i,
+    ],
     // The bare read is a listing, and it comes before the first question.
     shopping_brief_read: [/newest first/i, /before you ask/i],
-    // An entry is keyed by its name, and writing that name again replaces it.
-    shopping_profile_edit: [/same `name`/, /before the next search/i],
-    // The brief rides on every call, the honesty the whole answer turns on, the bound.
-    shopping_search: [/`brief`/, /never on the search/i, /\b4\b|\bfour\b/, /per CATEGORY/, /webpage_info/, /gap/i],
+    // An entry is keyed by its name, writing that name again replaces it, and only an
+    // unambiguous statement about the buyer reaches it at all.
+    shopping_profile_edit: [/same `name`/, /before the next search/i, /unambiguous/i, /snake_case/],
+    // The brief rides on every call, its specs travel unchanged, the honesty the whole
+    // answer turns on, the pick is priced before it is recommended, and the bound.
+    shopping_search: [
+      /`brief`/,
+      /never on the search/i,
+      /\b4\b|\bfour\b/,
+      /per CATEGORY/,
+      /webpage_info/,
+      /gap/i,
+      /unchanged/i,
+      /priced/i,
+    ],
     // What the dossier adds over the shortlist, and that a miss is an absence.
     shopping_product_get: [/sources/, /absent/i, /opaque/i],
-    // The brief rides here too, what dates a price, and why the spread is the answer.
-    shopping_offers: [/`brief`/, /observed_at/, /spread/i, /convert/i],
+    // The brief rides here too, its seller specs travel unchanged, what dates a price,
+    // and why the spread is the answer.
+    shopping_offers: [/`brief`/, /observed_at/, /spread/i, /convert/i, /unchanged/i],
     // The three states, that the third one keeps its seller, and that ids are the whole ask.
     shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i, /nothing else/i],
   };
