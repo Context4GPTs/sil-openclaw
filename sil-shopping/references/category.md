@@ -69,10 +69,13 @@ one is missing.
 
 **A read that did not return is not a read that returned nothing.** Any non-`ok` status —
 `invalid_request`, a transient, `not_registered` — leaves the mint out of reach: settle the
-read, never coin around it. And when `shopping_search` refuses, its refusals read alike, so
-read the domain you submitted with `shopping_domain_get` and let its answer decide — a
-guide back means fix the spec and re-issue, `not_found` means the domain was the problem.
-Then read again in the buyer's own words, and coin only if that comes back `matches: []`.
+read, never coin around it. And when `shopping_search` refuses with `invalid_request`, its
+refusals read alike — a domain the registry does not hold and a spec row it will not take
+carry the same status — so read the domain you submitted with `shopping_domain_get` and let
+its answer decide: a guide back means fix the row and re-issue, `not_found` means the
+domain was the problem. Then read again in the buyer's own words, and coin only if that
+comes back `matches: []`. The search's own `not_found` is about the `brief` id instead —
+that id is not one of this buyer's briefs — and no domain read will fix it.
 
 **A brief that already carries a settled path is searched with no registry read at all** —
 the registry read is the cold path's first move, never a per-search toll.
