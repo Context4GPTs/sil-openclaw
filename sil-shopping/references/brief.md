@@ -3,7 +3,7 @@ name: brief
 description: GATHER, the writing half — the session's brief and the buyer's profile, both held in sil under their account. Every want the buyer states becomes a spec before the next search, every lasting fact about them goes to the profile, product specs and seller specs are told apart, and a decision is logged in the buyer's own words. Load on any shopping intent.
 ---
 
-# GATHER — the brief: every want a spec, before the next search
+# GATHER — the brief and the profile, both held in sil
 
 **One brief per session, never one per category.** Boots and a helmet asked in one
 conversation share it: each category's product specs sit under its own domain path, and
