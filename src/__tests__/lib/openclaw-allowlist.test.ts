@@ -64,14 +64,14 @@ const SIL: SilAllowlistFacts = {
   // that do bite (`manifest-contract`, `index.test`).
   tools: [
     "shopping_brief_create",
-  "shopping_brief_edit",
-  "shopping_brief_read",
-  "shopping_domain_create",
+    "shopping_brief_edit",
+    "shopping_brief_read",
+    "shopping_domain_create",
     "shopping_domain_get",
     "shopping_domain_search",
     "shopping_offers",
     "shopping_product_get",
-  "shopping_profile_edit",
+    "shopping_profile_edit",
     "shopping_search",
     "shopping_seller_get",
     "sil_doctor",

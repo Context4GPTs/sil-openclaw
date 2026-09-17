@@ -289,25 +289,21 @@ describe("sil_whoami — happy path (valid access token)", () => {
     expect(blob).not.toContain("\"verified\"");
     expect(blob).not.toContain("\"note\"");
 
-    // The whole envelope, structurally: `{ status: "ok", identity: { name, country,
-    // addresses, measurements, preferences } }` — the shape an agent reads to know
-    // where the buyer is and what sil already holds about them, over the live 401
-    // choreography rather than over the classifier alone.
+    // The whole envelope, structurally: `{ status: "ok", identity: { name,
+    // country, addresses } }` — the shape an agent reads to know where the buyer is.
+    // What `identity` carries INSIDE it is `tools/whoami.test.ts`'s, through the same
+    // `execute()`; re-asserting it here would be two tests of one classifier.
     expect(payload["status"]).toBe("ok");
     const identity = payload["identity"] as {
       name?: unknown;
       country?: unknown;
       addresses?: unknown;
-      measurements?: unknown;
-      preferences?: unknown;
     };
     expect(identity).toBeDefined();
     expect(identity.name).toBe("Ada Lovelace");
     expect(identity.country).toBe("GB");
     expect(Array.isArray(identity.addresses)).toBe(true);
     expect((identity.addresses as unknown[]).length).toBe(1);
-    expect(identity.measurements).toEqual([{ name: "foot_length", value: 27.2, unit: "cm" }]);
-    expect(identity.preferences).toEqual([{ name: "fit", value: "snug over the forefoot" }]);
   });
 
   it("drops an `addresses` element that is not an object — a bare array never ships as an address", async () => {
