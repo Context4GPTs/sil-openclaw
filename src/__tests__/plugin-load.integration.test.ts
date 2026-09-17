@@ -161,10 +161,11 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       .mock.calls.filter(([marker]) => marker === "sil_plugin_loaded");
     expect(markerCalls).toHaveLength(1);
     // The full real tool set — the data-dir creation does not add/drop a tool.
-    // 10 tools: the local document store and its Brief compile are deleted (15 → 10,
-    // a group removal in src/index.ts). The set is exact in BOTH directions on
-    // purpose — loosening it to `toContain` stops it catching a silent removal,
-    // which is how a shipped tool disappears under a green suite.
+    // 14 tools: the local document store and its Brief compile are deleted (a group
+    // removal in src/index.ts), and the brief and profile the contract signed are
+    // registered in their place. The set is exact in BOTH directions on purpose —
+    // loosening it to `toContain` stops it catching a silent removal, which is how a
+    // shipped tool disappears under a green suite.
     expect([...api._tools.keys()].sort()).toEqual([
       "shopping_brief_create",
       "shopping_brief_edit",

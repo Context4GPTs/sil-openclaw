@@ -2,7 +2,7 @@
  * sil OpenClaw plugin — entry point.
  *
  * A UCP commerce plugin for sil. It registers its real tool groups — the account
- * tools (`sil_register`, `sil_whoami`, `sil_doctor`) and the seven `shopping_*`
+ * tools (`sil_register`, `sil_whoami`, `sil_doctor`) and the eleven `shopping_*`
  * catalog tools — so they load in an OpenClaw host.
  * There is no transport, no persistent service, and no background work at
  * register time — `register()` is strictly synchronous and opens nothing.

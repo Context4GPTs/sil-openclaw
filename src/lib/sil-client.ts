@@ -166,7 +166,7 @@ export interface ShoppingRoute {
 }
 
 /**
- * The outcome of any shopping call — ONE union for all seven, because they share one
+ * The outcome of any shopping call — ONE union for all eleven, because they share one
  * origin, one Bearer, one auth plugin and the contract's one error vocabulary (§4).
  *
  * `ok` carries the API's own 200 body, unread and unreshaped. `unauthorized` is the
@@ -182,7 +182,7 @@ export type ShoppingOutcome =
   | { kind: "retryable"; source?: string; detail?: string };
 
 /**
- * Classify a shopping response. One classifier for all seven routes — the contract
+ * Classify a shopping response. One classifier for all eleven routes — the contract
  * gives them one error vocabulary, so a second one could only drift.
  *
  * The 200 gate is the whole of what the plugin owns: a plain object stating

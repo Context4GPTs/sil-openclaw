@@ -128,11 +128,12 @@ describe("plugin entry — registration contract", () => {
     // register() runs the real tool groups (no mock), so it populates the
     // api with exactly the real tools and NO example stub. This pins the
     // wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
-    // 15 → 10: the local document store and its Brief compile are deleted (a GROUP
-    // removal — `registerDocTools` / `registerBriefCompileTool` are gone from
-    // src/index.ts), so nothing of the buyer's is kept on the agent's disk. Exact on
-    // purpose: loosening it to `toContain` stops it catching a silent removal, which
-    // is how a shipped tool disappears under a green suite.
+    // 14: the local document store and its Brief compile are deleted (a GROUP removal
+    // — `registerDocTools` / `registerBriefCompileTool` are gone from src/index.ts), and
+    // the brief and profile the contract signed are registered in their place, so
+    // nothing of the buyer's is kept on the agent's disk. Exact on purpose: loosening it
+    // to `toContain` stops it catching a silent removal, which is how a shipped tool
+    // disappears under a green suite.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
