@@ -71,9 +71,14 @@ describe("the loop the bundle drives", () => {
     // used" reached no brief and no profile, and six searches ran without them.
     const units = sectionStatements("GATHER");
 
+    // The satisfying statement has to be about WRITING the want down, not about the
+    // registry read that also happens before the search — measured: the domain read's
+    // own sentence satisfied a looser rule here and the mutant passed.
     const before = units.filter((s) => /before/i.test(s) && /search/i.test(s));
     expect(before.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(before, (s) => /\bspec/i.test(s))).toEqual([]);
+    expect(
+      unsatisfied(before, (s) => /\bspec/i.test(s) && /\bwrit|brief|profile/i.test(s)),
+    ).toEqual([]);
 
     const profile = units.filter((s) => /shopping_profile_edit/.test(s));
     expect(profile.length).toBeGreaterThan(0); // guard-of-the-guard
@@ -117,8 +122,11 @@ describe("the loop the bundle drives", () => {
     const shipTo = units.filter((s) => /ship_to/.test(s));
     expect(shipTo.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(unsatisfied(shipTo, (s) => /\blabel\b/i.test(s) && /address/i.test(s))).toEqual([]);
+    // The denial must attach to the MARKET reading. Keyed near the word because
+    // "excludes no seller" alone reads as satisfied by a sentence that has just called
+    // `ship_to` the market filter — measured, the mutant passed.
     expect(
-      unsatisfied(shipTo, (s) => /\bnever\b|\bno\b/i.test(s) && /market|excludes/i.test(s)),
+      unsatisfied(shipTo, (s) => /\b(?:never|not)\b[^.]{0,30}\bmarket\b/i.test(s)),
     ).toEqual([]);
 
     // …and the other side of the line: "not used" is a PRODUCT spec, on the category.
@@ -155,10 +163,12 @@ describe("the loop the bundle drives", () => {
     );
     expect(bound.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(unsatisfied(bound, (s) => /per categor|each categor/i.test(s))).toEqual([]);
-    // A bound naming per-job or per-turn-only is an offender ONLY when the same
-    // statement does not also say per category — the correct prose disavows the wrong
-    // reading by name, and a bare forbid would fail the sentence that fixes the defect.
-    expect(bound.filter((s) => /per job/i.test(s) && !/per categor/i.test(s))).toEqual([]);
+    // …and NO statement in the step re-scopes it. Scanned over the whole section, not
+    // just the statements naming the number: the sentence that spends one category's
+    // budget on another names neither `4` nor the search — measured, it slipped through.
+    // "per job" is an offender only where the same statement does not also say per
+    // category, since the correct prose disavows the wrong reading by name.
+    expect(units.filter((s) => /per job/i.test(s) && !/per categor/i.test(s))).toEqual([]);
   });
 
   it("5 — the offers carry the brief's seller specs, and an ABSENT `seller_fit` key is a term sil has not read — never a seller that failed it", () => {
@@ -224,12 +234,12 @@ describe("the loop the bundle drives", () => {
     const units = sectionStatements("GATHER").filter((s) => /invalid_request/.test(s));
     expect(units.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(unsatisfied(units, (s) => /\bkey\b/i.test(s) && /passes?|would pass/i.test(s))).toEqual([]);
-    expect(
-      unsatisfied(
-        sectionStatements("GATHER").filter((s) => /resend|re-?issue|send it again/i.test(s)),
-        (s) => /\bnever drop|\bnot drop/i.test(s) || /fix/i.test(s),
-      ),
-    ).toEqual([]);
+
+    const resend = sectionStatements("GATHER").filter((s) =>
+      /resend|re-?issue|send it again/i.test(s),
+    );
+    expect(resend.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(resend, (s) => /never drop|not drop|never dropped/i.test(s))).toEqual([]);
   });
 
   it("8 — what sil verified is said as verified and the rest as what it is: a `fit` gap, a page's own words, a bound in another currency", () => {

@@ -68,14 +68,14 @@ rejection is a decision too — *"not the Salomon"* is `brand nin ["Salomon"]` a
 sentence that says why — and where no key carries it, it is the narrative and the
 `decision` alone.
 
-## A refused write names the key and shows a spec that passes
+## When sil refuses a write
 
 sil checks every spec against the registry as it is written, so a write is `ok` or it is
 `invalid_request` naming the key, with a spec on that key that would pass — money as a
 decimal string with a currency, an operator the key lists, a value its type takes. Fix
-that key from the example it handed you and resend the write. Never drop the want, never
-re-word it into something vaguer, and never carry on as if it had been written: the
-buyer's ask is what the next search is made of.
+that key from the example it handed you and resend the write — never drop the want, never
+re-word it into something vaguer, and never carry on as if it had been written, because
+the buyer's ask is what the next search is made of.
 
 A key the domain does not hold is kept exactly as written — the brief holds it and the
 search records it — so a want ahead of the registry is never the thing you drop.
