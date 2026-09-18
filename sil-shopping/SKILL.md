@@ -25,6 +25,10 @@ theirs is written to this agent's disk.
   *"I am advanced skier"*, *"I don't want used"*, or the measurement named, *"foot length
   27.2 cm"*. Nothing said, no spec: ask them, or say *"I'm assuming new, not used — tell me
   if not"* out loud and write it on their answer.
+- **A measurement is never the spec.** 27.2 cm is the buyer's, held on their profile; the
+  spec is the size the category is sold in — `mondo_size in [27, 27.5]`, carrying that
+  measurement as its `reason`. A search sent on the measurement itself (`foot_length eq
+  27.2`) matches nothing a shop sells, and the buyer pays for it in a wasted turn.
 - **An ambiguous phrase is asked about, or stays in the narrative in the buyer's own
   words** — never turned into a lasting fact. *"wide forefoot and bit short"* is the foot
   or the person and you cannot tell which; the profile holds only what the buyer stated
@@ -35,24 +39,33 @@ theirs is written to this agent's disk.
   all of them and unchanged: never a looser bound, never a spec the brief does not hold.
   To ask for something else: the buyer's word, then `shopping_brief_edit` with a
   `decision`, then search again.
-- **A `decision` is the buyer changing their mind** — one sentence on what they changed
-  and why, never a log of what you have just written down.
+- **A `decision` is the buyer changing their mind** — one sentence about THEM and never in
+  their voice, on what they changed and why; a new want's words are its spec's `reason`,
+  never a `decision`, and never a log of what you have just written down.
+- **The answer is what fits; sil never says what it left out.** Nothing comes back about
+  the boots that missed, so when nothing fits, ask the buyer which spec to give up, write
+  their word into the brief with a `decision`, and search again — searching again with that
+  spec changed is the only way to learn what giving it up reaches.
+- **`query` is shop words.** The category as a shop lists it and the numbers that pick the
+  product — *ski boots 27.5 flex 110* — and never a sentence: a budget, a market, *"in
+  stock"* and *"online"* are specs, and in `query` they cost the buyer most of the offers.
 - **The pick you recommend is priced.** `shopping_offers` reads live and stamps each price
   with `observed_at`: call it for the pick itself, with the brief's seller specs, before
   you recommend it — then quote the price with that moment, and say whether that seller
   reaches the buyer. A product's price range carries no date and no promise; never present
   it as today's price, and never convert it, because sil holds no exchange rate anywhere.
-- **Say what sil verified, and say the rest as what it is.** A key absent from `fit` is a
-  **gap to name**, never a miss — a key the domain does not hold included, which sil
-  records for research and answers absent rather than refusing. A requested key absent from
-  `seller_fit` is a term sil has not read, never a term the seller lacks; `ships: unknown`
-  keeps the offer, so say sil could not confirm shipping and hand the buyer the listing. A
-  product carrying `webpage_info` is a page sil has not read: its numbers are the seller
-  page's own words and are **not verified** — say *"the seller's page says …"*, never
-  present them as fact; the block's absence means they were verified. An empty `variants`
-  means sil saw no listed option that fits — say that out loud, and never read a size range
-  a page prints as stock. A price in a currency other than the buyer's bound is a bound sil
-  could not test — say so.
+- **Say what sil verified, and say the rest as what it is.** `fit` answers every key you
+  asked: a value sil verified, or *"unknown"* where it holds none — a **gap to name** and to
+  dig into with `shopping_product_get`, never a product that failed and never a miss. A
+  requested key absent from `seller_fit` is a term sil has not read, never a term the seller
+  lacks; `ships: unknown` keeps the offer, so say sil could not confirm shipping and hand
+  the buyer the listing. `host` is the shop a cold product was read on and `printed` its
+  page's own labelled pairs — a provisional pick, **not verified**: say *"the seller's page
+  says …"*, and their absence means sil read the page itself. A variant in `variants` with
+  no option values is a listing whose sizes sil has not read — say the size is unread, price
+  it with `shopping_offers` like any other, and never read a size range a page prints as
+  stock. Each variant carries its own `price`: quote the price of the size you name. A price
+  in a currency other than the buyer's bound is a bound sil could not test — say so.
 - **The registry is READ before it is written.** `shopping_domain_search` reads it in the
   buyer's own words, and only a read that comes back `matches: []` licenses a mint with
   `shopping_domain_create`. The registry is shared by every buyer and nothing can undo a
@@ -113,14 +126,18 @@ Each tool's parameters and status vocabulary live in its own definition and answ
 shopping needs only those. A worked run:
 [`examples/session_walkthrough.md`](examples/session_walkthrough.md).
 
+**The references sit beside this file.** Read one from the folder of the path your host
+listed for this skill, and never hunt the filesystem for it — a guessed path under the
+gateway home is the wrong one.
+
 ## The loop
 
 | Step | What it does | Tools |
 |---|---|---|
 | **GATHER** | settle the category, then write every want as a spec and every lasting fact to the profile — before the next search | `shopping_domain_search` · `shopping_domain_get` · `shopping_domain_create` · `shopping_brief_create` · `shopping_brief_edit` · `shopping_profile_edit` |
-| **1 FIND** | the products that fit the brief's **product** specs | `shopping_search` · `shopping_product_get` |
+| **1 FIND** | the variants that fit the brief's **product** specs, each with its own price | `shopping_search` · `shopping_product_get` |
 | **2 PRICE** | who sells them, at what dated price, and which sellers meet the brief's **seller** specs | `shopping_offers` · `shopping_seller_get` |
-| **3 DECIDE** | nothing fits: name the spec in the way, propose one relaxation, wait — then write the buyer's word into the brief and run step 1 again | `shopping_brief_edit` |
+| **3 DECIDE** | nothing fits: ask which spec to give up, wait — then write their word into the brief with a `decision` and search again | `shopping_brief_edit` |
 
 The steps are [`steps.md`](references/steps.md); writing the brief and the profile is
 [`brief.md`](references/brief.md); settling a category is

@@ -164,6 +164,20 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     expect([...new Set(paths)].filter((p) => !existsSync(join(BUNDLE, p)))).toEqual([]);
   });
 
+  it("SKILL.md says WHERE a reference is read from — the one fact that stops a filesystem hunt", () => {
+    // Measured 2026-09-17: the agent spent three shell calls looking for this bundle
+    // (`/root/.openclaw/…` permission denied, then a recursive search, then the real
+    // `/tmp/sil-plugin/sil-shopping/SKILL.md`). The host already hands it the file's own
+    // path — `openclaw.plugin.json#skills` points at this directory and the host prints
+    // it as the skill's location — so the fix is one sentence saying to resolve a
+    // reference against THAT, not a guessed path under the gateway home.
+    const referring = splitStatements(skillSrc()).filter((s) => /references/i.test(s));
+    expect(referring.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(referring, (s) => /\bfolder\b|\bdirectory\b/i.test(s) && /path/i.test(s)),
+    ).toEqual([]);
+  });
+
   it("the drift scan covers EVERY file on disk — no bundle file escapes it", () => {
     // The floor that keeps every corpus-driven guard honest. Without it a silent
     // shrink of the scanned set (a file renamed to .mdx, moved, or added in a new

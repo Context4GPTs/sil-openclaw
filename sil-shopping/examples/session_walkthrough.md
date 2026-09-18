@@ -130,10 +130,11 @@ no `decision` was logged for them.
 ## Step 1 again, and the price before the recommendation
 
 The same five specs with the €400 ceiling. `v1` and `v6` come back as before, and with them
-a product sil has not read — `fit: {}`, `variants: []`, and a `webpage_info` block whose
-text prints *"Last: 102 mm, Flex: 110, sizes 24–31"*. That one is not the pick: its numbers
-are the seller's page's own words and sil has not verified them, and with no listed variant
-there is nothing to price, because `shopping_offers` takes variant ids.
+a product sil has not read: `fit` reads *"unknown"* on every key it asked, `host` is the
+shop, `printed` carries *"Last: 102 mm"* and *"Available sizes: 24.0 – 31.0"*, and its one
+variant carries no option values. Those numbers are the seller's page's own words and sil
+has not verified them, and the 24–31 the page prints is not stock — but that single variant
+has an id, so it prices and opens like any other.
 
 So the pick is priced first, and the recommendation comes after it:
 
@@ -147,8 +148,9 @@ shopping_offers
 price sil cannot test against your €400 ceiling. `seller_fit` carries no `country`, so sil
 has not read where that seller is, and `ships` came back `unknown`: I could not confirm it
 reaches Greece, so here is the listing. There is a third boot whose page says 102 mm last
-and flex 110 — that is the seller's page talking, sil has not verified it, and sil saw no
-listed 27.5 on it, so the 24–31 the page prints is not stock."*
+and flex 110 — that is the seller's page talking, sil has not verified it, and sil has not
+read its sizes, so I cannot tell you a 27.5 is in stock. It prices at €399 on that listing,
+if you want it priced and opened anyway."*
 
 ## The next morning — *"Boots again."*
 

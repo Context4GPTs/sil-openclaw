@@ -242,24 +242,31 @@ describe("the loop the bundle drives", () => {
     expect(unsatisfied(resend, (s) => /never drop|not drop|never dropped/i.test(s))).toEqual([]);
   });
 
-  it("8 — what sil verified is said as verified and the rest as what it is: a `fit` gap, a page's own words, a bound in another currency", () => {
+  it("8 — what sil verified is said as verified and the rest as what it is: `fit`'s \"unknown\", a page's own words, a bound in another currency", () => {
     // The honesty half of the always-on contract, and the one the scanners cannot hold:
     // `honestyExclusionOffenders` catches prose that teaches DROPPING an honesty state,
     // and is silent about prose that simply stops naming them — an agent that presents
     // an unread page as verified breaks nothing red.
     const units = splitStatements(skillSrc());
 
-    const gaps = units.filter((s) => /\bfit\b/.test(s) && /absent/i.test(s));
+    // `fit` answers every requested key now, so the gap is a VALUE ("unknown"), not an
+    // absent key: read as a failed spec it hides the product the buyer wanted.
+    const gaps = units.filter((s) => /`fit`/.test(s) && /unknown/i.test(s));
     expect(gaps.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(gaps, (s) => /\bgap\b/i.test(s) && /never a miss|not a miss/i.test(s))).toEqual([]);
+    expect(
+      unsatisfied(
+        gaps,
+        (s) => /\bgap\b/i.test(s) && /never a product that failed|never a miss/i.test(s),
+      ),
+    ).toEqual([]);
 
-    const page = units.filter((s) => /webpage_info/.test(s));
+    const page = units.filter((s) => /`printed`/.test(s));
     expect(page.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(page, (s) => /own words/i.test(s) && /never presented as verified|not verified/i.test(s)),
+      unsatisfied(page, (s) => /own words|labelled pairs/i.test(s) && /not verified/i.test(s)),
     ).toEqual([]);
-    // The half an agent loses first: the ABSENCE of the block is the positive signal.
-    expect(unsatisfied(page, (s) => /absence/i.test(s) && /verified/i.test(s))).toEqual([]);
+    // The half an agent loses first: the ABSENCE of the pairs is the positive signal.
+    expect(unsatisfied(page, (s) => /absence/i.test(s) && /read the page/i.test(s))).toEqual([]);
 
     const currency = units.filter((s) => /currency/i.test(s));
     expect(currency.length).toBeGreaterThan(0); // guard-of-the-guard
@@ -335,10 +342,13 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
     expect(unsatisfied(changing, (s) => /`decision`/.test(s) && /buyer/i.test(s))).toEqual([]);
   });
 
-  it("12 — a `decision` is the buyer changing their mind, never a log of what was just written down", () => {
-    // Measured: `decision` was used as narration — "Added my measured 27.2 cm length,
-    // 102 mm width, and 90 kg weight; target 27.5 mondo…". The buyer changed nothing;
-    // they answered a question. The next session then reads a decision nobody took.
+  it("12 — a `decision` is the buyer changing their mind, written about them, never a log and never a new want", () => {
+    // Measured twice. 2026-09-16: `decision` was used as narration — "Added my measured
+    // 27.2 cm length, 102 mm width, and 90 kg weight…". 2026-09-17: the seller spec
+    // `country eq GR` was written with no `reason` at all while the buyer's own quote sat
+    // in a `decision`, and every decision was phrased in the buyer's first person ("I
+    // changed the maximum budget … so you can find …"). The next session then reads a
+    // decision nobody took and a spec nobody asked for.
     const units = splitStatements(skillSrc());
     const decision = units.filter((s) => /`decision`/.test(s));
     expect(decision.length).toBeGreaterThan(0); // guard-of-the-guard
@@ -348,6 +358,10 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
         (s) => /mind/i.test(s) && /chang/i.test(s) && /never a log|not a log/i.test(s),
       ),
     ).toEqual([]);
+    // Whose voice it is written in, and what it is NOT: a want the buyer has just stated
+    // is that spec's `reason`, and nothing else.
+    expect(unsatisfied(decision, (s) => /voice/i.test(s) && /\bnever\b|\bnot\b/i.test(s))).toEqual([]);
+    expect(unsatisfied(decision, (s) => /`reason`/.test(s) && /new want/i.test(s))).toEqual([]);
   });
 
   it("13 — the pick is priced by shopping_offers BEFORE it is recommended", () => {
@@ -366,16 +380,80 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
     expect(unsatisfied(recommending, (s) => /reach/i.test(s) && /seller/i.test(s))).toEqual([]);
   });
 
-  it("14 — an empty `variants` is SAID, and a size range a page prints is not stock", () => {
-    // Measured: the pick came back `variants: []` with a page saying "sizes 24-31", and
-    // the agent told the buyer "sizes listed 24–31, including your likely 27.5". Bar 8
-    // holds `webpage_info`'s own honesty; this holds the two readings that turn a page
-    // sil has not read into a fitting size the buyer can buy.
+  it("14 — a variant with no option values is a listing whose sizes are unread: said, priced, and never read as stock", () => {
+    // Measured twice. 2026-09-16: the pick came back with no listed size and a page
+    // saying "sizes 24-31", and the agent told the buyer "sizes listed 24–31, including
+    // your likely 27.5". 2026-09-17: the two Greek listings of the boot the buyer needed
+    // were never priced at all — the agent read `variants: []` as "nothing to price",
+    // passed product ids to `shopping_product_get`, and called `shopping_offers` zero
+    // times in the whole session. Both readings die on the same sentence.
     const units = splitStatements(skillSrc());
     const listed = units.filter((s) => /`variants`/.test(s));
     expect(listed.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
       unsatisfied(listed, (s) => /\bsay\b/i.test(s) && /range/i.test(s) && /stock/i.test(s)),
+    ).toEqual([]);
+    expect(
+      unsatisfied(listed, (s) => /shopping_offers/.test(s) && /unread|has not read/i.test(s)),
+    ).toEqual([]);
+  });
+
+  it("15 — each variant carries its OWN price, so a price is quoted with the size it belongs to", () => {
+    // Measured 2026-09-17: one price was quoted per product while the answer's sizes were
+    // priced differently, and the sizes the price came from had been dropped from the
+    // turn. `n` counts variants now, so the price the buyer acts on is a size's.
+    const units = splitStatements(skillSrc());
+    const priced = units.filter((s) => /`price`/.test(s));
+    expect(priced.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(priced, (s) => /variant/i.test(s) && /size/i.test(s))).toEqual([]);
+  });
+
+  it("16 — a measurement is never the spec: the spec is the size the category is sold in", () => {
+    // Measured 2026-09-17: searches 1 and 2 sent `foot_length eq 27.2`, a key no boot
+    // listing carries, found no size, and cost the buyer a turn ("27.5 should be good").
+    // The rule lived in `references/brief.md`, which that session never opened.
+    const units = splitStatements(skillSrc());
+    const measured = units.filter((s) => /measurement/i.test(s));
+    expect(measured.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(measured, (s) => /\bnever the spec\b/i.test(s) || /\bnot the spec\b/i.test(s)),
+    ).toEqual([]);
+    // …and what the spec IS instead, so the rule is actionable rather than a prohibition.
+    expect(
+      unsatisfied(measured, (s) => /\bsold in\b|`reason`/.test(s) && /\bsize\b/i.test(s)),
+    ).toEqual([]);
+  });
+
+  it("17 — `query` is shop words: a budget, a market, in stock and online are specs", () => {
+    // Measured 2026-09-17: searches 3–5 read "… under 350 EUR Greece" and "… Greece
+    // online under 400 EUR in stock", and the offers the index answered fell from 39 and
+    // 40 to 3, 10 and 12. "Never a sentence" was already written; what a sentence IS was
+    // not, and the model kept adding the specs it had just written to the brief.
+    const units = splitStatements(skillSrc());
+    const query = units.filter((s) => /`query`/.test(s));
+    expect(query.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(query, (s) => /categor/i.test(s) && /number/i.test(s) && /never a sentence/i.test(s)),
+    ).toEqual([]);
+    expect(
+      unsatisfied(query, (s) => /budget/i.test(s) && /market/i.test(s) && /\bspecs?\b/i.test(s)),
+    ).toEqual([]);
+  });
+
+  it("18 — nothing fits: ask which spec to give up, write it, search again — sil never says what it left out", () => {
+    // The answer carries what fits and nothing about what it left out (contract rule 6),
+    // so no turn can tell the buyer what relaxing a bound would reach. An agent that does
+    // not know this either invents the trade-off or widens the search silently — both
+    // measured on 2026-09-17.
+    const units = splitStatements(skillSrc());
+    const leftOut = units.filter((s) => /left out/i.test(s));
+    expect(leftOut.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(leftOut, (s) => /\bnever\b|\bnot\b/i.test(s) && /sil/.test(s))).toEqual([]);
+    expect(
+      unsatisfied(
+        leftOut,
+        (s) => /give up|giving it up/i.test(s) && /search(?:ing)? again/i.test(s),
+      ),
     ).toEqual([]);
   });
 });

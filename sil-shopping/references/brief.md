@@ -41,11 +41,12 @@ the narrative in their own words until they settle it. A lasting fact written wr
 them into every category they ever shop. Every `name` is lower snake_case — `foot_length`,
 never *"foot length"*, which the write refuses.
 
-**A measurement is the buyer's; the spec it becomes is the brief's.** The category's guide
-is what converts one into the other: a 27.2 cm foot becomes `mondo_size in [27, 27.5]`
-with `reason` *"length 27.2 cm"*, and the 27.2 cm itself stays on the profile, in
-centimetres, for every category that ever needs it. This job's budget is not a fact about
-the person — it is a spec.
+**A measurement is never the spec.** The category's guide converts one into the other: a
+27.2 cm foot becomes `mondo_size in [27, 27.5]` — the size the category is sold in — with
+`reason` *"length 27.2 cm"*, and the 27.2 cm itself stays on the profile, in centimetres,
+for every category that ever needs it. A spec written on the measurement instead
+(`foot_length eq 27.2`) matches nothing a shop sells and costs the buyer a turn. This job's
+budget is not a fact about the person — it is a spec.
 
 ## Product spec or seller spec — the line the whole loop turns on
 
@@ -75,11 +76,13 @@ something a key holds.
 `shopping_brief_edit` takes the replacing specs (or `remove`, for keys whose specs go) and
 a one-sentence `decision` saying **what changed and why**, logged with the time:
 *"Ceiling raised 350 → 400 EUR: nothing in 27.5 at 100 mm or wider under 350."* It is
-written only where the buyer **changed their mind**: an answer to a question you asked is
-not a change, and a list of what you have just written down is not a decision. A
-rejection is a decision too — *"not the Salomon"* is `brand nin ["Salomon"]` and the
-sentence that says why — and where no key carries it, it is the narrative and the
-`decision` alone.
+written **about the buyer, never in their voice** — *"I changed my budget so you can find
+more"* is the agent wearing their words. It is written only where the buyer **changed their
+mind**: an answer to a question you asked is not a change, a new want is its spec's
+`reason` rather than a decision, and a list of what you have just written down is not a
+decision either. A rejection is a decision too — *"not the Salomon"* is
+`brand nin ["Salomon"]` and the sentence that says why — and where no key carries it, it is
+the narrative and the `decision` alone.
 
 ## When sil refuses a write
 
