@@ -117,18 +117,18 @@ describe("the key is the host callId, verbatim (A3, B3)", () => {
   });
 
   it("returns the page BY VALUE-EQUALITY, preserving every honesty rail", () => {
-    // `fit`, `variants` and `webpage_info` are what the client renders the honesty from;
+    // `fit`, `variants` and `printed` are what the client renders the honesty from;
     // a store that kept only the titles would show a shortlist it cannot qualify.
     const stored = page("a");
     putSearchResult("call_1", stored, PRINCIPAL);
     const read = getSearchResult("call_1", PRINCIPAL);
     expect(read).toEqual(stored);
     const products = read!.products as Record<string, unknown>[];
-    // The cold body's empty `fit` and its `webpage_info` survive the round trip — both
-    // are what say "sil has not verified this yet", and an absent one reads as verified.
+    // The cold body's `unknown` fit answers and its `printed` words survive the round
+    // trip — both say "sil holds none of this", and an absent one reads as verified.
     expect(products[0]).toHaveProperty("fit");
-    expect(products[0]).toHaveProperty("webpage_info");
-    expect(products[0]["fit"]).toEqual({});
+    expect(products[0]).toHaveProperty("printed");
+    expect(Object.values(products[0]["fit"] as Record<string, unknown>)).toContain("unknown");
   });
 
   it("an unknown callId is a MISS, never another entry's page", () => {

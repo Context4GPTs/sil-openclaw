@@ -31,8 +31,8 @@
     "n": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 50,
-      "description": "Asks for this many products."
+      "maximum": 10,
+      "description": "Asks for this many variants — one size or one colour each, grouped under their products."
     },
     "specs": {
       "type": "array",

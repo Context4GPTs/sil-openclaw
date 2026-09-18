@@ -90,9 +90,10 @@ beforeAll(async () => {
 
 /**
  * One real product off the wire, carrying what the agent's honesty reading is computed
- * from — a filled `fit` beside a key the ask named and sil holds nothing for, a priced
- * `variants` entry, and the page's own words. Anti-false-green: a `{stub:true}` echo
- * carries none of these, and neither would a projection that kept only what it knew.
+ * from — a filled `fit` beside an `unknown` for a key the ask named and sil holds nothing
+ * for, a priced `variants` entry, and the shop's own `printed` words. Anti-false-green: a
+ * `{stub:true}` echo carries none of these, and neither would a projection that kept only
+ * what it knew.
  */
 function wireProduct(n: number): Record<string, unknown> {
   return {
@@ -100,13 +101,17 @@ function wireProduct(n: number): Record<string, unknown> {
     title: `Ergonomic Task Chair ${n}`,
     brand: `Maker ${n % 7}`,
     image: `https://shop.example/i/chair-${n}.jpg`,
-    fit: { seat_height: 440 + n },
+    fit: { seat_height: 440 + n, armrest_travel: "unknown" },
     price: [{ from: `${1000 + n}.99`, to: `${1100 + n}.99`, currency: "USD" }],
-    variants: [{ id: `v-${String(n).padStart(4, "0")}`, colour: "Graphite" }],
-    webpage_info: {
-      url: `https://shop.example/chair-${n}`,
-      text: "Seat height 42–52 cm, mesh back, twelve-year warranty.",
-    },
+    variants: [
+      {
+        id: `v-${String(n).padStart(4, "0")}`,
+        colour: "Graphite",
+        price: [{ from: `${1000 + n}.99`, to: `${1000 + n}.99`, currency: "USD" }],
+      },
+    ],
+    host: "shop.example",
+    printed: { "Seat height": "42–52 cm", Back: "mesh", Warranty: "twelve years" },
   };
 }
 
@@ -346,9 +351,15 @@ describe("A1 — the shopping_search envelope is byte-identical, with or without
     // The real body, not a placeholder and not a projection: what the agent reads the
     // honesty off is all present on the page it receives.
     expect(products[0]!["id"]).toBe("p-0001");
-    expect(products[0]!["fit"]).toEqual({ seat_height: 441 });
-    expect(products[0]!["variants"]).toEqual([{ id: "v-0001", colour: "Graphite" }]);
-    expect(products[0]).toHaveProperty("webpage_info");
+    expect(products[0]!["fit"]).toEqual({ seat_height: 441, armrest_travel: "unknown" });
+    expect(products[0]!["variants"]).toEqual([
+      {
+        id: "v-0001",
+        colour: "Graphite",
+        price: [{ from: "1001.99", to: "1001.99", currency: "USD" }],
+      },
+    ]);
+    expect(products[0]).toHaveProperty("printed");
     // Nothing was ADDED to the envelope.
     expect(payload).not.toHaveProperty("result_ref");
     expect(payload).not.toHaveProperty("callId");

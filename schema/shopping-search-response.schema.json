@@ -60,7 +60,7 @@
                 ]
               }
             },
-            "description": "Compares each requested product-level key with what it asked; a key absent here is a gap, never a miss."
+            "description": "Answers each requested key with the value sil holds, or `\"unknown\"` where it holds none — what to dig into or to say as unverified, never a miss."
           },
           "price": {
             "type": "array",
@@ -92,14 +92,15 @@
               },
               "additionalProperties": false
             },
-            "description": "Quotes the range; a currency other than the ask's is a bound sil could not test."
+            "description": "Quotes the range over the variants that came back; a currency other than the ask's is a bound sil could not test."
           },
           "variants": {
             "type": "array",
             "items": {
               "type": "object",
               "required": [
-                "id"
+                "id",
+                "price"
               ],
               "properties": {
                 "id": {
@@ -107,6 +108,38 @@
                   "minLength": 1,
                   "maxLength": 256,
                   "description": "Passes it to `shopping_product_get` and `shopping_offers`."
+                },
+                "price": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "from",
+                      "to",
+                      "currency"
+                    ],
+                    "properties": {
+                      "from": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                        "description": "Quotes the low end of what the product costs in this currency."
+                      },
+                      "to": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                        "description": "Quotes the high end."
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$",
+                        "minLength": 3,
+                        "maxLength": 3,
+                        "description": "Reads which currency the range is in; sil converts nothing."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "description": "Quotes what THIS option costs, over its own offers; a currency other than the ask's is a bound sil could not test."
                 }
               },
               "additionalProperties": {
@@ -122,28 +155,22 @@
                   }
                 ]
               },
-              "description": "A variant that fits, and every option value that identifies it."
+              "description": "A variant that answers the ask, and every option value that identifies it. One carrying none is a listing sil has not read sizes from."
             },
-            "description": "Passes an `id` on to the dossier and the offers; names the option to the buyer. Empty means no listed option fits."
+            "description": "Passes an `id` on to the dossier and the offers; names the option to the buyer."
           },
-          "webpage_info": {
+          "host": {
+            "type": "string",
+            "description": "Names the shop whose page sil read in this request."
+          },
+          "printed": {
             "type": "object",
-            "required": [
-              "url",
-              "text"
-            ],
-            "properties": {
-              "url": {
-                "type": "string",
-                "description": "Links the page it read the words off."
-              },
-              "text": {
-                "type": "string",
-                "description": "Reads the page's own words for a provisional pick, never as verified. On the search it is the page's labelled lines first, then its description, then the rest, within 1500 characters; on the dossier it is the whole page."
+            "patternProperties": {
+              "^.*$": {
+                "type": "string"
               }
             },
-            "additionalProperties": false,
-            "description": "Reads a page sil has not read yet, in the page's own words."
+            "description": "Reads the page's own labelled pairs that no key catches — a provisional read of what sil could not verify. Absent on a product sil already holds."
           }
         },
         "additionalProperties": false

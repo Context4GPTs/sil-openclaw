@@ -303,72 +303,122 @@
       "status": "ok",
       "products": [
         {
-          "id": "p1",
-          "title": "2027 Atomic Hawx Ultra 130 S Dual Boa Ski Boots",
-          "brand": "Atomic",
-          "image": "https://cdn.shopify.com/s/files/1/0670/5135/6456/files/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580-gs2qoce3w9aoubnfhm89.jpg?v=1770768168",
-          "fit": {},
+          "id": "c1",
+          "title": "Hf 110 (GW) - Ανδρικές Μπότες Σκι Nordica Black/Anthracite/Red",
+          "brand": "Nordica",
+          "image": "https://freerider.gr/media/…/050k1201-7t1.jpg",
+          "host": "freerider.gr",
+          "fit": {
+            "condition": "unknown",
+            "flex_index": "unknown",
+            "last_width": 102
+          },
           "price": [
             {
-              "from": "939.95",
-              "to": "939.95",
-              "currency": "USD"
-            }
-          ],
-          "variants": [
-            {
-              "id": "v1",
-              "mondo_size": 27.5
-            }
-          ],
-          "webpage_info": {
-            "url": "https://www.skiessentials.com/products/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580",
-            "text": "… dual BOA system provides unmatched fit micro-adjustability. Flex: 130, Last: 98 mm, Intended Use: Freeride, Ability Level: Advanced to Expert"
-          }
-        },
-        {
-          "id": "p2",
-          "title": "Atomic Men's Hawx Prime 100 BOA Ski Boots 2027",
-          "brand": "Atomic",
-          "image": "https://www.skibarn.com/cdn/shop/files/Screenshot2026-08-11140738.png?v=1786478456&width=638",
-          "fit": {},
-          "price": [
-            {
-              "from": "549.95",
-              "to": "549.95",
-              "currency": "USD"
-            }
-          ],
-          "variants": [
-            {
-              "id": "v2",
-              "mondo_size": 27.5,
-              "color": "Black/Red"
-            }
-          ],
-          "webpage_info": {
-            "url": "https://skibarn.com/products/atomic-mens-hawx-prime-100-boa-boot",
-            "text": "… 100 Flex Rating: Balanced 100 flex provides a blend of comfort and responsiveness, making it ideal for intermediate and advanced all-mountain skiers. 100mm Medium-Volume Last: Designed with Atomic's versatile 100mm fit, offering an excellent balance of comfort, precision, and all-day performance. …"
-          }
-        },
-        {
-          "id": "p3",
-          "title": "Rossignol Alltrack 80 W GW Woman Alpine Ski Boots",
-          "brand": "Rossignol",
-          "image": "https://www.tradeinn.com/f/14250/142503605/rossignol-alltrack-80-w-gw-woman-alpine-ski-boots.webp",
-          "fit": {},
-          "price": [
-            {
-              "from": "210.49",
-              "to": "272.99",
+              "from": "399",
+              "to": "399",
               "currency": "EUR"
             }
           ],
-          "variants": [],
-          "webpage_info": {
-            "url": "https://www.tradeinn.com/snowinn/en/rossignol-alltrack-80-w-gw-woman-alpine-ski-boots/142503605/p",
-            "text": "… Technical Specifications:\n* Gender: Women\n* Skill Level: Beginner-Intermediate\n* Flex Index: 80 (Range: 65-110)\n* Last Width: 102 mm (Range: 101-105 mm)\n* Skiing Style: All Mountain Ski …"
+          "variants": [
+            {
+              "id": "c1.27",
+              "mondo_size": 27,
+              "price": [
+                {
+                  "from": "399",
+                  "to": "399",
+                  "currency": "EUR"
+                }
+              ]
+            },
+            {
+              "id": "c1.27.5",
+              "mondo_size": 27.5,
+              "price": [
+                {
+                  "from": "399",
+                  "to": "399",
+                  "currency": "EUR"
+                }
+              ]
+            }
+          ],
+          "printed": {
+            "Όγκος (Volume)": "Medium / Wide",
+            "Βάρος (μισό ζευγάρι)": "1760 g",
+            "Σόλες (Soles)": "GripWalk Extra-Grip"
           }
+        },
+        {
+          "id": "c2",
+          "title": "NORDICA NORDICA SPORTMACHINE 3 110 (24/25)",
+          "brand": "Nordica",
+          "image": "https://www.alpinehut.com/media/…/sportmachine-3-110.jpg",
+          "host": "www.alpinehut.com",
+          "fit": {
+            "condition": "unknown",
+            "flex_index": "unknown",
+            "last_width": "unknown",
+            "price": "unknown"
+          },
+          "price": [
+            {
+              "from": "349.99",
+              "to": "349.99",
+              "currency": "USD"
+            }
+          ],
+          "variants": [
+            {
+              "id": "c2.27.5",
+              "mondo_size": 27.5,
+              "price": [
+                {
+                  "from": "349.99",
+                  "to": "349.99",
+                  "currency": "USD"
+                }
+              ]
+            }
+          ],
+          "printed": {
+            "Color": "Anthracite/Black/Green"
+          }
+        },
+        {
+          "id": "c3",
+          "title": "HF S 110 Ski Boots",
+          "brand": "Nordica",
+          "image": "https://www.ellis-brigham.com/media/…/701601900.jpg",
+          "host": "www.ellis-brigham.com",
+          "fit": {
+            "condition": "unknown",
+            "flex_index": "unknown",
+            "last_width": "unknown",
+            "mondo_size": "unknown",
+            "price": "unknown"
+          },
+          "price": [
+            {
+              "from": "440.00",
+              "to": "440.00",
+              "currency": "GBP"
+            }
+          ],
+          "variants": [
+            {
+              "id": "c3.1",
+              "price": [
+                {
+                  "from": "440.00",
+                  "to": "440.00",
+                  "currency": "GBP"
+                }
+              ]
+            }
+          ],
+          "printed": {}
         }
       ]
     },
@@ -377,69 +427,107 @@
       "products": [
         {
           "id": "p1",
-          "title": "HAWX ULTRA 130 S DUAL BOA",
-          "brand": "Atomic",
-          "image": "https://cdn.shopify.com/s/files/1/0670/5135/6456/files/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580-gs2qoce3w9aoubnfhm89.jpg?v=1770768168",
+          "title": "Nordica HF 110 GW",
+          "brand": "Nordica",
+          "image": "https://freerider.gr/media/…/050k1201-7t1.jpg",
           "fit": {
-            "flex_index": 130
+            "condition": "unknown",
+            "flex_index": 110,
+            "last_width": 102
           },
           "price": [
             {
-              "from": "939.95",
-              "to": "1150.00",
-              "currency": "USD"
+              "from": "399",
+              "to": "399",
+              "currency": "EUR"
             }
           ],
           "variants": [
             {
               "id": "v1",
-              "mondo_size": 27.5
-            }
-          ]
-        },
-        {
-          "id": "p6",
-          "title": "Atomic Hawx Prime 100 Boa",
-          "brand": "Atomic",
-          "image": "https://geartrade.com/cdn/shop/files/744b2a67-3740-405b-bf9a-e58356722b35.webp?v=1786184367&width=1920",
-          "fit": {
-            "flex_index": 100
-          },
-          "price": [
+              "mondo_size": 27,
+              "price": [
+                {
+                  "from": "399",
+                  "to": "399",
+                  "currency": "EUR"
+                }
+              ]
+            },
             {
-              "from": "237.67",
-              "to": "237.67",
-              "currency": "USD"
-            }
-          ],
-          "variants": [
-            {
-              "id": "v6",
+              "id": "v2",
               "mondo_size": 27.5,
-              "color": "Black"
+              "price": [
+                {
+                  "from": "399",
+                  "to": "399",
+                  "currency": "EUR"
+                }
+              ]
             }
           ]
         },
         {
           "id": "p2",
-          "title": "Atomic Men's Hawx Prime 100 BOA Ski Boots 2027",
-          "brand": "Atomic",
-          "image": "https://www.skibarn.com/cdn/shop/files/Screenshot2026-08-11140738.png?v=1786478456&width=638",
+          "title": "Nordica Sportmachine 3 110",
+          "brand": "Nordica",
+          "image": "https://www.alpinehut.com/media/…/sportmachine-3-110.jpg",
           "fit": {
-            "flex_index": 100
+            "condition": "unknown",
+            "flex_index": "unknown",
+            "last_width": 102,
+            "price": "unknown"
           },
           "price": [
             {
-              "from": "549.95",
-              "to": "549.95",
+              "from": "349.99",
+              "to": "349.99",
               "currency": "USD"
             }
           ],
           "variants": [
             {
-              "id": "v2",
+              "id": "v3",
               "mondo_size": 27.5,
-              "color": "Black/Red"
+              "price": [
+                {
+                  "from": "349.99",
+                  "to": "349.99",
+                  "currency": "USD"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "title": "Nordica HF S 110",
+          "brand": "Nordica",
+          "image": "https://www.ellis-brigham.com/media/…/701601900.jpg",
+          "fit": {
+            "condition": "unknown",
+            "flex_index": 115,
+            "last_width": 100,
+            "mondo_size": "unknown",
+            "price": "unknown"
+          },
+          "price": [
+            {
+              "from": "440.00",
+              "to": "440.00",
+              "currency": "GBP"
+            }
+          ],
+          "variants": [
+            {
+              "id": "v4",
+              "price": [
+                {
+                  "from": "440.00",
+                  "to": "440.00",
+                  "currency": "GBP"
+                }
+              ]
             }
           ]
         }

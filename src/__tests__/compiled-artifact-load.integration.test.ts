@@ -280,22 +280,26 @@ const SEARCH_PARAMS = {
 
 /**
  * One real product off the sil-api wire, carrying what the agent's honesty reading is
- * computed from — a filled `fit`, a priced `variants` entry, a page's own words in
- * `webpage_info`. Anti-false-green: a `{stub:true}` echo carries none of these, and
- * neither does a body the compiled client's 200 gate would refuse.
+ * computed from — a filled `fit` with an `unknown` beside it, a priced `variants` entry,
+ * the shop's own `printed` words. Anti-false-green: a `{stub:true}` echo carries none of
+ * these, and neither does a body the compiled client's 200 gate would refuse.
  */
 function wireProduct(n: number): Record<string, unknown> {
   return {
     id: `p-compiled-${n}`,
     title: `Ergonomic Task Chair ${n}`,
     brand: `Maker ${n}`,
-    fit: { seat_height: 480 },
+    fit: { seat_height: 480, armrest_travel: "unknown" },
     price: [{ from: `${1000 + n}.99`, to: `${1000 + n}.99`, currency: "USD" }],
-    variants: [{ id: `v-compiled-${n}`, colour: "Black" }],
-    webpage_info: {
-      url: `https://shop.example/chair-${n}`,
-      text: "Seat height 42–52 cm, mesh back, 5-year warranty.",
-    },
+    variants: [
+      {
+        id: `v-compiled-${n}`,
+        colour: "Black",
+        price: [{ from: `${1000 + n}.99`, to: `${1000 + n}.99`, currency: "USD" }],
+      },
+    ],
+    host: "shop.example",
+    printed: { "Seat height": "42–52 cm", Back: "mesh", Warranty: "five years" },
   };
 }
 
