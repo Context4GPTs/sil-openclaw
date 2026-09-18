@@ -1,6 +1,6 @@
 ---
 name: steps
-description: The three steps of the shopping loop — find the products that fit the brief's product specs, price them and filter the sellers on the brief's seller specs, and when nothing fits, ask which spec the buyer will give up, then search again. Load on any shopping intent.
+description: The three steps of the shopping loop — find the products that fit the brief's product specs and talk only fit, price the one pick the buyer is ready to buy and filter its sellers on the brief's seller specs, and when nothing fits, ask which spec the buyer will give up, then search again. Load on any shopping intent.
 ---
 
 # The three steps
@@ -17,10 +17,18 @@ bound and never a spec the brief does not hold. You write them yourself from the
 like flags on a command line; nothing compiles them for you, and a spec left out of a call
 is a want the buyer has to state twice.
 
-**`query` is the shopping words**: the category as a shop lists it, then the numbers that
-pick the product — `ski boots 27.5 flex 110` — never a sentence and never the buyer's ask
-restated. The budget, the market, *"in stock"* and *"online"* are specs, not words for the
-index: sent in `query` they cost the buyer most of the offers.
+**The first search of a category waits for the deciding specs.** The guide from
+`shopping_domain_get` says what the thing is bought on — for a ski boot, size, forefoot
+width, sole norm and stiffness, plus the `gender` it is cut for — and every one of them is
+in the brief before this call, from the profile or from one question that lists all that is
+still missing at once. Two of those four shortlist a category, not a buyer.
+
+**`query` is the shopping words**: the category as a shop lists it, then the model words and
+the numbers that pick the product — `ski boots 27.5 flex 110` — never a sentence and never
+the buyer's ask restated. A unit, a standard's name, a budget, a market, *"in stock"* and
+*"online"* are specs, not words for the index: `men's alpine ski boots advanced 27.5 wide
+102mm Alpine ISO 5355` came back with motorcycle boots, where the four shop words came back
+with forty offers.
 
 **`n` counts variants, at most 10** — one size, one option, each under the product that
 carries it, each with its own `price`. Quote a price per size, never one price for a
@@ -43,7 +51,16 @@ whose sizes sil has not read: it prices and opens on its id like any other.
 every key sil holds and where each reading came from. Order is the server's: report
 best-first as returned, and never re-rank.
 
-## Step 2 — PRICE: who sells them, and which sellers the brief will buy from
+**This step says nothing about sellers.** No shipping, no country, no *"in Greece"* — until
+the buyer has a pick, every turn is about whether the boot fits and what each candidate
+trades away against the brief. Sellers are step 2, and step 2 is about the pick.
+
+## Step 2 — PRICE: who sells the pick, and which sellers the brief will buy from
+
+**`shopping_offers` is for the pick**, not for the shortlist: call it for the variant the
+buyer has settled on, or the one they ask the price of, once fit is decided. Pricing every
+candidate spends their turn on sellers for boots they were never going to buy, and the fit
+answer they asked for arrives under six shipping caveats.
 
 `shopping_offers` takes `brief`, 1–10 variant `ids`, and `seller_specs` — **all** of the
 brief's seller specs, unchanged, and nothing else: a brief holding none sends none, and a
@@ -82,14 +99,14 @@ spec (or `remove` for a want they dropped) **and** a one-sentence `decision` say
 changed and why — then step 1 runs again with the brief as it now stands. A spec relaxed
 on the wire and not in the brief is a widening that dies with the turn.
 
-**When something does fit**, price it first: `shopping_offers` on the pick itself, with the
-brief's seller specs, before you recommend anything — a recommendation with no dated price
-behind it is a guess. Then lead with one recommendation and the *why* — a met spec, a
+**When something does fit**, lead with one recommendation and the *why* — a met spec, a
 sentence from the guide, a fact sil already held — then one or two alternatives with a line
-each. The price is quoted with the size it belongs to and the moment sil read it, whether
-that seller reaches the buyer is said, a bound sil could not test is said out loud, a size
-sil has not read is said to be unread, and a number off a page sil has not read is quoted
-as *"the seller's page says …"*.
+each, all of it about fit. `shopping_offers` on that pick, with the brief's seller specs, is
+what puts a price under the recommendation: a recommendation with no dated price behind it
+is a guess. The price is quoted with the size it belongs to and the moment sil read it,
+whether that seller reaches the buyer is said, a bound sil could not test is said out loud,
+a size sil has not read is said to be unread, and a number off a page sil has not read is
+quoted as *"the seller's page says …"*.
 
 A non-`ok` status is not an empty result: follow that tool's own `recovery` and never relax
 the brief to route around it.

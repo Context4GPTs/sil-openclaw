@@ -456,4 +456,152 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
       ),
     ).toEqual([]);
   });
+
+  it("19 — everything the guide says decides the buy carries a spec BEFORE the first search, from the profile or from one question", () => {
+    // Measured 2026-09-18: the guide says a ski boot is "bought on stiffness, forefoot width
+    // and binding compatibility", and the agent searched four times and recommended a boot
+    // on two specs — `advanced` and `new` — with no size, no width and no sole norm. It
+    // asked for them in the turn AFTER the recommendation.
+    const units = splitStatements(skillSrc());
+
+    const deciding = units.filter((s) => /\bdecides?\b/i.test(s) && /\bguide\b/i.test(s));
+    expect(deciding.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(deciding, (s) => /first search/i.test(s) && /\bspec/i.test(s)),
+    ).toEqual([]);
+    // …and where those specs come from: the profile, or ONE question carrying all of them.
+    // Asked one at a time, the buyer answers three turns after the first search went out.
+    expect(
+      unsatisfied(
+        deciding,
+        (s) => /\bone\b/i.test(s) && /question/i.test(s) && /profile/i.test(s),
+      ),
+    ).toEqual([]);
+    // …and the recommendation that must not happen: a pick whose deciding keys are unread.
+    const short = units.filter((s) => /shortlist/i.test(s));
+    expect(short.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(short, (s) => /unknown/i.test(s) && /guess/i.test(s))).toEqual([]);
+  });
+
+  it("20 — FIND talks fit; `shopping_offers` prices the PICK the buyer is ready to buy, never a whole shortlist", () => {
+    // Measured 2026-09-18: every shortlist was priced with the seller spec `country eq GR`
+    // before the buyer had chosen anything, so each turn ended in Canadian, Swedish and UK
+    // sellers reading `ships: unknown` and a line of "shipping to Greece unverified" — three
+    // times over. The fit answer the buyer asked for arrived under the shipping caveats.
+    const units = splitStatements(skillSrc());
+
+    const offers = units.filter((s) => /shopping_offers/.test(s));
+    expect(offers.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(
+        offers,
+        (s) =>
+          /ready to price|ask about|\bpick\b/i.test(s)
+          && /never for (?:every|a|the)|never the shortlist/i.test(s),
+      ),
+    ).toEqual([]);
+    // The other half, and the one the draw lost first: before a pick there is no seller in
+    // the turn at all. Keyed on the fit statement so a bare "price the pick" cannot satisfy
+    // it — the defect was the shipping talk, not the offers call.
+    const fitTurn = units.filter((s) => /\bfit\b/i.test(s) && /\bpick\b/i.test(s));
+    expect(fitTurn.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(fitTurn, (s) => /no seller/i.test(s) && /shipping|market/i.test(s)),
+    ).toEqual([]);
+
+    // …and the step that owns PRICE opens on the same rule, for the agent that loads it.
+    const priceStep = sectionStatements("PRICE").filter((s) => /shopping_offers/.test(s));
+    expect(priceStep.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(priceStep, (s) => /\bpick\b/i.test(s) && /shortlist/i.test(s)),
+    ).toEqual([]);
+  });
+
+  it("21 — a measurement is mapped by the RULE the guide states, never by the number as the buyer typed it", () => {
+    // Measured 2026-09-18: a 102 mm forefoot was written `last_width gte 102` (a last two
+    // millimetres narrower packs out and fits) and "Alpine binding" was written
+    // `sole_norm eq alpine_iso5355` (GripWalk mounts on nearly every alpine binding sold
+    // since 2018) — together they cut 25 of the 38 boots on the shelf. `skill_level eq
+    // advanced` then threw out a boot built ABOVE the level the buyer claimed.
+    const units = splitStatements(skillSrc());
+
+    const mapping = units.filter((s) => /\bguide\b/i.test(s) && /\brule\b/i.test(s));
+    expect(mapping.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(mapping, (s) => /as typed/i.test(s) && /\bnever\b/i.test(s)),
+    ).toEqual([]);
+    // The three readings the draw got wrong, written as rules rather than as a ban: a width
+    // is a range, a level is a floor, a binding takes more than one norm.
+    expect(
+      unsatisfied(
+        mapping,
+        (s) => /2 mm|two millimet/i.test(s) && /floor/i.test(s) && /norm/i.test(s),
+      ),
+    ).toEqual([]);
+    // …and the fallback, so the rule is not a licence to invent one: where the guide is
+    // silent, the buyer decides what their number means.
+    const silent = units.filter((s) => /states no rule|guide is silent/i.test(s));
+    expect(silent.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(silent, (s) => /\bask\b/i.test(s))).toEqual([]);
+  });
+
+  it("22 — `query` carries no unit and no standard's name, with the stuffed query that came back with motorcycle boots", () => {
+    // Measured 2026-09-18: `"men's alpine ski boots advanced 27.5 wide 102mm Alpine ISO
+    // 5355"` answered with motorcycle boots. Bar 17 already holds "never a sentence"; what a
+    // sentence is MADE of was not written, and the model kept appending the specs it had
+    // just written to the brief.
+    const units = splitStatements(skillSrc());
+    const query = units.filter((s) => /`query`/.test(s));
+    expect(query.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(query, (s) => /\ba unit\b/i.test(s) && /standard/i.test(s)),
+    ).toEqual([]);
+    // Both literals, so the rule is copyable rather than a category of words to infer.
+    expect(skillSrc()).toContain("ski boots 27.5 flex 110");
+    expect(skillSrc()).toMatch(/motorcycle/i);
+  });
+
+  it("23 — `gender` is read off sil_whoami and sent on anything worn, asked once when the profile holds none, never inferred", () => {
+    // Measured 2026-09-18: *"Of course I am a male. Don't you know that?"* — five searches
+    // had gone out with men's and women's boots mixed, and the agent had neither read a
+    // gender nor asked for one.
+    const units = splitStatements(skillSrc());
+    const gender = units.filter((s) => /\bgender\b/i.test(s));
+    expect(gender.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(
+        gender,
+        (s) => /sil_whoami/.test(s) && /worn/i.test(s) && /\bspec\b/i.test(s),
+      ),
+    ).toEqual([]);
+    expect(
+      unsatisfied(
+        gender,
+        (s) => /one question/i.test(s) && /never an inference|never inferred/i.test(s),
+      ),
+    ).toEqual([]);
+  });
+
+  it("24 — a new chat READS the earlier briefs and opens its own, carrying what is still true under a `decision` that names the carry", () => {
+    // Measured 2026-09-18 (the warm session): the chat searched on the previous session's
+    // brief. The buyer was asked nothing, which is right, but the record now says one brief
+    // ran two conversations — and no later reader can tell which chat asked for what.
+    const body = sectionBody("OPEN");
+    expect(skillSrc()).toContain(body); // the rule is in the always-loaded file
+    const units = splitStatements(body);
+
+    const opening = units.filter((s) => /shopping_brief_create/.test(s));
+    expect(opening.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(
+      unsatisfied(opening, (s) => /carry|carrying/i.test(s) && /still true/i.test(s)),
+    ).toEqual([]);
+    expect(
+      unsatisfied(opening, (s) => /`decision`/.test(s) && /which brief/i.test(s)),
+    ).toEqual([]);
+
+    // …and the half that stops the warm session repeating: an earlier brief is a READ.
+    const past = units.filter((s) => /past brief/i.test(s));
+    expect(past.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(past, (s) => /never searched/i.test(s))).toEqual([]);
+  });
 });

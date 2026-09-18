@@ -47,8 +47,15 @@ genuinely niche one.
 **Mark the keys the category is SOLD by.** `variant_spec: true` marks a key that
 identifies a purchasable variant — a boot's size, a colour — and `product_spec: true` one
 that tells one product from the next, a model year or an edition; the registry derives
-each key's operators from the type. Settle those before searching: a buyer who has not
-said their size is a buyer you cannot shortlist for.
+each key's operators from the type.
+
+**The guide names what the thing is bought on, and those keys are settled before the FIRST
+search.** *"Bought on stiffness, forefoot width and binding compatibility"* is the answer's
+whole shape: read it off `shopping_domain_get`, add the key the category is sized by, and
+hold a spec for each in the brief — from the profile, or from one question that lists every
+one of them still missing. A buyer who has not said their size is a buyer you cannot
+shortlist for, and a search on two of the four is an answer about a category, not about
+them.
 
 **A category inherits every key its ancestors define and may not rename one.** To change a
 key for your own subtree — its unit, its allowed values, its variant or product mark —
