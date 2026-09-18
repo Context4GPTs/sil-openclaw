@@ -1,6 +1,6 @@
 ---
 name: steps
-description: The three steps of the shopping loop — find the products that fit the brief's product specs, price them and filter the sellers on the brief's seller specs, and when nothing fits, ask the buyer for the one change that would reach a product. Load on any shopping intent.
+description: The three steps of the shopping loop — find the products that fit the brief's product specs, price them and filter the sellers on the brief's seller specs, and when nothing fits, ask which spec the buyer will give up, then search again. Load on any shopping intent.
 ---
 
 # The three steps

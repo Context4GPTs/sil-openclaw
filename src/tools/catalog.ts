@@ -122,9 +122,8 @@ export const SHOPPING_TOOLS = [
     recovery: { not_found: "shopping_brief_read" },
     description:
       "GATHER and DECIDE, the write: put every want the buyer states into the brief BEFORE"
-      + " the next search, with `reason` quoting their own words VERBATIM (or the"
-      + " measurement the spec derives from) — never a paraphrase, never a want they did"
-      + " not state. A want that reaches"
+      + " the next search, with `reason` quoting their own words VERBATIM — never a"
+      + " paraphrase, never a want they did not state. A want that reaches"
       + " no brief is a want sil never sees. A MEASUREMENT is never the spec: 27.2 cm is"
       + " the buyer's, and the spec is the size the category is sold in —"
       + " `mondo_size in [27, 27.5]`, with that measurement as its `reason`."

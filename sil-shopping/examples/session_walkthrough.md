@@ -1,6 +1,6 @@
 ---
 name: session-walkthrough
-description: A worked run of one buyer's session — cold open, the category settled, every want written as a spec before the first search, offers filtered on the brief's seller specs, one relaxation proposed and waited for, then the next morning's session reusing the same brief and a second category joining it. Illustrative, not a spec.
+description: A worked run of one buyer's session — cold open, the category settled, every want written as a spec before the first search, offers filtered on the brief's seller specs, one spec the buyer is asked to give up before searching again, then the next morning's session reusing the same brief and a second category joining it. Illustrative, not a spec.
 ---
 
 # Worked run — one buyer, one brief, two mornings
@@ -149,8 +149,9 @@ price sil cannot test against your €400 ceiling. `seller_fit` carries no `coun
 has not read where that seller is, and `ships` came back `unknown`: I could not confirm it
 reaches Greece, so here is the listing. There is a third boot whose page says 102 mm last
 and flex 110 — that is the seller's page talking, sil has not verified it, and sil has not
-read its sizes, so I cannot tell you a 27.5 is in stock. It prices at €399 on that listing,
-if you want it priced and opened anyway."*
+read its sizes, so I cannot tell you a 27.5 is in stock. The search's own range puts that
+listing at €399, which carries no date — say the word and I will price it live and open
+it."*
 
 ## The next morning — *"Boots again."*
 
