@@ -50,6 +50,11 @@ describe("honestyExclusionOffenders — the `unknown` rule, mechanically", () =>
     ["unknown reframed as cannot-ship", "unknown means it cannot ship to the destination."],
     ["drop on an unfilled gap", "Discard products with a gap in fit."],
     ["drop on webpage_info", "Filter out products that only carry webpage_info."],
+    ["drop on a cold page's printed pairs", "Omit the products whose specs are only printed."],
+    [
+      "drop a listing whose sizes sil has not read",
+      "Skip a variant with no option values — there is nothing to price.",
+    ],
     ["drop on unverified", "Omit the unverified products from the shortlist."],
     ["drop on an empty variants list", "Skip products whose variants: [] came back empty."],
     ["drop on a currency sil could not test", "Hide the ones sil could not test against the budget."],
@@ -85,6 +90,11 @@ describe("honestyExclusionOffenders — the `unknown` rule, mechanically", () =>
       "a `webpage_info` product stays in the list",
       "A product carrying webpage_info is a real listing sil has not read yet — it remains in the" +
         " set, flagged as not verified.",
+    ],
+    [
+      "a listing whose sizes are unread is priced, not skipped",
+      "A variant with no option values is a listing whose sizes sil has not read — say so and" +
+        " price it with shopping_offers, rather than skipping it.",
     ],
     [
       "an untestable currency bound is named, never used to drop",

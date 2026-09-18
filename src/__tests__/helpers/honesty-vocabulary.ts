@@ -6,10 +6,10 @@
  * `per-niche-expert.ts`: one module means the allowance can never drift between
  * the two surfaces that carry the same rule.
  *
- * WHAT IT PROTECTS. The wire answers with honesty fields — `ships: unknown`, a key
- * absent from `fit`, an empty `variants`, a `webpage_info` block, a price in a currency
- * the bound could not be tested against. Every one of them is an ORDINARY answer that
- * KEEPS its subject. The agent learns what to do with them almost entirely from the tool
+ * WHAT IT PROTECTS. The wire answers with honesty fields — `ships: unknown`, a `fit` key
+ * answered `"unknown"`, a variant with no option values, the `printed` pairs of a page sil
+ * read cold, a `webpage_info` block on the dossier, a price in a currency the bound could
+ * not be tested against. Every one of them is an ORDINARY answer that KEEPS its subject. The agent learns what to do with them almost entirely from the tool
  * descriptions, and prose is the only carrier of the rule — so prose is what is guarded.
  *
  * `unknown` is the one that silently breaks the product. The seller read fails closed:
@@ -31,12 +31,12 @@
 
 /**
  * The honesty states, as they are actually written in agent-facing prose — bare
- * (`unknown`, a `gap`), backticked (`webpage_info`), or as the phrase the contract uses
- * for the two that have no field of their own (an empty `variants`, a bound in another
- * currency sil could not test).
+ * (`unknown`, a `gap`), backticked (`printed`, `webpage_info`), or as the phrase the
+ * contract uses for the three that have no field of their own (an empty `variants`, a
+ * variant with no option values, a bound in another currency sil could not test).
  */
 const HONESTY_TOKEN =
-  /\b(unknown|webpage_info|unverified|gap)\b|\bnot\s+(?:yet\s+)?verified\b|\bcould\s+not\s+test\b|variants\s*[`'":=]*\s*\[\s*\]|\bempty\s+variants\b/i;
+  /\b(unknown|printed|webpage_info|unverified|gap)\b|\bnot\s+(?:yet\s+)?verified\b|\bcould\s+not\s+test\b|\bno option values\b|variants\s*[`'":=]*\s*\[\s*\]|\bempty\s+variants\b/i;
 
 /**
  * Verbs that remove a subject from what the buyer sees. `deprioritise` is here
