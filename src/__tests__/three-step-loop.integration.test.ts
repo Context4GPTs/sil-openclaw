@@ -572,10 +572,18 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
     const units = splitStatements(skillSrc());
     const gender = units.filter((s) => /\bgender\b/i.test(s));
     expect(gender.length).toBeGreaterThan(0); // guard-of-the-guard
+    // The mapping is pinned by VALUE on both sides: `sil_whoami` answers the person
+    // (`male`), the registry's product-root spec takes the cut (`mens`), and a bundle that
+    // writes `gender eq men` sends a value the mint refuses.
     expect(
       unsatisfied(
         gender,
-        (s) => /sil_whoami/.test(s) && /worn/i.test(s) && /\bspec\b/i.test(s),
+        (s) =>
+          /sil_whoami/.test(s)
+          && /worn/i.test(s)
+          && /\bspec\b/i.test(s)
+          && /`male` writes `gender eq mens`/.test(s)
+          && /`gender eq womens`/.test(s),
       ),
     ).toEqual([]);
     expect(

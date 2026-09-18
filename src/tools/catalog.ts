@@ -112,9 +112,10 @@ export const SHOPPING_TOOLS = [
       + " specs, and each spec is a key and an operator shopping_domain_get listed whose"
       + " `reason` quotes the buyer VERBATIM — their own words, or the measurement the"
       + " guide converted — never a paraphrase and never a want they did not state. On"
-      + " anything worn, the `gender` sil_whoami holds is a product spec in the domain's own"
-      + " spelling (male → `gender eq mens`), asked once if the profile has none and never"
-      + " inferred. Everything after this is shopping_brief_edit.",
+      + " anything worn, the `gender` sil_whoami holds is a product spec in the registry's"
+      + " own spelling — male → `gender eq mens`, female → `gender eq womens` — asked once"
+      + " where the profile answers none or `other`, and never inferred. Everything after"
+      + " this is shopping_brief_edit.",
   },
   {
     name: "shopping_brief_edit",

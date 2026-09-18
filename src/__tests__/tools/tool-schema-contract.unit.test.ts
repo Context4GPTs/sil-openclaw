@@ -393,7 +393,8 @@ describe("each shopping tool carries its discipline clause", () => {
       /`id`/,
       /verbatim/i,
       /carry every spec/i,
-      /gender/,
+      /`gender eq mens`/,
+      /`gender eq womens`/,
     ],
     // The want is written BEFORE the search, a write REPLACES rather than appends, the
     // `reason` is the buyer's words verbatim, a measurement is not the spec it becomes,
