@@ -114,7 +114,7 @@
         {
           "key": "gender",
           "display_name": "Gender",
-          "description": "Who the item is made for.",
+          "description": "The fit the item is cut for; one model's men's and women's cut are two products.",
           "type": "enum",
           "allowed_values": [
             "mens",
