@@ -25,8 +25,8 @@ That guide is the list of what has to be in the brief before the first search. T
 answers `gender`; the buyer has answered their level; the other three are missing, so they
 are **one** question, not three turns:
 
-*"Before I search — the fit turns on three numbers I don't have yet. Your foot length in cm,
-your forefoot width at the widest point, and the binding you'll mount these to."*
+*"Before I search — three things decide the fit and I have none of them. Your foot length in
+cm, your forefoot width at the widest point, and the binding you'll mount these to."*
 
 ## *"length 27.3 cm, forefoot 102 mm, Alpine bindings"*
 
@@ -108,16 +108,18 @@ shopping_offers
 ```
 
 One id, because one boot is being bought. Two offers come back: `seller_fit` carries no
-`country` on either — sil has not read where they are — and one is `ships: unknown`. The
-agent says exactly that: €399 at freerider.gr as sil read it at 10:02Z, neither confirmed as
-a Greek seller, one whose shipping sil could not confirm, and here are both listings.
+`country` on either — sil has not read where they are — and one answers `ships: unknown`.
+The agent says exactly that: €399 at freerider.gr as sil read it at 10:02Z, which the page
+says cannot be bought now, and CAD 649.95 at a seller sil could not test against a euro
+bound. Neither is dropped, and both listings go to the buyer.
 
 ## Step 3 — one change, then wait
 
-*"In 27.5 at 100 mm or wider with an alpine-compatible sole, the Nordica is the only one
-sil can confirm under €400, and it is out of stock at the Greek seller. Raise the ceiling to
-€450, or drop the Greece-only?"* Then it waits. `shopping_brief_edit` writes whichever they
-choose with a one-sentence `decision`, and step 1 runs again.
+Nothing under €400 can be bought today, so one spec and one question: *"At 27.5, 100 mm or
+wider with an alpine-compatible sole, €400 is the one I cannot fill — raise it to €450?"*
+Then it waits. An answer that does not choose the change is not a yes; on their word,
+`shopping_brief_edit` writes the new ceiling with a one-sentence `decision` and step 1 runs
+again. Tonight the buyer says nothing, and the chat ends with the brief as written.
 
 ## The next morning — *"Boots again."*
 

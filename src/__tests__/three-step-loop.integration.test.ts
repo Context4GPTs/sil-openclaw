@@ -466,15 +466,19 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
 
     const deciding = units.filter((s) => /\bdecides?\b/i.test(s) && /\bguide\b/i.test(s));
     expect(deciding.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(
-      unsatisfied(deciding, (s) => /first search/i.test(s) && /\bspec/i.test(s)),
-    ).toEqual([]);
-    // …and where those specs come from: the profile, or ONE question carrying all of them.
-    // Asked one at a time, the buyer answers three turns after the first search went out.
+    // ONE statement carries the whole rule — what (the guide's own list), when (before the
+    // first search) and where from (the profile, or ONE question with all of it in). Split
+    // across two, the loop table's GATHER row satisfies the "when" by itself and the rule
+    // can leave the contract unnoticed; measured, that mutant passed.
     expect(
       unsatisfied(
         deciding,
-        (s) => /\bone\b/i.test(s) && /question/i.test(s) && /profile/i.test(s),
+        (s) =>
+          /first search/i.test(s)
+          && /\bspec/i.test(s)
+          && /\bone\b/i.test(s)
+          && /question/i.test(s)
+          && /profile/i.test(s),
       ),
     ).toEqual([]);
     // …and the recommendation that must not happen: a pick whose deciding keys are unread.
