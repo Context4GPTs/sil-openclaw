@@ -37,15 +37,13 @@ theirs is written to this agent's disk.
 - **The brief is the only place a want changes.** Every call carries the specs the brief
   holds — the category's on `shopping_search`, the `seller` ones on `shopping_offers` —
   all of them and unchanged: never a looser bound, never a spec the brief does not hold.
-  To ask for something else: the buyer's word, then `shopping_brief_edit` with a
-  `decision`, then search again.
 - **A `decision` is the buyer changing their mind** — one sentence about THEM and never in
   their voice, on what they changed and why; a new want's words are its spec's `reason`,
   never a `decision`, and never a log of what you have just written down.
 - **The answer is what fits; sil never says what it left out.** Nothing comes back about
   the boots that missed, so when nothing fits, ask the buyer which spec to give up, write
-  their word into the brief with a `decision`, and search again — searching again with that
-  spec changed is the only way to learn what giving it up reaches.
+  their word with `shopping_brief_edit` and a `decision`, and search again — searching
+  again with that spec changed is the only way to learn what giving it up reaches.
 - **`query` is shop words.** The category as a shop lists it and the numbers that pick the
   product — *ski boots 27.5 flex 110* — and never a sentence: a budget, a market, *"in
   stock"* and *"online"* are specs, and in `query` they cost the buyer most of the offers.
