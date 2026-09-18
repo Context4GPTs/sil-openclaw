@@ -156,3 +156,28 @@ export function sectionBody(name: LoopSection): string {
 /** The section, cut into statements. */
 export const sectionStatements = (name: LoopSection): string[] =>
   splitStatements(sectionBody(name));
+
+/**
+ * SKILL.md's always-on contract — the bullets that hold on EVERY turn, cut at its own
+ * heading. Narrower than `skillSrc()` on purpose: a rule that migrates out of the contract
+ * and into the routing or loop TABLE keeps satisfying a file-wide bar while the agent stops
+ * reading it as a rule. Measured — the loop table's GATHER row satisfied the ask-first bar
+ * on its own, and the mutant that gutted the bullet passed green.
+ *
+ * Throws rather than returning "": an empty scope makes every `unsatisfied()` below it pass
+ * vacuously, which is worse than a red.
+ */
+export function alwaysOnContract(): string {
+  const lines = skillSrc().split(/\r?\n/);
+  const start = lines.findIndex((l) => /^##\s+Always-on contract\b/.test(l));
+  if (start < 0) {
+    throw new Error("SKILL.md: no `## Always-on contract` heading — the every-turn rules"
+      + " have no home, and every bar scoped to them would pass over nothing");
+  }
+  let end = start + 1;
+  while (end < lines.length && !/^#{1,2}\s+/.test(lines[end] as string)) end += 1;
+  return lines.slice(start, end).join("\n");
+}
+
+/** The always-on contract, cut into statements. */
+export const contractStatements = (): string[] => splitStatements(alwaysOnContract());

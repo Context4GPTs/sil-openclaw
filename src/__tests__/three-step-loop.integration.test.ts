@@ -27,6 +27,8 @@
 import { describe, it, expect } from "vitest";
 
 import {
+  alwaysOnContract,
+  contractStatements,
   sectionBody,
   sectionStatements,
   splitStatements,
@@ -462,7 +464,7 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
     // and binding compatibility", and the agent searched four times and recommended a boot
     // on two specs — `advanced` and `new` — with no size, no width and no sole norm. It
     // asked for them in the turn AFTER the recommendation.
-    const units = splitStatements(skillSrc());
+    const units = contractStatements();
 
     const deciding = units.filter((s) => /\bdecides?\b/i.test(s) && /\bguide\b/i.test(s));
     expect(deciding.length).toBeGreaterThan(0); // guard-of-the-guard
@@ -492,7 +494,7 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
     // before the buyer had chosen anything, so each turn ended in Canadian, Swedish and UK
     // sellers reading `ships: unknown` and a line of "shipping to Greece unverified" — three
     // times over. The fit answer the buyer asked for arrived under the shipping caveats.
-    const units = splitStatements(skillSrc());
+    const units = contractStatements();
 
     const offers = units.filter((s) => /shopping_offers/.test(s));
     expect(offers.length).toBeGreaterThan(0); // guard-of-the-guard
@@ -527,7 +529,7 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
     // `sole_norm eq alpine_iso5355` (GripWalk mounts on nearly every alpine binding sold
     // since 2018) — together they cut 25 of the 38 boots on the shelf. `skill_level eq
     // advanced` then threw out a boot built ABOVE the level the buyer claimed.
-    const units = splitStatements(skillSrc());
+    const units = contractStatements();
 
     const mapping = units.filter((s) => /\bguide\b/i.test(s) && /\brule\b/i.test(s));
     expect(mapping.length).toBeGreaterThan(0); // guard-of-the-guard
@@ -554,22 +556,22 @@ describe("the rules SKILL.md itself must carry, because a live session read noth
     // 5355"` answered with motorcycle boots. Bar 17 already holds "never a sentence"; what a
     // sentence is MADE of was not written, and the model kept appending the specs it had
     // just written to the brief.
-    const units = splitStatements(skillSrc());
+    const units = contractStatements();
     const query = units.filter((s) => /`query`/.test(s));
     expect(query.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
       unsatisfied(query, (s) => /\ba unit\b/i.test(s) && /standard/i.test(s)),
     ).toEqual([]);
     // Both literals, so the rule is copyable rather than a category of words to infer.
-    expect(skillSrc()).toContain("ski boots 27.5 flex 110");
-    expect(skillSrc()).toMatch(/motorcycle/i);
+    expect(alwaysOnContract()).toContain("ski boots 27.5 flex 110");
+    expect(alwaysOnContract()).toMatch(/motorcycle/i);
   });
 
   it("23 — `gender` is read off sil_whoami and sent on anything worn, asked once when the profile holds none, never inferred", () => {
     // Measured 2026-09-18: *"Of course I am a male. Don't you know that?"* — five searches
     // had gone out with men's and women's boots mixed, and the agent had neither read a
     // gender nor asked for one.
-    const units = splitStatements(skillSrc());
+    const units = contractStatements();
     const gender = units.filter((s) => /\bgender\b/i.test(s));
     expect(gender.length).toBeGreaterThan(0); // guard-of-the-guard
     // The mapping is pinned by VALUE on both sides: `sil_whoami` answers the person

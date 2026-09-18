@@ -194,24 +194,24 @@ export const SHOPPING_TOOLS = [
     recovery: { not_found: "shopping_brief_read" },
     description:
       "FIND: the products that fit the brief, in one settled category. Before the FIRST call"
-      + " the brief holds a spec for everything the guide says the thing is bought on — from"
+      + " the brief holds a spec for everything the guide says it is bought on — from"
       + " the profile, or ONE question. Send `brief` (the session's brief id) on EVERY call,"
       + " the domain path, and `query` — the category as a shop lists it and the numbers"
       + " that pick the product, never a sentence; a budget, a market, a unit, a standard's"
-      + " name, \"in stock\" and \"online\" are specs, and here cost most of the offers."
-      + " `n` counts VARIANTS — one size, one option — at most 10. `specs`: every product"
+      + " name, \"in stock\" and \"online\" are specs, and cost most of the offers."
+      + " `n` counts VARIANTS — one size, one option — max 10. `specs`: every product"
       + " spec the brief holds for this category, all of them and UNCHANGED — never a looser"
       + " bound, never one it does not hold — money a decimal STRING (`\"300\"`, never 300)."
       + " The brief's `seller` specs ride on shopping_offers, never on the search. Keep the"
       + " server's order, never re-rank; quote each variant's OWN `price` with its size."
       + " `fit`"
       + " answers the ask key by key: the value sil verified, or \"unknown\" where it holds"
-      + " none — a gap to dig into with shopping_product_get, never a failed product."
-      + " `host` is the shop; `printed` is that page's own labelled pairs, never verified —"
+      + " none — a gap to dig into with shopping_product_get, never a failed one."
+      + " `host` is the shop; `printed` is that page's own pairs, never verified —"
       + " say \"the page says\". A `variants` entry with no option"
-      + " values is a listing whose sizes sil has not read: say so, price it anyway. At most"
-      + " 4 calls per CATEGORY before you ask. Talk fit here: the pick is priced by"
-      + " shopping_offers, never the shortlist.",
+      + " values is a listing whose sizes sil has not read: say so — it prices like any"
+      + " other once it is the pick. At most 4 calls per CATEGORY before you ask. Talk fit"
+      + " here: the pick is priced by shopping_offers, never the shortlist.",
   },
   {
     name: "shopping_product_get",
