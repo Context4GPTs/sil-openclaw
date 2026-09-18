@@ -384,8 +384,17 @@ describe("each shopping tool carries its discipline clause", () => {
     ],
     // One brief for the whole session, the id the rest of it is named by, and the quote
     // every `reason` is — the founder's live session wrote four first-person paraphrases,
-    // one of them a want ("new") the buyer never stated.
-    shopping_brief_create: [/per SESSION/i, /never one per category/i, /`id`/, /verbatim/i],
+    // one of them a want ("new") the buyer never stated. A NEW chat opens its own brief off
+    // what the earlier ones hold (2026-09-18: the warm session searched on the previous
+    // session's brief), and what the buyer wears is a spec sil already answers.
+    shopping_brief_create: [
+      /per SESSION/i,
+      /never one per category/i,
+      /`id`/,
+      /verbatim/i,
+      /carry every spec/i,
+      /gender/,
+    ],
     // The want is written BEFORE the search, a write REPLACES rather than appends, the
     // `reason` is the buyer's words verbatim, a measurement is not the spec it becomes,
     // and a `decision` is a mind changed, written about the buyer — not a note of what
@@ -399,8 +408,9 @@ describe("each shopping tool carries its discipline clause", () => {
       /MEASUREMENT is never the spec/i,
       /in their voice/i,
     ],
-    // The bare read is a listing, and it comes before the first question.
-    shopping_brief_read: [/newest first/i, /before you ask/i],
+    // The bare read is a listing, it comes before the first question, and what it answers
+    // is READ rather than searched — this session's brief is its own.
+    shopping_brief_read: [/newest first/i, /before you ask/i, /never on an earlier session/i],
     // An entry is keyed by its name, writing that name again replaces it, and only an
     // unambiguous statement about the buyer reaches it at all.
     shopping_profile_edit: [/same `name`/, /before the next search/i, /unambiguous/i, /snake_case/],
@@ -408,9 +418,13 @@ describe("each shopping tool carries its discipline clause", () => {
     // the query is shop words, the honesty the whole answer turns on (`fit` says
     // "unknown" for what sil could not test, `printed` is the page talking, a variant
     // with no option values is a listing whose sizes are unread), the pick is priced,
-    // and the bound.
+    // and the bound. The first call waits for what the guide says decides the buy, and
+    // this step talks fit: both measured 2026-09-18, four searches on two specs and every
+    // shortlist priced against a market the buyer had not been shown a boot from yet.
     shopping_search: [
       /`brief`/,
+      /before the FIRST call/i,
+      /never the shortlist/i,
       /never on the search/i,
       /\b4\b|\bfour\b/,
       /per CATEGORY/,
@@ -427,9 +441,11 @@ describe("each shopping tool carries its discipline clause", () => {
     // sizeless listing opens here like any other id.
     shopping_product_get: [/sources/, /absent/i, /opaque/i, /no option values/i],
     // The brief rides here too, its seller specs travel unchanged, a sizeless listing is
-    // priced as its page prints, what dates a price, and why the spread is the answer.
+    // priced as its page prints, what dates a price, why the spread is the answer — and
+    // that this call is the PICK's, not a pass over the shortlist.
     shopping_offers: [
       /`brief`/,
+      /never for a shortlist/i,
       /observed_at/,
       /spread/i,
       /convert/i,
