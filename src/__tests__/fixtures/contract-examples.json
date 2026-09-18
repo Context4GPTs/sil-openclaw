@@ -112,6 +112,24 @@
           ]
         },
         {
+          "key": "gender",
+          "display_name": "Gender",
+          "description": "Who the item is made for.",
+          "type": "enum",
+          "allowed_values": [
+            "mens",
+            "womens",
+            "unisex",
+            "kids"
+          ],
+          "operators": [
+            "eq",
+            "in",
+            "neq",
+            "nin"
+          ]
+        },
+        {
           "key": "weight",
           "display_name": "Weight",
           "type": "number",

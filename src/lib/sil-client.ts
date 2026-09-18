@@ -132,6 +132,9 @@ export interface IdentityAddress extends Record<string, unknown> {
 export interface Identity {
   name: string;
   country?: string;
+  /** `male`, `female` or `other` where the buyer stated one at onboarding; absent
+   * otherwise. Typed as a string: the vocabulary is the route's, not the plugin's. */
+  gender?: string;
   addresses: IdentityAddress[];
   /** What `shopping_profile_edit` wrote: a number with its unit, or a size as
    * printed. Opaque, exactly as `addresses` are — empty is a real answer. */
@@ -624,11 +627,19 @@ function extractIdentity(body: unknown): Identity | null {
   const measurements = plainObjects(source["measurements"]);
   const preferences = plainObjects(source["preferences"]);
 
-  // `country` is optional on the read and is passed through only as a string —
-  // an absent or non-string one is dropped, never coerced or inferred.
+  // `country` and `gender` are optional on the read and pass through only as strings —
+  // an absent or non-string one is dropped, never coerced or inferred. The VALUE is the
+  // route's to decide: a literal allow-list here would drop a vocabulary sil later adds.
   const country = source["country"];
-  const identity = { name, addresses, measurements, preferences };
-  return typeof country === "string" ? { ...identity, country } : identity;
+  const gender = source["gender"];
+  return {
+    name,
+    addresses,
+    measurements,
+    preferences,
+    ...(typeof country === "string" ? { country } : {}),
+    ...(typeof gender === "string" ? { gender } : {}),
+  };
 }
 
 /** The elements of `value` that are plain objects, as `addresses` are filtered:

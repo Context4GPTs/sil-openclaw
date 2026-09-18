@@ -133,10 +133,14 @@ function registerWhoami(api: PluginAPI): void {
     name: "sil_whoami",
     label: "Who am I on sil",
     description:
-      "The buyer's name, country and the addresses on file, and the `measurements`"
-      + " and `preferences` sil already holds for them — read live from sil with the"
-      + " credentials sil_register stored, a stale session token refreshed once and"
-      + " the read retried. Call it at the start of a chat: it says where the buyer"
+      "The buyer's name, country, `gender` and the addresses on file, and the"
+      + " `measurements` and `preferences` sil already holds for them — read live from"
+      + " sil with the credentials sil_register stored, a stale session token refreshed"
+      + " once and the read retried. `gender` is `male`, `female` or `other`, and is"
+      + " absent where the buyer never stated one; on anything worn it is the product"
+      + " spec `gender` in the registry's own spelling (male → `mens`, female →"
+      + " `womens`), asked once where this answers none and never inferred. Call it at"
+      + " the start of a chat: it says where the buyer"
       + " is, how they measure and what they lastingly prefer, and you never ask"
       + " them for anything it answers. shopping_profile_edit is what writes those"
       + " two back. If they are not registered, or the session is past refreshing,"
@@ -234,8 +238,8 @@ function identityOutcomeToResult(
   }
 }
 
-/** Success: `identity` carries the buyer's name, country (when the read has one),
- * addresses, measurements and preferences — no token, no Bearer header. */
+/** Success: `identity` carries the buyer's name, country and gender (each when the read
+ * has one), addresses, measurements and preferences — no token, no Bearer header. */
 function identityResult(
   api: PluginAPI,
   identity: Identity,

@@ -144,6 +144,24 @@ describe("classifyIdentityResponse — status taxonomy (the auth branch)", () =>
     if (nonString.kind === "ok") expect(nonString.identity).not.toHaveProperty("country");
   });
 
+  it("200 → `gender` passes through when the read carries a string, and is ABSENT otherwise", () => {
+    // The skill sends `gender eq mens` on anything worn off this one field, so a
+    // classifier that drops it makes the tool description a promise the tool breaks —
+    // and the agent either asks a question sil already answered or infers the answer.
+    const withGender = classifyIdentityResponse(200, { ...REAL_IDENTITY, gender: "male" });
+    expect(withGender.kind).toBe("ok");
+    if (withGender.kind === "ok") expect(withGender.identity.gender).toBe("male");
+
+    // A buyer who never stated one: absent, never defaulted to a cut.
+    const without = classifyIdentityResponse(200, REAL_IDENTITY);
+    expect(without.kind).toBe("ok");
+    if (without.kind === "ok") expect(without.identity).not.toHaveProperty("gender");
+
+    const nonString = classifyIdentityResponse(200, { ...REAL_IDENTITY, gender: 1 });
+    expect(nonString.kind).toBe("ok");
+    if (nonString.kind === "ok") expect(nonString.identity).not.toHaveProperty("gender");
+  });
+
   it("200 → `measurements` and `preferences` pass through OPAQUE, and a shapeless one is `[]`", () => {
     // What `shopping_profile_edit` wrote is what stops the agent re-asking a foot
     // length the buyer gave yesterday, so it has to survive the read whole — entry
