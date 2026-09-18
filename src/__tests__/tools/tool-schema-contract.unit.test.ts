@@ -387,37 +387,55 @@ describe("each shopping tool carries its discipline clause", () => {
     // one of them a want ("new") the buyer never stated.
     shopping_brief_create: [/per SESSION/i, /never one per category/i, /`id`/, /verbatim/i],
     // The want is written BEFORE the search, a write REPLACES rather than appends, the
-    // `reason` is the buyer's words verbatim, and a `decision` is a mind changed — not a
-    // note of what was just written down.
+    // `reason` is the buyer's words verbatim, a measurement is not the spec it becomes,
+    // and a `decision` is a mind changed, written about the buyer — not a note of what
+    // was just written down in their voice.
     shopping_brief_edit: [
       /before\b[^.]{0,20}next search/i,
       /replace/i,
       /`decision`/,
       /verbatim/i,
       /their mind/i,
+      /MEASUREMENT is never the spec/i,
+      /in their voice/i,
     ],
     // The bare read is a listing, and it comes before the first question.
     shopping_brief_read: [/newest first/i, /before you ask/i],
     // An entry is keyed by its name, writing that name again replaces it, and only an
     // unambiguous statement about the buyer reaches it at all.
     shopping_profile_edit: [/same `name`/, /before the next search/i, /unambiguous/i, /snake_case/],
-    // The brief rides on every call, its specs travel unchanged, the honesty the whole
-    // answer turns on, the pick is priced before it is recommended, and the bound.
+    // The brief rides on every call, its specs travel unchanged, `n` counts variants,
+    // the query is shop words, the honesty the whole answer turns on (`fit` says
+    // "unknown" for what sil could not test, `printed` is the page talking, a variant
+    // with no option values is a listing whose sizes are unread), the pick is priced,
+    // and the bound.
     shopping_search: [
       /`brief`/,
       /never on the search/i,
       /\b4\b|\bfour\b/,
       /per CATEGORY/,
-      /webpage_info/,
+      /counts VARIANTS/,
+      /never a sentence/i,
+      /"unknown"/,
+      /`printed`/,
+      /no option values/i,
       /gap/i,
       /unchanged/i,
       /priced/i,
     ],
-    // What the dossier adds over the shortlist, and that a miss is an absence.
-    shopping_product_get: [/sources/, /absent/i, /opaque/i],
-    // The brief rides here too, its seller specs travel unchanged, what dates a price,
-    // and why the spread is the answer.
-    shopping_offers: [/`brief`/, /observed_at/, /spread/i, /convert/i, /unchanged/i],
+    // What the dossier adds over the shortlist, that a miss is an absence, and that a
+    // sizeless listing opens here like any other id.
+    shopping_product_get: [/sources/, /absent/i, /opaque/i, /no option values/i],
+    // The brief rides here too, its seller specs travel unchanged, a sizeless listing is
+    // priced as its page prints, what dates a price, and why the spread is the answer.
+    shopping_offers: [
+      /`brief`/,
+      /observed_at/,
+      /spread/i,
+      /convert/i,
+      /unchanged/i,
+      /no option values/i,
+    ],
     // The three states, that the third one keeps its seller, and that ids are the whole ask.
     shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i, /nothing else/i],
   };

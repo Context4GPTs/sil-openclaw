@@ -2,8 +2,8 @@
  * The eleven `shopping_*` tools, 1:1 with the sil-api catalog, brief and profile routes.
  *
  * A projection on the way back would drop exactly the fields the agent's honesty reading
- * is computed from (`fit`, `variants`, `webpage_info`) while looking healthy, so the body
- * crosses verbatim. A new `registerXTools` group has to be hand-wired into three guards
+ * is computed from (`fit`, `unknown`, `variants`, `printed`) while looking healthy, so the
+ * body crosses verbatim. A new `registerXTools` group has to be hand-wired into three guards
  * or it silently NARROWS them (CLAUDE.md), which is why all eleven live in one group.
  */
 
@@ -124,16 +124,20 @@ export const SHOPPING_TOOLS = [
       "GATHER and DECIDE, the write: put every want the buyer states into the brief BEFORE"
       + " the next search, with `reason` quoting their own words VERBATIM (or the"
       + " measurement the spec derives from) — never a paraphrase, never a want they did"
-      + " not state, and no spec at all for a want they never stated. A want that reaches"
-      + " no brief is a want sil never sees. One write per `domain`: a category path carries"
+      + " not state. A want that reaches"
+      + " no brief is a want sil never sees. A MEASUREMENT is never the spec: 27.2 cm is"
+      + " the buyer's, and the spec is the size the category is sold in —"
+      + " `mondo_size in [27, 27.5]`, with that measurement as its `reason`."
+      + " One write per `domain`: a category path carries"
       + " that category's product specs, `price` among them, and `seller` carries the"
       + " seller specs, which belong to the whole brief. `specs` REPLACE every spec on the"
       + " keys they name — a range is the two rows on its key — `remove` names the keys"
       + " whose specs go, and `narrative` replaces the whole narrative. When the buyer"
       + " changes their mind — and only then — send the new spec together with `decision`:"
-      + " one sentence saying what they changed and why, never a log of what you have just"
-      + " written down, so the next session reads the reasoning"
-      + " instead of asking again. Send `status: \"closed\"` when the job is over. An"
+      + " one sentence ABOUT them, never in their voice, saying what they changed and"
+      + " why. A new want's words are its spec's `reason`, never a `decision`, and never a"
+      + " log of what you have just written down."
+      + " Send `status: \"closed\"` when the job is over. An"
       + " invalid_request names the key and shows a spec on it that passes — fix that row"
       + " and send it again, and never give the want up. A brief id that is not the"
       + " buyer's answers not_found; shopping_brief_read with no `id` lists their briefs.",
@@ -185,25 +189,24 @@ export const SHOPPING_TOOLS = [
     // refused as `invalid_request`, naming the path.
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "FIND: the products that fit the brief, in one settled category. Send"
-      + " `brief`, the session's brief id, on EVERY call, then the domain path, the"
-      + " shopping words as `query` (the category as a shop lists it and the numbers that"
-      + " pick the product, never a sentence), `n`, and `specs`: every product spec the"
-      + " brief holds for this category, all of them and UNCHANGED — never a looser bound,"
-      + " never one the brief does not hold — money a decimal STRING (`\"300\"`, never"
-      + " 300). The brief's `seller` specs ride on shopping_offers, never on"
-      + " the search. Leave `ship_to` out and sil localizes to the buyer's default address;"
-      + " send it only when the buyer named another, as the exact LABEL sil_whoami lists —"
-      + " never \"default\", never a country, never a market filter. `price` is a key every"
-      + " domain has, currency required: a bound in another currency is one sil could not"
-      + " test — say so. Present them in the order returned, never re-rank. `fit`"
-      + " answers the ask key by key with what sil verified: a key absent from it is a"
-      + " gap to name, never a miss. An empty `variants` says no listed option fits."
-      + " `webpage_info`"
-      + " means sil has not read that page: its numbers are the seller page's own words —"
-      + " say so, never as fact — and its absence means they were verified. Recommend"
-      + " nothing until shopping_offers has priced it. At most 4 calls per CATEGORY"
-      + " before you ask the buyer.",
+      "FIND: the products that fit the brief, in one settled category. Send `brief`, the"
+      + " session's brief id, on EVERY call, the domain path, and `query` — the category as"
+      + " a shop lists it and the numbers that pick the product,"
+      + " never a sentence; a budget, a market, \"in stock\", \"online\" are specs, and in"
+      + " `query` they cost most of the offers. `n` counts VARIANTS — one size, one option"
+      + " — at most 10. `specs`: every product spec the brief holds for this category, all"
+      + " of them and UNCHANGED — never a looser bound, never one the brief does not hold —"
+      + " money a decimal STRING (`\"300\"`, never 300). The brief's `seller` specs ride on"
+      + " shopping_offers, never on the search. Present them as returned, never re-rank;"
+      + " quote each variant's OWN `price` with its size. `fit` answers the ask key by key:"
+      + " the value sil verified, or \"unknown\" where it holds none — a gap to dig into"
+      + " with shopping_product_get or to say as unverified, never a product that failed."
+      + " `host` is the shop; `printed` is that"
+      + " page's own labelled pairs, never verified — say \"the page says\"; their absence"
+      + " means sil read the page. A variant in `variants` with no option values is a"
+      + " listing whose sizes sil has not read: say so, and price it with shopping_offers"
+      + " like any other. At most 4 calls per CATEGORY before you ask the buyer; recommend"
+      + " nothing shopping_offers has not priced.",
   },
   {
     name: "shopping_product_get",
@@ -215,6 +218,10 @@ export const SHOPPING_TOOLS = [
       + " the whole of what sil holds for each — the title, the maker, the page's own"
       + " description, the images, every key sil holds for it (not only the ones you"
       + " asked about), and `sources` naming which site each reading came from and when."
+      + " This is where a key the search answered \"unknown\" is dug out. A variant with no"
+      + " option values is a listing whose sizes sil has not read, and its id opens here"
+      + " like any other: the answer carries that page whole, so the sizes it prints are"
+      + " the page's own words — say the size is unread, never that it is in stock."
       + " Compare the shortlist on this before recommending, and quote a source's date"
       + " rather than implying sil read it just now. An id sil cannot place is simply"
       + " absent from the answer — say that listing could not be placed, and never"
@@ -234,21 +241,21 @@ export const SHOPPING_TOOLS = [
       + " of the session's brief, on EVERY call — 1–10 variant ids, and `seller_specs`:"
       + " the brief's `seller` specs, all of them, UNCHANGED, and nothing else — a brief"
       + " holding none sends none, and a `country` the brief does not hold is never yours"
-      + " to add. Leave `ship_to` out unless the buyer"
-      + " named an address, as the exact LABEL sil_whoami lists"
-      + "; the default address is used when you send nothing. You get one entry per variant"
-      + " per seller, read live: the seller's name and id, the price exactly as the page"
+      + " to add. A variant with no option values is a listing whose sizes sil"
+      + " has not read: send its id like any other and it is priced as its page prints —"
+      + " say the size is unread. One entry per variant per seller, read live: the seller's"
+      + " name and id, the price exactly as the page"
       + " prints it with its own currency (sil converts nothing), whether it can be"
-      + " bought now, the listing URL, `observed_at` — the moment sil read it, which"
-      + " dates the price for the buyer — and `seller_fit`. `seller_fit` answers the"
+      + " bought now, the listing URL, `observed_at` — when sil read it, which"
+      + " dates the price — and `seller_fit`. `seller_fit` answers the"
       + " brief's seller specs per offer: `ships` is always"
       + " there — serviceable, not_serviceable or unknown for that address — and each"
       + " requested key carries that seller's value where sil holds one. `unknown` is an"
       + " ordinary answer that keeps the offer: say sil could not confirm shipping and"
       + " hand the buyer the listing. A requested key absent from `seller_fit` is a term"
       + " sil has not read, never a term the seller lacks. Several offers on one variant"
-      + " ARE the price spread, and the spread is the answer — never collapse it to a"
-      + " single best one. One seller's whole terms are shopping_seller_get's.",
+      + " ARE the price spread, and the spread is the answer — never one best one. One"
+      + " seller's whole terms are shopping_seller_get's.",
   },
   {
     name: "shopping_seller_get",
