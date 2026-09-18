@@ -72,10 +72,15 @@
 import { getWebUrl } from "./config.js";
 import { readTokens, writeTokens } from "./credentials.js";
 
-/** Per-request timeout: a stalled endpoint must not wedge a call forever. 45 s because a live
- * cold search is one shopping call, up to three page calls and 20 s of fetching real pages —
- * at 15 s the plugin refused 7 of 12 live searches sil-api went on to finish (2026-09-15). */
+/** Per-request timeout: a stalled endpoint must not wedge a call forever. 45 s for every
+ * route that answers from what sil already holds — at 15 s the plugin refused 7 of 12 live
+ * calls sil-api went on to finish (2026-09-15). */
 const REQUEST_TIMEOUT_MS = 45_000;
+
+/** The search alone waits out its web leg, which the agent contract gives 120 s. Aborting
+ * short of that changes nothing sil does — the index is billed, the pages are read and the
+ * row is written — it only hides the answer from the agent that asked for it. */
+const SEARCH_TIMEOUT_MS = 130_000;
 
 /** The user identity sil-web returns inside a successful claim. */
 export interface ClaimedUser {
@@ -164,6 +169,14 @@ export interface ShoppingRoute {
   readonly path: string;
   readonly query?: readonly string[];
 }
+
+/** The search route, the one call that waits out a web leg. Resolved by PATH so a route
+ * renamed in the tool table falls back to the shared ceiling loudly — `lib/sil-client.test.ts`
+ * reads this off the production table. */
+const SEARCH_PATH = "/catalog/search";
+
+export const requestTimeoutMs = (route: ShoppingRoute): number =>
+  route.path === SEARCH_PATH ? SEARCH_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
 
 /**
  * The outcome of any shopping call — ONE union for all eleven, because they share one
@@ -391,10 +404,11 @@ export async function callShopping(
   const url = `${stripTrailingSlash(silApiUrl)}${path}`;
   let res: Response;
   try {
+    const timeoutMs = requestTimeoutMs(route);
     res =
       route.method === "GET"
-        ? await getJson(url, { authorization: `Bearer ${token}` })
-        : await postJson(url, args, { authorization: `Bearer ${token}` });
+        ? await getJson(url, { authorization: `Bearer ${token}` }, timeoutMs)
+        : await postJson(url, args, { authorization: `Bearer ${token}` }, timeoutMs);
   } catch {
     return { kind: "retryable" };
   }
@@ -724,9 +738,10 @@ async function postJson(
   url: string,
   body: Record<string, unknown>,
   extraHeaders?: Record<string, string>,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
       method: "POST",
@@ -748,9 +763,10 @@ async function postJson(
 async function getJson(
   url: string,
   extraHeaders?: Record<string, string>,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
       method: "GET",
