@@ -213,7 +213,7 @@ export const SHOPPING_TOOLS = [
       + " say \"the page says\". A `variants` entry with no option"
       + " values is a listing whose sizes sil has not read: say so — it prices like any"
       + " other. sil never says what it left out, so a want left off `specs` is one you will"
-      + " not know you missed. The brief's `seller` specs ride on shopping_offers.",
+      + " not know you missed.",
   },
   {
     name: "shopping_product_get",

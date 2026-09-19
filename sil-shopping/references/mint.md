@@ -79,5 +79,5 @@ and how a buyer's own fact becomes a value for it.
   research can coin what buyers actually need. The mint is for a domain sil does not have,
   never for a key a standing one is missing.
 
-Naming is silent to the buyer. The one thing you tell them is the category you settled on,
+Naming is silent to the buyer. The one thing you tell them is the domain you settled on,
 so they can correct it before a search spends on it.

@@ -307,15 +307,14 @@ describe("how a spec is made", () => {
       ),
     ).toEqual([]);
 
-    // WHAT converts it — the key's own `description`, not the agent's judgement — with
-    // the three readings the live draw got wrong, written as rules rather than as a ban.
+    // WHAT converts it — the key's own `description`, not the agent's judgement. This bar
+    // used to require the three ski readings verbatim, which pinned one domain's knowledge
+    // into a skill that must serve every domain; the conversion rules now live in the
+    // document sil ships, and what the skill owes is that the agent READS them there.
     const converting = units.filter((s) => /`description`/.test(s) && /turn|becomes|convert/i.test(s));
     expect(converting.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(
-        converting,
-        (s) => /2 mm|two millimet/i.test(s) && /floor/i.test(s) && /norm/i.test(s),
-      ),
+      unsatisfied(converting, (s) => /\bdomain\b/i.test(s) && /differ|every domain|per domain/i.test(s)),
     ).toEqual([]);
 
     const typed = units.filter((s) => /as typed/i.test(s));

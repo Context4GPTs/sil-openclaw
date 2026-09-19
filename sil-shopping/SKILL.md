@@ -94,9 +94,14 @@ host listed for this skill, never a guessed path under the gateway home.
   paraphrase, never first-person words they did not say. Nothing said, no spec: ask, or say
   *"I'm assuming new, not used"* out loud and write it on their word.
 - **A measurement is not a spec.** 27.2 cm is the buyer's foot; the spec is the size the
-  thing is sold in. The key's own `description` says how to turn one into the other — a
-  last within 2 mm fits, a level is a floor, a sole norm is a set. Read that, not the
-  number as typed.
+  thing is sold in. The key's own `description` says how to turn one into the other, and
+  every domain converts differently — a tolerance either side, a floor rather than a match,
+  a set of values that all work. Read that, not the number as typed.
+- **A want no spec can carry goes in the narrative, and you say so in the same turn.**
+  Otherwise the buyer believes sil is filtering on something it has never been told.
+- **Your memory is sil, not a file.** The brief holds the job and the profile holds the
+  person, both under the buyer's account. A workspace `MEMORY.md` is not that memory: do not
+  read one and do not write one.
 - **Gender is read, never guessed.** `sil_whoami` answers it; on anything worn it rides as
   a product spec. None on file is one question, never an inference from a name.
 - **`query` is shop words** — the thing as a shop lists it, and the model or numbers that
