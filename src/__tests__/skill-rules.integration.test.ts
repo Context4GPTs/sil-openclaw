@@ -188,14 +188,21 @@ describe("what a chat opens with", () => {
     // brief ran two conversations — and no later reader can tell which chat asked for what.
     const units = skillSectionStatements("reading");
 
-    const opening = units.filter((s) => /shopping_brief_create/.test(s));
-    expect(opening.length).toBeGreaterThan(0); // guard-of-the-guard
+    // Naming the tool is one rule; WHAT the new brief carries over is another, and both say
+    // `shopping_brief_create`. Filtering on the tool made the carry bar demand "still true"
+    // from the statement that only says WHEN to open one.
+    expect(units.filter((s) => /shopping_brief_create/.test(s)).length).toBeGreaterThan(0);
+
+    // TWO independent requirements, not one `unsatisfied` over everything saying "carry":
+    // the rule is a single sentence holding both halves, so an OR predicate over it stays
+    // green when either half is deleted, and the section's illustration ("that carry, not a
+    // second interview") carries neither. Each half is asserted — and bites — on its own.
     expect(
-      unsatisfied(opening, (s) => /carry|carrying/i.test(s) && /still true/i.test(s)),
-    ).toEqual([]);
+      units.filter((s) => /\bcarry(ing)?\b/i.test(s) && /still true/i.test(s)).length,
+    ).toBeGreaterThan(0);
     expect(
-      unsatisfied(opening, (s) => /`decision`/.test(s) && /what you carried|which brief/i.test(s)),
-    ).toEqual([]);
+      units.filter((s) => /`decision`/.test(s) && /what you carried|which brief/i.test(s)).length,
+    ).toBeGreaterThan(0);
 
     // …and the half that stops the warm session repeating: an earlier brief is a READ.
     const past = units.filter((s) => /past brief/i.test(s));
