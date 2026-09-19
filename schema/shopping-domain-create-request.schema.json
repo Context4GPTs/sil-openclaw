@@ -19,7 +19,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 4096,
-      "description": "Writes what the category is and how it is bought — the prose a read hands back."
+      "description": "Writes the domain document every later buyer inherits, in markdown: what the thing is bought on, what goes wrong and what that costs the buyer, what to trust and what not to, and what buying it online takes in place of handling it. sil ships these for the domains it holds — write one only for a domain it does not."
     },
     "specs": {
       "type": "array",
@@ -46,7 +46,7 @@
           "description": {
             "type": "string",
             "maxLength": 1024,
-            "description": "Says what the key means, for whoever reads this domain next."
+            "description": "Writes how this one key moves the fit, for every agent that reads this domain after you — what it decides, what goes wrong at either end of it, and how a measurement or a stated preference becomes a value for it."
           },
           "type": {
             "anyOf": [
@@ -97,7 +97,7 @@
         "additionalProperties": false
       },
       "maxItems": 50,
-      "description": "Coins the keys this category is bought by; the registry derives the operators."
+      "description": "Coins the keys this domain is bought by; the registry derives the operators."
     }
   },
   "additionalProperties": false

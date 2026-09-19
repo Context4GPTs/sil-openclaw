@@ -55,7 +55,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 2000,
-              "description": "Reads what the buyer is after before writing the next call."
+              "description": "Reads what a good buy looks like for this buyer, and judges a pick against it."
             },
             "specs": {
               "type": "object",

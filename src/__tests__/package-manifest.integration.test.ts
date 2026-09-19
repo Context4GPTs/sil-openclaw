@@ -247,19 +247,20 @@ describe("skill basename is sil-unique — no stale `./skill` literal, ships und
     expect(existsSync(join(REPO_ROOT, "skill"))).toBe(false);
   });
 
-  it("the skill subtree (references + examples) moved under sil-shopping/ intact", () => {
-    // A representative-but-stable probe: both folders are populated. Deliberately NOT
-    // the file set: it churns as the skill is reshaped — this guard proves the subtree
-    // shipped, not which exact files it holds today. The references literal was already
-    // replaced by a count twice over (`method_and_prds.md`, then
-    // `agent_creation_engine.md`); the example's literal died the same way when the
-    // three-step rewrite replaced the walkthrough, so it is a count now too.
-    const root = join(REPO_ROOT, "sil-shopping");
-    for (const folder of ["references", "examples"]) {
-      expect(
-        readdirSync(join(root, folder)).filter((f) => f.endsWith(".md")).length,
-      ).toBeGreaterThan(0);
-    }
+  it("the skill's references/ subtree moved under sil-shopping/ intact", () => {
+    // A representative-but-stable probe: the folder is populated. Deliberately NOT the
+    // file set — it churns as the skill is reshaped, and this guard proves the subtree
+    // shipped, not which exact files it holds today. The literal was already replaced by
+    // a count twice over (`method_and_prds.md`, then `agent_creation_engine.md`).
+    //
+    // `examples/` left this bar when the 2026-09-19 ruling deleted the worked
+    // walkthrough: a skill that is tips rather than a procedure has no run to walk. That
+    // every link in the bundle still resolves is `skill-bundle-contract`'s.
+    expect(
+      readdirSync(join(REPO_ROOT, "sil-shopping", "references")).filter((f) =>
+        f.endsWith(".md"),
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("no stale `./skill` / top-level `skill` literal survives in the publish-path config (AC8 sweep)", () => {

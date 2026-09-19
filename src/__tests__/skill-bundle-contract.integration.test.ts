@@ -19,6 +19,7 @@ import {
   createMockPluginApi,
   registeredToolNames,
 } from "./helpers/mock-plugin-api.js";
+import { categoryAsDomainOffenders } from "./helpers/domain-vocabulary.js";
 import { perNicheExpertOffenders } from "./helpers/per-niche-expert.js";
 // The needle list + the bundle's blanket-forbid scan, shared with the docs guard
 // (`docs-retired-tokens.integration.test.ts`). One module, two corpus rules: the
@@ -35,18 +36,18 @@ import {
   RETIRED_V0_TOKENS,
 } from "./helpers/honesty-vocabulary.js";
 // The bundle's reading + SCOPING primitives, shared with
-// `three-step-loop.integration.test.ts` so the two prose guards cannot drift apart.
+// `skill-rules.integration.test.ts` so the two prose guards cannot drift apart.
 import {
   BUNDLE,
+  MINT,
   REPO_ROOT,
   bundleCorpus,
   bundleEntries,
   bundleFiles,
   frontmatter,
+  mintStatements,
   read,
   routingRows,
-  sectionBody,
-  sectionStatements,
   skillSrc,
   splitStatements,
   statements,
@@ -171,7 +172,9 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     // path — `openclaw.plugin.json#skills` points at this directory and the host prints
     // it as the skill's location — so the fix is one sentence saying to resolve a
     // reference against THAT, not a guessed path under the gateway home.
-    const referring = splitStatements(skillSrc()).filter((s) => /references/i.test(s));
+    // `\b` on both sides, or "lasting preferences" is a candidate — a false positive
+    // that would let an unrelated bullet satisfy the bar once the real sentence is gone.
+    const referring = splitStatements(skillSrc()).filter((s) => /\breferences?\b/i.test(s));
     expect(referring.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
       unsatisfied(referring, (s) => /\bfolder\b|\bdirectory\b/i.test(s) && /path/i.test(s)),
@@ -256,8 +259,23 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
       // scan at the 88-column wrap they are written at.
       for (const p of retiredPhraseOffenders(body)) offenders.push(`${rel} → ${p}`);
       for (const ctx of perNicheExpertOffenders(body)) offenders.push(`${rel}: …${ctx}…`);
+      // "domain", never "category", for sil's registry concept (founder ruling
+      // 2026-09-19). Same scan runs over the registered surface in
+      // `tools/tool-schema-contract.unit.test.ts` — one module, two surfaces.
+      for (const ctx of categoryAsDomainOffenders(body)) offenders.push(`${rel}: …${ctx}…`);
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("guard-of-the-guard: the category scan BITES the registry sense and SPARES the generic one", () => {
+    // A vocabulary scan that cannot tell "the category's guide" from "the web researches
+    // a category" is either a blanket forbid nobody can keep green or a bar that matches
+    // nothing. Both halves are proved here, on the two sentences the bundle actually has.
+    expect(categoryAsDomainOffenders("read the category's guide first")).not.toEqual([]);
+    expect(categoryAsDomainOffenders("send a category path with the specs")).not.toEqual([]);
+    expect(categoryAsDomainOffenders("research how the category is bought")).toEqual([]);
+    expect(categoryAsDomainOffenders("a shortlist about the category, not this buyer")).toEqual([]);
+    expect(categoryAsDomainOffenders("the web researches a category; it supplies no pick")).toEqual([]);
   });
 
   it("AC G7 — every name this card retires is CAUGHT by that scan (the one-directional guard, closed)", () => {
@@ -298,10 +316,9 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
     // TWO tokens, deliberately not a re-pinning of the wording (the 1 341-line
     // prose test was deleted for a reason).
     //
-    // Resolved through the SECTION rather than a filename: the bundle's files have been
-    // renamed three times and a hardcoded path would have to be re-fixed each time while
-    // guarding nothing extra.
-    const src = sectionBody("GATHER");
+    // Resolved through the fallback document, which is where the whole mint discipline
+    // moved when the 2026-09-19 ruling made sil the shipper of the domain document.
+    const src = read(MINT);
     expect(src).toContain("one spelling"); // reuse the exact key you coined
     expect(src).toContain("conventional name"); // take the Schelling-point name
   });
@@ -324,11 +341,12 @@ describe("sil-shopping skill bundle — load-bearing contract (not prose)", () =
 // the statement splitter would have been the drift `honesty-vocabulary.ts` exists to
 // prevent: two prose guards, two definitions of "a statement", one of them wrong.
 
-/** Withholds the licence: "never licenses", "does not license", or the exclusivity
- * form the tool itself uses ("only a `q` read licenses one"). Direction is
- * load-bearing — the denial must PRECEDE the licence word, or "**mint licensed** —
- * no returned match states…" satisfies it and the bar is born vacuous. */
-const DENIES_LICENCE = /\b(?:never|not|cannot|can'?t|no|only)\b[\s\S]*?licen/i;
+/** Withholds the licence: "never licenses", "does not license", the exclusivity form
+ * the tool itself uses ("only a `q` read licenses one"), or the object form ("licenses
+ * nothing"). Direction is load-bearing in the first branch — a denial AFTER the licence
+ * word would let "**mint licensed** — no returned match states…" satisfy it and the bar
+ * is born vacuous — so the trailing form is spelled out rather than allowed generally. */
+const DENIES_LICENCE = /\b(?:never|not|cannot|can'?t|no|only)\b[\s\S]*?licen|licen\w*\s+nothing\b/i;
 /** An EMPTY match list — the one answer that licenses the write. */
 const EMPTY_MATCH_LIST =
   /matches:?\s*\[\s*\]|\bmatches\b[^.]{0,40}\bempty\b|\bempty\b[^.]{0,40}\bmatches\b/i;
@@ -352,7 +370,7 @@ describe("read before mint — the bundle's half of the card", () => {
       .toBeGreaterThan(0);
   });
 
-  it("S2 — the router's read row sits ABOVE its mint row, and the mint row names the read", () => {
+  it("S2 — the router's read row sits ABOVE its mint row, and the mint row calls itself the FALLBACK", () => {
     // Reading order, mechanised. The agent matches top-down; a mint row above the
     // read row is a mint row it reaches first.
     const rows = routingRows();
@@ -361,9 +379,10 @@ describe("read before mint — the bundle's half of the card", () => {
     expect(readRow).toBeGreaterThanOrEqual(0);
     expect(mintRow).toBeGreaterThanOrEqual(0);
     expect(readRow).toBeLessThan(mintRow);
-    // The mint row states what must have happened first — otherwise the trigger
-    // reads as "a cold category" and the read becomes optional.
-    expect(rows[mintRow]).toMatch(/shopping_domain_search|\bread\b/);
+    // The row has to disown itself where the agent picks a tool. sil SHIPS the domain
+    // document now (ruling, 2026-09-19), so a mint row that reads like a peer of the
+    // read row offers a permanent global write as an ordinary first move.
+    expect(rows[mintRow]).toMatch(/fallback/i);
   });
 
   it("S2 (= AC B5) — a read that did NOT return is not a read that returned nothing", () => {
@@ -424,27 +443,32 @@ describe("read before mint — the bundle's half of the card", () => {
     expect(getUnits.length).toBeGreaterThan(0); // guard-of-the-guard: an empty scan passes
     expect(unsatisfied(getUnits, (s) => DENIES_LICENCE.test(s))).toEqual([]);
 
-    const licenceUnits = units.filter((s) => /licen/i.test(s));
-    expect(licenceUnits.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(licenceUnits, (s) => EMPTY_MATCH_LIST.test(s))).toEqual([]);
+    // The other half, keyed on the EMPTY read rather than on the word "licence": the
+    // exclusivity has to sit on the statement that shows `matches: []`, or the bundle
+    // can name the licence in one paragraph and the empty read in another and the agent
+    // never learns which answer buys the write.
+    const emptyRead = units.filter((s) => EMPTY_MATCH_LIST.test(s));
+    expect(emptyRead.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(emptyRead, (s) => /\bonly\b/i.test(s))).toEqual([]);
   });
 
   it("S5 — the adoption discipline names its mechanism and says the keys travel VERBATIM", () => {
     // "take the key sil already holds" was unreachable advice until this tool
     // existed: nothing in the surface could read a standing domain's vocabulary.
     //
-    // RETARGETED twice, never weakened: the destination of an adopted key moved from a
-    // per-domain document section to the Brief's tables, and now to the brief's specs and
-    // the specs each call carries. The DECISION has not moved — adopted keys travel
-    // unchanged — so the bar follows the destination rather than dying with it.
-    const src = sectionBody("GATHER");
+    // RETARGETED three times, never weakened: the destination of an adopted key moved
+    // from a per-domain document section to the Brief's tables, then to the brief's
+    // specs, and the whole discipline now lives in the fallback document. The DECISION
+    // has not moved — an adopted key travels unchanged and nothing is coined beside it —
+    // so the bar follows the destination rather than dying with it.
+    const src = read(MINT);
     expect(src).toContain("shopping_domain_search");
     const verbatimUnits = splitStatements(src).filter((s) => /verbatim/i.test(s));
     expect(verbatimUnits.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
       unsatisfied(
         verbatimUnits,
-        (s) => /\bkeys?\b/i.test(s) && /\bspecs?\b/i.test(s),
+        (s) => /\bkeys?\b/i.test(s) && /coin nothing|as they are/i.test(s),
       ),
     ).toEqual([]);
   });
@@ -454,7 +478,7 @@ describe("read before mint — the bundle's half of the card", () => {
     // coined again") reads as a ban on declaring an ancestor's key at all. An agent that
     // needs the leaf's own unit then either renames the key — forking the vocabulary for
     // every later buyer — or sends the ancestor's unit and every value is wrong by 1000.
-    const units = sectionStatements("GATHER");
+    const units = mintStatements();
 
     const inheriting = units.filter((s) => /inherit/i.test(s));
     expect(inheriting.length).toBeGreaterThan(0); // guard-of-the-guard
@@ -470,20 +494,12 @@ describe("read before mint — the bundle's half of the card", () => {
 
   it("S5 — the read budget is stated as a NUMBER, not implied", () => {
     // An agent left to infer the bound either forfeits it — forking the vocabulary on a
-    // near-miss — or reads the registry all afternoon. Write the arithmetic.
-    const budget = sectionStatements("GATHER").filter((s) => /budget/i.test(s));
-    expect(budget.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(budget, (s) => /\b2\b|\btwo\b/.test(s) && /reads?/i.test(s))).toEqual([]);
-  });
-
-  it("S7 — a held path is the cold path's memory, not a per-search toll", () => {
-    // Without this the card ships a latency and spend regression on every warm
-    // search, which no other bar here would catch.
-    const corpus = bundleCorpus();
-    expect(corpus).toMatch(
-      /no `?shopping_domain_search`? call|without a read|no registry read|not re-?read/i,
-    );
-    expect(corpus).toMatch(/cold path'?s first move|never a per-search toll|already records/i);
+    // near-miss — or reads the registry all afternoon. Write the arithmetic. Keyed on
+    // the reads themselves now: the fallback document states the bound where it states
+    // the two reads, and never uses the word "budget".
+    const reads = mintStatements().filter((s) => /\breads\b/i.test(s));
+    expect(reads.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(unsatisfied(reads, (s) => /\b(?:2|two)\b/.test(s) && /at most/i.test(s))).toEqual([]);
   });
 });
 
@@ -540,8 +556,8 @@ describe("SC4 — no path in the bundle asks for a created shopper", () => {
   });
 
   // The POSITIVE half of the two scans above — what a chat opens with instead of a
-  // set-up turn — is `three-step-loop.integration.test.ts`'s bar 1, statement-scoped
-  // inside SKILL.md's own OPEN section. A second copy here would be duplicate coverage.
+  // set-up turn — is `skill-rules.integration.test.ts`'s bar 5, statement-scoped inside
+  // SKILL.md's own `## Start by reading`. A second copy here would be duplicate coverage.
 
   it("NO bundled prose names a bare sil bin — the one that ships, or the one that does not", () => {
     // `openclaw plugins install` links no bins, so a bare name reaches PATH only through
@@ -559,9 +575,8 @@ describe("SC4 — no path in the bundle asks for a created shopper", () => {
 });
 
 // ===========================================================================
-// What the live draws bought. The wordings a buyer round measured. The three that
-// were phrased through the deleted document store are re-expressed against the
-// brief in `three-step-loop.integration.test.ts` (bars 2, 4 and 6); this one is
+// What the live draws bought. The wordings a buyer round measured. The rest are
+// re-expressed against the brief in `skill-rules.integration.test.ts`; this one is
 // about the registry and stays here.
 // ===========================================================================
 
@@ -570,9 +585,7 @@ describe("the live draws' share — wordings a buyer round measured", () => {
     // Draw 2 minted `product.ski_boots` and `product.ski_helmets` on the root; draw 1
     // minted `product.sports.winter.ski.boots` from the same prompt. On a registry
     // holding only the root, a leaf on the root satisfies "descend".
-    const coining = sectionStatements("GATHER").filter(
-      (s) => /\bcoin|\bmint/i.test(s) && /\bpath\b/i.test(s),
-    );
+    const coining = mintStatements().filter((s) => /\bpath\b/i.test(s));
     expect(coining.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(unsatisfied(coining, (s) => /ancestor/i.test(s) && /\broot\b/i.test(s))).toEqual([]);
   });

@@ -1,14 +1,14 @@
 /**
  * Reading + SCOPING primitives for the `sil-shopping` bundle, shared by the two
  * files that guard its prose — `skill-bundle-contract.integration.test.ts` (the
- * load-bearing contract) and `three-step-loop.integration.test.ts` (the loop).
+ * load-bearing contract) and `skill-rules.integration.test.ts` (the rules).
  * Same reason as `honesty-vocabulary.ts` and `per-niche-expert.ts`: one module,
  * so the two surfaces carrying the same rule cannot drift apart.
  *
  * SCOPING IS THE POINT. A corpus-wide `probe` + `not licensed` pair passes on the
  * very wording the guards reject, because both strings already sit three lines
  * apart in different paragraphs. Everything here narrows the window a rule is
- * allowed to be satisfied in: a statement, a file, or one beat's own section.
+ * allowed to be satisfied in: a statement, a file, or one heading's own section.
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -68,116 +68,79 @@ export const unsatisfied = (candidates: string[], rule: (s: string) => boolean):
   candidates.some(rule) ? [] : candidates;
 
 // ===========================================================================
-// Loop sections — the scope every loop bar is asserted inside.
+// Sections — the scope a prose bar is asserted inside.
 // ===========================================================================
 
-/** The loop's sections, in order. The NAME is part of the contract: the agent routes
- * on it, and a renamed section is one it cannot find. Matched CASE-SENSITIVELY —
- * `find`, `price` and `open` are ordinary English words, and a case-insensitive scan
- * would hand a section to whichever paragraph happened to use the verb first. */
-export const LOOP_SECTIONS = ["OPEN", "GATHER", "FIND", "PRICE", "DECIDE"] as const;
-export type LoopSection = (typeof LOOP_SECTIONS)[number];
-
-export interface LoopSectionBody {
-  /** Bundle-relative path of the file whose heading opens the section. */
-  file: string;
-  heading: string;
-  /** The heading line plus everything under it, to the next same-or-higher heading. */
-  body: string;
-}
+/** The fallback document, by path: the mint discipline is the whole of what it says,
+ * so the file IS the scope. */
+export const MINT = "references/mint.md";
 
 /**
- * Map section → the prose that owns it, derived from HEADINGS on disk.
- *
- * THE ONE FORMAT CONTRACT this helper imposes: each section is opened by a markdown
- * heading naming it in upper case. That makes "the decision lives in the step that
- * owns it" a checkable claim rather than a corpus-wide grep.
- *
- * THE MOST SPECIFIC heading wins, and equally-specific ones concatenate: GATHER is
- * deliberately written in two files (the category, then the brief), while a heading
- * naming several sections is an index whose body would otherwise swallow them all.
- *
- * `examples/` is EXCLUDED. A worked run DEMONSTRATING a step is not the reference
- * that STATES its discipline: the agent loads the reference at the moment of use and
- * may never open the example.
+ * SKILL.md's own headings, by the short name the bars call them. The HEADING is part
+ * of the contract — the agent reads the file top-down and finds a rule under the
+ * heading that frames it — so a renamed one throws here rather than quietly widening
+ * the scope of every bar beneath it.
  */
-export function loopSections(): Map<LoopSection, LoopSectionBody> {
-  const candidates = new Map<LoopSection, Array<LoopSectionBody & { breadth: number }>>();
-  for (const rel of bundleFiles().filter((p) => !p.startsWith("examples/"))) {
-    const lines = read(rel).split(/\r?\n/);
-    for (let i = 0; i < lines.length; i += 1) {
-      const h = /^(#{1,6})\s+(.*)$/.exec(lines[i] as string);
-      if (!h) continue;
-      const level = (h[1] as string).length;
-      const heading = h[2] as string;
-      const named = LOOP_SECTIONS.filter((name) => new RegExp(`\\b${name}\\b`).test(heading));
-      if (named.length === 0) continue;
-      let end = i + 1;
-      while (end < lines.length) {
-        const next = /^(#{1,6})\s+/.exec(lines[end] as string);
-        if (next && (next[1] as string).length <= level) break;
-        end += 1;
-      }
-      const body = lines.slice(i, end).join("\n");
-      for (const name of named) {
-        const list = candidates.get(name) ?? [];
-        list.push({ file: rel, heading, body, breadth: named.length });
-        candidates.set(name, list);
-      }
-    }
-  }
+export const SKILL_SECTIONS = {
+  reading: "Start by reading",
+  tools: "The tools",
+  using: "Using sil well",
+  seller: "Don't take a seller's word",
+  traps: "Common traps",
+  pick: "Showing a pick",
+} as const;
+export type SkillSection = keyof typeof SKILL_SECTIONS;
 
-  const found = new Map<LoopSection, LoopSectionBody>();
-  for (const [name, list] of candidates) {
-    const breadth = Math.min(...list.map((c) => c.breadth));
-    const best = list.filter((c) => c.breadth === breadth);
-    found.set(name, {
-      file: (best[0] as LoopSectionBody).file,
-      heading: (best[0] as LoopSectionBody).heading,
-      body: best.map((c) => c.body).join("\n"),
-    });
-  }
-  return found;
-}
+const HEADINGS = (body: string): string[] =>
+  body.split(/\r?\n/).flatMap((l) => /^#{1,6}\s+(.*)$/.exec(l)?.[1] ?? []);
 
-/** The section's own prose, or a LOUD throw. Never "" — an empty scope makes every
- * `unsatisfied()` bar below it pass vacuously, which is worse than a red. */
-export function sectionBody(name: LoopSection): string {
-  const section = loopSections().get(name);
-  if (section === undefined) {
+/**
+ * One file's section: the heading line plus everything under it, to the next
+ * same-or-higher heading.
+ *
+ * Throws rather than returning "" — an empty scope makes every `unsatisfied()` bar
+ * below it pass vacuously, which is worse than a red. The throw prints the headings
+ * the file actually has, so a rename is one read to fix.
+ */
+export function section(rel: string, heading: string): string {
+  const lines = read(rel).split(/\r?\n/);
+  const open = new RegExp(`^(#{1,6})\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+  const start = lines.findIndex((l) => open.test(l));
+  if (start < 0) {
     throw new Error(
-      `no bundle heading opens the ${name} section (expected a markdown heading naming`
-        + ` "${name}") — found: ${[...loopSections().keys()].join(", ") || "none"}`,
+      `${rel}: no heading opens "${heading}" — found: ${HEADINGS(read(rel)).join(" · ")}`,
     );
   }
-  return section.body;
-}
-
-/** The section, cut into statements. */
-export const sectionStatements = (name: LoopSection): string[] =>
-  splitStatements(sectionBody(name));
-
-/**
- * SKILL.md's always-on contract — the bullets that hold on EVERY turn, cut at its own
- * heading. Narrower than `skillSrc()` on purpose: a rule that migrates out of the contract
- * and into the routing or loop TABLE keeps satisfying a file-wide bar while the agent stops
- * reading it as a rule. Measured — the loop table's GATHER row satisfied the ask-first bar
- * on its own, and the mutant that gutted the bullet passed green.
- *
- * Throws rather than returning "": an empty scope makes every `unsatisfied()` below it pass
- * vacuously, which is worse than a red.
- */
-export function alwaysOnContract(): string {
-  const lines = skillSrc().split(/\r?\n/);
-  const start = lines.findIndex((l) => /^##\s+Always-on contract\b/.test(l));
-  if (start < 0) {
-    throw new Error("SKILL.md: no `## Always-on contract` heading — the every-turn rules"
-      + " have no home, and every bar scoped to them would pass over nothing");
-  }
+  const level = (/^(#+)/.exec(lines[start] as string)?.[1] as string).length;
   let end = start + 1;
-  while (end < lines.length && !/^#{1,2}\s+/.test(lines[end] as string)) end += 1;
+  while (end < lines.length && !new RegExp(`^#{1,${level}}\\s`).test(lines[end] as string)) {
+    end += 1;
+  }
   return lines.slice(start, end).join("\n");
 }
 
-/** The always-on contract, cut into statements. */
-export const contractStatements = (): string[] => splitStatements(alwaysOnContract());
+export const skillSection = (name: SkillSection): string =>
+  section("SKILL.md", SKILL_SECTIONS[name]);
+
+export const skillSectionStatements = (name: SkillSection): string[] =>
+  splitStatements(skillSection(name));
+
+export const mintStatements = (): string[] => splitStatements(read(MINT));
+
+/**
+ * SKILL.md above its first `##` — the three things that carry the job. Scoped apart
+ * from the rest of the file because it is the frame the agent reads everything else
+ * under: a claim about what sil SHIPS that slides down into a tip is a claim the
+ * agent meets after it has already decided how to work.
+ */
+export function skillPreamble(): string {
+  const body = frontmatter().body;
+  const cut = body.search(/^##\s+/m);
+  if (cut <= 0) {
+    throw new Error("SKILL.md: nothing above the first `## ` heading — the preamble that"
+      + " frames the file is gone, and every bar scoped to it would pass over nothing");
+  }
+  return body.slice(0, cut);
+}
+
+export const preambleStatements = (): string[] => splitStatements(skillPreamble());
