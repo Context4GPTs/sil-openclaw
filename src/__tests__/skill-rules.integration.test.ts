@@ -78,16 +78,19 @@ describe("sil ships the domain document, and the mint is the fallback", () => {
     expect(unsatisfied(before, (s) => /decides the buy/i.test(s))).toEqual([]);
   });
 
-  it("2 — `references/mint.md` opens by saying sil ships the document, so the mint reads as the FALLBACK it is", () => {
+  it("2 — `references/mint.md` opens by saying a curated domain already carries the document, so the mint reads as the FALLBACK it is", () => {
     // The file an agent opens only when a domain is missing has to disown itself in its
     // first paragraph, or an agent that opened it for one cold domain carries the mint
     // into the next warm one — and the registry write is the one thing nothing undoes.
     const units = mintStatements();
 
-    const ships = units.filter((s) => /sil ships/i.test(s));
-    expect(ships.length).toBeGreaterThan(0); // guard-of-the-guard
+    // NOT /sil ships/: nothing in this repo ships a document any more — a domain's content
+    // lives only in the registry, authored by a mint (founder ruling 2026-09-21). What the
+    // file must still disown itself against is a domain that ALREADY carries one.
+    const carries = units.filter((s) => /curated/i.test(s));
+    expect(carries.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(ships, (s) => /domain document/i.test(s) && /markdown/i.test(s) && /guide/i.test(s)),
+      unsatisfied(carries, (s) => /document/i.test(s) && /markdown/i.test(s) && /guide/i.test(s)),
     ).toEqual([]);
 
     const normal = units.filter((s) => /normal path/i.test(s));
