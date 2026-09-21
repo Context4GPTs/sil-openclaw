@@ -5,7 +5,7 @@ description: The fallback — sil does not hold a domain for what the buyer is b
 
 # Minting a domain sil does not hold
 
-sil ships a domain document for the things it holds: a markdown guide on how the thing is
+A domain sil has curated already carries a document: a markdown guide on how the thing is
 bought well, and the keys it is bought by. **That is the normal path** — read it with
 `shopping_domain_get` and get on with the job.
 

@@ -394,7 +394,7 @@ describe("each shopping tool carries its discipline clause", () => {
     // that lets the agent use a key it did not mint.
     shopping_domain_create: [
       /\bFALLBACK\b/,
-      /ships a document/i,
+      /curated/i,
       /markdown/i,
       /goes wrong/i,
       /go to a shop/i,

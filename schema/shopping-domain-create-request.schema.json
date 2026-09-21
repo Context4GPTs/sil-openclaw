@@ -19,7 +19,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 4096,
-      "description": "Writes the domain document every later buyer inherits, in markdown: what the thing is bought on, what goes wrong and what that costs the buyer, what to trust and what not to, and what buying it online takes in place of handling it. sil ships these for the domains it holds — write one only for a domain it does not."
+      "description": "Writes the domain document every later buyer inherits, in markdown: what the thing is bought on, what goes wrong and what that costs the buyer, what to trust and what not to, and what buying it online takes in place of handling it. A domain sil has curated already carries one — write one only for a domain the registry does not hold."
     },
     "specs": {
       "type": "array",

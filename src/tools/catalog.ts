@@ -74,8 +74,8 @@ export const SHOPPING_TOOLS = [
     // A colliding path means the vocabulary is already there, so search that same path.
     recovery: { already_exists: "shopping_search" },
     description:
-      "The FALLBACK, and the one permanent global write in sil: sil ships a document for the"
-      + " domains it holds, and this writes one for a domain it does not. Two things must hold"
+      "The FALLBACK, and the one permanent global write in sil: a domain sil has curated"
+      + " already carries a document, and this writes one for a domain it does not hold. Two things must hold"
       + " first: a shopping_domain_search read came back `matches: []`, and you have"
       + " researched on the web how the domain is bought (never products). The `guide` is"
       + " markdown every later buyer inherits: what the thing is bought on, what goes wrong"
