@@ -24,6 +24,17 @@
       "type": "string",
       "description": "Reads the domain document — markdown on how this thing is bought well: what it is bought on, what goes wrong and what that costs the buyer, what to trust, and what buying it online takes in place of handling it. It is what sil knows about the domain, so reason from it rather than reciting it, and never send the buyer to a shop it already tells you how to do without."
     },
+    "names": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z]{2}$": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "description": "How a shop lists it, per market language (ISO 639-1): `{\"en\": \"ski boots\", \"el\": \"μπότες σκι\"}`. sil asks each index in these words; the agent never sends them."
+    },
     "specs": {
       "type": "array",
       "items": {

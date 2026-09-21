@@ -21,6 +21,17 @@
       "maxLength": 4096,
       "description": "Writes the domain document every later buyer inherits, in markdown: what the thing is bought on, what goes wrong and what that costs the buyer, what to trust and what not to, and what buying it online takes in place of handling it. A domain sil has curated already carries one — write one only for a domain the registry does not hold."
     },
+    "names": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z]{2}$": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "description": "How a shop lists it, per market language (ISO 639-1): `{\"en\": \"ski boots\", \"el\": \"μπότες σκι\"}`. sil asks each index in these words; the agent never sends them."
+    },
     "specs": {
       "type": "array",
       "items": {
