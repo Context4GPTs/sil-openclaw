@@ -22,7 +22,7 @@
     },
     "guide": {
       "type": "string",
-      "description": "Copies into `## Buying guide`; translates the buyer facts through it; reads from it which keys decide the buy."
+      "description": "Reads the domain document — markdown on how this thing is bought well: what it is bought on, what goes wrong and what that costs the buyer, what to trust, and what buying it online takes in place of handling it. It is what sil knows about the domain, so reason from it rather than reciting it, and never send the buyer to a shop it already tells you how to do without."
     },
     "specs": {
       "type": "array",
@@ -50,7 +50,7 @@
           "description": {
             "type": "string",
             "maxLength": 1024,
-            "description": "Phrases the question to the buyer from it."
+            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back."
           },
           "type": {
             "anyOf": [
@@ -161,7 +161,7 @@
           "description": {
             "type": "string",
             "maxLength": 1024,
-            "description": "Phrases the question to the buyer from it."
+            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back."
           },
           "type": {
             "anyOf": [
@@ -234,7 +234,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Builds seller rows with keys the registry holds — the base every category shares and this category's own branch — and sends them to `shopping_offers`."
+      "description": "Builds seller rows with keys the registry holds — the base every domain shares and this domain's own branch — and sends them to `shopping_offers`."
     }
   },
   "additionalProperties": false

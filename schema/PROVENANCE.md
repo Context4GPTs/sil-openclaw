@@ -1,7 +1,7 @@
 # Where these twenty-two files come from
 
 Copied verbatim from `sil-services` `packages/schemas/schema/`, commit
-`231b7847b74cfbe41d7237c5c65236606f5441a9`. One request and one response artifact per
+`6ab1198b1603afc54c4ba1235cd2c65d93d05d47`. One request and one response artifact per
 shopping tool; each is `JSON.stringify` of the TypeBox object the API serialises against.
 
 **Re-copy, never hand-edit.** A local edit is drift the moment the sibling moves, and the

@@ -15,6 +15,7 @@ import {
   registeredToolNames,
   type MockPluginAPI,
 } from "../helpers/mock-plugin-api.js";
+import { categoryAsDomainOffenders } from "../helpers/domain-vocabulary.js";
 import { perNicheExpertOffenders } from "../helpers/per-niche-expert.js";
 import {
   SHOPPING_TOOLS,
@@ -371,13 +372,32 @@ describe("each shopping tool carries its discipline clause", () => {
   const DISCIPLINE: Record<(typeof SHOPPING_TOOLS)[number], RegExp[]> = {
     // The read that licenses the mint, and the bound on how often it is taken.
     shopping_domain_search: [/matches: \[\]/, /licens/i, /\b(2|two)\b/],
-    // What the keys are for, and which of them identify a purchasable option.
-    shopping_domain_get: [/variant_spec/, /product_spec/, /operators?/i],
-    // The write nothing can undo, the two things that must hold first, the vocabulary it
-    // may not coin, and the inheritance rule in three parts — no rename, a re-declaration
-    // that binds the subtree, and the mark that lets the agent use a key it did not mint.
+    // sil SHIPS this document (ruling, 2026-09-19), so the description has to say what
+    // the agent is being handed: markdown that names what goes wrong, what to trust and
+    // what buying it online takes, plus each key's own `description` — which is what
+    // makes a question about that key worth the buyer's turn. Then what the keys are
+    // for, and which of them identify a purchasable option.
+    shopping_domain_get: [
+      /markdown/i,
+      /goes wrong/i,
+      /to trust/i,
+      /buying it online/i,
+      /moves the fit/i,
+      /variant_spec/,
+      /product_spec/,
+      /operators?/i,
+    ],
+    // The FALLBACK, not a peer of the read: sil ships a document for the domains it
+    // holds. Then the write nothing can undo, the two things that must hold first, the
+    // guide it has to produce, the vocabulary it may not coin, and the inheritance rule
+    // in three parts — no rename, a re-declaration that binds the subtree, and the mark
+    // that lets the agent use a key it did not mint.
     shopping_domain_create: [
-      /\bNEW\b/,
+      /\bFALLBACK\b/,
+      /ships a document/i,
+      /markdown/i,
+      /goes wrong/i,
+      /go to a shop/i,
       /research|read(ing)? up/i,
       /undo|permanent/i,
       /never .{0,20}to coin/i,
@@ -386,32 +406,41 @@ describe("each shopping tool carries its discipline clause", () => {
       /inherited/,
       /shopping_domain_get/,
     ],
-    // One brief for the whole session, the id the rest of it is named by, and the quote
-    // every `reason` is — the founder's live session wrote four first-person paraphrases,
-    // one of them a want ("new") the buyer never stated. A NEW chat opens its own brief off
-    // what the earlier ones hold (2026-09-18: the warm session searched on the previous
-    // session's brief), and what the buyer wears is a spec sil already answers.
+    // One brief for the whole session, the id the rest of it is named by, the narrative
+    // that IS the spec of the buy (ruling, 2026-09-19), and the quote every `reason` is —
+    // the founder's live session wrote four first-person paraphrases, one of them a want
+    // ("new") the buyer never stated. A NEW chat opens its own brief off what the earlier
+    // ones hold (2026-09-18: the warm session searched on the previous session's brief),
+    // and what the buyer wears is a spec sil already answers.
     shopping_brief_create: [
       /per SESSION/i,
-      /never one per category/i,
+      /never one per domain/i,
       /`id`/,
+      /spec of the buy/i,
       /verbatim/i,
       /carry every spec/i,
       /`gender eq mens`/,
       /`gender eq womens`/,
     ],
-    // The want is written BEFORE the search, a write REPLACES rather than appends, the
+    // The want is written AS it is settled, a write REPLACES rather than appends, the
     // `reason` is the buyer's words verbatim, a measurement is not the spec it becomes,
     // and a `decision` is a mind changed, written about the buyer — not a note of what
-    // was just written down in their voice.
+    // was just written down in their voice. The refusal is the one moment a want silently
+    // disappears, so what to do with an `invalid_request` is stated at the call that
+    // answers it: the row is fixed and RE-SENT, and the want is never given up.
     shopping_brief_edit: [
-      /before\b[^.]{0,20}next search/i,
+      /as it is settled/i,
+      /next call drops/i,
       /replace/i,
       /`decision`/,
       /verbatim/i,
       /their mind/i,
       /MEASUREMENT is never the spec/i,
       /in their voice/i,
+      /never a log/i,
+      /invalid_request/,
+      /send it again/i,
+      /never give the want up/i,
     ],
     // The bare read is a listing, it comes before the first question, and what it answers
     // is READ rather than searched — this session's brief is its own.
@@ -420,19 +449,19 @@ describe("each shopping tool carries its discipline clause", () => {
     // unambiguous statement about the buyer reaches it at all.
     shopping_profile_edit: [/same `name`/, /before the next search/i, /unambiguous/i, /snake_case/],
     // The brief rides on every call, its specs travel unchanged, `n` counts variants,
-    // the query is shop words, the honesty the whole answer turns on (`fit` says
+    // the query is shop words, and the honesty the whole answer turns on (`fit` says
     // "unknown" for what sil could not test, `printed` is the page talking, a variant
-    // with no option values is a listing whose sizes are unread), the pick is priced,
-    // and the bound. The first call waits for what the guide says decides the buy, and
-    // this step talks fit: both measured 2026-09-18, four searches on two specs and every
-    // shortlist priced against a market the buyer had not been shown a boot from yet.
+    // with no option values is a listing whose sizes are unread).
+    //
+    // The per-category call bound, the "wait for the guide before the first call"
+    // precondition and the "price the pick before you recommend" gate were RETIRED by
+    // the 2026-09-19 ruling — the agent loops freely. What replaces them is pinned in
+    // the opposite direction: the description must say searching is cheap and repeatable,
+    // so a bound cannot creep back in as folklore.
     shopping_search: [
       /`brief`/,
-      /before the FIRST call/i,
-      /never the shortlist/i,
+      /as often as the job needs/i,
       /never on the search/i,
-      /\b4\b|\bfour\b/,
-      /per CATEGORY/,
       /counts VARIANTS/,
       /never a sentence/i,
       /"unknown"/,
@@ -440,17 +469,18 @@ describe("each shopping tool carries its discipline clause", () => {
       /no option values/i,
       /gap/i,
       /unchanged/i,
-      /priced/i,
     ],
     // What the dossier adds over the shortlist, that a miss is an absence, and that a
     // sizeless listing opens here like any other id.
     shopping_product_get: [/sources/, /absent/i, /opaque/i, /no option values/i],
     // The brief rides here too, its seller specs travel unchanged, a sizeless listing is
     // priced as its page prints, what dates a price, why the spread is the answer — and
-    // that this call is the PICK's, not a pass over the shortlist.
+    // what pricing a whole shortlist COSTS the buyer. That last one is a cost tip now,
+    // never a gate: the ruling retired "never for a shortlist" as a precondition, so the
+    // pin follows the spend rather than the order.
     shopping_offers: [
       /`brief`/,
-      /never for a shortlist/i,
+      /pricing a whole shortlist/i,
       /observed_at/,
       /spread/i,
       /convert/i,
@@ -485,6 +515,47 @@ describe("each shopping tool carries its discipline clause", () => {
     // Guard-of-the-guard: the strip clears a real occurrence, so the bar is not passing
     // over prose that simply dropped the pointer to where seller terms come from.
     expect(mint).toMatch(/seller_specs/);
+  });
+});
+
+describe("a market is a SELLER spec — `ship_to` is an address label", () => {
+  it("`ship_to`'s own parameter description says it excludes no seller, and names `country` on the offers", () => {
+    // 2026-09-16: the model could not find a market filter, so it sent `ship_to: "Home"`
+    // on all six searches and reported it back as "Greece only" — six searches that
+    // filtered nothing and a buyer told they had. The rule has to sit on the PARAMETER
+    // the agent is filling: prose in a skill file three reads away is what failed.
+    const schema = getTool(allRegisteredTools(), "shopping_search").parameters as unknown as {
+      properties: Record<string, { description?: string }>;
+    };
+    const shipTo = schema.properties["ship_to"]?.description ?? "";
+    expect(shipTo.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(shipTo).toMatch(/\blabel\b/i);
+    expect(shipTo).toMatch(/excludes no seller/i);
+    expect(shipTo).toMatch(/`country`/);
+    expect(shipTo).toMatch(/on the offers/i);
+  });
+});
+
+describe("the registry's concept is a DOMAIN, never a category", () => {
+  it("no agent-facing string names a domain's path, guide, keys or specs a `category`'s", () => {
+    // Founder ruling, 2026-09-19: sil ships the domain document, and "domain" is the
+    // user-facing word for what the registry holds. An agent reading "the category's
+    // guide" in one description and `domain` in the next is being handed two names for
+    // one thing, and coins its spec keys under whichever it read last.
+    //
+    // Runs over the WHOLE surface — descriptions AND parameter descriptions — because a
+    // rule enforced on one is not enforced. The scan is narrow by construction (the
+    // possessive, or the registry's own nouns) so the generic English sense the bundle
+    // still uses legitimately cannot false-RED; its bite is proved in
+    // `skill-bundle-contract.integration.test.ts`, which runs the same module.
+    // De-duplicated: `agentFacingText` deliberately reads each property description
+    // twice (once directly, once through the nested-schema sweep), which costs the other
+    // scanners nothing but would print every offender here twice.
+    const offenders = new Set<string>();
+    for (const [name, text] of wholeSurface(allRegisteredTools())) {
+      for (const ctx of categoryAsDomainOffenders(text)) offenders.add(`${name}: …${ctx}…`);
+    }
+    expect([...offenders]).toEqual([]);
   });
 });
 

@@ -31,6 +31,11 @@ export const RETIRED_TOKENS = [
   // driving tools the wire does not have. A spec is `key · op · value`: prose that
   // still grades one as relaxable or not sends the agent widening on its own.
   "shopping_doc_", "shopping_brief_compile", "eight-beat", "hard constraint", "hard row",
+  // The ordered loop and the four reference files that carried it, retired 2026-09-19: sil
+  // prescribes no sequence, so prose naming a numbered step or one of those files is prose
+  // driving a shape the wire no longer has. Dangling LINKS were already caught; the bound
+  // itself ("at most four searches per domain") re-entered green until these landed.
+  "three-step", "steps.md", "category.md", "session_walkthrough", "per-search toll",
 ];
 
 /** The bundle rule: a blanket forbid, no allowance, every needle. */

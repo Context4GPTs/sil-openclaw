@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use when the user asks to shop with sil or to manage what sil holds for them: register or check their sil account, read sil''s registry for a category and coin one when nothing stands, read a category''s buying guide and keys, open, read or edit the session''s brief and the buyer''s profile, search a settled category, open a shortlisted variant, price the pick at every seller on the terms the buyer asked for, read a seller''s whole terms, or — on any shopping intent — run the three-step loop. Drives sil_register, sil_whoami, sil_doctor, shopping_domain_search, shopping_domain_get, shopping_domain_create, shopping_brief_create, shopping_brief_edit, shopping_brief_read, shopping_profile_edit, shopping_search, shopping_product_get, shopping_offers, shopping_seller_get.'
+description: 'Use on any shopping intent, and to manage what sil holds for the buyer: register or check their sil account, read sil''s domain document for the thing they are buying, open and keep the session''s brief and the buyer''s profile, search for what fits, open a product, price a pick at every seller, and read a seller''s terms. Drives sil_register, sil_whoami, sil_doctor, shopping_domain_search, shopping_domain_get, shopping_domain_create, shopping_brief_create, shopping_brief_edit, shopping_brief_read, shopping_profile_edit, shopping_search, shopping_product_get, shopping_offers, shopping_seller_get.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -8,102 +8,176 @@ metadata:
 
 # sil-shopping
 
-Drive sil's tools for the buyer: read intent, route to the tool or to the reference that
-owns it (loaded on demand), call it, say what came back. What the buyer tells you is held
-in sil — the session's **brief** and their **profile** — never on this agent's disk.
+sil is a catalog you shop on the buyer's behalf. You drive its tools in whatever order the
+conversation needs — search, open, price, write the brief, search again — as fast as you
+like. Nothing here is a sequence to follow.
 
-## Always-on contract
+Three things carry the job, and none of them live on this agent's disk:
 
-- **Act, don't narrate.** When intent maps to a tool, call it — don't re-confirm what was
-  already stated.
-- **Follow the tool's own `recovery`.** Every tool returns a `status`; on a non-`ok` one,
-  say what happened and follow that tool's own `recovery` hint — never improvise.
-- **What the guide says decides the buy has a spec before the FIRST search.**
-  `shopping_domain_get` names what the thing is bought on — a ski boot on size, forefoot
-  width, sole norm and stiffness — and each of those comes from the profile or from ONE
-  question listing everything still missing. Search on fewer and the shortlist is about
-  something else; recommending on DECIDING keys that read `unknown` sells the buyer a guess.
-- **A spec traces to the buyer.** Every spec comes from something the buyer SAID, or from a
-  measurement on their profile that the category's guide converts, and its `reason` is those
-  words VERBATIM — never a paraphrase, never first-person words they did not say: *"I am
-  advanced skier"*, or the measurement named, *"foot length 27.2 cm"*. Nothing said, no
-  spec: ask them, or say *"I'm assuming new, not used"* out loud and write it on their word.
-- **A measurement is never the spec — the guide maps it.** 27.2 cm is the buyer's, held on
-  their profile; the spec is the size the category is sold in — `mondo_size in [27, 27.5]`,
-  carrying that measurement as its `reason`. Map by the rule the guide states, never by the
-  number as typed: a last 2 mm under the forefoot still fits, a level is a floor and takes
-  `in` with every level above theirs, a sole spec lists every norm their binding accepts.
-  Where the guide states no rule, ask them — a bound nothing was built to matches nothing.
-- **Gender is read, never guessed.** `sil_whoami` answers `gender`, and on anything worn
-  the brief carries it as a product spec in the domain's own spelling: `male` writes
-  `gender eq mens`, `female` `gender eq womens`. No `gender` on file, or one reading
-  `other`, is one question asked with the deciding specs, never inferred from a name.
+- **The domain document** — sil's own knowledge of how this thing is bought well.
+  `shopping_domain_get` hands back a markdown guide and the keys the thing is bought by,
+  each key's `description` saying how it moves the fit. Read it before you ask the buyer
+  anything: it is where you learn what decides the buy and what a bad buy costs them.
+- **The brief** — one per conversation, in sil. It is the shared scratchpad AND the spec of
+  this buy: the narrative says what a good buy looks like for this person, the specs say it
+  in the registry's keys, the decisions say what they changed and why. Write to it the
+  moment something is settled, and judge every pick against it.
+
+  Write the narrative as the buy succeeding, in their terms — *"a boot he can ski piste in
+  all day without numb toes, that clicks into his GripWalk bindings, €450 at most, and can
+  go back if the size is wrong"* — never a description of the shopping (*"needs an
+  appropriate performance fit; measurements not yet settled"*), which gives a pick nothing
+  to be judged against.
+- **The profile** — the person, across sessions: their measurements, their gender, their
+  addresses, lasting preferences. `sil_whoami` reads it.
+
+## Start by reading
+
+`sil_whoami` and `shopping_brief_read {}` are the two reads a new chat opens with. **Never
+ask what they already answer** — a size, a width, a budget, a market. Asking twice is the
+one thing a buyer notices.
+
+**Then open this session's brief, as soon as you know what they are shopping for** — with
+`shopping_brief_create`, before you ask them anything, not after they answer. It is the
+scratchpad: their answers, the assumptions you say out loud, and every decision land in it
+as they happen. A turn that ends with nothing written is a turn no later turn and no later
+chat can see.
+
+A past brief is read, never reused: carry forward what is still true, and say in the first
+`shopping_brief_edit` `decision` what you carried. *"Boots again"* the next morning is that
+carry, not a second interview.
+
+An unregistered answer from any call routes to `sil_register`. Nothing is set up in advance.
+
+## The tools
+
+| What you want | Tool |
+|---|---|
+| sign up / log in / who am I | `sil_register` · `sil_whoami` |
+| what sil knows about how this thing is bought | `shopping_domain_search` → `shopping_domain_get` |
+| a domain sil does not hold yet | `shopping_domain_create` — the fallback, [`mint.md`](references/mint.md) |
+| open this session's brief, write a want, log a decision | `shopping_brief_create` · `shopping_brief_edit` |
+| what is already on file | `shopping_brief_read` · `sil_whoami` |
+| a measurement, a lasting taste | `shopping_profile_edit` |
+| what fits | `shopping_search` |
+| everything sil holds on one product | `shopping_product_get` |
+| who sells it, at what price, on what terms | `shopping_offers` · `shopping_seller_get` |
+| sil looks broken | `sil_doctor` |
+
+Every tool answers a `status`. On anything but `ok`, say what happened and follow that
+tool's own `recovery` — never improvise around a refusal, and never loosen the brief to get
+past one. Each tool's parameters live in its own definition.
+
+**`references/mint.md` sits beside this file** — read it from the folder of the path your
+host listed for this skill, never a guessed path under the gateway home.
+
+## Using sil well
+
+- **Read the domain document before the first search.** It names what the thing is bought
+  on. A search that leaves one of those out is a shortlist about the category, not about
+  this buyer — and you will not know what you missed, because sil never says what it left
+  out.
+- **Ask for what is missing in one question, and give each thing its consequence.** Each
+  key's `description` says what goes wrong when that key is wrong, in the buyer's own life.
+  Say *that* — never which field it fills. Naming the fields back answers a question nobody
+  asked, and it is why buyers skip half of them.
+
+  > Not: *"What are your foot length and forefoot width in mm, discipline, and binding sole
+  > standard? These determine size, shell width and compatibility."*
+  >
+  > Instead: *"Four things decide a ski boot, and each one costs you the day if it's wrong.
+  > Your foot length — a shell a size too long and your heel lifts on every turn. Your
+  > forefoot width in mm — narrower than your foot and your toes are numb by the second run.
+  > Which binding you own — the wrong sole won't click in at all. And your budget."*
+- **A spec traces to the buyer.** Every spec comes from something they said, or from a
+  measurement on their profile, and its `reason` is their own words verbatim — never a
+  paraphrase, never first-person words they did not say. Nothing said, no spec: ask, or say
+  *"I'm assuming new, not used"* out loud and write it on their word.
+- **A measurement is not a spec.** 27.2 cm is the buyer's foot; the spec is the size the
+  thing is sold in. The key's own `description` says how to turn one into the other, and
+  every domain converts differently — a tolerance either side, a floor rather than a match,
+  a set of values that all work. Read that, not the number as typed.
+- **A want no spec can carry goes in the narrative, and you say so in the same turn.**
+  Otherwise the buyer believes sil is filtering on something it has never been told.
+- **What the document says buying it online takes becomes a spec, not just narrative.** Most
+  of it is about who you buy from, so it is a seller spec on the brief's `seller` domain —
+  and until you write it there, `shopping_offers` filters on nothing and every seller comes
+  back equally good. *"Buy where it can go back"* is the ski-boot guide's whole answer to a
+  fit you cannot try on, and it does no work as a sentence: it is `return_window_days gte 14`,
+  with the window the buyer says they want, or one you name out loud and write on their word.
+- **Your memory is sil, not a file.** The brief holds the job and the profile holds the
+  person, both under the buyer's account. A workspace `MEMORY.md` is not that memory: do not
+  read one and do not write one.
+- **Gender is read, never guessed.** `sil_whoami` answers it; on anything worn it rides as
+  a product spec. None on file is one question, never an inference from a name.
+- **`query` is shop words** — the thing as a shop lists it, and the model or numbers that
+  pick it out: `Nordica ski boots`, `ski boots 27.5 flex 110`. A sentence costs the buyer
+  most of the offers. *"men's alpine ski boots advanced 27.5 wide 102mm Alpine ISO 5355"*
+  came back with motorcycle boots. A budget, a market, a unit, a standard's name, *"in
+  stock"* and *"online"* are specs, not query words.
+- **Search again freely.** A re-worded `query`, a narrower `n`, another domain — searching
+  costs the buyer nothing and teaches you what is out there. What you never do silently is
+  loosen a spec: a want changes in the brief, on the buyer's word, with a `decision`.
+- **Write the brief as you go, not at the end.** A want the brief does not hold is a want
+  the next call drops.
 - **An ambiguous phrase is asked about, or stays in the narrative in the buyer's own
-  words** — never turned into a lasting fact. *"wide forefoot and bit short"* is the foot or
-  the person and you cannot tell which; the profile holds only what the buyer stated
-  unambiguously about themselves, and a fact written wrong there follows them everywhere.
-- **The brief is the only place a want changes.** Every call carries the specs the brief
-  holds — the category's on `shopping_search`, the `seller` ones on `shopping_offers` —
-  all of them and unchanged: never a looser bound, never a spec the brief does not hold.
-- **A `decision` is the buyer changing their mind** — one sentence about THEM and never in
-  their voice, on what they changed and why; a new want's words are its spec's `reason`,
-  never a `decision`, and never a log of what you have just written down.
-- **The answer is what fits; sil never says what it left out.** Nothing comes back about
-  the boots that missed, so when nothing fits, ask the buyer which spec to give up, write
-  their word with `shopping_brief_edit` and a `decision`, and search again — searching
-  again with that spec changed is the only way to learn what giving it up reaches.
-- **`query` is shop words.** The category as a shop lists it, the model words and the
-  numbers that pick the product — *ski boots 27.5 flex 110* — and never a sentence: a
-  budget, a market, a unit, a standard's name, *"in stock"* and *"online"* are specs, and in
-  `query` they cost the buyer most of the offers. *"men's alpine ski boots advanced 27.5
-  wide 102mm Alpine ISO 5355"* is that sentence; the index answered it with motorcycle boots.
-- **FIND talks fit; PRICE is for the pick.** Until the buyer has a pick the turn is about
-  fit and nothing else — no seller, no shipping, no market. `shopping_offers` is called for
-  the variant they are ready to price or ask about, never for a shortlist, and it is
-  where sellers and the brief's seller specs are discussed. `shopping_offers` reads live and
-  stamps each price with `observed_at`: the pick you recommend is quoted from that call, at
-  that moment, with whether that seller reaches the buyer. A price range carries no date and
-  no promise; never quote it as today's price, never convert it — sil holds no rate at all.
-- **Say what sil verified, and say the rest as what it is.** `fit` answers every key you
-  asked: a value sil verified, or *"unknown"* where it holds none — a **gap to name** and to
-  dig into with `shopping_product_get`, never a product that failed and never a miss. A
-  requested key absent from `seller_fit` is a term sil has not read, never a term the seller
-  lacks; `ships: unknown` keeps the offer, so say sil could not confirm shipping and hand the
-  buyer the listing. `host` is the shop a cold product was read on, `printed` that page's own
-  labelled pairs — a provisional pick, **not verified**: say *"the seller's page says …"*,
-  and their absence means sil read the page itself. A variant in `variants` with no option
-  values is a listing whose sizes sil has not read — say the size is unread, and once it is
-  the pick it prices with `shopping_offers` like any other; never read a size range a page
-  prints as stock. Each variant carries its own `price`: quote the price of the size you
-  name. A price in a currency other than the buyer's bound is one sil could not test — say so.
-- **The registry is READ before it is written.** `shopping_domain_search` reads it in the
-  buyer's own words, and only a read that comes back `matches: []` licenses a mint with
-  `shopping_domain_create` — nothing undoes one, so never re-spell a path to dodge a refusal.
-- **Every pick comes out of a sil tool.** A product, price, seller or listing URL that did
-  not come back from `shopping_search` / `shopping_product_get` / `shopping_offers` /
-  `shopping_seller_get` never enters the shortlist — never from the open web, even when the
-  buyer asks: zero products is an answer, and the web researches a category, never a pick.
-- **Your memory is sil, never a `MEMORY.md`.** The brief holds this job and the profile
-  holds the person, both under the buyer's account; a workspace `MEMORY.md` is not that
-  memory, so do not read or write it.
+  words.** *"wide forefoot and bit short"* is the foot or the person, and you cannot tell
+  which. A fact written wrong on the profile follows them forever.
+- **Every pick comes out of a sil tool.** A product, price, seller or link that did not come
+  back from sil never enters the shortlist — not from the open web, even when the buyer
+  asks. Zero results is an answer. The web researches a category; it never supplies a pick.
 
-## OPEN — the two reads every new chat starts with
+## Don't take a seller's word
 
-1. **`sil_whoami`** — the buyer's name, `gender`, country and addresses, and the
-   measurements and preferences sil already holds for them.
-2. **`shopping_brief_read {}`** — no `id`, so the answer is the buyer's briefs, newest
-   first; `shopping_brief_read { id }` then reads one for what is already on file.
+- **A price range is not today's price.** Only `shopping_offers` reads live, and it stamps
+  each price with the moment it read it. Quote that, never a range, and never convert a
+  currency — sil holds no rate.
+- **What a page prints is a claim, not a reading.** `printed` and `host` are the shop
+  talking: say *"the shop's page says 102 mm"*. Their absence means sil read the page
+  itself. `fit` is what sil verified, and `"unknown"` there is a gap to name — never a
+  product that failed.
+- **An absent key is an unread term, not a missing one.** A key missing from `seller_fit`
+  is a term sil has not read about that seller. `ships: unknown` keeps the offer: say sil
+  could not confirm shipping and hand the buyer the listing.
+- **Read the return terms before you recommend.** Buying online, what makes a near-miss
+  survivable is that it can go back. If sil has not read a seller's returns, say so.
+- **A variant with no option values is a listing whose sizes sil has not read.** Say the
+  size is unread; price it like any other. Never read a size range a page prints as stock.
 
-**Never ask what the profile or a past brief already answers** — a size, a width, a budget,
-a market: it is on file, and asking again is the one thing a buyer notices.
+## Common traps
 
-**One brief per session: this chat writes its own.** A past brief is read, never searched:
-open this session's with `shopping_brief_create` carrying the specs those reads show are
-still true, then a `shopping_brief_edit` whose first `decision` names what you carried and
-from which brief. *"Boots again."* the next morning is that carry, not a second interview.
+- **Recommending on a key that reads `unknown`.** If the thing that decides the buy is the
+  thing sil could not verify, that is a question, not a recommendation.
+- **Sending the buyer to a shop.** The domain document tells you what buying it online
+  takes in place of handling it — a measurement, a return window, twenty minutes on carpet.
+  Use that. *"Get it fitted in store"* is the one answer a buyer who came here cannot use.
+- **A spec sil holds no value for.** Coining a synonym beside a key the domain already
+  defines gets you a key nothing is stored under. Use the domain's keys verbatim.
+- **Quoting a product price for a size that costs something else.** Each variant carries
+  its own price. Quote the price of the size you name.
+- **Pricing a whole shortlist.** Offers are worth a turn once the buyer is interested in
+  something; pricing five boots they were never going to buy spends their patience and
+  buries the fit answer they asked for.
 
-Nothing is offered up front and no account is set up in advance: an unregistered outcome
-from any call routes to `sil_register`, and that is the whole of it.
+## Showing a pick
+
+Say why this one, for this buyer, against their own brief — their words, not a spec table.
+Go through what they asked for and say, for each, what sil verified, what the shop claims,
+and what nobody has read. Then name the soft spot and what covers it.
+
+```
+My pick: Nordica HF 110, size 27.5, €399 at freerider.gr.
+  size 27–27.5 ........ 27.5 — sil read it
+  width 100 or more ... 102 — the shop's page says so; sil has not checked it
+  GripWalk ............ yes — sil read it
+  €450 at most ........ €399, read a minute ago
+The soft spot is the width: it is the shop's word. freerider.gr takes returns for 14 days,
+so if the toes pinch, it goes back. Want the link?
+```
+
+When nothing fits, say which want is in the way and ask for the one change that would give
+it up — then write their answer into the brief with a `decision` and search again. Searching
+again with that want changed is the only way to learn what giving it up reaches.
 
 ## When sil's tools are missing
 
@@ -112,40 +186,3 @@ sil at `plugins.allow` + `tools.alsoAllow`), then reopen the session. If `sil_do
 runs, its `wiring.tools_not_admitted` finding names the exact command: a `node "<absolute
 path>"` invocation, never a bare bin name. If no sil tool runs at all, run `node
 scripts/allowlist-openclaw.mjs` from the sil plugin's install directory — an operator fix.
-
-## Routing — a shopping intent runs the loop
-
-| Intent | Tool | Reference |
-|---|---|---|
-| "sign me up" / "log me in" / "register" | `sil_register` | — |
-| "who am I?" / what sil holds on me | `sil_whoami` | — |
-| "what was I shopping for?" / what is on file | `shopping_brief_read` | [`brief.md`](references/brief.md) |
-| this session's own brief, a want stated, a decision taken | `shopping_brief_create` · `shopping_brief_edit` | [`brief.md`](references/brief.md) |
-| a measurement, a size, a lasting taste | `shopping_profile_edit` | [`brief.md`](references/brief.md) |
-| a buy intent whose category has no standing path — or `shopping_search` refused the domain | `shopping_domain_search` | [`category.md`](references/category.md) |
-| the category's buying guide, and the keys it is bought by | `shopping_domain_get` | [`category.md`](references/category.md) |
-| a `shopping_domain_search` read came back `matches: []`, after research | `shopping_domain_create` | [`category.md`](references/category.md) |
-| "find X" / "search for X" in one settled category | `shopping_search` | [`steps.md`](references/steps.md) |
-| open the whole of what sil holds on a shortlisted variant | `shopping_product_get` | [`steps.md`](references/steps.md) |
-| "what does it cost?" / "who sells this?" — the pick, not the shortlist | `shopping_offers` | [`steps.md`](references/steps.md) |
-| "will it reach me?" — one seller's whole terms | `shopping_seller_get` | [`steps.md`](references/steps.md) |
-| a shopping intent on anything | the three-step loop | [`steps.md`](references/steps.md) |
-| "sil is broken" / "check my sil install" | `sil_doctor` | — |
-
-Each tool's parameters and status vocabulary live in its own definition and answer. A worked
-run: [`examples/session_walkthrough.md`](examples/session_walkthrough.md).
-
-**The references sit beside this file.** Read one from the folder of the path your host
-listed for this skill — never a guessed path under the gateway home.
-
-## The loop
-
-| Step | What it does | Tools |
-|---|---|---|
-| **GATHER** | settle the category, then write every want and everything its guide says decides the buy as a spec — before the first search | `shopping_domain_search` · `shopping_domain_get` · `shopping_domain_create` · `shopping_brief_create` · `shopping_brief_edit` · `shopping_profile_edit` |
-| **1 FIND** | the variants that fit the brief's **product** specs, each with its own price — fit, and no seller talk | `shopping_search` · `shopping_product_get` |
-| **2 PRICE** | the pick the buyer is ready to price: who sells it, at what dated price, and which sellers meet the brief's **seller** specs | `shopping_offers` · `shopping_seller_get` |
-| **3 DECIDE** | nothing fits: ask which spec to give up, wait — then write their word into the brief with a `decision` and search again | `shopping_brief_edit` |
-
-The steps are [`steps.md`](references/steps.md); writing the brief and the profile is
-[`brief.md`](references/brief.md); the category is [`category.md`](references/category.md).
