@@ -286,6 +286,28 @@ describe("how a spec is made", () => {
     ).toEqual([]);
   });
 
+  it("9b — what the document says buying it online takes becomes a SELLER spec, not narrative", () => {
+    // Measured, the founder's live-web session 2026-09-21: the guide's "buy where the boot
+    // can go back" reached the brief's narrative ("returnable if the fit is wrong") and
+    // stopped there. Both `shopping_offers` calls went out with `seller_specs: []`, so
+    // nothing filtered on returns and every seller came back equally good — the one thing
+    // that makes a fit you cannot try on survivable, carried as a sentence that does no work.
+    const units = skillSectionStatements("using");
+
+    const online = units.filter((s) => /buying it online|can go back/i.test(s));
+    expect(online.length).toBeGreaterThan(0); // guard-of-the-guard
+    // It must name the seller domain as where the row goes...
+    expect(unsatisfied(online, (s) => /\bseller\b/i.test(s))).toEqual([]);
+    // ...and say what silence costs, which is the half that makes it worth doing.
+    expect(
+      units.filter(
+        (s) => /`shopping_offers`|shopping_offers/.test(s) && /filters on nothing|equally/i.test(s),
+      ).length,
+    ).toBeGreaterThan(0);
+    // ...with the key itself, so "write a seller spec" is not left as an exercise.
+    expect(units.filter((s) => /`return_window_days/.test(s)).length).toBeGreaterThan(0);
+  });
+
   it("10 — a measurement is never the spec: the key's `description` converts it, and the number as typed is not the value", () => {
     // Two measured defects on one bullet. 2026-09-17: searches 1 and 2 sent
     // `foot_length eq 27.2`, a key no boot listing carries, found no size and cost the

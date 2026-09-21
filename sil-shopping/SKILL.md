@@ -99,6 +99,12 @@ host listed for this skill, never a guessed path under the gateway home.
   a set of values that all work. Read that, not the number as typed.
 - **A want no spec can carry goes in the narrative, and you say so in the same turn.**
   Otherwise the buyer believes sil is filtering on something it has never been told.
+- **What the document says buying it online takes becomes a spec, not just narrative.** Most
+  of it is about who you buy from, so it is a seller spec on the brief's `seller` domain —
+  and until you write it there, `shopping_offers` filters on nothing and every seller comes
+  back equally good. *"Buy where it can go back"* is the ski-boot guide's whole answer to a
+  fit you cannot try on, and it does no work as a sentence: it is `return_window_days gte 14`,
+  with the window the buyer says they want, or one you name out loud and write on their word.
 - **Your memory is sil, not a file.** The brief holds the job and the profile holds the
   person, both under the buyer's account. A workspace `MEMORY.md` is not that memory: do not
   read one and do not write one.
