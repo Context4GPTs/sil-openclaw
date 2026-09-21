@@ -14,12 +14,16 @@
     "response": {
       "status": "ok",
       "path": "product.sports.winter.ski.boots",
-      "guide": "Ski boots are bought primarily by exact Mondopoint length, forefoot last width/volume, flex, and use case. …",
+      "names": {
+        "en": "ski boots",
+        "el": "μπότες σκι"
+      },
+      "guide": "Alpine ski boots are bought on four things: the size, the width across the forefoot, the sole the binding accepts, and how stiff the boot is for the skier's level. …\n\n## What goes wrong\n\n- **Too long.** … The heel lifts, every turn starts late, and the shin bangs the tongue all day. …\n\n## What to trust\n\nThe maker's own size chart and last width, published per model. A shop's \"wide fit\" tag is marketing and measures nothing. …\n\n## Buying it online\n\nNo shop visit is needed to buy well. Measure both feet standing on paper, heel against a wall … Buy where the boot can go back …",
       "specs": [
         {
           "key": "mondo_size",
-          "display_name": "Mondopoint size",
-          "description": "Boot size as foot length in centimetres; the size selector axis.",
+          "display_name": "Size (Mondopoint)",
+          "description": "The size, and the only one that counts: the length of the foot in centimetres, never a street-shoe size. Shells come in half sizes, and a half size shares its shell with the whole size below it — 27 and 27.5 are the same shell with a thinner liner in the 27 — so a 27.2 cm foot is looking at both. Too long is the mistake that cannot be fixed afterwards.",
           "type": "number",
           "unit": "cm",
           "variant_spec": true,
@@ -29,33 +33,9 @@
           ]
         },
         {
-          "key": "model_year",
-          "display_name": "Model year",
-          "description": "The year the maker sells it as; retailers print it as the season.",
-          "type": "number",
-          "product_spec": true,
-          "operators": [
-            "eq",
-            "in",
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "flex_index",
-          "display_name": "Flex index",
-          "description": "Manufacturer flex rating; compare mainly within a brand.",
-          "type": "number",
-          "unit": "flex",
-          "operators": [
-            "gte",
-            "lte"
-          ]
-        },
-        {
           "key": "last_width",
           "display_name": "Last width",
-          "description": "Approximate forefoot width at the reference shell size.",
+          "description": "How wide the shell is across the forefoot, quoted by the maker at the reference size 26.5 … A last within about 2 mm of the measured forefoot fits, so a 102 mm forefoot asks for 100 mm or more rather than an exact width. The maker's figure beats a shop's \"wide fit\" tag.",
           "type": "number",
           "unit": "mm",
           "operators": [
@@ -64,22 +44,83 @@
           ]
         },
         {
-          "key": "discipline",
-          "display_name": "Discipline",
-          "description": "Primary skiing use.",
+          "key": "sole_norm",
+          "display_name": "Sole norm",
+          "description": "The standard the sole is built to, and the only key here that can make a boot unusable rather than merely uncomfortable: a sole the binding does not accept will not click in, or will not release in a fall. Nearly every alpine binding sold since 2018 accepts both Alpine (ISO 5355) and GripWalk (ISO 23223) — ask which binding they own before shortlisting.",
           "type": "enum",
           "allowed_values": [
-            "alpine",
-            "all-mountain",
-            "freeride",
-            "touring",
-            "freeride-touring"
+            "alpine_iso5355",
+            "gripwalk_iso23223",
+            "touring_iso9523",
+            "walk_to_ride"
           ],
           "operators": [
             "eq",
             "in",
             "neq",
             "nin"
+          ]
+        },
+        {
+          "key": "skill_level",
+          "display_name": "Skill level",
+          "description": "How hard the skier drives the boot … A level is a floor and not an exact match, so it is asked as a set rather than as an equality.",
+          "type": "enum",
+          "allowed_values": [
+            "beginner",
+            "intermediate",
+            "advanced",
+            "expert"
+          ],
+          "operators": [
+            "eq",
+            "in",
+            "neq",
+            "nin"
+          ]
+        },
+        {
+          "key": "flex_index",
+          "display_name": "Flex index",
+          "description": "The maker's own stiffness number, printed on the cuff. It is an index, not a unit: it compares within one maker's line and nowhere else. Too soft and the boot folds under the skier in a hard turn; too stiff and it will not bend at all in the cold, which is the more common and more miserable mistake.",
+          "type": "number",
+          "unit": "index",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "discipline",
+          "display_name": "Discipline",
+          "description": "Where the boot is meant to be skied … Buying across this line is the mistake a good fit cannot rescue.",
+          "type": "enum",
+          "allowed_values": [
+            "piste",
+            "all_mountain",
+            "freeride",
+            "touring",
+            "freeride_touring"
+          ],
+          "operators": [
+            "eq",
+            "in",
+            "neq",
+            "nin"
+          ]
+        },
+        {
+          "key": "model_year",
+          "display_name": "Model year",
+          "description": "The season the maker sells it as … Last season's model of the same boot is usually the same shell at a lower price.",
+          "type": "number",
+          "unit": "year",
+          "product_spec": true,
+          "operators": [
+            "eq",
+            "in",
+            "gte",
+            "lte"
           ]
         },
         {
@@ -215,15 +256,6 @@
         {
           "key": "duties_included",
           "display_name": "Duties included",
-          "type": "boolean",
-          "operators": [
-            "eq"
-          ]
-        },
-        {
-          "key": "bootfitting_service",
-          "display_name": "Bootfitting service",
-          "description": "Whether the shop fits and adjusts the boot after the sale.",
           "type": "boolean",
           "operators": [
             "eq"
