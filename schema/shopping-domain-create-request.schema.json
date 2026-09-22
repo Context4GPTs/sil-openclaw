@@ -114,6 +114,7 @@
                 "minLength": 1
               }
             },
+            "maxProperties": 100,
             "description": "Declares what pages print for a value, mapped to the value — `{\"1-4 cups\": \"02\", \"43⅓\": \"43.3\"}` — so a page sil has never read keys it without a model."
           },
           "labels": {
