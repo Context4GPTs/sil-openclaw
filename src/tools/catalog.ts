@@ -33,14 +33,14 @@ export const SHOPPING_TOOLS = [
     query: ["q"],
     label: "Read sil's registry for a domain",
     description:
-      "What sil already holds: read its shared registry in the buyer's own words and get"
-      + " back the domains that match, each with its path and a line on how the thing is"
-      + " bought. Judge fit on `about`, then take that path verbatim, or descend under a"
-      + " broader one — never a sibling of a path that already stands. `matches: []` is a"
-      + " real answer and the ONLY one that licenses shopping_domain_create; a non-ok status"
-      + " is not an empty answer, so settle the read before coining anything. At most two"
-      + " reads per domain: the item's own prose, then the plain name. Pass the path you"
-      + " take to shopping_domain_get for the document and the keys.",
+      "What sil holds, and where it shelves it: read the registry in the buyer's own"
+      + " words. `matches` are the domains that match, each with its path and a line on how"
+      + " the thing is bought — judge fit on `about`, then take that path verbatim, or"
+      + " descend under a broader one, never a sibling of a path that already stands. `tree`"
+      + " is every standing path grouped by family: hang a new leaf where a specialist shop"
+      + " would shelve it, and see that a setup of several things is several leaves."
+      + " `matches: []` is the ONLY answer that licenses shopping_domain_create, and a"
+      + " non-ok status is not an empty one. At most two reads per domain.",
   },
   {
     name: "shopping_domain_get",
@@ -49,22 +49,22 @@ export const SHOPPING_TOOLS = [
     recovery: { not_found: "shopping_domain_search" },
     description:
       "sil's own document on how this thing is bought well — read it before you ask the"
-      + " buyer anything. `guide` is markdown: what it is bought on, what goes wrong and"
-      + " what that costs the buyer, what to trust, and what buying it online takes in"
-      + " place of handling it. `specs` are the keys it is bought by and `seller_specs` the"
-      + " seller terms it is bought with — the base every domain shares (returns,"
-      + " restocking, the shipping terms of a route) plus this domain's own branch; one"
-      + " read hands you both. Each key's `description` says how that key moves the fit:"
-      + " what it decides, what goes wrong at either end, and how a buyer's own fact becomes"
-      + " a value for it — which is also why a question about it is worth answering. Each"
-      + " key states the operators it takes, its type, its unit and any closed set of"
-      + " values — send that key and one of those operators, never a synonym you coined: a"
-      + " `specs` key goes to shopping_search, a `seller_specs` key to shopping_offers. A"
-      + " key marked variant_spec identifies a purchasable option (a size, a colour) and its"
-      + " values come back under each product's variants; product_spec tells one product"
+      + " buyer anything, and again when a want fits no key: the document GROWS as sil reads"
+      + " pages. `guide` is markdown: what it is bought on, what goes wrong and what that"
+      + " costs the buyer, what to trust, and what buying it online takes. `name` is its one"
+      + " English name and `labels` the market's own words for it — read them, never send"
+      + " them. `specs` are the keys it is bought by and `seller_specs` the seller terms it"
+      + " is bought with; one read hands you both. Each key's `description` says how that"
+      + " key moves the fit: what it decides, what goes wrong at either end, and how a"
+      + " buyer's own fact becomes its value. Each key states its type, its operators, its"
+      + " unit, any closed set, the `step` a number moves by, and `forms` — what pages"
+      + " print, mapped to the value. Send that key and one of those operators, never a"
+      + " synonym you coined: `specs` go to shopping_search, `seller_specs` to"
+      + " shopping_offers. variant_spec marks the key an option is picked on (a size, a"
+      + " colour), answered under each product's variants; product_spec tells one product"
       + " from the next. The root `product` always stands and carries the universals every"
       + " domain inherits; a path that does not stand answers not_found, and the recovery is"
-      + " to read the registry again in the buyer's words.",
+      + " to read the registry again in their words.",
   },
   {
     name: "shopping_domain_create",
@@ -74,24 +74,23 @@ export const SHOPPING_TOOLS = [
     // A colliding path means the vocabulary is already there, so search that same path.
     recovery: { already_exists: "shopping_search" },
     description:
-      "The FALLBACK, and the one permanent global write in sil: a domain sil has curated"
-      + " already carries a document, and this writes one for a domain it does not hold. Two things must hold"
-      + " first: a shopping_domain_search read came back `matches: []`, and you have"
-      + " researched on the web how the domain is bought (never products). The `guide` is"
-      + " markdown every later buyer inherits: what the thing is bought on, what goes wrong"
-      + " and what that costs the buyer, what to trust, and what buying it online takes in"
-      + " place of handling it — never \"go to a shop\". Each key's `description` does that"
-      + " job for one key. Mark variant_spec"
-      + " on a key identifying a purchasable option, product_spec on one telling one product"
-      + " from the next; the registry derives the operators. Coin"
-      + " only keys a PRODUCT is bought by — seller terms are never yours to coin, and"
-      + " shopping_domain_get answers them as `seller_specs`. You inherit every ancestor's key"
-      + " and may not rename one: re-declare only to change its unit, values or mark for your"
-      + " subtree; re-declared with nothing new it is not coined again and answers"
-      + " `inherited: true`. An existing path is"
-      + " refused and nothing is written — search that same path instead, never a near-path"
-      + " variant. Every sil shopper sees what you write and nothing can undo"
-      + " it.",
+      "The FALLBACK, and the one permanent global write in sil: a curated domain already"
+      + " carries a document, and this writes one for a domain it does not hold. First: a"
+      + " shopping_domain_search read that came back `matches: []`, and research on how the"
+      + " domain is bought (never products). Hang the leaf where the `tree` shows its"
+      + " family: different keys are a different leaf, another value of the same keys is a"
+      + " value. `guide` is markdown every later buyer inherits: what the thing is bought"
+      + " on, what goes wrong and what that costs the buyer, and what buying it online takes"
+      + " — never \"go to a shop\". Each key's `description` does the same for one key. `name`"
+      + " is its one English name, `labels` the words shops print; a spec carries `step`,"
+      + " the increment its numbers move by, and `forms`, a printed form mapped to its"
+      + " value. Mark variant_spec on the key an option is picked , product_spec on one"
+      + " telling products apart. Coin only keys a PRODUCT is bought by: seller terms are"
+      + " never yours to coin, and shopping_domain_get answers them as `seller_specs`. You"
+      + " inherit every ancestor's key and may not rename one: re-declare only to change its"
+      + " unit, values or mark for your subtree; stating nothing new it answers `inherited:"
+      + " true`, and a key naming a standing one binds and answers `bound_from`. A refusal"
+      + " names the standing thing and the fix.",
   },
   {
     name: "shopping_brief_create",
