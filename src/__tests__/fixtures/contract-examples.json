@@ -7,6 +7,22 @@
           "path": "product.sports.winter.ski.boots",
           "about": "Ski boots are bought primarily by exact Mondopoint length, forefoot last width/volume, flex, and use case."
         }
+      ],
+      "tree": [
+        {
+          "family": "product.sports",
+          "domains": 2,
+          "paths": [
+            {
+              "path": "product.sports.winter.ski.boots",
+              "name": "ski boots"
+            },
+            {
+              "path": "product.sports.running.trail_shoes",
+              "name": "trail running shoes"
+            }
+          ]
+        }
       ]
     }
   },
@@ -14,10 +30,11 @@
     "response": {
       "status": "ok",
       "path": "product.sports.winter.ski.boots",
-      "names": {
-        "en": "ski boots",
-        "el": "μπότες σκι"
-      },
+      "name": "ski boots",
+      "labels": [
+        "μπότες_σκι",
+        "μπότες_ski"
+      ],
       "guide": "Alpine ski boots are bought on four things: the size, the width across the forefoot, the sole the binding accepts, and how stiff the boot is for the skier's level. …\n\n## What goes wrong\n\n- **Too long.** … The heel lifts, every turn starts late, and the shin bangs the tongue all day. …\n\n## What to trust\n\nThe maker's own size chart and last width, published per model. A shop's \"wide fit\" tag is marketing and measures nothing. …\n\n## Buying it online\n\nNo shop visit is needed to buy well. Measure both feet standing on paper, heel against a wall … Buy where the boot can go back …",
       "specs": [
         {
@@ -26,18 +43,23 @@
           "description": "The size, and the only one that counts: the length of the foot in centimetres, never a street-shoe size. Shells come in half sizes, and a half size shares its shell with the whole size below it — 27 and 27.5 are the same shell with a thinner liner in the 27 — so a 27.2 cm foot is looking at both. Too long is the mistake that cannot be fixed afterwards.",
           "type": "number",
           "unit": "cm",
+          "step": 0.5,
           "variant_spec": true,
           "operators": [
             "eq",
             "in"
           ],
           "labels": [
-            "boot size",
+            "boot_size",
             "mondo",
             "mondopoint",
             "size",
-            "μέγεθος μπότας"
-          ]
+            "μέγεθος_μπότας"
+          ],
+          "forms": {
+            "27/27.5": "27.5",
+            "42_1/2_(275)": "27.5"
+          }
         },
         {
           "key": "last_width",
@@ -98,8 +120,8 @@
           ],
           "labels": [
             "flex",
-            "flex index",
-            "ευρετήριο flex"
+            "flex_index",
+            "ευρετήριο_flex"
           ]
         },
         {
@@ -306,6 +328,10 @@
     },
     "request": {
       "path": "product.sports.winter.ski.boots",
+      "name": "ski boots",
+      "labels": [
+        "μπότες σκι"
+      ],
       "guide": "Ski boots are bought primarily by exact Mondopoint length, forefoot last width/volume, flex, and use case. …",
       "specs": [
         {
@@ -313,8 +339,16 @@
           "display_name": "Mondopoint size",
           "type": "number",
           "unit": "cm",
+          "step": 0.5,
           "variant_spec": true,
-          "description": "Boot size as foot length in centimetres; the size selector axis."
+          "description": "Boot size as foot length in centimetres; the size selector axis.",
+          "labels": [
+            "Size",
+            "Μέγεθος"
+          ],
+          "forms": {
+            "27/27.5": "27.5"
+          }
         },
         {
           "key": "model_year",
