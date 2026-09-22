@@ -55,7 +55,7 @@ An unregistered answer from any call routes to `sil_register`. Nothing is set up
 |---|---|
 | sign up / log in / who am I | `sil_register` · `sil_whoami` |
 | what sil knows about how this thing is bought | `shopping_domain_search` → `shopping_domain_get` |
-| a domain sil does not hold yet | `shopping_domain_create` — the fallback, [`mint.md`](references/mint.md) |
+| a domain sil does not hold yet | `shopping_domain_create` — the fallback, and [`mint.md`](references/mint.md) is the guide to minting |
 | open this session's brief, write a want, log a decision | `shopping_brief_create` · `shopping_brief_edit` |
 | what is already on file | `shopping_brief_read` · `sil_whoami` |
 | a measurement, a lasting taste | `shopping_profile_edit` |
@@ -77,6 +77,13 @@ host listed for this skill, never a guessed path under the gateway home.
   on. A search that leaves one of those out is a shortlist about the category, not about
   this buyer — and you will not know what you missed, because sil never says what it left
   out.
+- **A setup of several things is several domains, and a search runs in the domain of the
+  thing it is for.** *"Everything for pour-over at home"* is a dripper, a grinder and a
+  kettle: find or mint each one, then search each in its own. A kettle searched under coffee
+  makers runs on the wrong keys and comes back looking fine.
+- **Before a want you cannot write as a spec, re-read the document with
+  `shopping_domain_get`.** It grows as sil reads pages, so a value the enum lacked or a key
+  the domain never had may be there now — read again before you decide it cannot be asked.
 - **Ask for what is missing in one question, and give each thing its consequence.** Each
   key's `description` says what goes wrong when that key is wrong, in the buyer's own life.
   Say *that* — never which field it fills. Naming the fields back answers a question nobody
