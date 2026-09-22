@@ -323,6 +323,14 @@
             },
             "additionalProperties": false,
             "description": "Tells the buyer the return terms and links the page."
+          },
+          "policy_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Opens the shop's own shipping, returns and terms pages where sil has read none of them yet. A link is not a claim: `ships` stays `unknown` until sil reads what is behind it."
           }
         },
         "additionalProperties": false

@@ -30,6 +30,13 @@
           "operators": [
             "eq",
             "in"
+          ],
+          "labels": [
+            "boot size",
+            "mondo",
+            "mondopoint",
+            "size",
+            "μέγεθος μπότας"
           ]
         },
         {
@@ -88,6 +95,11 @@
           "operators": [
             "gte",
             "lte"
+          ],
+          "labels": [
+            "flex",
+            "flex index",
+            "ευρετήριο flex"
           ]
         },
         {
@@ -702,6 +714,18 @@
             "policy_url": "https://www.skiessentials.com/returns",
             "window_days": 30
           }
+        },
+        {
+          "id": "h.www.climber.gr",
+          "name": "Climber.gr by Klaoudatos",
+          "host": "www.climber.gr",
+          "country": "GR",
+          "ships": "unknown",
+          "specs": {},
+          "policy_urls": [
+            "https://www.climber.gr/apostoli-paraggelias/",
+            "https://www.climber.gr/epistrofes-proionton/"
+          ]
         },
         {
           "id": "s2",

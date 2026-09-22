@@ -132,6 +132,16 @@
             "minItems": 1,
             "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
           },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "description": "Sends any of these as the key and reaches this one: every name sil maps here — the headings pages print it under and the keys other agents send for it, one mapping with no origin between them."
+          },
           "variant_spec": {
             "type": "boolean",
             "const": true,
@@ -242,6 +252,16 @@
             },
             "minItems": 1,
             "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "description": "Sends any of these as the key and reaches this one: every name sil maps here — the headings pages print it under and the keys other agents send for it, one mapping with no origin between them."
           }
         },
         "additionalProperties": false

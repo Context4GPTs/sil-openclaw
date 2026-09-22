@@ -94,6 +94,28 @@
             "minItems": 1,
             "description": "Declares the closed set an enum takes."
           },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Maps the headings pages print this key under — `Flex`, `Flex Index`, `Ευρετήριο Flex` — so a page sil has never read keys the value without a model."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Maps the names another agent may send for this key — `mondopoint`, `mondo` — so a search naming one of them is answered on this key instead of refused."
+          },
           "variant_spec": {
             "type": "boolean",
             "const": true,
