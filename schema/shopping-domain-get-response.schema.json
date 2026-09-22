@@ -7,7 +7,8 @@
     "status",
     "path",
     "guide",
-    "names",
+    "name",
+    "labels",
     "specs",
     "seller_specs"
   ],
@@ -25,16 +26,19 @@
       "type": "string",
       "description": "Reads the domain document — markdown on how this thing is bought well: what it is bought on, what goes wrong and what that costs the buyer, what to trust, and what buying it online takes in place of handling it. It is what sil knows about the domain, so reason from it rather than reciting it, and never send the buyer to a shop it already tells you how to do without."
     },
-    "names": {
-      "type": "object",
-      "patternProperties": {
-        "^[a-z]{2}$": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 64
-        }
+    "name": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Calls the thing this in English — there is one, and this is it."
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64
       },
-      "description": "How a shop lists it, per market language (ISO 639-1): `{\"en\": \"ski boots\", \"el\": \"μπότες σκι\"}`. sil asks each index in these words; the agent never sends them."
+      "maxItems": 20,
+      "description": "Reads every other word for the thing — the market's own, in any language, folded to the form sil maps under. sil asks each index in them; the agent never sends them."
     },
     "specs": {
       "type": "array",
@@ -131,6 +135,20 @@
             },
             "minItems": 1,
             "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
+          },
+          "step": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value."
+          },
+          "forms": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "type": "string"
+              }
+            },
+            "description": "Reads what pages print for a value, mapped to the value — `{\"27/27.5\": \"27.5\"}`. Never sent: the request takes the value, and this is how sil recognises it in the wild."
           },
           "labels": {
             "type": "array",
@@ -253,6 +271,20 @@
             },
             "minItems": 1,
             "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
+          },
+          "step": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value."
+          },
+          "forms": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "type": "string"
+              }
+            },
+            "description": "Reads what pages print for a value, mapped to the value — `{\"27/27.5\": \"27.5\"}`. Never sent: the request takes the value, and this is how sil recognises it in the wild."
           },
           "labels": {
             "type": "array",

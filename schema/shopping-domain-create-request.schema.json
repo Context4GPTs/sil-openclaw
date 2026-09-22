@@ -6,6 +6,7 @@
   "required": [
     "path",
     "guide",
+    "name",
     "specs"
   ],
   "properties": {
@@ -21,16 +22,22 @@
       "maxLength": 4096,
       "description": "Writes the domain document every later buyer inherits, in markdown: what the thing is bought on, what goes wrong and what that costs the buyer, what to trust and what not to, and what buying it online takes in place of handling it. A domain sil has curated already carries one — write one only for a domain the registry does not hold."
     },
-    "names": {
-      "type": "object",
-      "patternProperties": {
-        "^[a-z]{2}$": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 64
-        }
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Names the thing in English, and there is ONE. A name a standing domain already answers to is refused, naming that domain."
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
       },
-      "description": "How a shop lists it, per market language (ISO 639-1): `{\"en\": \"ski boots\", \"el\": \"μπότες σκι\"}`. sil asks each index in these words; the agent never sends them."
+      "minItems": 1,
+      "maxItems": 20,
+      "description": "Seeds the market's own words for the thing, in any language — `καφετιέρα φίλτρου`, `dripper`. sil asks the indexes in them and grows more from the titles it holds."
     },
     "specs": {
       "type": "array",
@@ -93,6 +100,21 @@
             },
             "minItems": 1,
             "description": "Declares the closed set an enum takes."
+          },
+          "step": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Declares the increment the maker prints this numeric axis in — 0.5 for a Mondopoint size. Only on a number."
+          },
+          "forms": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "description": "Declares what pages print for a value, mapped to the value — `{\"1-4 cups\": \"02\", \"43⅓\": \"43.3\"}` — so a page sil has never read keys it without a model."
           },
           "labels": {
             "type": "array",

@@ -44,6 +44,11 @@
             "type": "boolean",
             "const": true,
             "description": "Knows it may filter on this key without having minted it."
+          },
+          "bound_from": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Reads the key it sent, which named a key that already stands: sil answers on the standing one and maps what was sent onto it. Uses `key`, never this."
           }
         },
         "additionalProperties": false
