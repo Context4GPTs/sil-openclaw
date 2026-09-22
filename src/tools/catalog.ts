@@ -40,7 +40,8 @@ export const SHOPPING_TOOLS = [
       + " is every standing path grouped by family: hang a new leaf where a specialist shop"
       + " would shelve it, and see that a setup of several things is several leaves."
       + " `matches: []` is the ONLY answer that licenses shopping_domain_create, and a"
-      + " non-ok status is not an empty one. At most two reads per domain.",
+      + " non-ok status is not an empty one. At most two reads per domain, then"
+      + " shopping_domain_get for the document and the keys of the path you take.",
   },
   {
     name: "shopping_domain_get",
@@ -84,7 +85,7 @@ export const SHOPPING_TOOLS = [
       + " — never \"go to a shop\". Each key's `description` does the same for one key. `name`"
       + " is its one English name, `labels` the words shops print; a spec carries `step`,"
       + " the increment its numbers move by, and `forms`, a printed form mapped to its"
-      + " value. Mark variant_spec on the key an option is picked , product_spec on one"
+      + " value. Mark variant_spec on the key an option is picked on, product_spec on one"
       + " telling products apart. Coin only keys a PRODUCT is bought by: seller terms are"
       + " never yours to coin, and shopping_domain_get answers them as `seller_specs`. You"
       + " inherit every ancestor's key and may not rename one: re-declare only to change its"

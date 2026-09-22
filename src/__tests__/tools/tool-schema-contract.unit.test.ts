@@ -388,7 +388,7 @@ describe("each shopping tool carries its discipline clause", () => {
       /operators?/i,
     ],
     // The FALLBACK, not a peer of the read: sil ships a document for the domains it
-    // holds. Then the write nothing can undo, the two things that must hold first, the
+    // holds. Then the permanent write, the two things that must hold first, the
     // guide it has to produce, the vocabulary it may not coin, and the inheritance rule
     // in three parts — no rename, a re-declaration that binds the subtree, and the mark
     // that lets the agent use a key it did not mint.

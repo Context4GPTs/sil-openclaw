@@ -113,6 +113,10 @@ never a dictionary form. A Greek shop prints *καφετιέρα φίλτρου*
 *καφεμηχανές* is the dictionary word and finds nothing:
 `{ "name": "pour-over dripper", "labels": ["dripper", "καφετιέρα φίλτρου", "V60"] }`.
 
+A spec carries the same two lists: `labels` are the headings pages print that key under,
+`aliases` the names another agent may send for it — both land in one mapping, so either
+spelling is answered on the standing key.
+
 **One concept, one spelling.** A widely shared attribute takes its conventional name; coin a
 fresh one only for a genuinely niche attribute.
 
@@ -129,7 +133,7 @@ fresh one only for a genuinely niche attribute.
 - **Seller terms are never yours to coin.** Read them off `shopping_domain_get`'s `seller_specs`.
 
 ```json
-{ "key": "colour", "display_name": "Colour", "type": "enum", "allowed_values": ["black", "white"] }
+{ "key": "colour", "display_name": "Colour", "type": "enum" }
 
 → { "key": "color", "variant_spec": true, "inherited": true, "bound_from": "colour" }
 ```
@@ -172,7 +176,7 @@ Each is an `invalid_request` whose `message` names the standing thing and the fi
       "description": "How much the cone brews in one pour. A 01 overflows past two; a 02 run for one pours thin." },
     { "key": "material", "display_name": "Material", "type": "enum", "allowed_values": ["ceramic", "glass", "plastic", "metal"],
       "description": "What the cone is made of, which decides the heat it takes out of the pour." },
-    { "key": "colour", "display_name": "Colour", "type": "enum", "allowed_values": ["black", "white"],
+    { "key": "colour", "display_name": "Colour", "type": "enum",
       "description": "The finish it is sold in." } ] }
 
 → { "status": "ok", "path": "product.coffee.pour_over_drippers",
@@ -181,6 +185,6 @@ Each is an `invalid_request` whose `message` names the standing thing and the fi
                { "key": "color", "variant_spec": true, "inherited": true, "bound_from": "colour" } ] }
 ```
 
-`colour` is the bind: the root already defines `color` as a variant spec, so nothing was
-coined and `colour` is now one of its labels. Naming is silent to the buyer — the one thing
-you tell them is the domain you settled on, before a search spends on it.
+`colour` is the bind: the declaration says nothing the root's own `color` does not, so
+nothing was coined and `colour` is now one of its labels. Naming is silent to the buyer —
+the one thing you tell them is the domain you settled on, before a search spends on it.
