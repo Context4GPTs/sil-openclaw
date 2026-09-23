@@ -4,6 +4,13 @@
   "title": "sil shopping_profile_edit — request",
   "type": "object",
   "properties": {
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "minLength": 3,
+      "maxLength": 3,
+      "description": "Writes the currency the buyer prices in; every money row that names none means this one. sil converts nothing."
+    },
     "measurements": {
       "type": "array",
       "items": {

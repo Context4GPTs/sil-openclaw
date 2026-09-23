@@ -670,19 +670,6 @@
       "offers": [
         {
           "variant_id": "v1",
-          "seller_id": "s2",
-          "seller_name": "Atomic",
-          "price": "1150.00",
-          "currency": "USD",
-          "availability": "out_of_stock",
-          "observed_at": "2026-09-11T10:02:14Z",
-          "url": "https://www.atomic.com/en-us/shop/product/hawx-ultra-130-s-dual-boa-ae0002296.html",
-          "seller_fit": {
-            "ships": "unknown"
-          }
-        },
-        {
-          "variant_id": "v1",
           "seller_id": "s1",
           "seller_name": "SkiEssentials",
           "price": "939.95",
@@ -693,6 +680,19 @@
           "seller_fit": {
             "ships": "not_serviceable",
             "return_window_days": 30
+          }
+        },
+        {
+          "variant_id": "v1",
+          "seller_id": "s2",
+          "seller_name": "Atomic",
+          "price": "1150.00",
+          "currency": "USD",
+          "availability": "out_of_stock",
+          "observed_at": "2026-09-11T10:02:14Z",
+          "url": "https://www.atomic.com/en-us/shop/product/hawx-ultra-130-s-dual-boa-ae0002296.html",
+          "seller_fit": {
+            "ships": "unknown"
           }
         }
       ]

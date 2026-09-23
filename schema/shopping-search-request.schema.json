@@ -87,7 +87,7 @@
             "pattern": "^[A-Z]{3}$",
             "minLength": 3,
             "maxLength": 3,
-            "description": "Required on money: sil holds no exchange rate, so the bound is tested against offers in this currency only, and `eur` matches no offer sil stores."
+            "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
           }
         },
         "additionalProperties": false
