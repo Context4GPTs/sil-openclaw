@@ -16,8 +16,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   `shopping_domain_search` (read the registry in the buyer's words),
   `shopping_domain_get` (a category's buying guide and the keys it is bought by),
   `shopping_domain_create` (coin a new one), `shopping_search`, `shopping_product_get`
-  (the whole dossier on 1–10 variants), `shopping_offers` (dated prices and the seller
-  terms you asked for, per offer, read live) and `shopping_seller_get` (one seller's
+  (the whole dossier on 1–10 variants), `shopping_offers` (dated prices and the brief's
+  seller terms, per offer, read live) and `shopping_seller_get` (one seller's
   whole terms). Every tool the loop calls is named for what it does for the shopper;
   only `sil_register`, `sil_whoami` and `sil_doctor` keep the `sil_` name.
 - **The brief and the profile are tools now: `shopping_brief_create`,

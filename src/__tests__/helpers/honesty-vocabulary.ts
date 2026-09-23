@@ -275,8 +275,8 @@ export function notFoundLicenceOffenders(body: string): string[] {
  * Vocabulary the pre-contract request surface retired, as TEXT — every entry is a dead string
  * that cannot appear innocently in English prose, so a blanket forbid is right.
  *
- * `ship_to` is deliberately NOT here any more: the search and the offers take it as a
- * request field, so forbidding the word would fight the wire it guards.
+ * `ship_to` is deliberately NOT here any more: the search takes it as a request field, so
+ * forbidding the word would fight the wire it guards.
  *
  * The retired PARAMETER names that ARE innocent words (`category`, `cursor`) are
  * deliberately absent: they are guarded STRUCTURALLY instead, off each tool's own

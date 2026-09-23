@@ -70,10 +70,10 @@ describe("shopping_search — one route, the ask verbatim", () => {
     expect((router.search[0].body as typeof ASK).specs).toEqual(ASK.specs);
   });
 
-  it("the search carries NO seller side — seller rows are the offers' ask", async () => {
-    // `seller_specs` moved to `shopping_offers`, where a term is answered per seller.
-    // A search that still carried them would be refused by the route, and the agent
-    // would read the refusal as a bad product row.
+  it("the search carries NO seller side — seller rows are the brief's", async () => {
+    // The offers read them off the brief and answer a term per seller. A search that
+    // carried them would be refused by the route, and the agent would read the refusal
+    // as a bad product row.
     seedTokens(ACCESS, REFRESH);
     const router = installRouter(() => ok(contractResponse(TOOL)));
     await run();

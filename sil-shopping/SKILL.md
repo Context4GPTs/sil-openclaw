@@ -145,8 +145,10 @@ host listed for this skill, never a guessed path under the gateway home.
   each price with the moment it read it. Quote that, never a range, and never convert a
   currency — sil holds no rate.
 - **The offers are a wide set, in sil's order.** Shops in the buyer's currency and market
-  come first, the rest after, each with its link. Say which reach the buyer and in which
-  currency each prices, keep the order, and hand a shop's details to `shopping_seller_get`.
+  come first, then shops known to reach them, then the rest, each with its link. Say which
+  reach the buyer and in which currency each prices, keep the order, and hand a shop's
+  details to `shopping_seller_get`. One over the brief's price is left out; one in another
+  currency was never tested against it — say so.
 - **What a page prints is a claim, not a reading.** `printed` and `host` are the shop
   talking: say *"the shop's page says 102 mm"*. Their absence means sil read the page
   itself. `fit` is what sil verified, and `"unknown"` there is a gap to name — never a
