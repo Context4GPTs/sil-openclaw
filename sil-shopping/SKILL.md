@@ -28,8 +28,8 @@ Three things carry the job, and none of them live on this agent's disk:
   go back if the size is wrong"* — never a description of the shopping (*"needs an
   appropriate performance fit; measurements not yet settled"*), which gives a pick nothing
   to be judged against.
-- **The profile** — the person, across sessions: their measurements, their gender, their
-  addresses, lasting preferences. `sil_whoami` reads it.
+- **The profile** — the person, across sessions: their measurements, their gender, the
+  currency they price in, their addresses, lasting preferences. `sil_whoami` reads it.
 
 ## Start by reading
 
@@ -58,7 +58,7 @@ An unregistered answer from any call routes to `sil_register`. Nothing is set up
 | a domain sil does not hold yet | `shopping_domain_create` — the fallback, and [`mint.md`](references/mint.md) is the guide to minting |
 | open this session's brief, write a want, log a decision | `shopping_brief_create` · `shopping_brief_edit` |
 | what is already on file | `shopping_brief_read` · `sil_whoami` |
-| a measurement, a lasting taste | `shopping_profile_edit` |
+| a measurement, a lasting taste, their currency | `shopping_profile_edit` |
 | what fits | `shopping_search` |
 | everything sil holds on one product | `shopping_product_get` |
 | who sells it, at what price, on what terms | `shopping_offers` · `shopping_seller_get` |
@@ -107,16 +107,21 @@ host listed for this skill, never a guessed path under the gateway home.
 - **A want no spec can carry goes in the narrative, and you say so in the same turn.**
   Otherwise the buyer believes sil is filtering on something it has never been told.
 - **What the document says buying it online takes becomes a spec, not just narrative.** Most
-  of it is about who you buy from, so it is a seller spec on the brief's `seller` domain —
-  and until you write it there, `shopping_offers` filters on nothing and every seller comes
-  back equally good. *"Buy where it can go back"* is the ski-boot guide's whole answer to a
-  fit you cannot try on, and it does no work as a sentence: it is `return_window_days gte 14`,
-  with the window the buyer says they want, or one you name out loud and write on their word.
+  of it is about who you buy from, so it is a seller spec on the brief's `seller` domain.
+  `shopping_offers` takes the brief and the picked ids, and answers the brief's seller rows
+  and no others — until you write it there, every seller comes back equally good. *"Buy
+  where it can go back"* is the ski-boot guide's whole answer to a fit you cannot try on,
+  and it does no work as a sentence: it is `return_window_days gte 14`, with the window the
+  buyer says they want, or one you name out loud and write on their word.
 - **Your memory is sil, not a file.** The brief holds the job and the profile holds the
   person, both under the buyer's account. A workspace `MEMORY.md` is not that memory: do not
   read one and do not write one.
 - **Gender is read, never guessed.** `sil_whoami` answers it; on anything worn it rides as
   a product spec. None on file is one question, never an inference from a name.
+- **Currency is the profile's.** `sil_whoami` answers it, and a money row that means the
+  buyer's own leaves `currency` off. *"My prices in dollars from now on"* is
+  `shopping_profile_edit { currency: "USD" }`, never a conversion: it changes which offers
+  come first, never a price.
 - **`query` is shop words** — the thing as a shop lists it, and the model or numbers that
   pick it out: `Nordica ski boots`, `ski boots 27.5 flex 110`. A sentence costs the buyer
   most of the offers. *"men's alpine ski boots advanced 27.5 wide 102mm Alpine ISO 5355"*
@@ -139,6 +144,9 @@ host listed for this skill, never a guessed path under the gateway home.
 - **A price range is not today's price.** Only `shopping_offers` reads live, and it stamps
   each price with the moment it read it. Quote that, never a range, and never convert a
   currency — sil holds no rate.
+- **The offers are a wide set, in sil's order.** Shops in the buyer's currency and market
+  come first, the rest after, each with its link. Say which reach the buyer and in which
+  currency each prices, keep the order, and hand a shop's details to `shopping_seller_get`.
 - **What a page prints is a claim, not a reading.** `printed` and `host` are the shop
   talking: say *"the shop's page says 102 mm"*. Their absence means sil read the page
   itself. `fit` is what sil verified, and `"unknown"` there is a gap to name — never a
