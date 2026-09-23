@@ -532,7 +532,7 @@ describe("each shopping tool carries its discipline clause", () => {
 });
 
 describe("a market is a SELLER spec — `ship_to` is an address label", () => {
-  it("`ship_to`'s own parameter description says it excludes no seller, and names `country` on the offers", () => {
+  it("`ship_to`'s own parameter description says it excludes no seller, and names `country` on the brief", () => {
     // 2026-09-16: the model could not find a market filter, so it sent `ship_to: "Home"`
     // on all six searches and reported it back as "Greece only" — six searches that
     // filtered nothing and a buyer told they had. The rule has to sit on the PARAMETER
@@ -545,7 +545,7 @@ describe("a market is a SELLER spec — `ship_to` is an address label", () => {
     expect(shipTo).toMatch(/\blabel\b/i);
     expect(shipTo).toMatch(/excludes no seller/i);
     expect(shipTo).toMatch(/`country`/);
-    expect(shipTo).toMatch(/on the offers/i);
+    expect(shipTo).toMatch(/on the brief/i);
   });
 });
 
