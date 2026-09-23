@@ -144,7 +144,7 @@ for you; you just say what you want.
 | Tool | What it does |
 |---|---|
 | `sil_register` | Start a browser sign-in and link your agent to your sil identity. Takes no arguments. |
-| `sil_whoami` | Read your sil identity — name, country, saved addresses, and the measurements and preferences sil holds for you — as the agent sees it. Takes no arguments. |
+| `sil_whoami` | Read your sil identity — name, country, the currency you price in, saved addresses, and the measurements and preferences sil holds for you — as the agent sees it. Takes no arguments. |
 | `sil_doctor` | Check the install: file modes, credential health, host wiring, and whether a newer plugin is published. Reports; repairs only what is safe. |
 
 **Your brief and your profile**
@@ -154,7 +154,7 @@ for you; you just say what you want.
 | `shopping_brief_create` | Open the shopping job this conversation works from — a title and what you are after in your own words, plus any wants you have already stated. One brief per conversation, across every category it covers. |
 | `shopping_brief_edit` | Write a want, a change of mind or the end of the job into that brief: the values you want under the category they belong to, the seller terms under `seller`, the keys you have given up, and one sentence saying what you changed and why. |
 | `shopping_brief_read` | With no arguments, your shopping jobs, newest first — so a new chat carries on where the last one stopped. With an `id`, that whole brief: what you are after, every want under its category, and the decisions you have already taken. |
-| `shopping_profile_edit` | Write what is true of you whatever you are buying: a measurement with its unit, a size as it is printed, or a lasting taste in your own words. Writing the same name again replaces it; `sil_whoami` reads it all back. |
+| `shopping_profile_edit` | Write what is true of you whatever you are buying: a measurement with its unit, a size as it is printed, a lasting taste in your own words, or the currency you price in. Writing the same name again replaces it; `sil_whoami` reads it all back. A new currency changes which offers come first, never a price: sil converts nothing. |
 
 **Shopping**
 
@@ -165,7 +165,7 @@ for you; you just say what you want.
 | `shopping_domain_create` | Coin a NEW category — its path, a guide written from research, and its first keys. The one permanent, global write in sil; an existing path is refused and nothing is written. |
 | `shopping_search` | Search one settled category, under the brief this conversation is working from. Send the brief's id, the domain, your own shopping words, how many products you want, the brief's own values for that category as `specs`, and `ship_to` — the label of one of your saved addresses, which localizes the search (your default one when it is left off) and rules no seller out. Products come back best-first with `fit` (what sil verified), their variants, a price range, and `webpage_info` where sil has not read the page yet. |
 | `shopping_product_get` | Open the whole of what sil holds on 1–10 shortlisted variants: the description, the images, every key sil holds, and where each reading came from and when. |
-| `shopping_offers` | Price 1–10 variants live, on your own terms: send the brief's id, its `seller` terms as `seller_specs` (where the seller is among them) and a `ship_to` label, and each offer comes back with the price exactly as the page prints it, its currency, availability, the listing URL, the moment sil read it, and `seller_fit` — whether that seller ships to that address (`serviceable`, `not_serviceable` or `unknown`) and what it holds for each term you asked about. |
+| `shopping_offers` | Price 1–10 picked variants live, on your own terms: send the brief's id and the variant ids, and sil reads the rest — the brief's `seller` terms and price ceiling, your default address and your currency. It looks on the web for shops it does not hold yet, and each offer comes back with the price exactly as the page prints it, its currency, availability, the listing URL, the moment sil read it, and `seller_fit` — whether that seller ships to your address (`serviceable`, `not_serviceable` or `unknown`) and what it holds for each term on the brief. Shops in your currency and market come first. |
 | `shopping_seller_get` | One seller's whole terms, for 1–10 of them: `specs` (every seller key sil holds a value for), whether it ships to you, and the shipping routes and return terms sil has read. `unknown` keeps the seller; it just means sil has not read that policy. |
 
 **The wire is a contract, not a convention.** Each shopping tool's input schema IS the

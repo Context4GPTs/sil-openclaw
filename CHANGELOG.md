@@ -29,27 +29,31 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   on it, and a want no spec can carry stays in the narrative. `shopping_brief_read` with
   no `id` lists the buyer's briefs, newest first, which is what a new chat opens on.
   `shopping_profile_edit` writes what is true of them whatever they buy — a measurement
-  with its unit, a size as printed, a lasting taste — and an entry replaces the one of
-  the same `name`.
-- **`sil_whoami` answers the buyer's `measurements` and `preferences`**, beside the name,
-  country and addresses, so a foot length written last session is never asked for again.
+  with its unit, a size as printed, a lasting taste, the `currency` they price in — and an
+  entry replaces the one of the same `name`.
+- **`sil_whoami` answers the buyer's `measurements`, `preferences` and `currency`**, beside
+  the name, country and addresses, so a foot length written last session is never asked
+  for again. A money row on the brief or a search that names no currency means theirs;
+  sil converts nothing, so a new currency changes which offers come first, never a price.
 - **The twenty-two schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
   its committed request artifact, copied verbatim from `sil-services`
   (`schema/PROVENANCE.md` names the commit), and each `ok` result IS the API's 200 body,
   handed over untouched. The plugin adds no shape of its own in either direction, so
   there is nothing here for the contract to drift from.
 - **`ship_to` is the LABEL of an address the buyer has on file**, as `sil_whoami` lists
-  them — never a country. It localizes a search to that address and is what
-  `shopping_offers` reads `ships` against; absent, sil uses the buyer's default address.
-  `shopping_seller_get` takes `ids` and nothing else — its `ships` answers for that
-  default address.
-- **Seller terms are asked and answered per OFFER, and never coined by the agent.**
-  `shopping_offers` takes `seller_specs` — keys of the domain read's own `seller_specs`,
-  which are sil's base plus whatever branch research has coined — and answers `seller_fit`
-  on each offer: `ships` always (serviceable, not_serviceable or unknown for that address),
-  plus each requested key with that seller's value where sil holds one.
-  `shopping_seller_get` is the details read beside it, carrying every seller key sil holds
-  as `specs`.
+  them — never a country. It localizes a search to that address; absent, sil uses the
+  buyer's default address. `shopping_offers` and `shopping_seller_get` take no address:
+  their `ships` answers for the default one.
+- **Seller terms live on the brief, are answered per OFFER, and are never coined by the
+  agent.** `shopping_offers` takes the brief's id and the picked variant ids and nothing
+  else: sil reads the brief's `seller` specs — keys of the domain read's own
+  `seller_specs`, sil's base plus whatever branch research has coined — its price ceiling,
+  and the buyer's default address and currency, looks on the web for shops it does not
+  hold, and answers `seller_fit` on each offer: `ships` always (serviceable,
+  not_serviceable or unknown for that address), plus each seller key on the brief with that
+  seller's value where sil holds one. Offers in the buyer's currency and market come
+  first. `shopping_seller_get` is the details read beside it, carrying every seller key sil
+  holds as `specs`.
 - **A key the domain does not hold is recorded, never refused.** The search takes any
   well-formed key, answers the products it found and leaves that key absent from `fit`,
   writing the ask on the search row so research can coin what buyers need. The skill keeps
@@ -80,13 +84,13 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 - **`sil_whoami` carries the buyer's `country` inside `identity`**, beside `name`, when the
   read has one — absent when nothing on file says it, never inferred from an address.
 - **BREAKING — `shopping_search` and `shopping_offers` name the brief.** `brief` is
-  required on both: the agent writes each call's specs FROM the brief's — all of them,
-  the same ones — and sil records the call against the want behind it. The brief's
-  product specs ride on the search; its `seller` specs, `country` among them, ride on
-  the offers and never on the search. `ship_to` stays what it was, the label of an
-  address that localizes and rules no seller out — never a market filter. To change what
-  is asked, change the brief with the buyer's decision; a spec is never left out of one
-  call.
+  required on both, and sil records the call against the want behind it. The search
+  carries the brief's product specs, written FROM the brief's — all of them, the same
+  ones. The offers carry the brief and the picked ids and nothing else: sil reads the
+  `seller` specs, `country` among them, off the brief, and they never ride on the search.
+  `ship_to` stays what it was on the search, the label of an address that localizes and
+  rules no seller out — never a market filter. To change what is asked, change the brief
+  with the buyer's decision; a spec is never left out of one call.
 - **BREAKING — the catalog answer is the agent contract's, and the pre-contract one is
   deleted.** `shopping_search` takes `brief` · `domain` · `query` · `n` · `specs` ·
   `ship_to` and
