@@ -144,22 +144,25 @@ describe("classifyIdentityResponse — status taxonomy (the auth branch)", () =>
     if (nonString.kind === "ok") expect(nonString.identity).not.toHaveProperty("country");
   });
 
-  it("200 → `gender` passes through when the read carries a string, and is ABSENT otherwise", () => {
-    // The skill sends `gender eq mens` on anything worn off this one field, so a
-    // classifier that drops it makes the tool description a promise the tool breaks —
-    // and the agent either asks a question sil already answered or infers the answer.
-    const withGender = classifyIdentityResponse(200, { ...REAL_IDENTITY, gender: "male" });
-    expect(withGender.kind).toBe("ok");
-    if (withGender.kind === "ok") expect(withGender.identity.gender).toBe("male");
+  it.each([
+    ["gender", "male"],
+    ["currency", "EUR"],
+  ])("200 → `%s` passes through when the read carries a string, and is ABSENT otherwise", (field, value) => {
+    // The skill reads each off this one field — `gender eq mens` on anything worn, a money
+    // row with no `currency` meaning this one — so a classifier that drops it makes the
+    // tool description a promise the tool breaks, and the agent asks what sil answered.
+    const withField = classifyIdentityResponse(200, { ...REAL_IDENTITY, [field]: value });
+    expect(withField.kind).toBe("ok");
+    if (withField.kind === "ok") expect(withField.identity).toHaveProperty(field, value);
 
-    // A buyer who never stated one: absent, never defaulted to a cut.
+    // Never stated: absent, never defaulted.
     const without = classifyIdentityResponse(200, REAL_IDENTITY);
     expect(without.kind).toBe("ok");
-    if (without.kind === "ok") expect(without.identity).not.toHaveProperty("gender");
+    if (without.kind === "ok") expect(without.identity).not.toHaveProperty(field);
 
-    const nonString = classifyIdentityResponse(200, { ...REAL_IDENTITY, gender: 1 });
+    const nonString = classifyIdentityResponse(200, { ...REAL_IDENTITY, [field]: 1 });
     expect(nonString.kind).toBe("ok");
-    if (nonString.kind === "ok") expect(nonString.identity).not.toHaveProperty("gender");
+    if (nonString.kind === "ok") expect(nonString.identity).not.toHaveProperty(field);
   });
 
   it("200 → `measurements` and `preferences` pass through OPAQUE, and a shapeless one is `[]`", () => {

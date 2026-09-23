@@ -57,18 +57,20 @@ const TOOL_CONTRACT = {
   sil_whoami: {
     label: "Who am I on sil",
     description:
-      "The buyer's name, country, `gender` and the addresses on file, and the"
-      + " `measurements` and `preferences` sil already holds for them — read live from"
+      "The buyer's name, country, `gender`, `currency` and the addresses on file, and"
+      + " the `measurements` and `preferences` sil already holds for them — read live from"
       + " sil with the credentials sil_register stored, a stale session token refreshed"
       + " once and the read retried. `gender` is `male`, `female` or `other`, and is"
       + " absent where the buyer never stated one; on anything worn it is the product"
       + " spec `gender` in the registry's own spelling (male → `mens`, female →"
-      + " `womens`), asked once where this answers none and never inferred. Call it at"
-      + " the start of a chat: it says where the buyer"
-      + " is, how they measure and what they lastingly prefer, and you never ask"
-      + " them for anything it answers. shopping_profile_edit is what writes those"
-      + " two back. If they are not registered, or the session is past refreshing,"
-      + " the result names the recovery (sil_register).",
+      + " `womens`), asked once where this answers none and never inferred. `currency` is"
+      + " the ISO 4217 code they price in: a money row that means theirs leaves"
+      + " `currency` off, and sil converts nothing. Call it at the start of a chat: it"
+      + " says where the buyer is, what they price in, how they measure and what they"
+      + " lastingly prefer, and you never ask them for anything it answers."
+      + " shopping_profile_edit is what writes those last three back. If they are not"
+      + " registered, or the session is past refreshing, the result names the recovery"
+      + " (sil_register).",
     parameters: EMPTY_OBJECT_SCHEMA,
   },
 } as const;
@@ -446,8 +448,16 @@ describe("each shopping tool carries its discipline clause", () => {
     // is READ rather than searched — this session's brief is its own.
     shopping_brief_read: [/newest first/i, /before you ask/i, /never on an earlier session/i],
     // An entry is keyed by its name, writing that name again replaces it, and only an
-    // unambiguous statement about the buyer reaches it at all.
-    shopping_profile_edit: [/same `name`/, /before the next search/i, /unambiguous/i, /snake_case/],
+    // unambiguous statement about the buyer reaches it at all. "Prices in dollars from now
+    // on" is a `currency` written here, never a price converted.
+    shopping_profile_edit: [
+      /same `name`/,
+      /before the next search/i,
+      /unambiguous/i,
+      /snake_case/,
+      /`currency`/,
+      /converts nothing/i,
+    ],
     // The brief rides on every call, its specs travel unchanged, `n` counts variants,
     // the query is shop words, and the honesty the whole answer turns on (`fit` says
     // "unknown" for what sil could not test, `printed` is the page talking, a variant
@@ -473,18 +483,19 @@ describe("each shopping tool carries its discipline clause", () => {
     // What the dossier adds over the shortlist, that a miss is an absence, and that a
     // sizeless listing opens here like any other id.
     shopping_product_get: [/sources/, /absent/i, /opaque/i, /no option values/i],
-    // The brief rides here too, its seller specs travel unchanged, a sizeless listing is
-    // priced as its page prints, what dates a price, why the spread is the answer — and
-    // what pricing a whole shortlist COSTS the buyer. That last one is a cost tip now,
-    // never a gate: the ruling retired "never for a shortlist" as a precondition, so the
-    // pin follows the spend rather than the order.
+    // The brief and the ids are the WHOLE ask (sil reads the seller rows, the ceiling, the
+    // address and the currency itself), a sizeless listing is priced as its page prints,
+    // what dates a price, why the spread is the answer, that the buyer's-currency-first
+    // order is the server's — and what pricing a whole shortlist COSTS the buyer. That
+    // last one is a cost tip, never a gate: the ruling retired "never for a shortlist".
     shopping_offers: [
       /`brief`/,
+      /nothing else/i,
       /pricing a whole shortlist/i,
       /observed_at/,
       /spread/i,
       /convert/i,
-      /unchanged/i,
+      /never re-rank/i,
       /no option values/i,
     ],
     // The three states, that the third one keeps its seller, and that ids are the whole ask.
@@ -504,14 +515,15 @@ describe("each shopping tool carries its discipline clause", () => {
    */
   const ATTRIBUTED_SELLER_SPECS = /shopping_domain_get[^.]{0,60}seller_specs/g;
 
-  it("neither description names the field the signed wire took off its request", () => {
+  it("no description names a field the signed wire took off its request", () => {
     // The map above only proves a clause is PRESENT: a description can carry every token
     // and still tell the agent to send a field the route no longer takes, which is what
-    // both of these were before the signed wire. An agent sends what it reads.
+    // all three were before the signed wire. An agent sends what it reads.
     const api = allRegisteredTools();
     const mint = getTool(api, "shopping_domain_create").description ?? "";
     expect(mint.replace(ATTRIBUTED_SELLER_SPECS, "")).not.toMatch(/seller_specs/);
     expect(getTool(api, "shopping_seller_get").description ?? "").not.toMatch(/ship_to/);
+    expect(getTool(api, "shopping_offers").description ?? "").not.toMatch(/seller_specs|ship_to/);
     // Guard-of-the-guard: the strip clears a real occurrence, so the bar is not passing
     // over prose that simply dropped the pointer to where seller terms come from.
     expect(mint).toMatch(/seller_specs/);

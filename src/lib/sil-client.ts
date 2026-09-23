@@ -135,6 +135,8 @@ export interface Identity {
   /** `male`, `female` or `other` where the buyer stated one at onboarding; absent
    * otherwise. Typed as a string: the vocabulary is the route's, not the plugin's. */
   gender?: string;
+  /** The ISO 4217 code the buyer prices in; a money row naming none means this one. */
+  currency?: string;
   addresses: IdentityAddress[];
   /** What `shopping_profile_edit` wrote: a number with its unit, or a size as
    * printed. Opaque, exactly as `addresses` are — empty is a real answer. */
@@ -627,11 +629,12 @@ function extractIdentity(body: unknown): Identity | null {
   const measurements = plainObjects(source["measurements"]);
   const preferences = plainObjects(source["preferences"]);
 
-  // `country` and `gender` are optional on the read and pass through only as strings —
-  // an absent or non-string one is dropped, never coerced or inferred. The VALUE is the
-  // route's to decide: a literal allow-list here would drop a vocabulary sil later adds.
+  // `country`, `gender` and `currency` are optional on the read and pass through only as
+  // strings — an absent or non-string one is dropped, never coerced or inferred. The VALUE
+  // is the route's to decide: a literal allow-list here would drop a vocabulary sil adds.
   const country = source["country"];
   const gender = source["gender"];
+  const currency = source["currency"];
   return {
     name,
     addresses,
@@ -639,6 +642,7 @@ function extractIdentity(body: unknown): Identity | null {
     preferences,
     ...(typeof country === "string" ? { country } : {}),
     ...(typeof gender === "string" ? { gender } : {}),
+    ...(typeof currency === "string" ? { currency } : {}),
   };
 }
 
