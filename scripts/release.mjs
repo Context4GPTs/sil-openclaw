@@ -2,7 +2,7 @@
 /**
  * One build, one tarball: STAGED on npm (`sil-openclaw`), public only once a maintainer
  * approves it with 2FA, then the same files to ClawHub (`@4gpts/sil`). Re-running resumes.
- *   pnpm release        stage → wait for `npm stage approve` → verify → ClawHub
+ *   pnpm release        stage → wait for the 2FA approval → verify → ClawHub
  *   pnpm release:dry    build + pack + preview both, upload nothing
  */
 
@@ -158,8 +158,11 @@ async function releaseNpm(tarball) {
           `Run \`npm stage reject ${staged.id}\`, then re-run.`,
       );
     }
-    log(`staged ${pkg.name}@${version} (${staged.status}). Approve it with 2FA:`);
-    log(`    npm stage approve ${staged.id}`);
+    // `npm stage approve` returned 404 for a stage `npm stage view` could read (npm 11.17,
+    // web-login token, 2026-09-25), so the website comes first.
+    log(`staged ${pkg.name}@${version} (${staged.status}, id ${staged.id}). Approve it with 2FA:`);
+    log("    npmjs.com → Staged Packages → Approve");
+    log(`    or: npm stage approve ${staged.id}`);
     log(`waiting up to ${APPROVAL_TIMEOUT_MIN} min for it to go public…`);
     const deadline = Date.now() + APPROVAL_TIMEOUT_MIN * 60_000;
     while (!(served = publicIntegrity())) {
