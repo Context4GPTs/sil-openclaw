@@ -7,7 +7,7 @@
  * or it silently NARROWS them (CLAUDE.md), which is why all eleven live in one group.
  */
 
-import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk";
+import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk/plugin-entry";
 
 import { requestSchema } from "../lib/artifacts.js";
 import { readConfig } from "../lib/credentials.js";

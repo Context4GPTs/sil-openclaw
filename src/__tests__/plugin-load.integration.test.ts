@@ -43,7 +43,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PluginAPI } from "openclaw/plugin-sdk";
+import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 import { getDataDir } from "../lib/credentials.js";
 import { createMockPluginApi } from "./helpers/mock-plugin-api.js";
 

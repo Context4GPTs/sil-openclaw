@@ -4,7 +4,7 @@
  * second copy is what `cross-tool-401-parity` forbids. The caller owns only the `ok` body.
  */
 
-import type { PluginAPI, ToolResult } from "openclaw/plugin-sdk";
+import type { PluginAPI, ToolResult } from "openclaw/plugin-sdk/plugin-entry";
 
 import { getApiUrl } from "./config.js";
 import { clearTokens, readTokens } from "./credentials.js";

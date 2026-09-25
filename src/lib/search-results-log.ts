@@ -6,7 +6,7 @@
  * sil_search_results_miss` with no callId to join on and no cause.
  */
 
-import type { PluginAPI } from "openclaw/plugin-sdk";
+import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 
 /** The four outcomes of the delivery buffer, plus the handler's own fault. `skipped` is
  * the BUFFER side: a search whose page was never stored, and why. */
