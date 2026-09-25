@@ -203,7 +203,7 @@ pnpm test        # vitest (unit + integration)
 pnpm typecheck   # tsc --noEmit
 ```
 
-Releasing is two steps: `pnpm version <patch|minor|major>` (bump → sync manifest → cut changelog → test → tag → push), then `pnpm release` (build → pack → npm `sil-openclaw` + ClawHub `@4gpts/sil` — the same contents, re-packed under each registry's name). Release notes in [`CHANGELOG.md`](https://github.com/Context4GPTs/sil-openclaw/blob/main/CHANGELOG.md). Adding a tool is three steps, enforced by a drift-guard test.
+Releasing is two steps: `pnpm version <patch|minor|major>` (bump → sync manifest → cut changelog → test → tag → push), then `pnpm release` (build → pack → **stage** on npm as `sil-openclaw` → a maintainer runs `npm stage approve <id>` with 2FA → the same contents to ClawHub as `@4gpts/sil`, only once npm serves them byte-identical). Staged publishing needs no 2FA-bypass token, which npm is retiring from publishing. Release notes in [`CHANGELOG.md`](https://github.com/Context4GPTs/sil-openclaw/blob/main/CHANGELOG.md). Adding a tool is three steps, enforced by a drift-guard test.
 
 ---
 
