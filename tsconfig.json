@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    // The lib is the RUNTIME's, not the emit's: `engines` requires Node >= 22, which
+    // implements ES2023 whole. The implicit ES2022 lib understated it.
+    "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,

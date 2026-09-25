@@ -1,7 +1,7 @@
 /**
  * Host-wiring drift — is sil wired the way it thinks it is?
  *
- * A skill attaches per-agent at `agents.list[i].skills` by its PUBLISHED NAME
+ * A skill attaches per-agent in the roster's `skills` array by its PUBLISHED NAME
  * (`sil-shopping` = the skill-dir basename); tools admit by PLUGIN ID (`sil`).
  * Two different host keys, and conflating them seeded incident #1 — silently,
  * because the host fails a bad skill ref with a warning, not an error.
@@ -30,7 +30,7 @@ import { fileURLToPath } from "node:url";
 
 import type { PluginAPI } from "openclaw/plugin-sdk";
 
-import { resolveAllowlistScript } from "./creation-entrypoint.js";
+import { resolveAllowlistScript } from "./allowlist-script.js";
 import type { Finding } from "./findings.js";
 
 /** The shipped manifest, resolved relative to this module — two levels up from
@@ -150,7 +150,7 @@ export function detectWiringDrift(config: unknown, facts: SilWiringFacts): Findi
  * plugin id but NOT the published name.
  *
  * Both halves are load-bearing. "Lacks the published name" alone is not drift —
- * a host runs many agents and only one is the shopper, so that would fire on
+ * a host runs many agents and only some reach for sil at all, so that would fire on
  * every unrelated agent. And an agent carrying BOTH tokens is not drift either:
  * the published name attaches, the skill runs, nothing is degraded.
  */
@@ -158,27 +158,44 @@ function findMisattachedAgents(
   config: Record<string, unknown>,
   facts: SilWiringFacts,
 ): string[] {
-  const agents = isRecord(config["agents"]) ? config["agents"] : undefined;
-  const list = Array.isArray(agents?.["list"]) ? agents["list"] : [];
-
   const labels: string[] = [];
+  for (const { label, skills: declared } of rosterAgents(config)) {
+    const skills = stringsOf(declared);
+    if (skills === null) continue;
+    if (!skills.includes(facts.id) || skills.includes(facts.skill)) continue;
+    labels.push(label);
+  }
+  return labels;
+}
+
+/**
+ * Every roster agent as `{ label, skills }`, from BOTH host shapes: the `agents.entries`
+ * map keyed by id (2026.8.1+) and the `agents.list` array (<=2026.7.1). `label` is what
+ * the fix string points at, so an entry with no usable id is reported by its path.
+ */
+function rosterAgents(
+  config: Record<string, unknown>,
+): Array<{ label: string; skills: unknown }> {
+  const agents = isRecord(config["agents"]) ? config["agents"] : undefined;
+  const found: Array<{ label: string; skills: unknown }> = [];
+
+  const entries = isRecord(agents?.["entries"]) ? agents["entries"] : undefined;
+  for (const [id, entry] of Object.entries(entries ?? {})) {
+    if (!isRecord(entry)) continue;
+    found.push({ label: id.length > 0 ? id : `agents.entries[""]`, skills: entry["skills"] });
+  }
+
+  const list = Array.isArray(agents?.["list"]) ? agents["list"] : [];
   for (let i = 0; i < list.length; i += 1) {
     const entry: unknown = list[i];
     if (!isRecord(entry)) continue;
-
-    const skills = stringsOf(entry["skills"]);
-    if (skills === null) continue;
-    if (!skills.includes(facts.id) || skills.includes(facts.skill)) continue;
-
-    // The fix string points at this agent, so it must be legible. An entry with
-    // no usable id is operator corruption — the drift is still real, so report
-    // it positionally rather than printing `undefined` at the operator.
     const id = entry["id"];
-    labels.push(
-      typeof id === "string" && id.length > 0 ? id : `agents.list[${i}]`,
-    );
+    found.push({
+      label: typeof id === "string" && id.length > 0 ? id : `agents.list[${i}]`,
+      skills: entry["skills"],
+    });
   }
-  return labels;
+  return found;
 }
 
 /**
@@ -226,7 +243,7 @@ function findUnadmittedReasons(
  * stays byte-identical to today. Absence of a problem is not a finding, and an
  * always-present key is one consumers start depending on.
  *
- * Additive, never a wrapper: a `sil_search` result carrying an advisory is still
+ * Additive, never a wrapper: a search result carrying an advisory is still
  * the same search result, with the same products in the same order.
  *
  * It recurs on every result while the drift persists — that is the feature, not
@@ -241,6 +258,18 @@ function findUnadmittedReasons(
 export function wiringAdvisories(api: PluginAPI): { advisories?: Finding[] } {
   const drift = detectWiringDrift(api.config, readSilWiringFacts());
   return drift.length === 0 ? {} : { advisories: drift };
+}
+
+/**
+ * The same advisory as its OWN result block, or nothing at all.
+ *
+ * A shopping tool's payload IS the API's 200 body, passed through verbatim, so the
+ * advisory cannot ride as a key beside the contract's — it would either collide with
+ * one or teach a consumer to expect a field sil-services never sends.
+ */
+export function wiringAdvisoryBlocks(api: PluginAPI): [{ advisories: Finding[] }] | [] {
+  const { advisories } = wiringAdvisories(api);
+  return advisories === undefined ? [] : [{ advisories }];
 }
 
 function buildSkillMisattachedFinding(

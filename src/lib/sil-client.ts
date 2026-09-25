@@ -1,8 +1,9 @@
 /**
- * Typed HTTP wrappers for the two sil-web endpoints the plugin calls, each
- * returning a DISCRIMINATED UNION over the documented outcomes so the status
- * taxonomy lives in exactly one place and the caller switches on `kind` rather
- * than re-deriving meaning from `res.status` at every site.
+ * Typed HTTP wrappers for every endpoint the plugin calls — the two sil-web auth
+ * endpoints, the sil-api identity read and the eleven shopping routes — each returning
+ * a DISCRIMINATED UNION over the documented outcomes so the status taxonomy lives in
+ * exactly one place and the caller switches on `kind` rather than re-deriving meaning
+ * from `res.status` at every site.
  *
  * Wire contract (pinned to the already-merged sil-web routes —
  * sil-services/apps/sil-web/src/app/api/v1/...):
@@ -29,118 +30,24 @@
  *     5xx / network / abort                           → retryable
  *
  * Wire contract for the sil-API identity read (a SECOND origin — sil-api, the
- * Fastify domain service — NOT sil-web; bare path, not /api/v1; see the
- * sil-whoami card). The authenticated self-read is a BODYLESS GET; the
- * Authorization header carries the stored session token and IS the principal —
- * sil-api derives the user from the JWT `sub`, not a request body:
+ * Fastify domain service — NOT sil-web; bare path, not /api/v1). The authenticated
+ * self-read is a BODYLESS GET; the Authorization header carries the stored session
+ * token and IS the principal — sil-api derives the user from the JWT `sub`, not a
+ * request body:
  *
  *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
- *                               (no body, no content-type)
- *     200 { name, addresses }                             → ok (carries identity)
+ *     200 { name, country?, addresses, measurements?, preferences? } → ok
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     5xx / network / abort                               → retryable
  *
- * Wire contract for the sil-API catalog search (SAME origin as the identity
- * read — sil-api, bare path, NOT /api/v1; see the sil-search card). A simplified
- * structured query in, ranked purchasable products out. sil-api owns the
- * enrichment; the plugin sends NO envelope and fills NO defaults:
- *
- *   POST <silApiUrl>/catalog/search   Authorization: Bearer <access_token>
- *     body { query?, filters?:{ categories?, price?:{ min?, max? } },
- *            pagination?:{ cursor?, limit? } }       (no context, no envelope)
- *     200 { products: SilCatalogProduct[],
- *           pagination?:{ has_next_page, cursor? } } → ok
- *         (`products`/`pagination` at the TOP LEVEL, NO `result` wrapper)
- *     400 { error:"empty_search_input", message }    → invalid_request
- *     401                                            → unauthorized (→ refresh)
- *     5xx / network / abort                          → retryable
- *
- * Wire contract for the sil-API catalog LOOKUP (SAME origin/path style as search —
- * sil-api, bare `/catalog/lookup`, NOT /api/v1; see the sil-product-get card). The
- * lookup COMPANION to search: an agent passes ids it already holds and gets fresh
- * RICH detail back (search is LEAN). sil-api owns enrichment + the `not_found`
- * messaging; the plugin sends just `{ ids }` (NO filters/context,
- * NO envelope). The two structural deltas from search's response: NO `pagination`
- * (a batch resolve, not a list) and a `messages[]` carrying the misses:
- *
- *   POST <silApiUrl>/catalog/lookup   Authorization: Bearer <access_token>
- *     body { ids: string[] }                         (≥1; no filters/context)
- *     200 { products: SilCatalogProduct[],
- *           messages?:[{ type:"info", code:"not_found", content:<id> }] } → ok
- *         (`products`/`messages` at the TOP LEVEL, NO `result` wrapper)
- *     400 (schema: empty `ids` / request_too_large)  → invalid_request
- *     401                                            → unauthorized (→ refresh)
- *     5xx / network / abort                          → retryable
- *
- * A lookup MISS is partial-SUCCESS data, NEVER an error: an unresolved id is a
- * `not_found` info `message` (the server omits `messages` entirely on full
- * success), surfaced on the `ok` outcome as a `not_found: string[]`. Each looked-up
- * variant carries an `inputs:[{ id, match }]` correlation (lookup's defining
- * feature over search — the response does NOT preserve request order and one id
- * may resolve to a variant of another id's product, so `inputs` is the only way to
- * map a request id to its result). `classifyLookupResponse` gates `ok` on a real
- * `Array.isArray(products)` on the FLAT envelope's top-level `products` — a 200
- * with no usable products array is `retryable`, NEVER a false-green; a genuine
- * ALL-MISSED lookup is a 200 whose top-level `products` IS `[]` WITH a populated
- * `not_found` → `ok` (success: "none of these exist anymore"), the discriminator
- * being array PRESENCE, never length.
- *
- * Wire contract for the sil-API spec REGISTRY (SAME origin/path style as search —
- * sil-api, bare `/catalog/specs`, NOT /api/v1; see the sds-specs-client-tool card).
- * The dedupe-or-create up-flow: at method mint/refresh the method submits its coined
- * spec DEFINITIONS and gets back the canonical `ns.key` to adopt (born canonical,
- * BEFORE persist). sil-api owns the dedupe authority; the plugin sends `{ query,
- * specs }` (NO envelope) and reads the resolutions straight off the body:
- *
- *   POST <silApiUrl>/catalog/specs   Authorization: Bearer <access_token>
- *     body { query, specs: SpecDefinition[] }        (both required; specs ≥1)
- *     200 { resolved: SpecResolution[] }             → ok
- *         (BARE `{ resolved }` at the TOP LEVEL — NO `ucp` meta, NO `result`
- *          wrapper; specs is an INTERNAL agent↔service op, not a UCP message)
- *     400 (schema: empty specs / blank query)        → invalid_request
- *     401                                            → unauthorized (→ refresh)
- *     403 { error }                                  → forbidden (terminal)
- *     5xx / network / abort                          → retryable
- *
- * The error arms are a STRICT SUBSET of search's: there is NO 422 SourceError arm
- * and NO `source` attribution — the registry is sil's OWN Postgres, not an external
- * source (handlers/specs.ts), so a specs `retryable` is always BARE. Every
- * well-formed request resolves EVERY submitted spec 1:1 (`matched`|`created`);
- * `classifySpecsResponse` gates `ok` on `Array.isArray(resolved)` AND a NON-EMPTY
- * array of fully-formed resolutions — a partial / garbage / EMPTY-`resolved` 200
- * falls WHOLE to `retryable` (the method can't adopt a canonical name it never got
- * back, and there is NO valid empty-match success here, unlike search's empty list).
- *
- * `SilCatalogProduct` = a UCP product PLUS a required `source`; each variant PLUS
- * a required non-empty `checkout_url` (sil-services `@sil/schemas` catalog.ts —
- * the byte-shape of truth; `@ucp-js/sdk` carries ZERO catalog types). The plugin
- * does NOT depend on `@sil/schemas` (cross-repo): it re-declares the read-subset
- * it consumes locally (the `Search*` types below) and narrows the untrusted body
- * defensively in `extractSearchResult`. The tool reads `products` straight off the
- * FLAT envelope's top level (NO `result` unwrap — search/lookup are always flat,
- * only the identity read carries the `result ?? envelope` dual shape), picks the
- * FIRST (featured) variant per product (UCP: "Platforms SHOULD treat the first
- * element as featured"), projects each to the product-level `{ id, title, source }`
- * plus the nested featured `variant` `{ id, title, price, availability,
- * checkout_url }`, and hoists the top-level `pagination.cursor` to a top-level
- * cursor (present iff `has_next_page`). `classifySearchResponse` gates `ok` on a
- * real `Array.isArray(products)` over that top-level `products` — a 200 with no
- * usable products array is `retryable`, NEVER a false-green empty match (the same
- * anti-false-green guard as the identity `name`-gate). A genuine empty match is a
- * 200 whose top-level `products` IS an empty array → `ok` + `products: []`
- * (success, not an error — UCP: "empty search returns an empty array … this is not
- * an error").
- *
- * The VERB is load-bearing: sil-api's `POST /identity` is the agent enrich-STUB
- * ({kind, verified, subject, ...} — no name/addresses); `GET /identity` is the
- * real self-read returning {id, name, addresses} (sil-api `handlers/identity.ts`,
- * PR #7). The identity lives in the envelope's `result` (the tool unwraps it so
- * the agent sees identity, not transport metadata). `classifyIdentityResponse`
- * still narrows DEFENSIVELY — a 200 whose result has no usable identity (no
- * `name`) falls to `retryable`, NEVER to a false `ok`, so a stray stub 200 (or a
- * malformed body) can't be green while the product promise is unmet. An EMPTY
- * `addresses: []` IS a valid identity (a provisioned, address-less user).
+ * THE SHOPPING WIRE IS NOT MIRRORED HERE. Each tool's request shape is the committed
+ * artifact under `schema/`, registered as the tool's own `parameters`; each 200 body is
+ * the agent contract's, handed back VERBATIM. So this file declares no product type at
+ * all — a hand-mirror of the response would be a second copy of the contract, and the
+ * first thing to drift from it. {@link classifyShoppingResponse} gates the 200 on the
+ * ONE thing the plugin genuinely owns (a plain object stating `status: "ok"`) and maps
+ * every other status onto the contract's §4 vocabulary.
  *
  * THE subtle correctness point (architect Risk "claim taxonomy mis-mapping"):
  * 200-pending and 200-success are BOTH HTTP 200. `classifyClaimResponse` branches
@@ -151,6 +58,11 @@
  * unit-tested in isolation, since misclassifying two 200s is the highest-risk
  * subtle bug in the whole flow.
  *
+ * The VERB is load-bearing: only `GET /identity` is the self-read — `POST` is the
+ * agent enrich route and carries no name. The identity rides in the envelope's
+ * `result`, and a 200 with no usable identity (no `name`) falls to `retryable`,
+ * never to a false `ok`. An EMPTY `addresses: []` IS a valid identity.
+ *
  * Tokens never appear in a log line here (mirrors sil-web's invariant) — they
  * only travel inside the returned union variant.
  *
@@ -160,9 +72,15 @@
 import { getWebUrl } from "./config.js";
 import { readTokens, writeTokens } from "./credentials.js";
 
-/** Per-request timeout: a stalled endpoint (DNS hang, SYN drop) must not wedge
- * a poll tick forever. Mirrors the 15s ceiling the klodi poller uses. */
-const REQUEST_TIMEOUT_MS = 15_000;
+/** Per-request timeout: a stalled endpoint must not wedge a call forever. 45 s for every
+ * route that answers from what sil already holds — at 15 s the plugin refused 7 of 12 live
+ * calls sil-api went on to finish (2026-09-15). */
+const REQUEST_TIMEOUT_MS = 45_000;
+
+/** The search alone waits out its web leg, which the agent contract gives 120 s. Aborting
+ * short of that changes nothing sil does — the index is billed, the pages are read and the
+ * row is written — it only hides the answer from the agent that asked for it. */
+const SEARCH_TIMEOUT_MS = 130_000;
 
 /** The user identity sil-web returns inside a successful claim. */
 export interface ClaimedUser {
@@ -209,12 +127,30 @@ export interface IdentityAddress extends Record<string, unknown> {
 }
 
 /** The authenticated user's identity, unwrapped from the sil-api envelope's
- * `result`. The `name` is the authoritative human name; `addresses` is the
- * user's address list (possibly empty). This is the REAL contract whoami
- * surfaces — NOT the current /identity stub's {kind, verified, subject, ...}. */
+ * `result`. `country` is the upper-case ISO-2 the read carries and is ABSENT
+ * when nothing on file says it — never inferred from an address. */
 export interface Identity {
   name: string;
+  country?: string;
+  /** `male`, `female` or `other` where the buyer stated one at onboarding; absent
+   * otherwise. Typed as a string: the vocabulary is the route's, not the plugin's. */
+  gender?: string;
+  /** The ISO 4217 code the buyer prices in; a money row naming none means this one. */
+  currency?: string;
   addresses: IdentityAddress[];
+  /** What `shopping_profile_edit` wrote: a number with its unit, or a size as
+   * printed. Opaque, exactly as `addresses` are — empty is a real answer. */
+  measurements: ProfileEntry[];
+  /** A lasting taste in the buyer's own words. Same opacity. */
+  preferences: ProfileEntry[];
+}
+
+/** A profile entry as the identity read returns it. The named fields are HINTS —
+ * the entries pass through opaque, and extra fields ride along untyped. */
+export interface ProfileEntry extends Record<string, unknown> {
+  name?: string;
+  value?: unknown;
+  unit?: string;
 }
 
 /**
@@ -228,422 +164,63 @@ export type IdentityOutcome =
   | { kind: "forbidden"; reason: string }
   | { kind: "retryable" };
 
-/** A deliver-to destination for serviceability + localization filtering. `country`
- * is the ISO 3166-1 alpha-2 code (required when the object is present); `region`
- * (ISO 3166-2 subdivision code) and `postal_code` refine it. FORMAT is enforced at
- * the read site (`readSearchParams` in catalog.ts rejects a present-but-malformed
- * value client-side) — by the time a value reaches this layer it is already
- * format-valid. The ONLY wire normalization here is country-case: `country` is
- * uppercased on emit (`us` → `US`, the alpha-2 contract `@sil/schemas` mirrors);
- * `region`/`postal_code` are forwarded VERBATIM. The agent-arg name `ship_to` is
- * renamed to the wire key `ships_to` in `buildSearchBody`. Mirrors the Shopify
- * Global-Catalog `ships_to` wire shape (`global-catalog-extension.md:32`). */
-export interface ShipTo {
-  country: string;
-  region?: string;
-  postal_code?: string;
+/**
+ * One shopping route, as the tool table declares it. A `:name` segment in `path` is
+ * filled from the argument of that name and URL-encoded; on a GET, `query` names the
+ * arguments that ride the querystring and everything else stays home.
+ */
+export interface ShoppingRoute {
+  readonly method: "GET" | "POST";
+  readonly path: string;
+  readonly query?: readonly string[];
 }
 
-/** The comparison operator on a spec predicate. All seven forward UNCHANGED on the
- * wire `filters.specs` — the plugin is pure transport and never interprets an op.
- * The op→value shape validity is a READ-SITE rule (`readSpecs` in catalog.ts), not
- * a wire concern. */
-export type SpecOp = "eq" | "neq" | "gte" | "lte" | "in" | "nin" | "exists";
+/** The search route, the one call that waits out a web leg. Resolved by PATH so a route
+ * renamed in the tool table falls back to the shared ceiling loudly — `lib/sil-client.test.ts`
+ * reads this off the production table. */
+const SEARCH_PATH = "/catalog/search";
 
-/** The value a spec predicate carries. A scalar for `eq`/`neq`, a number for
- * `gte`/`lte`, an array for `in`/`nin`; `exists` carries NONE. Value is OPTIONAL
- * in the shape (so `exists` fits) — the op→value validity is a READ-SITE rule
- * (`readSpecs` in catalog.ts), not a schema one. */
-export type SpecValue = number | string | boolean | (string | number)[];
-
-/** One structured requirement projected from a filled PRD — the THIRD search
- * channel beside free-text `query` and the dedicated params. Closed SHAPE, open
- * `ns.key` VOCABULARY: `ns`/`key` are two free wire strings (the method coins them
- * bottom-up; the TypeBox schema enumerates zero keys — [[sds-specs-vocabulary-is-
- * bottom-up]]), never a dotted string. `hard` mirrors the PRD inviolability flag
- * and is forwarded UNCHANGED so the backend can enforce once it lands and
- * reflection can correlate the `applied:false` hard set. */
-export interface SpecPredicate {
-  ns: string;
-  key: string;
-  op: SpecOp;
-  value?: SpecValue;
-  unit?: string;
-  hard?: boolean;
-}
-
-/** The per-predicate applied-status the backend reports on the `ok` response —
- * the OBSERVABLE fail-green signal. `applied:true` = the backend indexed it and
- * truly filtered; `applied:false` = not indexed yet, and that `applied:false` set
- * is EXACTLY what reflection's hard-constraint honesty check polices. Surfaced
- * verbatim, per-predicate — never collapsed to one boolean, never dropped. */
-export interface SpecStatus {
-  ns: string;
-  key: string;
-  applied: boolean;
-}
-
-/** The simplified search query an agent sends — a free-text `query` plus
- * optional filters and pagination. Maps 1:1 into the sil-api `CatalogSearchRequest`
- * body (`searchCatalog` builds the nested shape). All fields optional at this
- * layer; the at-least-one-input rule is enforced by the tool, not here.
- *
- * The three serviceability/localization filters (`ship_to`, `condition`,
- * `available`) ride sil-api's OPEN `SearchFilters` (`additionalProperties: true`).
- * They are forwarded ONLY when supplied — an absent filter is an omitted key, never
- * a client-injected default (the server applies `available: true` itself).
- * `available: false` is meaningful (include unavailable items) and is forwarded,
- * never dropped as falsy.
- *
- * `local_merchants` is NOT one of those filters — it is a sil-PRIVATE ranking-bias
- * signal that rides at the TOP LEVEL of the request body (beside `query`/`filters`/
- * `pagination`), NEVER under `filters` (filters are forwarded to the cross-shop
- * Global Catalog, which does not understand the field → a silent no-op). It is
- * emitted ONLY when exactly `true`: unlike `available: false`, a `false` bias
- * carries no signal (== the server's unbiased default), so `false`/absent both omit
- * the key. See `buildSearchBody`. */
-export interface SearchParams {
-  query?: string;
-  category?: string;
-  price_min?: number;
-  price_max?: number;
-  cursor?: string;
-  limit?: number;
-  ship_to?: ShipTo;
-  condition?: string[];
-  available?: boolean;
-  local_merchants?: boolean;
-  /** The structured requirement predicates ({@link SpecPredicate}) projected from a
-   * filled PRD — the open long-tail channel with no dedicated param. Each rides a
-   * single namespaced `filters.specs` key in `buildSearchBody`, forwarded VERBATIM:
-   * the plugin is pure transport and NEVER folds a predicate into `query` (the agent
-   * authors free-text from the requirements itself). Present-but-empty `[]` is a
-   * benign no-op (omits `filters.specs`, does not count as usable input); the
-   * per-predicate validity is enforced at the read site (`readSpecs`). */
-  specs?: SpecPredicate[];
-}
-
-/** A currency-tagged price, passed through OPAQUE from sil-api's UCP `Price`
- * (`{ amount: <minor units>, currency: <ISO 4217> }`). Extra fields tolerated. */
-export interface SearchPrice extends Record<string, unknown> {
-  amount: number;
-  currency: string;
-}
-
-/** Variant availability, passed through OPAQUE from sil-api's UCP `Availability`
- * object (`{ available?, status? }`) — NOT flattened to a bare boolean, which
- * would drop the `status` signal sil-api may carry. Both fields are optional in
- * the wire shape; extra fields are tolerated and passed through. */
-export interface SearchAvailability extends Record<string, unknown> {
-  available?: boolean;
-  status?: string;
-}
-
-/** The single purchasable variant the agent acts on — the featured (first)
- * variant of a product, projected to the fields the agent needs to present, view,
- * dig into, and buy it. `price`/`availability` pass through opaque; `checkout_url`
- * is the non-empty acquisition target (the BUY permalink).
- *
- * The enriched evaluate-before-buy surface (each surfaced WHERE PRESENT, omitted
- * when absent — a hollow value is worse than omission): `url` (the variant PAGE —
- * VIEW, distinct from `checkout_url`), `seller` (the seller context incl.
- * `seller.links[]` dig-in policy/info links), `media`, and `metadata`. Every
- * enriched field is passed through OPAQUE (filter-to-object/array, forward
- * verbatim) keyed on PRESENCE — never narrowed on a guessed inner shape, so a
- * `seller` carrying Shopify extension keys (`url`/`domain`) beyond the base
- * `{ name, links }` survives whole (the [[sil-shared-catalog-client]]
- * narrow-vs-pass-through rule; a `{ name, links }` narrow would drop a real
- * `seller.url`). */
-export interface SearchVariant {
-  id: string;
-  title: string;
-  price: SearchPrice;
-  availability: SearchAvailability;
-  checkout_url: string;
-  url?: string;
-  seller?: Record<string, unknown>;
-  media?: Record<string, unknown>[];
-  metadata?: Record<string, unknown>;
-}
-
-/** One agent-facing search result. Carries BOTH identities the agent needs:
- * product-level `id`/`title`/`source` (what was ranked + its provenance) AND the
- * nested featured `variant` (what to buy). Keeping the product id distinct from
- * the variant id matters — the ranked match is the product, the purchase target
- * is the variant; flattening them would lose one.
- *
- * The enriched product surface (each surfaced WHERE PRESENT, omitted when absent):
- * `url` (the canonical product PAGE — VIEW / learn more, NOT buy), `description`
- * lifted to `{ plain }` (the short human summary — only the `plain` UCP format,
- * surfaced only when non-empty), `media`, product `options` (the option
- * DEFINITIONS — the menu of choices, distinct from a variant's SelectedOption
- * picks), and `metadata`. Same OPAQUE pass-through discipline as the variant. */
-export interface SearchProduct {
-  id: string;
-  title: string;
-  source: string;
-  variant: SearchVariant;
-  url?: string;
-  description?: ProductDescription;
-  media?: Record<string, unknown>[];
-  options?: Record<string, unknown>[];
-  metadata?: Record<string, unknown>;
-}
-
-/** The agent-facing product description — the UCP `description` object's `plain`
- * format lifted to a flat `{ plain }`, the short human summary an agent can show.
- * ONLY `plain` is surfaced (never `html`/`markdown`): `html` is untrusted rich
- * text the UCP spec flags for sanitization, and surfacing one named scalar keeps
- * BOTH catalog tools on ONE `description` shape. Omitted entirely when `plain` is
- * absent or empty (so the same product never yields a different `description`
- * shape across `sil_search` and `sil_product_get`). */
-export interface ProductDescription {
-  plain: string;
-}
-
-/** The normalized search payload: the ranked products in server order (the tool
- * does NOT re-rank) plus the opaque pagination cursor, present iff another page
- * remains. `cursor` is hoisted from the flat envelope's top-level
- * `pagination.cursor`; its ABSENCE is end-of-results — never inferred from
- * `products.length`. */
-export interface SearchResult {
-  products: SearchProduct[];
-  cursor?: string;
-  /** The per-predicate applied-status ({@link SpecStatus}[]) read off the flat
-   * envelope's top-level `specs_status` — a SIBLING of `products`, so it surfaces on
-   * an empty match too. OMITTED entirely when the wire carries none (no fabricated
-   * default — interpreting absence as unconfirmed is reflection's job). */
-  specs_status?: SpecStatus[];
-}
+export const requestTimeoutMs = (route: ShoppingRoute): number =>
+  route.path === SEARCH_PATH ? SEARCH_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
 
 /**
- * Outcome of a single sil-api catalog search (classified by status + body).
- * Models `IdentityOutcome`, with `invalid_request` for sil-api's structured 400
- * (`empty_search_input`) carried through to the agent. The `ok` variant carries
- * the projected `products` + optional hoisted `cursor` DIRECTLY (no nested
- * `result` — the normalized payload IS the outcome). `unauthorized` (401) is the
- * refresh trigger — the caller routes it through {@link refreshAndRetryOnce}
- * (transparent refresh-and-retry-once), the SAME choreography `sil_whoami` uses;
- * it is no longer terminal for the catalog tools.
+ * The outcome of any shopping call — ONE union for all eleven, because they share one
+ * origin, one Bearer, one auth plugin and the contract's one error vocabulary (§4).
  *
- * The `retryable` variant optionally carries `source`/`detail`: a 5xx whose body
- * is a `source_unavailable` SourceError names which catalog source failed, so the
- * consumer (`transient()` in catalog.ts) can distinguish a *source* outage (name
- * it — outcome b) from sil/network itself being down (generic copy — outcome a).
- * Both are retryable — the only difference is attribution; this is a *message*
- * split within one status, not a new outcome kind. `source` is attached ONLY when
- * the body carries a real non-empty `source` field (never fabricated, never
- * scraped from `message`); a sil-internal 5xx, a bodyless/garbage non-200, and a
- * network-error throw all stay bare `{ kind: "retryable" }` (outcome a).
- *
- * The 401-vs-403 split is the load-bearing auth-branch distinction: `unauthorized`
- * (401) is the refresh trigger; `forbidden` (403) is terminal-but-recoverable —
- * refreshing a valid-but-unprovisioned token changes nothing. The `forbidden`
- * variant carries the actionable `reason` (`user_not_provisioned` /
- * `principal_mismatch`, defaulting to the generic `"forbidden"` marker on an
- * unexpected body — byte-identical to `IdentityOutcome`'s variant), which the tool
- * surfaces in the same forbidden envelope `sil_whoami` emits, and uses to decide
- * whether to clear the dead token (only on `user_not_provisioned`).
+ * `ok` carries the API's own 200 body, unread and unreshaped. `unauthorized` is the
+ * sole refresh trigger; `forbidden` is terminal (a refresh cannot provision a user).
  */
-export type SearchOutcome =
-  | { kind: "ok"; products: SearchProduct[]; cursor?: string; specs_status?: SpecStatus[] }
+export type ShoppingOutcome =
+  | { kind: "ok"; body: Record<string, unknown> }
   | { kind: "unauthorized" }
   | { kind: "forbidden"; reason: string }
-  | { kind: "invalid_request"; error: string; message: string }
+  | { kind: "invalid_request"; message: string }
+  | { kind: "not_found"; message: string }
+  | { kind: "already_exists"; message: string }
   | { kind: "retryable"; source?: string; detail?: string };
 
-/** Which request id resolved to a looked-up variant, and how. Lookup's defining
- * feature over search: the response does NOT preserve request order and one id
- * may resolve to a VARIANT of another id's product, so `inputs` is the only way
- * to correlate "the id I asked about" → "the variant I got back". `match` is an
- * OPEN string (UCP well-known values `exact` — a direct variant/sku/barcode hit —
- * and `featured` — a product-id hit where the server picked a representative
- * variant), passed through as-is. `id` is required; a missing/non-string `match`
- * is dropped (not coerced). */
-export interface LookupInput {
-  id: string;
-  match?: string;
-}
-
-/** The featured variant of a looked-up product, projected to the purchase-decision
- * fields a lookup caller needs. Richer than {@link SearchVariant}: adds `sku` and
- * `options` (which specific configuration this is — e.g. "Blue / Large") and the
- * lookup-only `inputs` correlation. `price`/`availability` pass through opaque;
- * `checkout_url` is the non-empty acquisition target (re-fetched live — freshness
- * is the reason this tool exists). Optional fields are omitted when absent rather
- * than emitted as `undefined`.
- *
- * The enriched evaluate-before-buy surface mirrors {@link SearchVariant} exactly
- * (ONE vocabulary across both tools): `url` / `seller` / `media` / `metadata`,
- * each surfaced WHERE PRESENT via the same OPAQUE pass-through. `options` here is
- * the variant's SelectedOption picks (the SELECTIONS, e.g. "Size: B") — NOT the
- * product-level option DEFINITIONS that live on {@link LookupProduct.options}. */
-export interface LookupVariant {
-  id: string;
-  title: string;
-  price: SearchPrice;
-  availability: SearchAvailability;
-  checkout_url: string;
-  sku?: string;
-  options?: SelectedOption[];
-  inputs?: LookupInput[];
-  url?: string;
-  seller?: Record<string, unknown>;
-  media?: Record<string, unknown>[];
-  metadata?: Record<string, unknown>;
-}
-
-/** One option selection on a variant, passed through OPAQUE from the UCP
- * `SelectedOption` (well-known fields `{ name, label }`, e.g. "Size: Large") —
- * the tool does NOT read or remap individual fields; it filters to plain objects
- * and passes them through verbatim, exactly as identity `addresses` pass through.
- * Surfaced so a lookup caller knows WHICH variant of a product they are buying. */
-export type SelectedOption = Record<string, unknown>;
-
-/** One looked-up product, projected to its RICH agent-facing detail (the deliberate
- * split vs search's LEAN six: a lookup caller is making a purchase decision, so it
- * gets `categories`, `handle`, `price_range`). Carries the product-level identity
- * AND the single featured `variant` (what to buy) — mirroring search's structural
- * shape; the split is rich-vs-lean FIELDS, not a different envelope. `categories`/
- * `handle` are omitted when absent. `categories` passes through opaque (the tool
- * surfaces it, it does not interpret it).
- *
- * `description` is the `{ plain }` lift — the SAME shape `sil_search` surfaces
- * (ONE vocabulary). Lookup once passed the WHOLE `description` object opaque; that
- * diverged from search the moment a wire `description` carried `html`/`markdown`,
- * so the same product would have yielded a different `description` shape across the
- * two tools. Lifting `.plain` on both reconciles it; `description` is omitted when
- * `plain` is absent/empty (so it is now optional, where it was once required).
- *
- * The enriched product surface mirrors {@link SearchProduct} (ONE vocabulary):
- * product-level `url` / `media` / `options` (the option DEFINITIONS) / `metadata`,
- * each surfaced WHERE PRESENT via the same OPAQUE pass-through. */
-export interface LookupProduct {
-  id: string;
-  title: string;
-  price_range: unknown;
-  source: string;
-  description?: ProductDescription;
-  categories?: Record<string, unknown>[];
-  handle?: string;
-  url?: string;
-  media?: Record<string, unknown>[];
-  options?: Record<string, unknown>[];
-  metadata?: Record<string, unknown>;
-  variant: LookupVariant;
-}
-
-/** The normalized lookup payload: the resolved products (in server order — lookup
- * does NOT guarantee request order, and the tool does not re-sort; the agent
- * correlates via each variant's `inputs`) plus `not_found`, the request ids that
- * resolved to nothing. `not_found` is OMITTED when every id resolved (the
- * server-side `messages`-absent-on-full-success contract surfaced as no key) and
- * is the partial-success DATA, never an error. */
-export interface LookupResult {
-  products: LookupProduct[];
-  not_found?: string[];
-}
-
 /**
- * Outcome of a single sil-api catalog lookup (classified by status + body).
- * Models {@link SearchOutcome} — the SAME error/success classes so the two
- * catalog tools present ONE agent-facing error vocabulary, NOT a divergent one.
- * The `ok` variant carries the projected `products` + optional `not_found`
- * DIRECTLY (no nested `result`). `unauthorized` (401) is the refresh trigger —
- * the caller routes it through {@link refreshAndRetryOnce} (transparent
- * refresh-and-retry-once, parity with `sil_search` and `sil_whoami`); it is no
- * longer terminal for the catalog tools. `forbidden` (403) is terminal-but-
- * recoverable, carrying the actionable `reason` exactly as {@link SearchOutcome}
- * does — a 403 surfaces as the shared forbidden envelope, never the false-transient
- * `retryable`; refreshing it would not help (it is not `unauthorized`).
+ * Classify a shopping response. One classifier for all eleven routes — the contract
+ * gives them one error vocabulary, so a second one could only drift.
  *
- * Structural deltas from `SearchOutcome`, both handled here: NO `cursor` (lookup
- * is a batch resolve, not a list) and a `not_found` id list parsed from the
- * server's `not_found` info `messages`.
+ * The 200 gate is the whole of what the plugin owns: a plain object stating
+ * `status: "ok"`. Every 200 the API means as an answer says so, and a 200 that does
+ * not is a broken contract rather than a degraded answer — `retryable`, never `ok`.
+ * Nothing below the top level is inspected: the response artifact is the shape's one
+ * source, and a second opinion here would be the copy that drifts from it.
  */
-export type LookupOutcome =
-  | { kind: "ok"; products: LookupProduct[]; not_found?: string[] }
-  | { kind: "unauthorized" }
-  | { kind: "forbidden"; reason: string }
-  | { kind: "invalid_request"; error: string; message: string }
-  | { kind: "retryable"; source?: string; detail?: string };
+function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcome {
+  if (status === 400) return { kind: "invalid_request", message: extractApiError(body).message };
+  if (status === 401) return { kind: "unauthorized" };
+  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
+  if (status === 404) return { kind: "not_found", message: extractApiError(body).message };
+  if (status === 409) return { kind: "already_exists", message: extractApiError(body).message };
+  if (status !== 200) return retryableFromBody(body);
 
-/** The closed value-type a coined spec declares (mirrors `@sil/schemas`
- * `SpecDataType` — re-declared locally, the same no-cross-repo-import discipline as
- * the `Search*` read-subset). A bad value 400s at the sil-api TypeBox boundary. */
-export type SpecDataType = "number" | "text" | "boolean" | "enum";
-
-/** One coined spec DEFINITION the method submits to `/catalog/specs` for
- * canonicalization. Closed SHAPE, open `namespace`/`key` VOCABULARY (coined
- * bottom-up). Mirrors `@sil/schemas` `SpecDefinition` — the read-subset the plugin
- * sends and echoes back. `data_type` is the closed enum; `description`/`unit`/
- * `allowed_values` are optional context that sharpens the backend's dedupe. */
-export interface SpecDefinition {
-  namespace: string;
-  key: string;
-  display_name: string;
-  description?: string;
-  data_type: SpecDataType;
-  unit?: string;
-  allowed_values?: string[];
+  const envelope = asRecord(body);
+  if (envelope === null || envelope["status"] !== "ok") return { kind: "retryable" };
+  return { kind: "ok", body: envelope };
 }
-
-/** A `{ namespace, key }` reference — a resolution carries both the `submitted`
- * echo and the `canonical` name the method adopts. */
-export interface SpecRef {
-  namespace: string;
-  key: string;
-}
-
-/** The two per-spec resolution classes: `matched` = deduped to an existing
- * canonical row (`canonical` MAY differ from `submitted` — adopt it, drop the
- * synonym); `created` = newly registered as canonical (`canonical === submitted`).
- * NOT named `SpecStatus` — that is the search `specs_status` entry above. */
-export type SpecResolutionStatus = "matched" | "created";
-
-/** The canonical resolution of ONE submitted spec (mirrors `@sil/schemas`
- * `SpecResolution`). Carries the canonical definition FLAT (a {@link SpecDefinition})
- * plus the `submitted` echo, the `canonical` ref to adopt, the `status`, and the two
- * capability flags. The method adopts `canonical.namespace`/`canonical.key`.
- *
- * Also spreads `Record<string, unknown>` — the wire-read discipline the `Search*`
- * opaque types follow: a resolution is surfaced FAITHFULLY (the client trusts the
- * backend's dedupe verdict, never second-guessing it), so callers read it by dynamic
- * key without a double-`unknown` cast. The real shape is enforced at RUNTIME by
- * `projectResolution` (the request `SpecDefinition` stays strictly closed). */
-export interface SpecResolution extends SpecDefinition, Record<string, unknown> {
-  submitted: SpecRef;
-  canonical: SpecRef;
-  status: SpecResolutionStatus;
-  is_filterable: boolean;
-  is_comparable: boolean;
-}
-
-/** The spec-registry request an agent sends: the motivating `query`
- * (governance/dedupe context) + the non-empty coined `specs`. Maps 1:1 to the
- * sil-api `SpecsRequest` body — the tool builds NO envelope and NO filter mapping;
- * the wire body is EXACTLY `{ query, specs }`. */
-export interface SpecsParams {
-  query: string;
-  specs: SpecDefinition[];
-}
-
-/**
- * Outcome of a single `/catalog/specs` canonicalization (classified by status +
- * body). A STRICT SUBSET of {@link SearchOutcome}: there is NO 422 arm and the
- * `retryable` variant is BARE — no `source`/`detail`, because the registry is sil's
- * OWN Postgres, not an external catalog source (so a fabricated `source` on a specs
- * 5xx would be wrong attribution). `unauthorized` (401) is the refresh trigger
- * (routed through {@link refreshAndRetryOnce}, parity with search); `forbidden`
- * (403) is terminal-but-recoverable carrying the actionable `reason`. The `ok`
- * variant carries the projected `resolved` array DIRECTLY.
- */
-export type SpecsOutcome =
-  | { kind: "ok"; resolved: SpecResolution[] }
-  | { kind: "unauthorized" }
-  | { kind: "forbidden"; reason: string }
-  | { kind: "invalid_request"; error: string; message: string }
-  | { kind: "retryable" };
 
 /**
  * Classify a claim response from its HTTP status AND body. The discriminant for
@@ -737,158 +314,6 @@ export function classifyIdentityResponse(status: number, body: unknown): Identit
   return { kind: "ok", identity };
 }
 
-/**
- * Classify a sil-api catalog-search response from its HTTP status AND body.
- * Branches on STATUS (and, for 200, the body shape) — never on `res.ok`:
- *   400 → invalid_request (surface sil-api's structured `{ error, message }`,
- *         e.g. `empty_search_input` — distinct from both the empty-match success
- *         and a transient failure; the agent must learn to fix its query, not
- *         retry or re-register)
- *   401 → unauthorized (the refresh trigger — the caller drives transparent
- *         refresh-and-retry-once via `refreshAndRetryOnce`, not terminal)
- *   403 → forbidden (terminal-but-recoverable; carries the actionable reason
- *         `user_not_provisioned`/`principal_mismatch`, defaulting to the generic
- *         `"forbidden"` marker on an unexpected body — parity with
- *         `classifyIdentityResponse`). A 403 is NOT a 401: it surfaces as the
- *         shared forbidden envelope, never the false-transient `retryable`, and a
- *         valid-but-unprovisioned token gains nothing from a refresh.
- *   5xx / other non-200 → retryable
- *   200 → read `products` off sil-api's FLAT body (`{ products, pagination? }` —
- *         top level, no `result` wrapper), normalize, and require
- *         `products` to be a real ARRAY. A 200 that yields no usable top-level
- *         products array (a partial / garbage / stub-shaped body) is `retryable`,
- *         NEVER `ok` — the
- *         `Array.isArray(products)` gate is the anti-false-green guard, the
- *         analogue of the identity `name`-gate. A genuine empty match (200 whose
- *         top-level `products` IS `[]`) is `ok` with an empty product list: a
- *         SUCCESS, distinct from the no-array guard.
- *
- * Pure and exported — unit-tested in isolation like `classifyIdentityResponse`;
- * conflating the empty-match success with a partial-200 false-green, or with the
- * 400/401/403/5xx error classes, is the highest-risk subtle bug in this flow.
- */
-export function classifySearchResponse(status: number, body: unknown): SearchOutcome {
-  if (status === 400) {
-    const { error, message } = extractApiError(body);
-    return { kind: "invalid_request", error, message };
-  }
-  if (status === 401) return { kind: "unauthorized" };
-  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
-  // 422 source_rejected: the source LOOKED at this exact request and refused it —
-  // it can never succeed unchanged, so it is non-retryable invalid_request carrying
-  // the real upstream cause, NOT the source-named `retryable` the fallthrough below
-  // would produce (a 422 body names a `source`, so `retryableFromBody` would emit
-  // outcome (b) and tell the agent to retry a doomed request). This is the third
-  // arm of the 401-vs-403-vs-422 split: 401 refresh-and-retry, 403 forbidden
-  // (refresh won't help), 422 invalid_request (fix the request, don't retry).
-  // Matches EXACTLY 422 — a 5xx/429 source_unavailable stays `retryable` (outcome b).
-  if (status === 422) {
-    const { error, message } = extractApiError(body);
-    return { kind: "invalid_request", error, message };
-  }
-  if (status !== 200) return retryableFromBody(body);
-
-  const result = extractSearchResult(body);
-  if (result === null) return { kind: "retryable" };
-  return { kind: "ok", ...result };
-}
-
-/**
- * Classify a sil-api catalog-LOOKUP response from its HTTP status AND body.
- * Branches on STATUS (and, for 200, the body shape) — never on `res.ok`. The
- * SAME class structure as `classifySearchResponse` (so the two catalog tools
- * share one error vocabulary), minus search's `empty_search_input` subtlety:
- *   400 → invalid_request (a SCHEMA-validation 400 — an empty/missing `ids`
- *         rejected by `CatalogLookupRequest.ids` `minItems:1`, or a
- *         `request_too_large` over-batch — surface the server's `{ error,
- *         message }`. NOTE: this is NOT search's `empty_search_input` SourceError,
- *         which never arises on the lookup route; do not special-case it.)
- *   401 → unauthorized (the refresh trigger — the caller drives transparent
- *         refresh-and-retry-once via `refreshAndRetryOnce`, parity with search)
- *   403 → forbidden (terminal-but-recoverable; carries the actionable reason
- *         `user_not_provisioned`/`principal_mismatch`, defaulting to the generic
- *         `"forbidden"` marker on an unexpected body — parity with search and
- *         `classifyIdentityResponse`). A 403 surfaces as the shared forbidden
- *         envelope, never the false-transient `retryable`; it is NOT a 401, so no
- *         refresh is triggered.
- *   5xx / other non-200 → retryable
- *   200 → read `products` off sil-api's FLAT body (`{ products, messages? }` —
- *         top level, no `result` wrapper), normalize, and require
- *         `products` to be a real ARRAY. A 200 that yields no usable top-level
- *         products array (a partial / garbage / stub-shaped body) is `retryable`,
- *         NEVER `ok` — the `Array.isArray(products)` gate is the anti-false-green
- *         guard, the analogue of the identity `name`-gate and search's
- *         products-array gate.
- *
- * THE subtle correctness point: an all-MISSED lookup is a genuine SUCCESS — a 200
- * whose top-level `products` IS an empty array WITH a populated `not_found` list
- * ("none of these ids exist anymore"). It is `ok` with empty `products` + full
- * `not_found`, distinct from the no-array guard above. The discriminator between
- * "valid all-missed" and "garbage 200" is the `products`-array PRESENCE, NEVER
- * array length — exactly as search distinguishes empty-match from a partial-200
- * false-green.
- *
- * Pure and exported — unit-tested in isolation like `classifySearchResponse`.
- */
-export function classifyLookupResponse(status: number, body: unknown): LookupOutcome {
-  if (status === 400) {
-    const { error, message } = extractApiError(body);
-    return { kind: "invalid_request", error, message };
-  }
-  if (status === 401) return { kind: "unauthorized" };
-  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
-  // 422 source_rejected: the twin seam of `classifySearchResponse` — sil-api emits
-  // 422 on the SHARED source layer backing both catalog routes, so a source-rejected
-  // lookup is the same non-retryable invalid_request, carrying the upstream cause,
-  // NOT the source-named `retryable` the fallthrough would produce. Same one error
-  // vocabulary across both catalog tools (see this fn's doc-comment). Matches EXACTLY
-  // 422 — a 5xx/429 source_unavailable stays `retryable` (outcome b).
-  if (status === 422) {
-    const { error, message } = extractApiError(body);
-    return { kind: "invalid_request", error, message };
-  }
-  if (status !== 200) return retryableFromBody(body);
-
-  const result = extractLookupResult(body);
-  if (result === null) return { kind: "retryable" };
-  return { kind: "ok", ...result };
-}
-
-/**
- * Classify a sil-api spec-REGISTRY response from its HTTP status AND body. A STRICT
- * SUBSET of `classifySearchResponse` — same 400/401/403 arms, but NO 422 arm and a
- * BARE `retryable` (the registry has no external source to attribute):
- *   400 → invalid_request (schema reject: empty `specs` / blank `query` — surface
- *         the server's `{ error, message }`; NOT retryable, NOT re-register)
- *   401 → unauthorized (the refresh trigger — the caller drives transparent
- *         refresh-and-retry-once via `refreshAndRetryOnce`, parity with search)
- *   403 → forbidden (terminal-but-recoverable; carries the actionable reason
- *         `user_not_provisioned`/`principal_mismatch`, defaulting to `"forbidden"`)
- *   5xx / other non-200 → retryable (BARE — no `source`/`detail`; the registry is
- *         sil's own Postgres, so there is nothing external to name)
- *   200 → read `resolved` off the FLAT body (`{ resolved }` — top level, NO `ucp`
- *         meta, NO `result` wrapper) and require a NON-EMPTY array of fully-formed
- *         resolutions via {@link extractSpecsResult}. A 200 with no usable array (a
- *         partial / garbage / stub / EMPTY-`resolved` body) is `retryable`, NEVER
- *         `ok` — `Array.isArray(resolved)` is the anti-false-green gate. Unlike
- *         search there is NO valid empty-match: the server owes a 1:1 resolution, so
- *         an empty or short `resolved` is a malformed 200, not a success.
- *
- * Pure and exported — unit-tested in isolation like `classifySearchResponse`.
- */
-export function classifySpecsResponse(status: number, body: unknown): SpecsOutcome {
-  if (status === 400) {
-    const { error, message } = extractApiError(body);
-    return { kind: "invalid_request", error, message };
-  }
-  if (status === 401) return { kind: "unauthorized" };
-  if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
-  if (status !== 200) return { kind: "retryable" };
-
-  const resolved = extractSpecsResult(body);
-  if (resolved === null) return { kind: "retryable" };
-  return { kind: "ok", resolved };
-}
 
 /**
  * Attempt to claim the token pair for `sessionId` with `verifier`. The verifier
@@ -932,20 +357,12 @@ export async function refreshSession(
 }
 
 /**
- * Read the authenticated user's identity from sil-api (the SECOND origin — the
- * Fastify domain service, NOT sil-web). This is a bodyless `GET <silApiUrl>/identity`:
- * sil-api's authenticated self-read derives the principal from the JWT `sub`
- * (the `Authorization: Bearer <token>` header), loads that user's addresses,
- * and returns `{ id, name, addresses }` (sil-api `handlers/identity.ts` GET route —
- * declares only a response schema, takes no request body). The verb is the whole
- * point: POST hits the agent
- * enrich-STUB (no name/addresses), GET hits the real self-read. No `agent_id`
- * or `on_behalf_of` is sent — the GET self-read has no body, so the principal
- * is unambiguously the token subject and the `principal_mismatch` 403 path is
- * eliminated entirely. A network error / timeout → `retryable`.
+ * Read the authenticated user's identity from sil-api (the SECOND origin, not
+ * sil-web): a BODYLESS `GET /identity` answering `{ id, name, country?, addresses }`.
+ * Bodyless is the point — the principal is the token subject and nothing else, so
+ * no `agent_id` is sendable and the `principal_mismatch` 403 cannot arise.
  *
- * The Bearer header is built HERE and never logged; the token travels only in
- * the outbound request, never into the returned union.
+ * The Bearer header is built HERE and never logged.
  */
 export async function fetchIdentity(
   silApiUrl: string,
@@ -963,98 +380,85 @@ export async function fetchIdentity(
 }
 
 /**
- * Run a catalog search against sil-api (the SAME origin as the identity read —
- * NOT sil-web; bare `/catalog/search`, no `/api/v1`). The simplified
- * {@link SearchParams} are mapped into the sil-api `CatalogSearchRequest` body
- * (`{ query?, filters:{ categories?, price:{ min?, max? } }, pagination:{ cursor?, limit? } }`)
- * — building NO UCP envelope and filling NO defaults the agent did not supply.
- * Only the keys the agent actually provided are emitted (an absent filter is an
- * omitted key, not an empty object), so a free-text-only query sends just
- * `{ query }` and sil-api applies its own context resolution.
+ * Call one shopping route. `args` are the host-validated tool arguments, forwarded AS
+ * GIVEN: the plugin fills no default, clamps no bound and re-validates nothing, because
+ * the route refuses before it spends and names the offender in its own message — a
+ * second validator here would buy nothing and drift from the artifact that already
+ * bounds the input.
  *
- * The Bearer header is built HERE and never logged; the token travels only in
- * the outbound request, never into the returned union. A network error / timeout
- * maps to `retryable`.
+ * The Bearer header is built HERE and never logged; the token travels only in the
+ * outbound request, never into the returned union.
  */
-export async function searchCatalog(
+export async function callShopping(
   silApiUrl: string,
   token: string,
-  params: SearchParams,
-): Promise<SearchOutcome> {
-  const url = `${stripTrailingSlash(silApiUrl)}/catalog/search`;
+  route: ShoppingRoute,
+  args: Record<string, unknown>,
+): Promise<ShoppingOutcome> {
+  const path = routePath(route, args);
+  if (typeof path !== "string") {
+    return {
+      kind: "invalid_request",
+      message:
+        `\`${path.missing}\` is required and must be a string. Nothing was sent to sil:`
+        + ` it names a path SEGMENT, so an empty one would call a different route and`
+        + ` sil would answer about that route instead of about your request.`,
+    };
+  }
+
+  const url = `${stripTrailingSlash(silApiUrl)}${path}`;
   let res: Response;
   try {
-    res = await postJson(url, buildSearchBody(params), {
-      authorization: `Bearer ${token}`,
-    });
+    const timeoutMs = requestTimeoutMs(route);
+    res =
+      route.method === "GET"
+        ? await getJson(url, { authorization: `Bearer ${token}` }, timeoutMs)
+        : await postJson(url, args, { authorization: `Bearer ${token}` }, timeoutMs);
   } catch {
     return { kind: "retryable" };
   }
-  const body = await readJsonBody(res);
-  return classifySearchResponse(res.status, body);
+  return classifyShoppingResponse(res.status, await readJsonBody(res));
 }
 
 /**
- * Resolve catalog ids against sil-api (the SAME origin as the identity read and
- * `searchCatalog` — NOT sil-web; bare `/catalog/lookup`, no `/api/v1`). The agent
- * already holds the ids (from a prior `sil_search`, a saved list, or cart
- * validation); this re-fetches CURRENT detail for them — building NO UCP envelope
- * and filling NO defaults. The body is just `{ ids }` (the simplified contract;
- * `filters`/`context` are sil-api options this tool does not expose). The ids are
- * forwarded AS GIVEN — sil-api owns dedup (its seam already dedups) and any batch
- * cap; the tool does not pre-dedup (which would mask a seam regression).
+ * The route's path with its `:name` segment filled and its querystring built — or the
+ * name of the segment the arguments could not fill.
  *
- * The Bearer header is built HERE and never logged; the token travels only in the
- * outbound request, never into the returned union. A network error / timeout maps
- * to `retryable`.
+ * THE SEGMENT IS THE ONE THING REFUSED LOCALLY, and it is not a second validator: an
+ * absent one does not make a bad request, it makes a request to a DIFFERENT ROUTE, and
+ * sil then answers truthfully about that route while the agent reads the answer as being
+ * about its own. Everything else travels as sent, because the route names the offender.
+ *
+ * Both halves are encoded, never concatenated: a dotted registry path is one PATH
+ * SEGMENT (a stray `/` in it would re-route the call), and an unencoded query value
+ * could inject a second parameter. Only the keys the agent actually sent travel — an
+ * empty `q=` is a DIFFERENT request from an omitted `q`, and each gets its own refusal
+ * message, which is the agent's whole recourse.
  */
-export async function lookupCatalog(
-  silApiUrl: string,
-  token: string,
-  ids: string[],
-): Promise<LookupOutcome> {
-  const url = `${stripTrailingSlash(silApiUrl)}/catalog/lookup`;
-  let res: Response;
-  try {
-    res = await postJson(url, { ids }, { authorization: `Bearer ${token}` });
-  } catch {
-    return { kind: "retryable" };
+function routePath(
+  route: ShoppingRoute,
+  args: Record<string, unknown>,
+): string | { missing: string } {
+  let missing: string | undefined;
+  const path = route.path.replace(/:([a-z_]+)/g, (_match, name: string) => {
+    const value = args[name];
+    if (typeof value !== "string" || value.length === 0) {
+      missing ??= name;
+      return "";
+    }
+    return encodeURIComponent(value);
+  });
+  if (missing !== undefined) return { missing };
+  if (route.method !== "GET") return path;
+  const query = new URLSearchParams();
+  for (const key of route.query ?? []) {
+    const value = args[key];
+    if (typeof value === "string") query.set(key, value);
   }
-  const body = await readJsonBody(res);
-  return classifyLookupResponse(res.status, body);
+  const search = query.toString();
+  return search === "" ? path : `${path}?${search}`;
 }
 
-/**
- * Canonicalize coined spec definitions against sil-api's registry (the SAME origin
- * as the identity read / `searchCatalog` / `lookupCatalog` — NOT sil-web; bare
- * `/catalog/specs`, no `/api/v1`). The method submits `{ query, specs }` at mint/
- * refresh and gets back the canonical `ns.key` per submitted spec — building NO UCP
- * envelope and NO filter mapping (the wire body is EXACTLY `{ query, specs }`).
- *
- * The Bearer header is built HERE and never logged; the token travels only in the
- * outbound request, never into the returned union. A network error / timeout maps
- * to `retryable` (bare) so the method degrades gracefully to raw coined names — a
- * registry hiccup never blocks the mint.
- */
-export async function specsCatalog(
-  silApiUrl: string,
-  token: string,
-  params: SpecsParams,
-): Promise<SpecsOutcome> {
-  const url = `${stripTrailingSlash(silApiUrl)}/catalog/specs`;
-  let res: Response;
-  try {
-    res = await postJson(
-      url,
-      { query: params.query, specs: params.specs },
-      { authorization: `Bearer ${token}` },
-    );
-  } catch {
-    return { kind: "retryable" };
-  }
-  const body = await readJsonBody(res);
-  return classifySpecsResponse(res.status, body);
-}
 
 /** Result of the high-level refresh orchestration (read → refresh → rotate). */
 export type RefreshStoredResult =
@@ -1096,9 +500,9 @@ export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
 /**
  * The discriminant {@link refreshAndRetryOnce} returns for the caller to map to
  * its own agent-facing envelope. Generic over the caller's outcome union `O`
- * (`SearchOutcome` / `LookupOutcome` / `IdentityOutcome`) — the helper only ever
- * surfaces an `O` produced by the first call or the retry, never one it
- * fabricates, so `O` stays parametric (no `any`, no cast).
+ * (`ShoppingOutcome` / `IdentityOutcome`) —
+ * the helper only ever surfaces an `O` produced by the first call or the retry,
+ * never one it fabricates, so `O` stays parametric (no `any`, no cast).
  *
  *   result             — pass `outcome` through the caller's normal mapping (the
  *                        first non-401 outcome, OR the retry's non-401 outcome).
@@ -1128,7 +532,7 @@ export type RefreshRetryResult<O> =
 
 /**
  * THE single 401 refresh-and-retry-once choreography, shared by every
- * sil-api-calling tool (`sil_search`, `sil_product_get`, `sil_whoami`) so the 401
+ * sil-api-calling tool (every `shopping_*` call and `sil_whoami`) so the 401
  * behaviour cannot drift apart between them (FLAG-10). The control flow IS the
  * contract — straight-line, AT MOST one refresh + AT MOST one retry, no loop:
  *
@@ -1196,22 +600,12 @@ export async function refreshAndRetryOnce<O>(
 }
 
 /**
- * Unwrap + narrow a sil-api identity response body to a typed `Identity`, or
- * null if it carries no usable identity. Defends against the latent wire shape:
- * the identity may be wrapped in a `result` field OR (if the follow-on returns it
- * bare) at the top level, so we try `result` first and fall back to the body
- * itself.
+ * Unwrap + narrow a sil-api identity body to a typed `Identity`, or null when it
+ * carries none. The body may wrap the identity in `result` or return it bare.
  *
- * A usable identity REQUIRES a non-empty `name` string (the authoritative human
- * name) and that `addresses` is an ARRAY — but the array may be EMPTY. sil-api
- * returns `addresses: []` for a provisioned user who has onboarded a name but
- * not yet added an address (`handlers/identity.ts` → `buildIdentityReadResult`);
- * that is a real, authenticated identity, NOT a not-yet-ready read. Rejecting it
- * would strand such a user on a false `retryable` they could never escape by
- * retrying. The `name` gate is the load-bearing anti-false-green guard: the
- * current /identity STUB shape ({kind, verified, subject, ...}) has NO name, so
- * it still returns null → `retryable`, never a false `ok`. Extra fields on each
- * address are preserved (addresses pass through opaque — see `IdentityAddress`).
+ * An EMPTY `addresses` is a real identity (a provisioned user who has not added
+ * an address yet) — rejecting it would strand them on a `retryable` no retry can
+ * clear. The non-empty `name` gate is what keeps a nameless body off `ok`.
  */
 function extractIdentity(body: unknown): Identity | null {
   const envelope = asRecord(body);
@@ -1229,7 +623,34 @@ function extractIdentity(body: unknown): Identity | null {
     (a): a is IdentityAddress => asRecord(a) !== null,
   );
 
-  return { name, addresses };
+  // The profile halves are NOT a gate: a read that carries neither is a buyer who
+  // has told sil nothing yet, and `[]` says exactly that — refusing here would
+  // strand them on a `retryable` no retry can clear.
+  const measurements = plainObjects(source["measurements"]);
+  const preferences = plainObjects(source["preferences"]);
+
+  // `country`, `gender` and `currency` are optional on the read and pass through only as
+  // strings — an absent or non-string one is dropped, never coerced or inferred. The VALUE
+  // is the route's to decide: a literal allow-list here would drop a vocabulary sil adds.
+  const country = source["country"];
+  const gender = source["gender"];
+  const currency = source["currency"];
+  return {
+    name,
+    addresses,
+    measurements,
+    preferences,
+    ...(typeof country === "string" ? { country } : {}),
+    ...(typeof gender === "string" ? { gender } : {}),
+    ...(typeof currency === "string" ? { currency } : {}),
+  };
+}
+
+/** The elements of `value` that are plain objects, as `addresses` are filtered:
+ * absent or shapeless is `[]`, never a partial read of a malformed entry. */
+function plainObjects(value: unknown): ProfileEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((e): e is ProfileEntry => asRecord(e) !== null);
 }
 
 /** Pull the actionable reason out of a 403 body (`user_not_provisioned` /
@@ -1241,647 +662,6 @@ function extractForbiddenReason(body: unknown): string {
   return typeof error === "string" && error.length > 0 ? error : "forbidden";
 }
 
-/**
- * Map the simplified {@link SearchParams} into the sil-api `CatalogSearchRequest`
- * body. Only keys the agent supplied are emitted — an absent filter is an OMITTED
- * key (sil-api's body is `additionalProperties: false`, but every field is
- * optional), never an empty `{}`. The singular `category` maps into the UCP
- * `filters.categories` ARRAY (sil-api's filter is multi-taxonomy; the simplified
- * contract takes one). `price_min`/`price_max` map into `filters.price.{min,max}`.
- * The tool clamps nothing and validates no cursor opacity — sil-api owns those.
- *
- * THE load-bearing rename: the agent arg `ship_to` (singular) becomes the wire key
- * `filters.ships_to` (plural). `condition`/`available` keep their name under
- * `filters.*`. These three ride sil-api's OPEN `SearchFilters`
- * (`additionalProperties: true`), which SILENTLY accepts an unknown key — so the
- * exact emitted key name is the only thing standing between a working serviceability
- * filter and a no-op (a wrong rename fails GREEN). Each is forwarded ONLY when
- * supplied (omit-when-absent, identical to `category`/`price`/`pagination`); NO
- * client-injected default (the server applies `available: true`). A supplied
- * `available: false` is narrowed with `typeof === "boolean"`, never `if (v)`, so the
- * meaningful `false` (include unavailable items) survives.
- *
- * `local_merchants` is the ONE field that does NOT ride `filters`. It is a
- * sil-PRIVATE ranking-bias signal, not a UCP/Global-Catalog filter — `filters` is
- * forwarded to the cross-shop Global Catalog, whose OPEN schema would silently
- * accept and ignore an unknown `local_merchants` key (the exact wrong-placement
- * no-op the rename hazard above warns of). So it is emitted at the TOP LEVEL of the
- * body (beside `query`/`filters`/`pagination`), and ONLY when exactly `true`: unlike
- * `available: false` (a meaningful include-unavailable signal that survives), a
- * `false` bias carries NO signal (== the server's unbiased default), so `false` and
- * absent both omit the key (narrow on the VALUE, not just the type — emit iff true).
- *
- * COUNTRY-CASE NORMALIZATION is the wire layer's job (the read site owns FORMAT
- * rejection): `ships_to.country` is emitted UPPERCASE (`us` → `US`), the alpha-2
- * contract `@sil/schemas` `ShipTo` mirrors byte-for-byte. A lowercase code on the
- * wire would diverge from the sibling and (depending on the server's
- * case-sensitivity) silently mis-filter. `region` and `postal_code` are forwarded
- * VERBATIM — they passed their pattern at the read site, and the wire normalizes
- * only country case.
- */
-function buildSearchBody(params: SearchParams): Record<string, unknown> {
-  const body: Record<string, unknown> = {};
-  // The agent's free-text `query` is forwarded VERBATIM. The plugin is pure
-  // transport — a `specs` predicate NEVER folds into `query` (that lossy/unsafe job
-  // belongs to the agent, which authors the free-text from the requirements).
-  if (typeof params.query === "string") body["query"] = params.query;
-
-  const filters: Record<string, unknown> = {};
-  if (typeof params.category === "string") {
-    filters["categories"] = [params.category];
-  }
-  const price: Record<string, unknown> = {};
-  if (typeof params.price_min === "number") price["min"] = params.price_min;
-  if (typeof params.price_max === "number") price["max"] = params.price_max;
-  if (Object.keys(price).length > 0) filters["price"] = price;
-
-  // The three serviceability/localization filters — the `ship_to` → `ships_to`
-  // rename happens here; the other two keep their name. Country is uppercased on
-  // emit (region/postal forwarded verbatim); the other two pass through as-is.
-  if (params.ship_to !== undefined) filters["ships_to"] = withUppercaseCountry(params.ship_to);
-  if (params.condition !== undefined) filters["condition"] = params.condition;
-  if (typeof params.available === "boolean") filters["available"] = params.available;
-
-  // The structured requirement predicates ride ONE namespaced well-known key —
-  // `filters.specs` holds the WHOLE array (never spread as `filters.<key>`, which
-  // would collide with a typed filter and fail-green on the open `SearchFilters`;
-  // never top-level — unlike the sil-private `local_merchants`, `specs` is a
-  // backend-bound filter). `hard` rides each entry UNCHANGED. A present-but-empty
-  // `[]` emits nothing (the query is unchanged, `filters.specs` omitted).
-  if (Array.isArray(params.specs) && params.specs.length > 0) filters["specs"] = params.specs;
-
-  if (Object.keys(filters).length > 0) body["filters"] = filters;
-
-  // `local_merchants` is a sil-PRIVATE ranking bias — it rides at the TOP LEVEL of
-  // the body (a sibling of `query`/`filters`/`pagination`), NEVER under `filters`
-  // (those are forwarded to the Global Catalog, which would silently swallow it).
-  // Emitted ONLY when exactly `true`: a `false`/absent bias carries no signal (it is
-  // the server's unbiased default), so — unlike `available:false` — it is omitted.
-  // Narrow on the VALUE, not just the type: `=== true`, never a truthiness coerce.
-  if (params.local_merchants === true) body["local_merchants"] = true;
-
-  const pagination: Record<string, unknown> = {};
-  if (typeof params.cursor === "string") pagination["cursor"] = params.cursor;
-  if (typeof params.limit === "number") pagination["limit"] = params.limit;
-  if (Object.keys(pagination).length > 0) body["pagination"] = pagination;
-
-  return body;
-}
-
-/** Emit a ship-to object with its alpha-2 `country` UPPERCASED on the wire
- * (`us` → `US`); every other field (`region`/`postal_code` on {@link ShipTo}) is
- * preserved verbatim. The spread-then-overwrite keeps the shape generic over any
- * `{ country }`-bearing value without reshaping or dropping a field. */
-function withUppercaseCountry<T extends { country: string }>(value: T): T {
-  return { ...value, country: value.country.toUpperCase() };
-}
-
-/**
- * Unwrap + narrow a sil-api catalog-search response body to a typed
- * {@link SearchResult}, or null if it carries no usable products array. sil-api
- * emits a FLAT body: `products` and `pagination` sit at the TOP LEVEL, there is
- * NO `result` wrapper. Read them straight
- * off the body. (There is no nested-`result` fallback to keep: search has no
- * second route that ever returns one, so a `result`-wrapper expectation would be
- * dead weight and — worse — a latent false-green a stray `result` key could shadow
- * the real top-level `products`.)
- *
- * The load-bearing anti-false-green guard is the `Array.isArray(products)` check:
- * a 200 lacking a real top-level `products` array (a partial / garbage / stub
- * `{ stub: true }` body) returns null →
- * `retryable`, never a false-green empty match. An EMPTY array is a VALID empty
- * match (a genuine "nothing matched") and returns an empty `products` list —
- * distinct from the no-array guard. Individual products that are unusable (no
- * projectable featured variant, missing checkout_url) are dropped via
- * `projectProduct` returning null, never fabricated.
- *
- * The opaque cursor is hoisted from `pagination.cursor` and surfaced ONLY when
- * `pagination.has_next_page` is true (end-of-results is the absent cursor — never
- * derived from `products.length`).
- *
- * `specs_status` is read off the SAME flat envelope as a sibling of `products`
- * (via {@link extractSpecsStatus}), so the observable per-predicate applied-status
- * surfaces even on an empty match. It is informational — NEVER a purchasability
- * gate; the `Array.isArray(products)` anti-false-green guard is unchanged.
- */
-function extractSearchResult(body: unknown): SearchResult | null {
-  const envelope = asRecord(body);
-  if (envelope === null) return null;
-
-  const rawProducts = envelope["products"];
-  if (!Array.isArray(rawProducts)) return null;
-
-  const products = rawProducts
-    .map(projectProduct)
-    .filter((p): p is SearchProduct => p !== null);
-
-  const result: SearchResult = { products };
-  const cursor = extractCursor(envelope["pagination"]);
-  if (cursor !== null) result.cursor = cursor;
-  const specsStatus = extractSpecsStatus(envelope["specs_status"]);
-  if (specsStatus !== null) result.specs_status = specsStatus;
-  return result;
-}
-
-/** Narrow the wire `specs_status` to {@link SpecStatus}[], or null to OMIT the
- * key. Each usable entry needs a non-empty string `ns`, a non-empty string `key`,
- * and a BOOLEAN `applied`; a malformed entry is DROPPED (never fabricated
- * `applied:true`, never a crash). Returns null when the field is absent/non-array
- * OR when no entry survives — the no-fabrication discipline: interpreting the
- * ABSENCE of a status is reflection's job, not the tool's. A fully-`applied:false`
- * array is the honest "not indexed yet" shape and passes through whole. */
-function extractSpecsStatus(raw: unknown): SpecStatus[] | null {
-  if (!Array.isArray(raw)) return null;
-  const statuses = raw
-    .map((entry): SpecStatus | null => {
-      const obj = asRecord(entry);
-      if (obj === null) return null;
-      const ns = obj["ns"];
-      const key = obj["key"];
-      const applied = obj["applied"];
-      if (typeof ns !== "string" || ns.length === 0) return null;
-      if (typeof key !== "string" || key.length === 0) return null;
-      if (typeof applied !== "boolean") return null;
-      return { ns, key, applied };
-    })
-    .filter((s): s is SpecStatus => s !== null);
-  return statuses.length === 0 ? null : statuses;
-}
-
-/**
- * Project one `SilCatalogProduct` to the agent-facing {@link SearchProduct}, or
- * null if it is unusable. Carries the product-level `id`/`title`/`source` AND the
- * featured variant nested under `variant`. Picks the FIRST (featured) variant —
- * UCP: "Platforms SHOULD treat the first element as featured". A product whose
- * featured variant has no non-empty `checkout_url` (the one field the agent acts
- * on to buy), or that is missing any required field, is dropped rather than
- * surfaced as a non-purchasable result.
- */
-function projectProduct(raw: unknown): SearchProduct | null {
-  const product = asRecord(raw);
-  if (product === null) return null;
-
-  const productId = product["id"];
-  const productTitle = product["title"];
-  const source = product["source"];
-  if (typeof productId !== "string" || productId.length === 0) return null;
-  if (typeof productTitle !== "string") return null;
-  if (typeof source !== "string" || source.length === 0) return null;
-
-  const variants = product["variants"];
-  if (!Array.isArray(variants) || variants.length === 0) return null;
-  const variant = projectVariant(variants[0]);
-  if (variant === null) return null;
-
-  const result: SearchProduct = { id: productId, title: productTitle, source, variant };
-  attachProductEnrichment(result, product);
-  return result;
-}
-
-/**
- * Project a `SilCatalogVariant` to the agent-facing {@link SearchVariant}, or
- * null if it is not a usable purchasable variant. Requires `id`, `title`, a price
- * object, and a non-empty `checkout_url`; `price`/`availability` pass through
- * opaque. The PURCHASABILITY gate is unchanged — the enriched fields are additive
- * context, never a new gate: a variant lacking a non-empty `checkout_url` is still
- * dropped even when it carries `url`/`seller`/`media`.
- *
- * The enriched per-variant surface (`url`/`seller`/`media`/`metadata`) is attached
- * via {@link attachVariantEnrichment}, each ONLY when present.
- */
-function projectVariant(raw: unknown): SearchVariant | null {
-  const variant = asRecord(raw);
-  if (variant === null) return null;
-
-  const id = variant["id"];
-  const title = variant["title"];
-  const checkoutUrl = variant["checkout_url"];
-  if (typeof id !== "string" || id.length === 0) return null;
-  if (typeof title !== "string") return null;
-  if (typeof checkoutUrl !== "string" || checkoutUrl.length === 0) return null;
-
-  const price = extractPrice(variant["price"]);
-  if (price === null) return null;
-
-  const result: SearchVariant = {
-    id,
-    title,
-    price,
-    availability: extractAvailability(variant["availability"]),
-    checkout_url: checkoutUrl,
-  };
-  attachVariantEnrichment(result, variant);
-  return result;
-}
-
-/**
- * Unwrap + narrow a sil-api catalog-LOOKUP response body to a typed
- * {@link LookupResult}, or null if it carries no usable products array. Like
- * `extractSearchResult`, it reads sil-api's FLAT body: `products` and `messages`
- * sit at the TOP LEVEL, there is NO `result` wrapper — read them straight off
- * the body (no nested-`result` fallback; lookup has no route that returns one).
- *
- * It shares search's load-bearing anti-false-green guard — `Array.isArray(products)`
- * on the TOP-LEVEL `products`; a 200 lacking it (partial / garbage / stub
- * `{ stub: true }`) returns null → `retryable`. An EMPTY
- * array is a VALID all-missed lookup (the products gate passes; `not_found`
- * carries the ids) — distinct from the no-array guard. The two structural deltas
- * from search:
- *   - NO cursor hoist — lookup is a batch resolve, not a list (no `pagination`).
- *   - `not_found` is parsed from the top-level `messages`: each
- *     `{ code: 'not_found', content: <id> }` entry's `content` IS a missed request
- *     id (server emits one per unresolved id, in input order, and OMITS `messages`
- *     on full success). The `not_found` key is omitted here when there are no misses.
- *
- * Products unusable in lookup terms (no projectable featured variant, missing
- * `checkout_url`) are dropped via `projectLookupProduct` returning null, never
- * fabricated — same null-drop discipline as search.
- */
-function extractLookupResult(body: unknown): LookupResult | null {
-  const envelope = asRecord(body);
-  if (envelope === null) return null;
-
-  const rawProducts = envelope["products"];
-  if (!Array.isArray(rawProducts)) return null;
-
-  const products = rawProducts
-    .map(projectLookupProduct)
-    .filter((p): p is LookupProduct => p !== null);
-
-  const notFound = extractNotFound(envelope["messages"]);
-  return notFound.length === 0 ? { products } : { products, not_found: notFound };
-}
-
-/** The closed spec value-types, the anti-false-green enum for a resolution's
- * `data_type` (the vocabulary `namespace`/`key` stay open). */
-const SPEC_DATA_TYPES: readonly SpecDataType[] = ["number", "text", "boolean", "enum"];
-
-function isSpecDataType(value: unknown): value is SpecDataType {
-  return typeof value === "string" && (SPEC_DATA_TYPES as readonly string[]).includes(value);
-}
-
-/**
- * Narrow a sil-api spec-registry response body to the typed {@link SpecResolution}[],
- * or null if it carries no usable resolution array. sil-api emits a FLAT body:
- * `resolved` sits at the TOP LEVEL, there is NO `ucp` meta and NO `result` wrapper —
- * read it straight off the body.
- *
- * The load-bearing anti-false-green guard is `Array.isArray(resolved)` AND a
- * NON-EMPTY array. This is STRICTER than search's products gate: the server owes a
- * 1:1 resolution for every submitted spec, so there is NO valid empty-match — an
- * empty `resolved: []` is itself a malformed 200 and returns null → `retryable`.
- *
- * FAIL-WHOLE (design decision, product-owner AC1/AC9 "no partial adopt"): because
- * the method cannot adopt a canonical name it never got back, a SINGLE malformed
- * entry (missing/blank `canonical` ref, bad `status`, bad `data_type`, missing flag)
- * falls the WHOLE 200 to `retryable` — unlike search, which drops one unusable
- * product from a best-effort list. Every entry must project cleanly or none do.
- */
-function extractSpecsResult(body: unknown): SpecResolution[] | null {
-  const envelope = asRecord(body);
-  if (envelope === null) return null;
-
-  const rawResolved = envelope["resolved"];
-  if (!Array.isArray(rawResolved) || rawResolved.length === 0) return null;
-
-  const resolved: SpecResolution[] = [];
-  for (const raw of rawResolved) {
-    const one = projectResolution(raw);
-    if (one === null) return null; // fail-whole: no half-canonical vocabulary
-    resolved.push(one);
-  }
-  return resolved;
-}
-
-/**
- * Project ONE wire resolution to the typed {@link SpecResolution}, or null if any
- * required field is malformed (fail-whole, per {@link extractSpecsResult}). Requires
- * the flat canonical definition (`namespace`/`key`/`display_name` non-empty,
- * `data_type` in the closed enum), the `submitted`/`canonical` refs, a valid
- * `status`, and both boolean capability flags. Optional `description`/`unit`/
- * `allowed_values` pass through when the right type. No `any`, no unchecked `as`.
- */
-function projectResolution(raw: unknown): SpecResolution | null {
-  const obj = asRecord(raw);
-  if (obj === null) return null;
-
-  const namespace = obj["namespace"];
-  const key = obj["key"];
-  const displayName = obj["display_name"];
-  if (typeof namespace !== "string" || namespace.length === 0) return null;
-  if (typeof key !== "string" || key.length === 0) return null;
-  if (typeof displayName !== "string" || displayName.length === 0) return null;
-
-  const dataType = obj["data_type"];
-  if (!isSpecDataType(dataType)) return null;
-
-  const submitted = extractSpecRef(obj["submitted"]);
-  const canonical = extractSpecRef(obj["canonical"]);
-  if (submitted === null || canonical === null) return null;
-
-  const status = obj["status"];
-  if (status !== "matched" && status !== "created") return null;
-
-  const isFilterable = obj["is_filterable"];
-  const isComparable = obj["is_comparable"];
-  if (typeof isFilterable !== "boolean" || typeof isComparable !== "boolean") return null;
-
-  const result: SpecResolution = {
-    namespace,
-    key,
-    display_name: displayName,
-    data_type: dataType,
-    submitted,
-    canonical,
-    status,
-    is_filterable: isFilterable,
-    is_comparable: isComparable,
-  };
-  const description = obj["description"];
-  if (typeof description === "string") result.description = description;
-  const unit = obj["unit"];
-  if (typeof unit === "string") result.unit = unit;
-  const allowedValues = obj["allowed_values"];
-  if (Array.isArray(allowedValues)) {
-    const values = allowedValues.filter((v): v is string => typeof v === "string");
-    if (values.length > 0) result.allowed_values = values;
-  }
-  return result;
-}
-
-/** Narrow a wire `{ namespace, key }` reference (the `submitted` / `canonical`
- * fields), or null if either is missing/blank — the load-bearing gate a resolution
- * needs so the method can adopt the canonical name. */
-function extractSpecRef(raw: unknown): SpecRef | null {
-  const obj = asRecord(raw);
-  if (obj === null) return null;
-  const namespace = obj["namespace"];
-  const key = obj["key"];
-  if (typeof namespace !== "string" || namespace.length === 0) return null;
-  if (typeof key !== "string" || key.length === 0) return null;
-  return { namespace, key };
-}
-
-/**
- * Project one `SilCatalogProduct` to the agent-facing {@link LookupProduct}, or
- * null if it is unusable. RICHER than search's `projectProduct`: carries the
- * product-level `description`, `price_range`, `categories?` and `handle?` (a lookup
- * caller is making a purchase decision) plus the featured variant nested under
- * `variant`. Picks the FIRST (featured) variant — `lookup_catalog` returns one
- * featured variant per product; UCP: "Platforms SHOULD treat the first element as
- * featured". A product whose featured variant has no non-empty `checkout_url`, or
- * that is missing any required field, is dropped rather than surfaced as a
- * non-purchasable result.
- */
-function projectLookupProduct(raw: unknown): LookupProduct | null {
-  const product = asRecord(raw);
-  if (product === null) return null;
-
-  const id = product["id"];
-  const title = product["title"];
-  const source = product["source"];
-  if (typeof id !== "string" || id.length === 0) return null;
-  if (typeof title !== "string") return null;
-  if (typeof source !== "string" || source.length === 0) return null;
-
-  const priceRange = product["price_range"];
-  if (asRecord(priceRange) === null) return null;
-
-  const variants = product["variants"];
-  if (!Array.isArray(variants) || variants.length === 0) return null;
-  const variant = projectLookupVariant(variants[0]);
-  if (variant === null) return null;
-
-  const result: LookupProduct = {
-    id,
-    title,
-    price_range: priceRange,
-    source,
-    variant,
-  };
-  const categories = passThroughObjects(product["categories"]);
-  if (categories !== null) result.categories = categories;
-  const handle = product["handle"];
-  if (typeof handle === "string" && handle.length > 0) result.handle = handle;
-  // `description` is now the `{ plain }` lift (ONE vocabulary with search), NOT the
-  // whole opaque object — omitted entirely when `plain` is absent/empty. Reuses the
-  // SAME product-enrichment attach as search so both tools surface the identical
-  // enriched shape (`url`/`description`/`media`/`options`/`metadata`).
-  attachProductEnrichment(result, product);
-  return result;
-}
-
-/**
- * Project a `SilCatalogVariant` to the agent-facing {@link LookupVariant}, or null
- * if it is not a usable purchasable variant. RICHER than search's `projectVariant`:
- * adds `sku`, `options` (which configuration this variant is), and the lookup-only
- * `inputs` correlation. Requires `id`, `title`, a price object, and a non-empty
- * `checkout_url`; `price`/`availability` pass through opaque. Optional rich fields
- * are omitted when absent rather than emitted as `undefined`.
- */
-function projectLookupVariant(raw: unknown): LookupVariant | null {
-  const variant = asRecord(raw);
-  if (variant === null) return null;
-
-  const id = variant["id"];
-  const title = variant["title"];
-  const checkoutUrl = variant["checkout_url"];
-  if (typeof id !== "string" || id.length === 0) return null;
-  if (typeof title !== "string") return null;
-  if (typeof checkoutUrl !== "string" || checkoutUrl.length === 0) return null;
-
-  const price = extractPrice(variant["price"]);
-  if (price === null) return null;
-
-  const result: LookupVariant = {
-    id,
-    title,
-    price,
-    availability: extractAvailability(variant["availability"]),
-    checkout_url: checkoutUrl,
-  };
-  const sku = variant["sku"];
-  if (typeof sku === "string" && sku.length > 0) result.sku = sku;
-  const options = passThroughObjects(variant["options"]);
-  if (options !== null) result.options = options;
-  const inputs = extractInputs(variant["inputs"]);
-  if (inputs !== null) result.inputs = inputs;
-  // The SAME enriched per-variant surface as search (ONE vocabulary):
-  // `url`/`seller`/`media`/`metadata`, each only when present. The variant's
-  // `options` SELECTIONS above and these enriched fields are distinct, additive.
-  attachVariantEnrichment(result, variant);
-  return result;
-}
-
-/** Pass a wire array of objects through OPAQUE — filter to plain objects, preserve
- * each verbatim, never read or remap individual fields. Used for `categories` and
- * the variant's `options`: contextual display data the tool SURFACES but does not
- * interpret (it is not a purchasability gate — that is `checkout_url`/`price`).
- * Mirrors how identity `addresses` pass through (the wire field names — `value` vs
- * `name` on a category — are the source's to define, not the tool's to assert).
- * Returns null when the field is absent/non-array or yields no usable object, so
- * the caller omits the key rather than emitting an empty array. */
-function passThroughObjects(raw: unknown): Record<string, unknown>[] | null {
-  if (!Array.isArray(raw)) return null;
-  const objects = raw.filter(
-    (o): o is Record<string, unknown> => asRecord(o) !== null,
-  );
-  return objects.length === 0 ? null : objects;
-}
-
-/** Pass a single wire OBJECT through OPAQUE — forward it verbatim when it is a
- * plain object, never reading or remapping individual fields. The single-object
- * counterpart to {@link passThroughObjects}, for `seller` and `metadata`: contextual
- * data the tool SURFACES but does not interpret. This is the load-bearing
- * narrow-vs-pass-through guard ([[sil-shared-catalog-client]]) — a typed
- * `{ name, links }` narrow on `seller` would silently DROP the Shopify extension
- * keys (`seller.url`/`seller.domain`) the source attaches, and pass a naive fixture;
- * opaque pass-through keeps both the base shape and any extension/drift. An ARRAY is
- * NOT a usable object here (a `seller`/`metadata` that arrived as `[]` is garbage),
- * so arrays return null and the caller omits the key. */
-function passThroughObject(raw: unknown): Record<string, unknown> | null {
-  return raw !== null && typeof raw === "object" && !Array.isArray(raw)
-    ? (raw as Record<string, unknown>)
-    : null;
-}
-
-/** Lift the agent-facing {@link ProductDescription} (`{ plain }`) from a wire
- * `description` object, or null to OMIT. Surfaces ONLY the `plain` UCP format, and
- * ONLY when it is a non-empty string — `html`/`markdown` are never substituted into
- * `plain` (the spec flags `html` as untrusted rich text), and an absent/empty `plain`
- * omits the whole `description` key. This is the one SCALAR read in the enriched
- * surface (a stable, named UCP sub-field), and lifting it identically on both catalog
- * tools is what keeps them on ONE `description` shape. */
-function liftDescriptionPlain(raw: unknown): ProductDescription | null {
-  const obj = asRecord(raw);
-  if (obj === null) return null;
-  const plain = obj["plain"];
-  return typeof plain === "string" && plain.length > 0 ? { plain } : null;
-}
-
-/** Attach the enriched PRODUCT surface (`url`/`description`/`media`/`options`/
- * `metadata`) onto a projected product, each ONLY when present on the wire object.
- * Shared verbatim by `projectProduct` (search) and `projectLookupProduct` (lookup)
- * so BOTH tools surface the IDENTICAL enriched shape — the ONE-vocabulary property.
- * Mutates `target` in place (it is a freshly-built projection the caller owns). Every
- * field is OPAQUE pass-through keyed on PRESENCE; the only scalar read is
- * `description.plain`. Omit-when-absent is per-field — an absent / empty-`plain` /
- * no-`metadata` / all-garbage-array field leaves its key off entirely (no null/''/[]). */
-function attachProductEnrichment(
-  target: SearchProduct | LookupProduct,
-  product: Record<string, unknown>,
-): void {
-  const url = product["url"];
-  if (typeof url === "string" && url.length > 0) target.url = url;
-  const description = liftDescriptionPlain(product["description"]);
-  if (description !== null) target.description = description;
-  const media = passThroughObjects(product["media"]);
-  if (media !== null) target.media = media;
-  const options = passThroughObjects(product["options"]);
-  if (options !== null) target.options = options;
-  const metadata = passThroughObject(product["metadata"]);
-  if (metadata !== null) target.metadata = metadata;
-}
-
-/** Attach the enriched per-VARIANT surface (`url`/`seller`/`media`/`metadata`) onto a
- * projected variant, each ONLY when present. Shared verbatim by `projectVariant`
- * (search) and `projectLookupVariant` (lookup) — the variant half of the
- * ONE-vocabulary property. `seller` (incl. `seller.links[]`) and `metadata` are
- * single-object opaque pass-through; `media` is array pass-through. Same
- * omit-when-absent, per-field, never-narrow discipline as the product surface. */
-function attachVariantEnrichment(
-  target: SearchVariant | LookupVariant,
-  variant: Record<string, unknown>,
-): void {
-  const url = variant["url"];
-  if (typeof url === "string" && url.length > 0) target.url = url;
-  const seller = passThroughObject(variant["seller"]);
-  if (seller !== null) target.seller = seller;
-  const media = passThroughObjects(variant["media"]);
-  if (media !== null) target.media = media;
-  const metadata = passThroughObject(variant["metadata"]);
-  if (metadata !== null) target.metadata = metadata;
-}
-
-/** Narrow a wire `inputs` correlation array to {@link LookupInput}[] — each entry
- * needs a non-empty `id` (the request id that resolved to this variant); a missing
- * or non-string `match` is dropped (not coerced). Returns null when the field is
- * absent or yields no usable entry, so the caller omits the key. Surfacing this is
- * what makes a multi-id lookup correlatable — without it the agent cannot map "the
- * id I asked about" to "the variant I got back". */
-function extractInputs(raw: unknown): LookupInput[] | null {
-  if (!Array.isArray(raw)) return null;
-  const inputs = raw
-    .map((i): LookupInput | null => {
-      const obj = asRecord(i);
-      if (obj === null) return null;
-      const id = obj["id"];
-      if (typeof id !== "string" || id.length === 0) return null;
-      const match = obj["match"];
-      return typeof match === "string" ? { id, match } : { id };
-    })
-    .filter((i): i is LookupInput => i !== null);
-  return inputs.length === 0 ? null : inputs;
-}
-
-/** Parse the missed request ids out of a wire `messages` array. Each
- * `{ code: 'not_found', content: <id> }` info entry's `content` IS an unresolved
- * id (sil-api emits one per miss, in input order; `messages` is OMITTED on full
- * success). Returns the ids in order — an empty array when there are no misses
- * (the caller then omits the `not_found` key). Only `not_found` codes are
- * surfaced; any other message code (a future UCP `warning`/`delayed_fulfillment`)
- * is ignored here — broader message passthrough is out of scope. */
-function extractNotFound(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const ids: string[] = [];
-  for (const entry of raw) {
-    const obj = asRecord(entry);
-    if (obj === null) continue;
-    if (obj["code"] !== "not_found") continue;
-    const content = obj["content"];
-    if (typeof content === "string" && content.length > 0) ids.push(content);
-  }
-  return ids;
-}
-
-/** Narrow a wire price (`{ amount: number, currency: string }`) — passed through
- * opaque (extra fields preserved), or null if the two required fields are absent
- * (an unpriced variant is not a usable purchasable result). */
-function extractPrice(raw: unknown): SearchPrice | null {
-  const obj = asRecord(raw);
-  if (obj === null) return null;
-  const amount = obj["amount"];
-  const currency = obj["currency"];
-  if (typeof amount !== "number" || typeof currency !== "string") return null;
-  return { ...obj, amount, currency };
-}
-
-/** Narrow a wire availability object (`{ available?, status? }`) — passed through
- * opaque (NOT flattened to a bare boolean; extra fields preserved). A missing or
- * non-object availability yields an empty object (the agent reads no signal,
- * rather than the tool inventing one). */
-function extractAvailability(raw: unknown): SearchAvailability {
-  const obj = asRecord(raw);
-  if (obj === null) return {};
-  const result: SearchAvailability = { ...obj };
-  const available = obj["available"];
-  const status = obj["status"];
-  result.available = typeof available === "boolean" ? available : undefined;
-  result.status = typeof status === "string" ? status : undefined;
-  return result;
-}
-
-/** Hoist the opaque next-page cursor from a wire `pagination` object. Returns the
- * cursor string ONLY when `has_next_page` is true AND a non-empty `cursor` is
- * present; null otherwise (last page, or no pagination). End-of-results is the
- * absent cursor — never `products.length === limit`. */
-function extractCursor(raw: unknown): string | null {
-  const obj = asRecord(raw);
-  if (obj === null) return null;
-  if (obj["has_next_page"] !== true) return null;
-  const cursor = obj["cursor"];
-  return typeof cursor === "string" && cursor.length > 0 ? cursor : null;
-}
 
 /**
  * Build the `retryable` outcome for a non-200, non-{400,401} response, attaching
@@ -1890,7 +670,8 @@ function extractCursor(raw: unknown): string | null {
  *
  * This is the seam where outcome (a) (sil/network down → bare retryable, generic
  * copy) and outcome (b) (a named source down → source-named retryable) become
- * distinguishable — see {@link SearchOutcome}. The gate is the PRESENCE of a real
+ * distinguishable — see {@link ShoppingOutcome}'s `retryable` arm. The gate is the
+ * PRESENCE of a real
  * non-empty-string `source` field on the body, NEVER the `message` prose: a
  * sil-internal 5xx (no `source`), a bodyless/garbage non-200, or a `source` that is
  * null/number/empty/object/array all fall back to the bare sourceless retryable.
@@ -1919,9 +700,11 @@ function retryableFromBody(body: unknown): { kind: "retryable"; source?: string;
   return { kind: "retryable", source, detail };
 }
 
-/** Pull sil-api's structured `{ error, message }` out of a 400 body, defaulting
- * each field when the shape is unexpected so the agent always gets an actionable
- * (if generic) hint rather than `undefined`. */
+/** Pull sil-api's structured `{ error, message }` out of a refusal body, verbatim.
+ * Every v0 route names the offender in its own message by design, so the message
+ * is the agent's whole recourse and is never rewritten here — the defaults only
+ * cover a body that carried neither field, so the agent gets a sentence rather
+ * than `undefined`. */
 function extractApiError(body: unknown): { error: string; message: string } {
   const obj = asRecord(body);
   const error = obj?.["error"];
@@ -1931,7 +714,7 @@ function extractApiError(body: unknown): { error: string; message: string } {
     message:
       typeof message === "string" && message.length > 0
         ? message
-        : "The search request was rejected. Provide a search query or at least one filter.",
+        : "sil rejected this request and gave no reason.",
   };
 }
 
@@ -1947,9 +730,18 @@ function extractUser(raw: unknown): ClaimedUser {
   };
 }
 
-/** A non-null plain object, or null for anything else (incl. arrays/primitives). */
+/**
+ * A non-null plain object, or null for anything else (incl. arrays/primitives).
+ *
+ * The array arm decides an OUTCOME at exactly one site, and it is not a body gate:
+ * {@link extractIdentity} filters `addresses` through this PER ELEMENT, so the return
+ * value is membership rather than a branch — without the arm a bare array survives and
+ * ships as one of the buyer's own addresses (pinned in `whoami.integration.test.ts`).
+ * At the body sites it changes nothing, because each reads a named key and a parsed
+ * array has none; the element site is the whole reason it stays.
+ */
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object"
+  return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
 }
@@ -1961,9 +753,10 @@ async function postJson(
   url: string,
   body: Record<string, unknown>,
   extraHeaders?: Record<string, string>,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
       method: "POST",
@@ -1985,9 +778,10 @@ async function postJson(
 async function getJson(
   url: string,
   extraHeaders?: Record<string, string>,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
       method: "GET",
@@ -2007,6 +801,8 @@ async function readJsonBody(res: Response): Promise<unknown> {
   }
 }
 
-function stripTrailingSlash(url: string): string {
+/** Every URL here is built by concatenation, so a configured origin with a
+ * trailing slash would emit a doubled `//` path the route does not match. */
+export function stripTrailingSlash(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }

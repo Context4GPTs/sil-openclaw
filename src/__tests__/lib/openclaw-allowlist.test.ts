@@ -54,23 +54,28 @@ import {
 // unit core takes them as an argument so the test pins behaviour, not wiring).
 const SIL: SilAllowlistFacts = {
   id: "sil",
-  // The real 11-tool floor after the sil-doctor-tool-data-store-identity-health
-  // card added sil_doctor (report-first data-store/identity/version health) in
-  // the new doctor group, beside the five profile verbs and the five other core
-  // tools. (This carrier is the SILENT one — a stale entry stays GREEN here,
-  // because the loop below only asserts each name is ABSENT from a fresh config
-  // — so it is bumped for hygiene in lockstep with the mirrors that bite.)
+  // The real fourteen-tool set — the eleven `shopping_*` tools and the three
+  // account tools.
+  //
+  // THIS CARRIER IS THE SILENT ONE, and it has gone stale before. Nothing here goes RED
+  // on a stale entry — the loop below only asserts each name is ABSENT from a fresh
+  // config, which a shorter list satisfies just as well — so a fixture that lies about
+  // the canonical set can sit here indefinitely. Bumped in lockstep with the mirrors
+  // that do bite (`manifest-contract`, `index.test`).
   tools: [
+    "shopping_brief_create",
+    "shopping_brief_edit",
+    "shopping_brief_read",
+    "shopping_domain_create",
+    "shopping_domain_get",
+    "shopping_domain_search",
+    "shopping_offers",
+    "shopping_product_get",
+    "shopping_profile_edit",
+    "shopping_search",
+    "shopping_seller_get",
     "sil_doctor",
-    "sil_learn",
-    "sil_product_get",
-    "sil_profile_get",
-    "sil_profile_materialize",
-    "sil_profile_remove",
-    "sil_profile_search",
     "sil_register",
-    "sil_search",
-    "sil_specs",
     "sil_whoami",
   ],
   skill: "./sil-shopping",
@@ -133,7 +138,7 @@ describe("AC1 (core) — fresh merge trusts sil at all three real surfaces", () 
     expect(changed).toBe(true);
   });
 
-  it("does NOT enumerate the 11 tool NAMES into config — admission is by plugin id only", () => {
+  it("does NOT enumerate the 10 tool NAMES into config — admission is by plugin id only", () => {
     const { config } = mergeSilAllowlist({}, SIL);
     const serialized = JSON.stringify(config);
     // The mechanism is plugin-id admission; tool names must never leak into the

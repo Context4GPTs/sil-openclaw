@@ -1,1413 +1,355 @@
 /**
- * Catalog tools for the sil plugin.
+ * The eleven `shopping_*` tools, 1:1 with the sil-api catalog, brief and profile routes.
  *
- * `sil_search` is a thin, typed product-discovery tool. An AI agent sends a
- * SIMPLIFIED structured query — free-text `query` plus optional filters
- * (`category`, `price_min`/`price_max`) and pagination (`cursor`/`limit`) — and
- * gets back a flat, ranked list of purchasable options: one featured variant per
- * product projected to `{ id, title, price, availability, checkout_url, source }`,
- * plus an opaque pagination `cursor`. The agent builds no UCP envelope and fills
- * no defaults; sil-api owns enrichment, ranking, and the envelope. The tool's job
- * is: validate the one invariant it owns (≥1 input), attach the stored Bearer
- * token, POST the bare `/catalog/search` on sil-api, and normalize the response.
- *
- * `execute()` flow (ALL I/O here; `register()` opens nothing — search is a
- * synchronous request/response, NOT a poll):
- *   1. Not registered (no stored tokens) → terminal `not_registered` + a
- *      `recovery: sil_register` hint, ZERO network calls (nothing to authenticate
- *      with). Mirrors `sil_whoami`'s not-registered path.
- *   2. Client-side input guard: a request with neither a non-empty `query` nor
- *      any filter is rejected with a structured validation error and makes NO
- *      network call (sil-api's `empty_search_input` 400 is the authoritative
- *      backstop). A filter-only request (e.g. `category` alone) is a valid browse.
- *   3. searchCatalog(getApiUrl(), token, params) → map the `SearchOutcome`:
- *        ok            → the ranked products + cursor;
- *        invalid_request (400) → surface sil-api's `{ error, message }`;
- *        unauthorized  (401)   → refresh-and-retry ONCE via the shared
- *                                `refreshAndRetryOnce` choreography (sil-web refresh,
- *                                re-read rotated pair, retry once). The agent never
- *                                sees a recovered 401; a second 401 or a dead refresh
- *                                is terminal re-register (tokens cleared); a refresh
- *                                5xx/network blip is transient "try again". 401
- *                                recovery is UNIFORM across sil_search /
- *                                sil_product_get / sil_whoami — never per-tool;
- *        retryable (5xx/net)   → transient "try again", NO re-register hint.
- *
- * The three distinct sil-api outcomes (empty match 200 / invalid 400 / source
- * failure 500) surface as three DISTINGUISHABLE agent envelopes — an empty match
- * is a SUCCESS (`status: "ok"`, `products: []`), never an error. Distinct recovery
- * hints per error class, mirroring `identity.ts`: re-register sends the agent to
- * `sil_register`; a transient/invalid must NOT (re-registering can't fix a 5xx or
- * a bad query and would derail the user).
- *
- * Privacy: the session token and Bearer header never reach a log line or the
- * result; logs carry only non-credential status markers (search params are not
- * credentials, but are not logged either — nothing here needs them).
- *
- * The group hosts THREE catalog tools sharing this origin, Bearer, and 401
- * choreography: `sil_search` (discovery), `sil_product_get` (the lookup companion),
- * and `sil_specs` (the spec-REGISTRY dedupe-or-create up-flow — the method
- * canonicalizes its coined `ns.key` vocabulary at Beat-2 mint/refresh, so
- * `filters.specs` converges). The structured-error envelope helpers (`notRegistered`
- * / `mustReregister` / `transient` / `forbidden` / `invalidRequest`) are
- * tool-parameterized and shared across all three — a new catalog tool reuses them,
- * it does not fork them.
- *
- * `register()` stays synchronous and side-effect-free beyond registering tools —
- * no fetch, no timer, no unawaited promise. All I/O is inside `execute()`.
+ * A projection on the way back would drop exactly the fields the agent's honesty reading
+ * is computed from (`fit`, `unknown`, `variants`, `printed`) while looking healthy, so the
+ * body crosses verbatim. A new `registerXTools` group has to be hand-wired into three guards
+ * or it silently NARROWS them (CLAUDE.md), which is why all eleven live in one group.
  */
 
-import type { PluginAPI } from "openclaw/plugin-sdk";
-import { Type } from "typebox";
+import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk";
 
-import { getApiUrl } from "../lib/config.js";
-import { clearTokens, readConfig, readTokens } from "../lib/credentials.js";
-import { wiringAdvisories } from "../lib/host-wiring.js";
-import { putSearchResult } from "../lib/search-results-store.js";
-import {
-  lookupCatalog,
-  refreshAndRetryOnce,
-  searchCatalog,
-  specsCatalog,
-  type LookupOutcome,
-  type SearchOutcome,
-  type SearchParams,
-  type ShipTo,
-  type SpecDataType,
-  type SpecDefinition,
-  type SpecOp,
-  type SpecPredicate,
-  type SpecsOutcome,
-  type SpecsParams,
-  type SpecValue,
-} from "../lib/sil-client.js";
+import { requestSchema } from "../lib/artifacts.js";
+import { readConfig } from "../lib/credentials.js";
+import { wiringAdvisoryBlocks } from "../lib/host-wiring.js";
+import { logSearchResults } from "../lib/search-results-log.js";
+import { putSearchResult, type SearchResultPage } from "../lib/search-results-store.js";
+import { DOMAIN_GET_ROUTE, callRoute, type ShoppingCall } from "../lib/shopping-call.js";
 import { jsonResult } from "../lib/tool-result.js";
 
+interface ShoppingTool extends ShoppingCall {
+  readonly label: string;
+  readonly description: string;
+}
+
+/** The tool whose page a paired client can pull back by `callId`. */
+const SEARCH_TOOL = "shopping_search";
+
+export const SHOPPING_TOOLS = [
+  {
+    name: "shopping_domain_search",
+    method: "GET",
+    path: "/catalog/domains",
+    query: ["q"],
+    label: "Read sil's registry for a domain",
+    description:
+      "What sil holds, and where it shelves it: read the registry in the buyer's own"
+      + " words. `matches` are the domains that match, each with its path and a line on how"
+      + " the thing is bought — judge fit on `about`, then take that path verbatim, or"
+      + " descend under a broader one, never a sibling of a path that already stands. `tree`"
+      + " is every standing path grouped by family: hang a new leaf where a specialist shop"
+      + " would shelve it, and see that a setup of several things is several leaves."
+      + " `matches: []` is the ONLY answer that licenses shopping_domain_create, and a"
+      + " non-ok status is not an empty one. At most two reads per domain, then"
+      + " shopping_domain_get for the document and the keys of the path you take.",
+  },
+  {
+    name: "shopping_domain_get",
+    ...DOMAIN_GET_ROUTE,
+    label: "Read a domain's document and keys",
+    recovery: { not_found: "shopping_domain_search" },
+    description:
+      "sil's own document on how this thing is bought well — read it before you ask the"
+      + " buyer anything, and again when a want fits no key: the document GROWS as sil reads"
+      + " pages. `guide` is markdown: what it is bought on, what goes wrong and what that"
+      + " costs the buyer, what to trust, and what buying it online takes. `name` is its one"
+      + " English name and `labels` the market's own words for it — read them, never send"
+      + " them. `specs` are the keys it is bought by and `seller_specs` the seller terms it"
+      + " is bought with; one read hands you both. Each key's `description` says how that"
+      + " key moves the fit: what it decides, what goes wrong at either end, and how a"
+      + " buyer's own fact becomes its value. Each key states its type, its operators, its"
+      + " unit, any closed set, the `step` a number moves by, and `forms` — what pages"
+      + " print, mapped to the value. Send that key and one of those operators, never a"
+      + " synonym you coined: `specs` go on the brief and to shopping_search,"
+      + " `seller_specs` on the brief's `seller` domain, where shopping_offers reads"
+      + " them. variant_spec marks the key an option is picked on (a size, a"
+      + " colour), answered under each product's variants; product_spec tells one product"
+      + " from the next. The root `product` always stands and carries the universals every"
+      + " domain inherits; a path that does not stand answers not_found, and the recovery is"
+      + " to read the registry again in their words.",
+  },
+  {
+    name: "shopping_domain_create",
+    method: "POST",
+    path: "/catalog/domains",
+    label: "Write a domain sil does not hold",
+    // A colliding path means the vocabulary is already there, so search that same path.
+    recovery: { already_exists: "shopping_search" },
+    description:
+      "The FALLBACK, and the one permanent global write in sil: a curated domain already"
+      + " carries a document, and this writes one for a domain it does not hold. First: a"
+      + " shopping_domain_search read that came back `matches: []`, and research on how the"
+      + " domain is bought (never products). Hang the leaf where the `tree` shows its"
+      + " family: different keys are a different leaf, another value of the same keys is a"
+      + " value. `guide` is markdown every later buyer inherits: what the thing is bought"
+      + " on, what goes wrong and what that costs the buyer, and what buying it online takes"
+      + " — never \"go to a shop\". Each key's `description` does the same for one key. `name`"
+      + " is its one English name, `labels` the words shops print; a spec carries `step`,"
+      + " the increment its numbers move by, and `forms`, a printed form mapped to its"
+      + " value. Mark variant_spec on the key an option is picked on, product_spec on one"
+      + " telling products apart. Coin only keys a PRODUCT is bought by: seller terms are"
+      + " never yours to coin, and shopping_domain_get answers them as `seller_specs`. You"
+      + " inherit every ancestor's key and may not rename one: re-declare only to change its"
+      + " unit, values or mark for your subtree; stating nothing new it answers `inherited:"
+      + " true`, and a key naming a standing one binds and answers `bound_from`. A refusal"
+      + " names the standing thing and the fix.",
+  },
+  {
+    name: "shopping_brief_create",
+    method: "POST",
+    path: "/briefs/create",
+    label: "Open the session's brief",
+    description:
+      "Once per SESSION: open the one brief this conversation works from — across"
+      + " every domain the buyer asks about, never one per domain — and hold the `id`"
+      + " it answers for the rest of the session, because every search and every offers"
+      + " call names it. A new chat opens its own AFTER shopping_brief_read has shown what"
+      + " is on file: carry every spec an earlier brief still holds true into this one, then"
+      + " name that carry in the first shopping_brief_edit `decision`. `title` names the job"
+      + " in a few words. `narrative` is the spec of the buy in the buyer's own terms — what"
+      + " a good buy looks like for THEM, what it has to do for them, what would make it a"
+      + " bad one — and a want no keyed spec can carry lives there and still counts. An"
+      + " optional first `domain` with `specs` writes what they have already said: a"
+      + " domain path carries that domain's product specs, `seller` carries the seller"
+      + " specs, and each spec is a key and an operator shopping_domain_get listed whose"
+      + " `reason` quotes the buyer VERBATIM — their own words, or the measurement the"
+      + " guide converted — never a paraphrase and never a want they did not state. On"
+      + " anything worn, the `gender` sil_whoami holds is a product spec in the registry's"
+      + " own spelling — male → `gender eq mens`, female → `gender eq womens` — asked once"
+      + " where the profile answers none or `other`, and never inferred. Everything after"
+      + " this is shopping_brief_edit.",
+  },
+  {
+    name: "shopping_brief_edit",
+    method: "POST",
+    path: "/briefs/edit",
+    label: "Write a want or a decision into the brief",
+    // The id is the only thing a 404 can be about here, and the bare read lists what is.
+    recovery: { not_found: "shopping_brief_read" },
+    description:
+      "The brief's write: put every want the buyer states into the brief as it is settled,"
+      + " with `reason` quoting their own words VERBATIM — never a"
+      + " paraphrase, never a want they did not state. A want that reaches"
+      + " no brief is a want the next call drops. A MEASUREMENT is never the spec: 27.2 cm is"
+      + " the buyer's, and the spec is the size the thing is sold in —"
+      + " `mondo_size in [27, 27.5]`, with that measurement as its `reason`; the key's"
+      + " `description` says how one becomes the other."
+      + " One write per `domain`: a domain path carries"
+      + " that domain's product specs, `price` among them, and `seller` carries the"
+      + " seller specs, which belong to the whole brief. `specs` REPLACE every spec on the"
+      + " keys they name — a range is the two rows on its key — `remove` names the keys"
+      + " whose specs go, and `narrative` replaces the whole narrative. When the buyer"
+      + " changes their mind — and only then — send the new spec together with `decision`:"
+      + " one sentence ABOUT them, never in their voice, saying what they changed and"
+      + " why. A new want's words are its spec's `reason`, never a `decision`, and never a"
+      + " log of what you have just written down."
+      + " Send `status: \"closed\"` when the job is over. An"
+      + " invalid_request names the key and shows a spec on it that passes — fix that row"
+      + " and send it again, and never give the want up. A brief id that is not the"
+      + " buyer's answers not_found; shopping_brief_read with no `id` lists their briefs.",
+  },
+  {
+    name: "shopping_brief_read",
+    method: "POST",
+    path: "/briefs/read",
+    label: "Read the brief, or list the buyer's briefs",
+    description:
+      "The first read of a new chat: with no `id` it answers the buyer's briefs,"
+      + " newest first, each with its title, its domains and when it was last written."
+      + " Call it with sil_whoami before you ask the buyer anything, so a job already"
+      + " under way is continued rather than interviewed a second time. With an `id` it"
+      + " answers that brief whole: the title, the narrative, every spec under the domain"
+      + " it sits on (`seller` for the seller specs), and the decisions already taken with"
+      + " the time of each. What comes back is a READ: it says what the buyer has already"
+      + " settled so you ask none of it again, and the specs still true are carried into"
+      + " this session's own brief with shopping_brief_create — the search runs on that"
+      + " one, never on an earlier session's. New wants go in through shopping_brief_edit.",
+  },
+  {
+    name: "shopping_profile_edit",
+    method: "POST",
+    path: "/profile/edit",
+    label: "Write what is true of the buyer",
+    description:
+      "The person rather than the job: write what is true of the buyer whatever"
+      + " they are buying, the moment they say it and BEFORE the next search — only what"
+      + " they stated UNAMBIGUOUSLY about themselves. A phrase that could mean two things"
+      + " (\"wide forefoot and bit short\" — the foot, or the buyer?) is asked about, never"
+      + " written here, because a lasting fact written wrong follows them into every"
+      + " domain. Every `name` is lower snake_case: `foot_length`, never \"foot length\"."
+      + " A"
+      + " `measurements` entry is a number with its `unit`, or a size exactly as it is"
+      + " printed; a `preferences` entry is a lasting taste in the buyer's own words."
+      + " An entry replaces the one of the same `name`, and `remove` names the entries"
+      + " that stopped being true. `currency` is the ISO 4217 code they price in, and"
+      + " every money row naming none means it: \"my prices in dollars from now on\" is"
+      + " `currency: \"USD\"`, which changes which offers come first and never a price —"
+      + " sil converts nothing. sil_whoami reads all of it back, so a fact written here"
+      + " is one you never ask for again. What belongs to THIS job — a budget, a size for"
+      + " these boots — is the brief's, through shopping_brief_edit: a measurement is the"
+      + " buyer's, and the spec the domain's guide turns it into carries that"
+      + " measurement as its `reason`.",
+  },
+  {
+    name: SEARCH_TOOL,
+    method: "POST",
+    path: "/catalog/search",
+    label: "Search sil in one settled domain",
+    // A 404 here is the `brief` id and nothing else: a domain that does not stand is
+    // refused as `invalid_request`, naming the path.
+    recovery: { not_found: "shopping_brief_read" },
+    description:
+      "The products that fit the brief, in one settled domain. Search as often as the job"
+      + " needs — a re-worded `query`, a different `n` — it is cheap and it is how you learn"
+      + " what is out there. Send `brief` (the session's brief id) on EVERY call,"
+      + " the domain path, and `query` — the thing as a shop lists it and the numbers"
+      + " that pick the product, never a sentence; a budget, a market, a unit, a standard's"
+      + " name, \"in stock\" and \"online\" are specs, and cost most of the offers."
+      + " `n` counts VARIANTS — one size, one option — max 10. `specs`: every product"
+      + " spec the brief holds for this domain, all of them and UNCHANGED — never a looser"
+      + " bound, never one it does not hold — money a decimal STRING (`\"300\"`, never 300)."
+      + " The brief's `seller` specs are shopping_offers' to read off the brief, never on"
+      + " the search. Keep the server's order, never re-rank; quote each variant's OWN"
+      + " `price` with its size. `fit` answers the ask key by key: the value sil verified,"
+      + " or \"unknown\" where it holds none — a gap to dig into with shopping_product_get,"
+      + " never a failed one."
+      + " `host` is the shop; `printed` is that page's own pairs, never verified —"
+      + " say \"the page says\". A `variants` entry with no option"
+      + " values is a listing whose sizes sil has not read: say so — it prices like any"
+      + " other. sil never says what it left out, so a want left off `specs` is one you will"
+      + " not know you missed.",
+  },
+  {
+    name: "shopping_product_get",
+    method: "POST",
+    path: "/catalog/product",
+    label: "Read the whole dossier on a shortlisted variant",
+    description:
+      "The dossier: send 1–10 variant ids from a shopping_search answer and get"
+      + " the whole of what sil holds for each — the title, the maker, the page's own"
+      + " description, the images, every key sil holds for it (not only the ones you"
+      + " asked about), and `sources` naming which site each reading came from and when."
+      + " This is where a key the search answered \"unknown\" is dug out. A variant with no"
+      + " option values is a listing whose sizes sil has not read, and its id opens here"
+      + " like any other: the answer carries that page whole, so the sizes it prints are"
+      + " the page's own words — say the size is unread, never that it is in stock."
+      + " Compare the shortlist on this before recommending, and quote a source's date"
+      + " rather than implying sil read it just now. An id sil cannot place is simply"
+      + " absent from the answer — say that listing could not be placed, and never"
+      + " substitute another product. Ids are opaque: pass them back exactly as sil"
+      + " minted them, and never read one.",
+  },
+  {
+    name: "shopping_offers",
+    method: "POST",
+    path: "/catalog/offers",
+    label: "List who sells a variant, at what price and on what terms",
+    // Same as the search: the only 404 this route answers is a brief that is not
+    // the buyer's.
+    recovery: { not_found: "shopping_brief_read" },
+    description:
+      "Who sells it, at what price, on what terms — the only live read of a price."
+      + " Worth a call once the buyer wants something: pricing a whole shortlist buries the"
+      + " fit answer they asked for. Send `brief` (the session's brief id) and 1–10 picked"
+      + " variant ids, and nothing else: sil reads the brief's `seller` specs, its `price`"
+      + " ceiling, the buyer's default address and their currency itself, so a seller term"
+      + " the buyer states goes on the brief. The first three picks are also looked for on"
+      + " the web, so put the one they want first; the rest answer from shops sil holds. A"
+      + " variant with no option values is priced as its page prints. An offer is the pick"
+      + " at one shop, read live: the seller, the price in its own currency (sil converts"
+      + " nothing), its availability, the listing URL, `observed_at`, and `seller_fit`:"
+      + " `ships` always — serviceable, not_serviceable or unknown for that address — and"
+      + " each brief seller key where sil holds the seller's value. An offer over the"
+      + " brief's price in that price's currency is left out; one in another currency was"
+      + " not tested against it — say so. `unknown` keeps the offer: say sil could not"
+      + " confirm shipping. A key absent from `seller_fit` is a term sil has not read. The"
+      + " order is the buyer's currency and market first, then sellers known to reach them,"
+      + " then the rest — keep it, never re-rank. Several offers ARE the price spread, and"
+      + " the spread is the answer.",
+  },
+  {
+    name: "shopping_seller_get",
+    method: "POST",
+    path: "/catalog/sellers",
+    label: "Read one seller's whole terms",
+    description:
+      "One seller's WHOLE terms: send 1–10 seller ids from shopping_offers, and"
+      + " nothing else. Each seller comes back with its name, host and country, `specs` —"
+      + " every seller key sil holds a value for, base and branch, as the dossier's `specs`"
+      + " are a product's — and `ships`, which answers for the buyer's default address:"
+      + " serviceable (sil read a route covering it), not_serviceable (sil read this"
+      + " seller's policy and it excludes it), or unknown (sil has read nothing about this"
+      + " seller). `unknown` is an ordinary answer that keeps the seller — say sil could not"
+      + " confirm shipping, and hand the buyer the listing; an empty `specs` is the same"
+      + " answer about its terms. Where sil has read them, `shipping` carries the routes"
+      + " with their cost, free-over threshold and days, and `returns` the window and any"
+      + " restocking fee; a term the page never stated is simply absent, which is never zero"
+      + " and never free. A `policy_url` of null means the terms were read off a product"
+      + " page and sil holds no policy page. This is the details read: whether an offer"
+      + " meets the buyer's own seller rows is `seller_fit` on that offer, from"
+      + " shopping_offers.",
+  },
+] as const satisfies readonly ShoppingTool[];
+
+/** The eleven names, as a literal union — so a table of one-per-tool anything is forced
+ * to cover them all rather than quietly covering ten. */
+export type ShoppingToolName = (typeof SHOPPING_TOOLS)[number]["name"];
+
 /**
- * The TIGHTENED ship-to format contract (founder re-spec 2026-06-11), pinned as a
- * `pattern` BOTH the local schema and sil-api's `@sil/schemas` `ShipTo` enforce
- * IDENTICALLY (byte-for-byte) — so the plugin rejects a malformed value client-side
- * instead of forwarding free text and eating an opaque, fail-late sil-api 400. These
- * same patterns are the schema `pattern` (so the host validates) AND the read-site
- * format gate (so a drifted on-disk call is rejected), defined once here to keep the
- * two in lockstep. The sil-services sibling
- * (`attach-buyer-ship-to-context-server-side-in-sil-ap`) MUST mirror these exactly;
- * the sil-stage eval verifies it end-to-end.
- *   - country (ships_to): ISO 3166-1 alpha-2, a 2-letter code.
- *   - region: ISO 3166-2 subdivision code (CA/NY/BY/97), bounded — NOT a place name.
- *   - postal_code: a single self-contained pattern (a length-cap lookahead 2–12
- *     chars, separators counted, + a structural body of alnum runs joined by single
- *     internal space/hyphen, no leading/trailing/doubled separator) — accepts real
- *     national formats (94107 / EC1A 1BB / K1A 0B1), rejects prose/injection/overlong.
+ * Registers the eleven, reading each one's request artifact off disk as it goes.
+ *
+ * That read is the ONE exception to "register() opens nothing": eleven synchronous
+ * `readFileSync`s that return immediately and hold no resource open, exactly as
+ * `ensureDataDir`'s `mkdirSync` does. It is deliberately eager — an unreadable artifact
+ * is a broken build, and failing loud at load beats a tool whose `parameters` the host
+ * has already published by the time anyone finds out.
  */
-const COUNTRY_PATTERN = "^[A-Za-z]{2}$";
-const REGION_PATTERN = "^[A-Za-z0-9]{1,3}$";
-const POSTAL_PATTERN = "^(?=[A-Za-z0-9 -]{2,12}$)[A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*$";
-
-/** The `sil_specs` coined-definition schema. Unlike the search predicate's `value`
- * (an op→value read-site rule the schema can't express), a `SpecDefinition` is
- * FULLY TypeBox-expressible — a closed `data_type` union of four literals plus
- * `minLength:1` identity fields and optional context — so the host validates the
- * shape directly. Mirrors `@sil/schemas` `SpecDefinition` (the frozen wire contract). */
-const SPEC_DEFINITION_SCHEMA = Type.Object({
-  namespace: Type.String({
-    minLength: 1,
-    description:
-      "The spec NAMESPACE (e.g. \"product\", \"seller\", \"shipping\") — a free"
-      + " string coined bottom-up; NOT dotted with the key.",
-  }),
-  key: Type.String({
-    minLength: 1,
-    description:
-      "The spec KEY within the namespace (e.g. \"waterproof_rating\","
-      + " \"rating_average\") — a free string coined bottom-up.",
-  }),
-  display_name: Type.String({
-    minLength: 1,
-    description: "A short human label for the spec (e.g. \"Waterproof rating\").",
-  }),
-  data_type: Type.Union(
-    [
-      Type.Literal("number"),
-      Type.Literal("text"),
-      Type.Literal("boolean"),
-      Type.Literal("enum"),
-    ],
-    {
-      description:
-        "The spec's value type: number, text, boolean, or enum (use enum with"
-        + " allowed_values for a closed set).",
-    },
-  ),
-  description: Type.Optional(
-    Type.String({
-      description:
-        "Optional prose describing what the spec means — sharpens the registry's"
-        + " dedupe (a clearer definition reduces false matches).",
-    }),
-  ),
-  unit: Type.Optional(
-    Type.String({
-      description: "Optional unit for a numeric spec (e.g. \"mm\", \"GB\", \"days\").",
-    }),
-  ),
-  allowed_values: Type.Optional(
-    Type.Array(Type.String(), {
-      description: "For an enum spec, the closed set of permitted values.",
-    }),
-  ),
-});
-
 export function registerCatalogTools(api: PluginAPI): void {
-  registerSearch(api);
-  registerProductGet(api);
-  registerSpecs(api);
+  for (const tool of SHOPPING_TOOLS) api.registerTool(defineTool(api, tool));
 }
 
-function registerSearch(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_search",
-    label: "Search the sil catalog",
-    description:
-      "Search sil's catalog for purchasable products. Pass a free-text `query`"
-      + " and/or filters (`category`, `price_min`/`price_max` in the currency's"
-      + " minor units, e.g. cents). Returns a ranked list (best match first —"
-      + " present results in order, do not re-rank), each item a purchasable"
-      + " variant with id, title, price, availability, checkout_url, and source,"
-      + " plus (where the source provides them) the evaluate-before-buy fields:"
-      + " product and variant `url`, a short `description`, `media`, the product"
-      + " `options` (the menu of choices), the `seller` (with policy/info links),"
-      + " and arbitrary `metadata`. THREE DISTINCT ACTIONS the agent must not"
-      + " conflate: (1) VIEW — a product's or variant's `url` opens the PAGE to"
-      + " view / learn more; hand it to the user to SEE the item, it is NOT a"
-      + " purchase. (2) DIG IN — `seller.links` are the seller's policy / info"
-      + " links (refund policy, shipping policy, terms); follow one to answer"
-      + " \"what's their return policy?\" without a web search. (3) BUY —"
-      + " `checkout_url` is the variant permalink that commits the purchase; use it"
-      + " ONLY to buy. A variant's `url` and its `checkout_url` are DIFFERENT"
-      + " targets: `url` is the page (view / learn more) whereas `checkout_url`"
-      + " buys — never hand back `checkout_url` for a \"show me / learn more\""
-      + " intent, and never stall on `url` when the user said \"buy\"."
-      + " Use the returned `cursor` to fetch the next page (its absence means no"
-      + " more results — never infer end-of-results from the page size). An empty"
-      + " result list means nothing matched (a normal outcome, not an error)."
-      + " For the location filters, ALWAYS send standard ISO CODES, NOT free text or"
-      + " natural-language place names — send the 2-letter country code \"US\", never"
-      + " the name \"United States\"; send the subdivision code \"CA\", never the place"
-      + " name \"California\". A free-text name is rejected; the code is not."
-      + " Delivery destination: LEAVE `ship_to` EMPTY for \"ship to me\" — when it is"
-      + " absent, sil-api resolves the user's REGISTERED DEFAULT ADDRESS server-side"
-      + " and localizes results to it. Do NOT call sil_whoami (or any identity read)"
-      + " to fetch the user's address and put it in `ship_to` — that round-trip is"
-      + " wasted work and yields the same result as omitting it. Set `ship_to` ONLY"
-      + " to OVERRIDE the default — to ship to a DIFFERENT destination than the"
-      + " user's registered address (e.g. \"ship it to my office in Berlin\"). Its"
-      + " fields: `country` = the 2-letter ISO 3166-1 alpha-2 code (US, GB, DE — a"
-      + " code, NOT a country name); `region` (optional) = the ISO 3166-2 subdivision"
-      + " code (CA, NY, BY — a code, NOT a place name); `postal_code` (optional) ="
-      + " the destination postal/ZIP code. The other optional filters need no prior"
-      + " tool call: `condition` (array; the values are exactly \"new\" or"
-      + " \"secondhand\", lowercase) filters by product condition; `available`"
-      + " (boolean) controls availability — the server returns only sale-ready items"
-      + " by default, so set `available: false` to INCLUDE out-of-stock/unavailable"
-      + " items. `local_merchants` (boolean) is a BEST-EFFORT BIAS toward shops based"
-      + " in the user's OWN country (home-country / domestic / local sellers) — set it"
-      + " ONLY when the shopper asks for local/domestic shops; it nudges local shops up"
-      + " the ranking but does NOT restrict results to them, so never tell the user the"
-      + " results are all local. To surface MORE local shops you MAY also issue the"
-      + " `query` in that country's language (a Greek-language query surfaces Greek"
-      + " shops) — optional, and never an override of a language the user deliberately"
-      + " chose; pass NO country — sil resolves it server-side. `specs` is the"
-      + " STRUCTURED requirement channel — a list of typed predicates ({ ns, key, op,"
-      + " value, unit?, hard? }) for the OPEN LONG-TAIL of attributes that have no"
-      + " dedicated param (e.g. product.capacity_gb, seller.rating_average,"
-      + " shipping.delivery_max_days). PREFER A DEDICATED PARAM OVER A `specs`"
-      + " PREDICATE FOR THE SAME ATTRIBUTE: route price to price_min/price_max,"
-      + " category to category, condition to condition, availability to available,"
-      + " and the delivery destination to ship_to — never send both a dedicated"
-      + " param and a `specs` predicate for the one attribute (that risks an"
-      + " over-narrow or divergent result). Mark a predicate `hard: true` when the"
-      + " requirement is inviolable. Requires registration (run"
-      + " sil_register first).",
-    parameters: Type.Object({
-      query: Type.Optional(
-        Type.String({
-          description:
-            "Free-text search query. Either this or at least one filter is required.",
-        }),
-      ),
-      category: Type.Optional(
-        Type.String({
-          description: "Restrict results to a single product category.",
-        }),
-      ),
-      price_min: Type.Optional(
-        Type.Integer({
-          minimum: 0,
-          description: "Minimum price, in the currency's ISO 4217 minor unit (e.g. cents).",
-        }),
-      ),
-      price_max: Type.Optional(
-        Type.Integer({
-          minimum: 0,
-          description: "Maximum price, in the currency's ISO 4217 minor unit (e.g. cents).",
-        }),
-      ),
-      cursor: Type.Optional(
-        Type.String({
-          description: "Opaque pagination cursor from a prior search's result.",
-        }),
-      ),
-      limit: Type.Optional(
-        Type.Integer({
-          minimum: 1,
-          description:
-            "Requested maximum number of results. The server may return fewer.",
-        }),
-      ),
-      ship_to: Type.Optional(
-        Type.Object(
-          {
-            country: Type.String({
-              pattern: COUNTRY_PATTERN,
-              description:
-                "Destination country as a 2-letter ISO 3166-1 alpha-2 CODE (US, GB,"
-                + " DE) — a code, NOT a country name (\"United States\" is rejected).",
-            }),
-            region: Type.Optional(
-              Type.String({
-                pattern: REGION_PATTERN,
-                description:
-                  "Destination region as an ISO 3166-2 subdivision CODE (CA, NY, BY)"
-                  + " — a code, NOT a place name (\"California\" is rejected). Optional.",
-              }),
-            ),
-            postal_code: Type.Optional(
-              Type.String({
-                pattern: POSTAL_PATTERN,
-                description:
-                  "Destination postal/ZIP code (e.g. 94107, EC1A 1BB, K1A 0B1)."
-                  + " Optional refinement.",
-              }),
-            ),
-          },
-          {
-            description:
-              "Deliver-to destination for serviceability + localization. LEAVE EMPTY"
-              + " for \"ship to me\": when absent/omitted, sil-api uses the user's"
-              + " REGISTERED DEFAULT ADDRESS (resolved server-side) — do NOT call"
-              + " sil_whoami to fetch and resubmit it. Set this ONLY to OVERRIDE the"
-              + " default with a DIFFERENT destination than the registered address."
-              + " Send ISO CODES, never free-text place names.",
-          },
-        ),
-      ),
-      local_merchants: Type.Optional(
-        Type.Boolean({
-          description:
-            "Bias results toward shops based in the USER'S OWN country (home-country"
-            + " / domestic / local sellers) — set true ONLY when the shopper asks for"
-            + " local or domestic shops (e.g. \"buy from a Greek shop\", \"support"
-            + " local businesses\"). This is a BEST-EFFORT BIAS, NOT a filter: it"
-            + " nudges local shops up the ranking but does NOT restrict results to them"
-            + " and does NOT guarantee every result is local — some local shops won't"
-            + " be detected and some non-local shops may still appear, so never tell"
-            + " the user the results are all local sellers. To surface MORE local"
-            + " shops you MAY also issue the `query` in that country's language (a"
-            + " Greek-language query surfaces Greek shops; an English query will not)"
-            + " — optional, never overriding a language the user deliberately chose. You pass NO"
-            + " country — sil resolves the user's country server-side from their"
-            + " registered address, so do NOT call sil_whoami or pass a country. Omit"
-            + " (or false) for the normal unbiased ranking.",
-        }),
-      ),
-      condition: Type.Optional(
-        Type.Array(Type.String(), {
-          description:
-            "Filter by product condition. The values are exactly \"new\" or"
-            + " \"secondhand\" (lowercase; multiple are OR'd). Omit for no condition"
-            + " filter.",
-        }),
-      ),
-      available: Type.Optional(
-        Type.Boolean({
-          description:
-            "Availability filter. The server returns only sale-ready items by"
-            + " default; set false to INCLUDE unavailable/out-of-stock items. Omit"
-            + " to keep the default (available only).",
-        }),
-      ),
-      specs: Type.Optional(
-        Type.Array(
-          Type.Object({
-            ns: Type.String({
-              description:
-                "The predicate NAMESPACE (e.g. \"product\", \"seller\", \"shipping\")"
-                + " — a free string, coined bottom-up; NOT dotted with the key.",
-            }),
-            key: Type.String({
-              description:
-                "The predicate KEY within the namespace (e.g. \"capacity_gb\","
-                + " \"rating_average\") — a free string, coined bottom-up.",
-            }),
-            op: Type.Union(
-              [
-                Type.Literal("eq"),
-                Type.Literal("neq"),
-                Type.Literal("gte"),
-                Type.Literal("lte"),
-                Type.Literal("in"),
-                Type.Literal("nin"),
-                Type.Literal("exists"),
-              ],
-              {
-                description:
-                  "The comparison operator. `gte`/`lte` need a number `value`;"
-                  + " `in`/`nin` need an array `value`; `eq`/`neq` need a scalar"
-                  + " `value`; `exists` takes NO `value`.",
-              },
-            ),
-            value: Type.Optional(
-              Type.Union(
-                [
-                  Type.Number(),
-                  Type.String(),
-                  Type.Boolean(),
-                  Type.Array(Type.Union([Type.String(), Type.Number()])),
-                ],
-                {
-                  description:
-                    "The compared value, matching the op (omit it for `exists`).",
-                },
-              ),
-            ),
-            unit: Type.Optional(
-              Type.String({
-                description:
-                  "The value's unit (e.g. \"mm\", \"GB\", \"days\") — optional context"
-                  + " carried on the wire.",
-              }),
-            ),
-            hard: Type.Optional(
-              Type.Boolean({
-                description:
-                  "Set true when the requirement is INVIOLABLE (a hard constraint the"
-                  + " result must satisfy), false/omit for a soft preference.",
-              }),
-            ),
-          }),
-          {
-            description:
-              "Structured requirement predicates for the OPEN LONG-TAIL of attributes"
-              + " with no dedicated param (product.capacity_gb, seller.rating_average,"
-              + " shipping.delivery_max_days). Each { ns, key, op, value, unit?, hard? }"
-              + " rides the request under one namespaced `filters.specs` key. PREFER a"
-              + " dedicated param (price_min/price_max, category, condition, available,"
-              + " ship_to) over a `specs` predicate for the SAME attribute — never send"
-              + " both. Omit when there are no structured requirements.",
-          },
-        ),
-      ),
-    }),
+function defineTool(api: PluginAPI, tool: ShoppingTool): ToolDefinition {
+  return {
+    name: tool.name,
+    label: tool.label,
+    description: tool.description,
+    parameters: requestSchema(tool.name),
     async execute(callId, params) {
-      // 1 — not registered: terminal, zero network calls.
-      const stored = readTokens();
-      if (stored === null) {
-        return notRegistered("sil_search");
+      const called = await callRoute(api, tool, params);
+      if (called.kind === "refused") {
+        if (tool.name === SEARCH_TOOL) skipped(api, callId, `refused:${called.status}`);
+        return called.result;
       }
-
-      // Narrow the untrusted params (the SDK types `params` as
-      // Record<string, unknown>; the host validates against the schema, but the
-      // read site still guards — mirrors the defensive narrowing in sil-client).
-      // A present-but-malformed location filter (bad FORMAT, not wrong type) is
-      // rejected client-side BEFORE the input guard or any network call — a clear
-      // `invalid_filter` beats an opaque, fail-late sil-api 400 (re-spec).
-      const read = readSearchParams(params);
-      if (read.kind === "invalid") {
-        if (read.code === "invalid_spec") {
-          api.logger.info("sil_search_invalid_spec", { field: read.field });
-          return invalidSpec(read.field);
-        }
-        api.logger.info("sil_search_invalid_filter", { field: read.field });
-        return invalidFilter(read.field);
-      }
-      const search = read.params;
-
-      // 2 — client-side input guard: reject the obviously-empty request before
-      // any network call. A filter-only request is a valid browse, not rejected.
-      // (The new location filters are REFINEMENTS, not inputs — `hasUsableInput` is
-      // unchanged, so a request of only-new-args is rejected as empty input.)
-      if (!hasUsableInput(search)) {
-        return invalidInput();
-      }
-
-      // 3 — search; on a 401 refresh-and-retry ONCE via the shared choreography
-      // (the SAME path sil_whoami / sil_product_get use — 401 recovery is uniform
-      // across every sil-api-calling tool, never per-tool).
-      const first = await searchCatalog(getApiUrl(), stored.access_token, search);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => searchCatalog(getApiUrl(), accessToken, search),
-      );
-      switch (recovered.kind) {
-        case "result":
-          // On a silent recovery (`refreshed`: a 401 was healed by the refresh+retry)
-          // emit the operator marker so a thrashing session is visible in logs —
-          // logs-only, no token material, NOT a payload field (the agent never sees it).
-          if (recovered.refreshed) api.logger.info("sil_search_refreshed", {});
-          // Buffer the page for a paired client to pull by this exact `callId`
-          // (`sil.search_results`). A PURE SIDE EFFECT: the envelope returned
-          // below is byte-identical to what every channel got before this
-          // existed — no reference, no flag, no listener check. Only `ok` is
-          // stored; the other outcomes steer the agent's recovery and carry no
-          // product data to deliver. `advisories` stay OFF the stored page —
-          // they are operator/agent copy, not products.
-          if (recovered.outcome.kind === "ok") {
-            const { kind: _kind, ...page } = recovered.outcome;
-            const principal = readConfig()?.user?.id;
-            if (principal !== undefined) {
-              putSearchResult(callId, { status: "ok", ...page }, principal);
-            }
-          }
-          return mapSearchOutcome(api, recovered.outcome);
-        case "must_reregister":
-          // A dead refresh token (invalid_grant) is cleared so the agent's
-          // sil_register recovery is not blocked by stale presence; a TOCTOU
-          // empty re-read (no_stored_tokens) has nothing to clear.
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_search_must_reregister", { cause: recovered.reason });
-          return mustReregister("sil_search");
-        case "second_unauthorized":
-          // A freshly-rotated token STILL rejected is structurally dead — clear it.
-          clearTokens();
-          api.logger.info("sil_search_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister("sil_search");
-        case "retryable":
-          api.logger.info("sil_search_refresh_retryable", {});
-          return transient("sil_search");
-      }
+      if (tool.name === SEARCH_TOOL) bufferPage(api, callId, called.body);
+      // VERBATIM, and the advisory rides its own block: the body's keys are the API's
+      // contract, so nothing of ours may sit beside them.
+      return jsonResult(called.body, ...wiringAdvisoryBlocks(api));
     },
-  });
-}
-
-/** Map a search outcome that has ALREADY cleared the 401-recovery path (so it is
- * never `unauthorized` — that is the refresh trigger, handled by the caller via
- * {@link refreshAndRetryOnce}) to the agent-facing envelope. The `unauthorized`
- * arm is structurally unreachable but kept exhaustive so a future refactor can't
- * silently drop a variant — it falls to the same terminal re-register. */
-function mapSearchOutcome(api: PluginAPI, outcome: SearchOutcome) {
-  switch (outcome.kind) {
-    case "ok":
-      return searchResult(api, outcome);
-    case "forbidden":
-      // A 403 surfaces the SAME forbidden envelope `sil_whoami` emits — never the
-      // false-transient `retryable`. On `user_not_provisioned` (and ONLY that exact
-      // reason) the held token maps to no account on this backend and a refresh
-      // cannot help — structurally dead, like the invalid_grant/second_unauthorized
-      // clears below — so clear it HERE (the tool call site, never the pure
-      // classifier) and the next sil_register re-onboards instead of short-circuiting
-      // to already_registered. A `principal_mismatch` / unknown reason can be
-      // transient and stays recoverable — it MUST NOT clear (the exact-equality gate
-      // is the correctness boundary: a startsWith/truthy check would wrongly wipe a
-      // good session).
-      api.logger.warn("sil_search_forbidden", { reason: outcome.reason });
-      if (outcome.reason === "user_not_provisioned") clearTokens();
-      return forbidden(outcome.reason);
-    case "invalid_request":
-      api.logger.info("sil_search_invalid_request", { error: outcome.error });
-      return invalidRequest(outcome.error, outcome.message);
-    case "retryable":
-      // A source-attributed 5xx names the failed source (outcome b); a sil/network
-      // blip carries no source and stays the generic copy (outcome a). The log marker
-      // records the source when present so a flaky source is visible to operators.
-      api.logger.info("sil_search_retryable", outcome.source ? { source: outcome.source } : {});
-      return transient("sil_search", outcome.source, outcome.detail);
-    case "unauthorized":
-      return mustReregister("sil_search");
-  }
+  };
 }
 
 /**
- * `sil_product_get` — the lookup COMPANION to `sil_search`. The agent passes ids
- * it already holds (from a prior `sil_search`, a saved list, deep links, or cart
- * validation) and gets back the matching products in UCP shape, each with its
- * FRESH featured variant `{ id, title, price, availability, checkout_url, ... }`.
- * RICH where search is LEAN: lookup adds the description, the variant's options,
- * and — its defining feature — the per-variant `inputs` correlation, because the
- * response does NOT preserve request order and one id can resolve to a variant of
- * another id's product. The agent builds no envelope and fills no defaults; the
- * tool sends just `{ ids }`, sil-api owns enrichment + the `not_found` messaging.
- *
- * `execute()` flow (ALL I/O here; `register()` opens nothing — a synchronous
- * request/response, NOT a poll). MIRRORS `sil_search` and shares its taxonomy:
- *   1. Not registered (no stored tokens) → terminal `not_registered` + a
- *      `recovery: sil_register` hint, ZERO network calls. Mirrors `sil_whoami`.
- *   2. Client-side guard: an empty `ids` (after dropping non-strings) is rejected
- *      with a structured validation error and NO network call (sil-api's
- *      `minItems:1` schema 400 is the authoritative backstop).
- *   3. lookupCatalog(getApiUrl(), token, ids) → map the `LookupOutcome`:
- *        ok            → the resolved products + the `not_found` id list (a PARTIAL
- *                        or ALL-MISSED hit is `status:"ok"` — a SUCCESS, never an
- *                        error, with NO recovery hint: re-running won't conjure a
- *                        delisted product);
- *        invalid_request (400) → surface sil-api's `{ error, message }`;
- *        unauthorized  (401)   → refresh-and-retry ONCE via the shared
- *                                `refreshAndRetryOnce` choreography (parity with
- *                                `sil_search` and `sil_whoami` — 401 recovery is
- *                                uniform). Recovered 401 is invisible; second 401 /
- *                                dead refresh is terminal re-register (tokens
- *                                cleared); a refresh 5xx/network blip is transient;
- *        retryable (5xx/net)   → transient "try again", NO re-register hint.
- *
- * The unfound-ids outcome is the headline: a lookup that resolves SOME (or NONE)
- * of its ids is a success the agent relays ("3 of your 4 items are still
- * available; 1 is no longer listed"), distinguished from the two true-error
- * classes (not-registered/401 and source/transport failure) by DISTINCT recovery
- * hints. One wrong hint = one misdirected user.
- *
- * Privacy + freshness: the session token and Bearer header never reach a log line
- * or the result; the products are always live-fetched (never cached — freshness is
- * the reason this tool exists; a cached `checkout_url`/price is a broken purchase).
+ * Buffer an `ok` search page for a paired client to pull by this exact `callId`
+ * (`sil.search_results`). A PURE SIDE EFFECT: the result returned to the agent is
+ * byte-identical to what every channel got before this existed. Only a body that
+ * actually carries its `products` list is stored — the pull surface counts it.
  */
-function registerProductGet(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_product_get",
-    label: "Look up sil products by id",
-    description:
-      "Look up sil products or variants by id — the companion to sil_search."
-      + " Pass `ids` (one or more product/variant ids you already hold, e.g. from"
-      + " a prior sil_search result) and get the matching products back with FRESH"
-      + " detail: each product's description plus its featured purchasable variant"
-      + " (id, title, price, availability, checkout_url, options), and — where the"
-      + " source provides them — the same evaluate-before-buy fields sil_search"
-      + " surfaces: product and variant `url`, `media`, the product `options` menu,"
-      + " the `seller` (with policy/info links), and `metadata`. The SAME three"
-      + " distinct actions apply: (1) VIEW — a product's or variant's `url` opens"
-      + " the PAGE to view / learn more (NOT a purchase); (2) DIG IN —"
-      + " `seller.links` follow the seller's policy / info links (refund, shipping,"
-      + " terms); (3) BUY — `checkout_url` is the variant permalink that commits the"
-      + " purchase. A variant's `url` and its `checkout_url` are DIFFERENT targets:"
-      + " `url` is the page (view) whereas `checkout_url` buys — do not conflate"
-      + " them. Re-fetch right"
-      + " before the user buys — prices, availability, and checkout_url are"
-      + " point-in-time, not guarantees. Each variant carries an `inputs` list"
-      + " correlating it back to the id(s) you asked about (the response is NOT in"
-      + " request order). Ids that no longer resolve come back in a `not_found`"
-      + " list — that is a normal outcome, not an error (the other products are"
-      + " still valid). Requires registration (run sil_register first).",
-    parameters: Type.Object({
-      ids: Type.Array(Type.String(), {
-        minItems: 1,
-        description:
-          "Product or variant ids to resolve (at least one). Typically ids from a"
-          + " prior sil_search result, a saved list, or a deep link.",
-      }),
-    }),
-    async execute(_callId, params) {
-      // 1 — not registered: terminal, zero network calls.
-      const stored = readTokens();
-      if (stored === null) {
-        return notRegistered("sil_product_get");
-      }
-
-      // Narrow the untrusted params (the SDK types `params` as
-      // Record<string, unknown>; the host validates against the schema, but the
-      // read site still guards — non-string entries are dropped, not coerced).
-      const ids = readIds(params);
-
-      // 2 — client-side input guard: reject an empty `ids` before any network
-      // call (sil-api's `minItems:1` schema 400 is the authoritative backstop).
-      if (ids.length === 0) {
-        return invalidIds();
-      }
-
-      // 3 — look up; on a 401 refresh-and-retry ONCE via the shared choreography
-      // (the SAME path sil_whoami / sil_search use). A partial/all-missed hit is
-      // `ok` + `not_found`.
-      const first = await lookupCatalog(getApiUrl(), stored.access_token, ids);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => lookupCatalog(getApiUrl(), accessToken, ids),
-      );
-      switch (recovered.kind) {
-        case "result":
-          // On a silent recovery (`refreshed`: a 401 was healed by the refresh+retry)
-          // emit the operator marker so a thrashing session is visible in logs —
-          // logs-only, no token material, NOT a payload field (the agent never sees it).
-          if (recovered.refreshed) api.logger.info("sil_product_get_refreshed", {});
-          return mapLookupOutcome(api, recovered.outcome);
-        case "must_reregister":
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_product_get_must_reregister", { cause: recovered.reason });
-          return mustReregister("sil_product_get");
-        case "second_unauthorized":
-          clearTokens();
-          api.logger.info("sil_product_get_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister("sil_product_get");
-        case "retryable":
-          api.logger.info("sil_product_get_refresh_retryable", {});
-          return transient("sil_product_get");
-      }
-    },
-  });
-}
-
-/** Map a lookup outcome that has ALREADY cleared the 401-recovery path (never
- * `unauthorized` — the refresh trigger handled by {@link refreshAndRetryOnce}) to
- * the agent-facing envelope. The `unauthorized` arm is structurally unreachable
- * but kept exhaustive (falls to the same terminal re-register) so a future
- * refactor can't silently drop a variant. */
-function mapLookupOutcome(api: PluginAPI, outcome: LookupOutcome) {
-  switch (outcome.kind) {
-    case "ok":
-      return lookupResult(api, outcome);
-    case "forbidden":
-      // Symmetric with sil_search (one vocabulary, AC2/AC7/AC10): a 403 is the shared
-      // forbidden envelope, and `user_not_provisioned` — and ONLY that exact reason —
-      // clears the structurally-dead token at this call site so recovery terminates
-      // regardless of which catalog tool revealed the state. `principal_mismatch` /
-      // unknown reasons survive (recoverable; the same exact-equality gate).
-      api.logger.warn("sil_product_get_forbidden", { reason: outcome.reason });
-      if (outcome.reason === "user_not_provisioned") clearTokens();
-      return forbidden(outcome.reason);
-    case "invalid_request":
-      api.logger.info("sil_product_get_invalid_request", { error: outcome.error });
-      return invalidRequest(outcome.error, outcome.message);
-    case "retryable":
-      // Symmetric with sil_search: a source-attributed 5xx names the source (outcome
-      // b); a sil/network blip is the generic copy (outcome a). One error vocabulary.
-      api.logger.info(
-        "sil_product_get_retryable",
-        outcome.source ? { source: outcome.source } : {},
-      );
-      return transient("sil_product_get", outcome.source, outcome.detail);
-    case "unauthorized":
-      return mustReregister("sil_product_get");
+function bufferPage(api: PluginAPI, callId: string, body: Record<string, unknown>): void {
+  const principal = readConfig()?.user?.id;
+  if (principal === undefined) {
+    skipped(api, callId, "no_principal");
+    return;
   }
-}
-
-/**
- * `sil_specs` — the spec-REGISTRY canonicalize-or-create tool. Driven by the
- * sil-shopping method at Beat 2 (mint/refresh), NOT directly by the buyer: the
- * method coins its niche `ns.key` vocabulary bottom-up from research, submits the
- * coined DEFINITIONS here, and gets back the canonical name per spec to adopt BEFORE
- * it persists — so the method is born speaking canonical names and the whole
- * catalog's `filters.specs` vocabulary converges (that convergence is what makes
- * `filters.specs` actually filter). A `matched` spec adopts the existing canonical
- * name (drop the private synonym); a `created` spec keeps its own (it is canonical
- * going forward).
- *
- * `execute()` flow (ALL I/O here; `register()` opens nothing — a synchronous
- * request/response, NOT a poll). MIRRORS `sil_search` and shares its taxonomy, minus
- * search's 422 arm and source attribution (the registry is sil's own Postgres):
- *   1. Not registered (no stored tokens) → terminal `not_registered` + a
- *      `recovery: sil_register` hint, ZERO network calls. Mirrors `sil_whoami`.
- *   2. Client-side guard: a blank/absent `query` OR an empty/all-dropped `specs`
- *      array → `invalid_request` (`empty_specs_input`), NO network call (sil-api's
- *      `minLength`/`minItems` schema 400 is the authoritative backstop). A single
- *      MALFORMED definition rejects the WHOLE request (`invalid_spec`) — a silently
- *      dropped coined spec would never canonicalize and never converge.
- *   3. specsCatalog(getApiUrl(), token, params) → map the `SpecsOutcome`:
- *        ok            → the `resolved` array (one resolution per submitted spec);
- *        invalid_request (400) → surface sil-api's `{ error, message }`;
- *        unauthorized  (401)   → refresh-and-retry ONCE via the shared
- *                                `refreshAndRetryOnce` choreography (parity with
- *                                `sil_search`/`sil_product_get`/`sil_whoami` — 401
- *                                recovery is uniform). Recovered 401 is invisible;
- *                                second 401 / dead refresh is terminal re-register
- *                                (tokens cleared);
- *        retryable (5xx/net)   → transient "try again", NO re-register hint (BARE —
- *                                no source; the method degrades to raw coined names).
- *
- * GRACEFUL DEGRADATION is the load-bearing product invariant (AC14): a non-`ok`
- * outcome never blocks the mint — the method proceeds with the RAW coined names
- * (every predicate `applied:false`) and converges on the next mint/refresh. The tool
- * only surfaces the registry's verdict; the method decides to degrade.
- *
- * Privacy: the session token and Bearer header never reach a log line or the result.
- */
-function registerSpecs(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_specs",
-    label: "Canonicalize coined spec definitions",
-    description:
-      "Canonicalize the coined spec DEFINITIONS a method invents for a niche — the"
-      + " dedupe-or-create registry call at method mint/refresh. Pass the motivating"
-      + " `query` and `specs` (coined { namespace, key, display_name, data_type,"
-      + " description?, unit?, allowed_values? }). Each resolves 1:1: `matched` → adopt"
-      + " the returned canonical { namespace, key } and drop your synonym; `created` →"
-      + " yours is novel, keep it. Rewrite the method's search vocabulary + any PRD"
-      + " predicates to the canonical names before persisting. Internal plumbing — never"
-      + " surface ns.key to the buyer. If not `ok`, do NOT block the mint: persist raw and"
-      + " converge on the next mint/refresh. Requires registration.",
-    parameters: Type.Object({
-      query: Type.String({
-        description:
-          "The motivating shopping query — what the shopper is buying. Governance /"
-          + " dedupe context for the registry; required and non-empty.",
-      }),
-      specs: Type.Array(SPEC_DEFINITION_SCHEMA, {
-        minItems: 1,
-        description:
-          "The coined spec definitions to canonicalize (at least one). Each is a"
-          + " { namespace, key, display_name, data_type, description?, unit?,"
-          + " allowed_values? } the method coined bottom-up from research.",
-      }),
-    }),
-    async execute(_callId, params) {
-      // 1 — not registered: terminal, zero network calls.
-      const stored = readTokens();
-      if (stored === null) {
-        return notRegistered("sil_specs");
-      }
-
-      // 2 — client-side guard (defensive drifted-call backstop; the host validates
-      // the schema, but a blank query / empty specs / malformed definition is
-      // rejected BEFORE any network call). An empty input is `empty_specs_input`; a
-      // present-but-malformed definition rejects the WHOLE request (`invalid_spec`) —
-      // a silently dropped coined spec never canonicalizes → never converges.
-      const read = readSpecsParams(params);
-      if (read.kind === "invalid") {
-        if (read.code === "invalid_spec") {
-          api.logger.info("sil_specs_invalid_spec", { field: read.field });
-          return invalidSpecDefinition(read.field);
-        }
-        api.logger.info("sil_specs_invalid_request", { error: "empty_specs_input" });
-        return invalidSpecsInput();
-      }
-      const specsParams = read.params;
-
-      // 3 — canonicalize; on a 401 refresh-and-retry ONCE via the shared
-      // choreography (the SAME path sil_whoami / sil_search / sil_product_get use).
-      const first = await specsCatalog(getApiUrl(), stored.access_token, specsParams);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => specsCatalog(getApiUrl(), accessToken, specsParams),
-      );
-      switch (recovered.kind) {
-        case "result":
-          if (recovered.refreshed) api.logger.info("sil_specs_refreshed", {});
-          return mapSpecsOutcome(api, recovered.outcome);
-        case "must_reregister":
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_specs_must_reregister", { cause: recovered.reason });
-          return mustReregister("sil_specs");
-        case "second_unauthorized":
-          clearTokens();
-          api.logger.info("sil_specs_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister("sil_specs");
-        case "retryable":
-          api.logger.info("sil_specs_refresh_retryable", {});
-          return transient("sil_specs");
-      }
-    },
-  });
-}
-
-/** Map a specs outcome that has ALREADY cleared the 401-recovery path (never
- * `unauthorized` — the refresh trigger handled by {@link refreshAndRetryOnce}) to
- * the agent-facing envelope. Mirrors `mapSearchOutcome`, minus the source-attributed
- * `retryable` (specs has no external source): a 5xx/network blip is the GENERIC
- * transient. The `unauthorized` arm is structurally unreachable but kept exhaustive
- * (falls to the same terminal re-register) so a future refactor can't drop a variant. */
-function mapSpecsOutcome(api: PluginAPI, outcome: SpecsOutcome) {
-  switch (outcome.kind) {
-    case "ok":
-      return specsResult(api, outcome);
-    case "forbidden":
-      // Symmetric with sil_search/sil_product_get (one vocabulary): a 403 is the
-      // shared forbidden envelope, and `user_not_provisioned` — and ONLY that exact
-      // reason — clears the structurally-dead token at this call site.
-      api.logger.warn("sil_specs_forbidden", { reason: outcome.reason });
-      if (outcome.reason === "user_not_provisioned") clearTokens();
-      return forbidden(outcome.reason);
-    case "invalid_request":
-      api.logger.info("sil_specs_invalid_request", { error: outcome.error });
-      return invalidRequest(outcome.error, outcome.message);
-    case "retryable":
-      // BARE transient — the registry is sil's own Postgres, so there is no external
-      // source to name (unlike sil_search's outcome-b). Generic "try again" copy.
-      api.logger.info("sil_specs_retryable", {});
-      return transient("sil_specs");
-    case "unauthorized":
-      return mustReregister("sil_specs");
+  if (!Array.isArray(body["products"])) {
+    skipped(api, callId, "no_products");
+    return;
   }
+  putSearchResult(callId, body as SearchResultPage, principal);
 }
 
-/** Narrow the untrusted `params` to a string[] of ids. A non-string entry is
- * DROPPED (treated as absent), not coerced — the host has already validated
- * against the schema, but a drifted on-disk call must not slip a non-string into
- * the id list. No `any`, no unchecked `as`. */
-function readIds(params: Record<string, unknown>): string[] {
-  const raw = params["ids"];
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((id): id is string => typeof id === "string");
-}
-
-/** Success: the resolved products + optional `not_found` id list — no token, no
- * Bearer header. An empty `products` list WITH a `not_found` list is a valid,
- * successful all-missed lookup. The `ok` outcome already carries `products` (+
- * optional `not_found`); spread its payload (minus the `kind` discriminant) onto
- * the agent-facing `{ status: "ok", ... }` envelope. A `not_found` list is
- * partial-success DATA, NOT an error and NOT a recovery hint. */
-function lookupResult(api: PluginAPI, outcome: Extract<LookupOutcome, { kind: "ok" }>) {
-  const { kind: _kind, ...payload } = outcome;
-  return jsonResult({ status: "ok", ...payload, ...wiringAdvisories(api) });
-}
-
-/** Client-side validation: the request named no usable id. Distinct from a sil-api
- * 400 (which carries the server's structured error) — this never hit the network.
- * No `recovery: sil_register` (auth is fine; the input is the problem). */
-function invalidIds() {
-  return jsonResult({
-    status: "invalid_request",
-    error: "empty_ids",
-    message: "Provide at least one product or variant id to look up.",
-  });
-}
-
-/** The outcome of narrowing ONE untrusted filter field. The three arms encode the
- * re-spec's behavioral split (founder directive 2026-06-11):
- *   - `ok`      — a valid, format-checked value to forward.
- *   - `absent`  — the field is absent OR the WRONG TYPE → DROP it (treat as unset),
- *                 never coerce. This is the established `readIds` discipline.
- *   - `invalid` — the field is the RIGHT type but a provided string fails its
- *                 FORMAT pattern (`country="United States"`, `region="California"`)
- *                 → REJECT the whole request client-side. `field` names the offender. */
-type FilterRead<T> =
-  | { kind: "ok"; value: T }
-  | { kind: "absent" }
-  | { kind: "invalid"; field: string };
-
-/** The outcome of narrowing the whole param object: either the typed
- * {@link SearchParams} to forward, or the FIRST bad field that rejects the request
- * client-side. `code` names WHICH reject envelope the tool emits — a bad-FORMAT
- * location filter (`invalid_filter`) or a malformed spec predicate
- * (`invalid_spec`) — so the two client-side rejects stay distinguishable (the read
- * site owns FORMAT + op→value rejection; the wire owns country-case normalization). */
-type SearchParamsRead =
-  | { kind: "ok"; params: SearchParams }
-  | { kind: "invalid"; field: string; code: "invalid_filter" | "invalid_spec" };
-
-/** Narrow the untrusted `params` to the simplified {@link SearchParams}, or report
- * the first bad-FORMAT filter field. A field of the wrong type is dropped (treated
- * as absent), not coerced — the host has already validated against the schema, but
- * a drifted on-disk call must not slip a non-string into the query mapping. No
- * `any`, no unchecked `as`.
- *
- * The serviceability/localization filters narrow by their own type: `ship_to` to an
- * object with a string `country` (a primitive/number is DROPPED), `condition` to a
- * string[] (a bare string is dropped), `available` and `local_merchants` to a boolean
- * (a string is dropped). The drop is TYPE-driven, never value-driven, so a valid
- * `available: false` survives — it is a boolean, the meaningful "include unavailable
- * items" signal, not a falsy value to discard.
- *
- * Beyond TYPE narrowing, `ship_to` also FORMAT-validates every provided string field
- * (country alpha-2, region 3166-2, postal bounded) against the shared patterns: a
- * present-but-malformed value returns an `invalid` read so the tool rejects the
- * request client-side with a clear `invalid_filter` error (better agent UX than an
- * opaque, fail-late sil-api 400). `condition` is NOT format-validated — its wire
- * stays OPEN (an unrecognized value still forwards; steering to new/secondhand lives
- * in the description only). `local_merchants` is a plain boolean bias (no format, no
- * country) — its whole steer lives in the description. The first bad field wins. */
-function readSearchParams(params: Record<string, unknown>): SearchParamsRead {
-  const result: SearchParams = {};
-  const query = params["query"];
-  if (typeof query === "string") result.query = query;
-  const category = params["category"];
-  if (typeof category === "string") result.category = category;
-  const priceMin = params["price_min"];
-  if (typeof priceMin === "number") result.price_min = priceMin;
-  const priceMax = params["price_max"];
-  if (typeof priceMax === "number") result.price_max = priceMax;
-  const cursor = params["cursor"];
-  if (typeof cursor === "string") result.cursor = cursor;
-  const limit = params["limit"];
-  if (typeof limit === "number") result.limit = limit;
-
-  const shipTo = readShipTo(params["ship_to"]);
-  if (shipTo.kind === "invalid") {
-    return { kind: "invalid", field: shipTo.field, code: "invalid_filter" };
-  }
-  if (shipTo.kind === "ok") result.ship_to = shipTo.value;
-
-  const condition = readCondition(params["condition"]);
-  if (condition !== null) result.condition = condition;
-  const available = params["available"];
-  if (typeof available === "boolean") result.available = available;
-  // `local_merchants` is a plain boolean bias narrowed exactly like `available`:
-  // a wrong type is DROPPED (treated as absent), never coerced. A valid `false`
-  // survives the read site (type-driven, not value-driven); the omit-when-falsy
-  // discipline for the BIAS itself lives at the wire (`buildSearchBody`), since
-  // unlike `available:false`, a false bias carries no ranking signal.
-  const localMerchants = params["local_merchants"];
-  if (typeof localMerchants === "boolean") result.local_merchants = localMerchants;
-
-  // `specs` is a THIRD input class (a real constraint, not a refinement): a
-  // malformed predicate rejects the whole request client-side (`invalid_spec`,
-  // zero network — the `invalid_filter` twin); a non-array is DROPPED (the
-  // `readIds` discipline); a benign empty `[]` reads `ok` and no-ops downstream.
-  const specs = readSpecs(params["specs"]);
-  if (specs.kind === "invalid") {
-    return { kind: "invalid", field: specs.field, code: "invalid_spec" };
-  }
-  if (specs.kind === "ok") result.specs = specs.value;
-
-  return { kind: "ok", params: result };
-}
-
-/** A non-null plain object, or null for anything else (arrays/primitives). */
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-/** Narrow a `ship_to` arg to {@link ShipTo}. A non-object (a primitive `"US"`, a
- * number) or a missing/non-string `country` is `absent` (DROPPED — the wrong-TYPE
- * discipline). A provided string that fails its FORMAT pattern (`country`,
- * `region`, or `postal_code`) is `invalid` (REJECT the request). `country` is
- * uppercased on the WIRE (`buildSearchBody`), not here — the read site validates
- * FORMAT, the wire normalizes case; region/postal are carried verbatim. */
-function readShipTo(raw: unknown): FilterRead<ShipTo> {
-  const obj = asRecord(raw);
-  if (obj === null) return { kind: "absent" };
-  const country = obj["country"];
-  if (typeof country !== "string" || country.length === 0) return { kind: "absent" };
-  if (!matchesPattern(country, COUNTRY_PATTERN)) {
-    return { kind: "invalid", field: "ship_to.country" };
-  }
-  const result: ShipTo = { country };
-  const region = obj["region"];
-  if (typeof region === "string") {
-    if (!matchesPattern(region, REGION_PATTERN)) {
-      return { kind: "invalid", field: "ship_to.region" };
-    }
-    result.region = region;
-  }
-  const postalCode = obj["postal_code"];
-  if (typeof postalCode === "string") {
-    if (!matchesPattern(postalCode, POSTAL_PATTERN)) {
-      return { kind: "invalid", field: "ship_to.postal_code" };
-    }
-    result.postal_code = postalCode;
-  }
-  return { kind: "ok", value: result };
-}
-
-/** Test a value against one of the shared schema patterns, anchored exactly as the
- * schema's `pattern` is (the constants carry their own `^…$`). A fresh `RegExp` per
- * call keeps the patterns as plain shared strings (the schema needs the string form;
- * the read site needs to execute it) with no stateful `lastIndex` to reset. */
-function matchesPattern(value: string, pattern: string): boolean {
-  return new RegExp(pattern).test(value);
-}
-
-/** Narrow a `condition` arg to string[], or null if unusable. Requires an array (a
- * bare string is DROPPED, not wrapped); non-string entries are dropped. Returns
- * null for an empty/all-dropped array so the key is omitted rather than emitted
- * empty. The wire stays OPEN — values are NOT format-validated against a known set
- * (an unrecognized value like "refurbished" still forwards; steering to
- * new/secondhand is the description's job, not validation's). */
-function readCondition(raw: unknown): string[] | null {
-  if (!Array.isArray(raw)) return null;
-  const values = raw.filter((c): c is string => typeof c === "string");
-  return values.length === 0 ? null : values;
-}
-
-/** The seven spec ops, the ONLY closed part of the predicate contract (the `ns`/
- * `key` vocabulary is deliberately open — [[sds-specs-vocabulary-is-bottom-up]]). */
-const SPEC_OPS: readonly SpecOp[] = ["eq", "neq", "gte", "lte", "in", "nin", "exists"];
-
-function isSpecOp(op: string): op is SpecOp {
-  return (SPEC_OPS as readonly string[]).includes(op);
-}
-
-/** The op→value validity rule, enforced at the READ SITE (the flat-schema +
- * read-site idiom — the schema keeps `value` optional so `exists` fits; the
- * per-op requirement lives here, not in TypeBox):
- *   - `exists` carries NO value;
- *   - `in`/`nin` need a NON-EMPTY array of string|number;
- *   - `gte`/`lte` need a number;
- *   - `eq`/`neq` need a scalar (string|number|boolean).
- * Exhaustive over {@link SpecOp} — a new op forces a case here. */
-function specValueMatchesOp(op: SpecOp, value: unknown): boolean {
-  switch (op) {
-    case "exists":
-      return value === undefined;
-    case "in":
-    case "nin":
-      return (
-        Array.isArray(value)
-        && value.length > 0
-        && value.every((v) => typeof v === "string" || typeof v === "number")
-      );
-    case "gte":
-    case "lte":
-      return typeof value === "number";
-    case "eq":
-    case "neq":
-      return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
-  }
-}
-
-/** The outcome of narrowing ONE untrusted predicate: the typed {@link SpecPredicate}
- * to forward, or the offending index/field that rejects the whole request. */
-type SpecRead =
-  | { kind: "ok"; value: SpecPredicate }
-  | { kind: "invalid"; field: string };
-
-/** The outcome of narrowing the whole `specs` arg. `absent` covers both a missing
- * arg AND a non-array (DROPPED — the `readIds` discipline); an empty array reads
- * `ok` with an empty value (a benign no-op downstream). The FIRST malformed
- * predicate wins the `invalid`. */
-type SpecsRead =
-  | { kind: "ok"; value: SpecPredicate[] }
-  | { kind: "absent" }
-  | { kind: "invalid"; field: string };
-
-/** Narrow the untrusted `specs` arg to {@link SpecPredicate}[], or report the FIRST
- * malformed predicate. A non-array is DROPPED (treated absent — the `readIds`
- * discipline; a drifted on-disk call must not slip a non-array through). Each entry
- * must be an object with a non-blank `ns` and `key`, an `op` in the seven, and a
- * `value` matching the op ({@link specValueMatchesOp}) — else the WHOLE request is
- * rejected client-side (`invalid_spec`, zero network — the `invalid_filter` twin),
- * because a malformed hard predicate silently dropped would be a fail-worse honesty
- * hole. `unit`/`hard` are carried when the right type, dropped otherwise. No `any`,
- * no unchecked `as` (the one cast is gated by {@link specValueMatchesOp}). */
-function readSpecs(raw: unknown): SpecsRead {
-  if (!Array.isArray(raw)) return { kind: "absent" };
-  const specs: SpecPredicate[] = [];
-  for (let index = 0; index < raw.length; index++) {
-    const read = readSpec(raw[index], index);
-    if (read.kind === "invalid") return read;
-    specs.push(read.value);
-  }
-  return { kind: "ok", value: specs };
-}
-
-/** Narrow ONE untrusted predicate to {@link SpecPredicate}, or report the offending
- * field (`specs[i]`, `specs[i].ns`, `specs[i].op`, `specs[i].value`, …) for a clear
- * client-side reject. */
-function readSpec(raw: unknown, index: number): SpecRead {
-  const at = (suffix: string): string => `specs[${index}]${suffix}`;
-  const obj = asRecord(raw);
-  if (obj === null) return { kind: "invalid", field: at("") };
-
-  const ns = obj["ns"];
-  if (typeof ns !== "string" || ns.trim().length === 0) return { kind: "invalid", field: at(".ns") };
-  const key = obj["key"];
-  if (typeof key !== "string" || key.trim().length === 0) return { kind: "invalid", field: at(".key") };
-
-  const op = obj["op"];
-  if (typeof op !== "string" || !isSpecOp(op)) return { kind: "invalid", field: at(".op") };
-
-  const value = obj["value"];
-  if (!specValueMatchesOp(op, value)) return { kind: "invalid", field: at(".value") };
-
-  const spec: SpecPredicate = { ns, key, op };
-  // `exists` carries no value (validated above); the others carry the op-checked value.
-  if (op !== "exists") spec.value = value as SpecValue;
-  const unit = obj["unit"];
-  if (typeof unit === "string") spec.unit = unit;
-  const hard = obj["hard"];
-  if (typeof hard === "boolean") spec.hard = hard;
-  return { kind: "ok", value: spec };
-}
-
-/** The `sil_specs` read-site closed value-types (the defensive backstop for the
- * host-validated `data_type`; `namespace`/`key` stay open — the coined vocabulary). */
-const SPEC_DATA_TYPES: readonly SpecDataType[] = ["number", "text", "boolean", "enum"];
-
-function isSpecDataType(value: unknown): value is SpecDataType {
-  return typeof value === "string" && (SPEC_DATA_TYPES as readonly string[]).includes(value);
-}
-
-/** The outcome of narrowing the whole `sil_specs` param object: the typed
- * {@link SpecsParams} to forward, or the reject class. `empty_specs_input` = a blank
- * `query` OR an empty/all-dropped `specs` (no usable input); `invalid_spec` = a
- * present-but-malformed definition (fail-whole — `field` names the offender). */
-type SpecsParamsRead =
-  | { kind: "ok"; params: SpecsParams }
-  | { kind: "invalid"; code: "empty_specs_input" }
-  | { kind: "invalid"; code: "invalid_spec"; field: string };
-
-/** The outcome of narrowing ONE untrusted definition: the typed
- * {@link SpecDefinition} to forward, or the offending index/field. */
-type SpecDefinitionRead =
-  | { kind: "ok"; value: SpecDefinition }
-  | { kind: "invalid"; field: string };
-
-/** Narrow the untrusted `sil_specs` params to the typed {@link SpecsParams}, or
- * report the reject. A blank `query` or an empty/non-array/all-dropped `specs` is
- * `empty_specs_input` (no network); the FIRST malformed definition rejects the WHOLE
- * request `invalid_spec` (a silently-dropped coined spec never canonicalizes → never
- * converges — the same honesty rule as search's `readSpecs`). No `any`, no unchecked
- * `as`. The host has already validated the schema; this is a drifted-call backstop. */
-function readSpecsParams(params: Record<string, unknown>): SpecsParamsRead {
-  const query = params["query"];
-  if (typeof query !== "string" || query.trim().length === 0) {
-    return { kind: "invalid", code: "empty_specs_input" };
-  }
-
-  const rawSpecs = params["specs"];
-  if (!Array.isArray(rawSpecs) || rawSpecs.length === 0) {
-    return { kind: "invalid", code: "empty_specs_input" };
-  }
-
-  const specs: SpecDefinition[] = [];
-  for (let index = 0; index < rawSpecs.length; index++) {
-    const read = readSpecDefinition(rawSpecs[index], index);
-    if (read.kind === "invalid") {
-      return { kind: "invalid", code: "invalid_spec", field: read.field };
-    }
-    specs.push(read.value);
-  }
-  return { kind: "ok", params: { query, specs } };
-}
-
-/** Narrow ONE untrusted definition to {@link SpecDefinition}, or report the
- * offending field (`specs[i]`, `specs[i].namespace`, `specs[i].data_type`, …).
- * Requires a non-blank `namespace`/`key`/`display_name` and a `data_type` in the
- * closed set; optional `description`/`unit`/`allowed_values` are carried when the
- * right type, dropped otherwise. */
-function readSpecDefinition(raw: unknown, index: number): SpecDefinitionRead {
-  const at = (suffix: string): string => `specs[${index}]${suffix}`;
-  const obj = asRecord(raw);
-  if (obj === null) return { kind: "invalid", field: at("") };
-
-  const namespace = obj["namespace"];
-  if (typeof namespace !== "string" || namespace.trim().length === 0) {
-    return { kind: "invalid", field: at(".namespace") };
-  }
-  const key = obj["key"];
-  if (typeof key !== "string" || key.trim().length === 0) {
-    return { kind: "invalid", field: at(".key") };
-  }
-  const displayName = obj["display_name"];
-  if (typeof displayName !== "string" || displayName.trim().length === 0) {
-    return { kind: "invalid", field: at(".display_name") };
-  }
-  const dataType = obj["data_type"];
-  if (!isSpecDataType(dataType)) return { kind: "invalid", field: at(".data_type") };
-
-  const value: SpecDefinition = { namespace, key, display_name: displayName, data_type: dataType };
-  const description = obj["description"];
-  if (typeof description === "string") value.description = description;
-  const unit = obj["unit"];
-  if (typeof unit === "string") value.unit = unit;
-  const allowedValues = obj["allowed_values"];
-  if (Array.isArray(allowedValues)) {
-    const values = allowedValues.filter((v): v is string => typeof v === "string");
-    if (values.length > 0) value.allowed_values = values;
-  }
-  return { kind: "ok", value };
-}
-
-/** The one client-side invariant the tool owns: at least one recognized input.
- * A non-whitespace `query`, any filter (`category` / `price_min` / `price_max`),
- * OR a non-empty well-formed `specs` list suffices — a spec is a real constraint
- * (it renders + filters), not a refinement. A bare `{}`, a whitespace-only `query`
- * with no filter, or a present-but-EMPTY `specs: []` with nothing else is rejected;
- * pagination params alone (`cursor`/`limit`) are NOT inputs — they refine an
- * existing search, they do not constitute one. */
-function hasUsableInput(params: SearchParams): boolean {
-  const hasQuery = typeof params.query === "string" && params.query.trim().length > 0;
-  const hasFilter =
-    typeof params.category === "string"
-    || typeof params.price_min === "number"
-    || typeof params.price_max === "number";
-  const hasSpecs = Array.isArray(params.specs) && params.specs.length > 0;
-  return hasQuery || hasFilter || hasSpecs;
-}
-
-/** Success: the ranked products + optional cursor — no token, no Bearer header.
- * An empty `products` list is a valid, successful empty match. The `ok` outcome
- * already carries `products` (+ optional `cursor`); spread its payload (minus the
- * `kind` discriminant) onto the agent-facing `{ status: "ok", ... }` envelope. */
-function searchResult(api: PluginAPI, outcome: Extract<SearchOutcome, { kind: "ok" }>) {
-  const { kind: _kind, ...payload } = outcome;
-  return jsonResult({ status: "ok", ...payload, ...wiringAdvisories(api) });
-}
-
-/** Not registered: a distinct, actionable outcome naming the recovery tool. No
- * products field so the agent can't mistake it for an empty match. The `tool`
- * name keeps the message actionable per-tool (re-run THIS tool) while the
- * status/recovery taxonomy stays shared across the catalog tools. */
-function notRegistered(tool: string) {
-  return jsonResult({
-    status: "not_registered",
-    message:
-      `Not registered on sil. Run sil_register to authenticate, then call ${tool} again.`,
-    recovery: "sil_register",
-  });
-}
-
-/** Client-side validation: the request named no usable input. Distinct from a
- * sil-api 400 (which carries the server's structured error) — this never hit the
- * network. No `recovery: sil_register` (auth is fine; the query is the problem). */
-function invalidInput() {
-  return jsonResult({
-    status: "invalid_request",
-    error: "empty_search_input",
-    message:
-      "Provide a search query or at least one filter (category, price_min, or"
-      + " price_max).",
-  });
-}
-
-/** Client-side validation: a location filter carried a malformed value (bad FORMAT,
- * not wrong type) — rejected BEFORE any network call (re-spec). Distinct from the
- * empty-input case (`empty_search_input`) and from a sil-api 400; the pinned machine
- * code is `invalid_filter`. No `recovery: sil_register` — auth is fine; the value
- * FORMAT is the problem. The message names the offending field and the required ISO
- * code form so the agent re-sends a code, not free text. */
-function invalidFilter(field: string) {
-  return jsonResult({
-    status: "invalid_request",
-    error: "invalid_filter",
-    message:
-      `The \`${field}\` filter is malformed. Send standard ISO codes, not`
-      + " free-text names: country as a 2-letter ISO 3166-1 alpha-2 code (e.g."
-      + " \"US\"), region as an ISO 3166-2 subdivision code (e.g. \"CA\"), and"
-      + " postal_code as a destination postal/ZIP code.",
-  });
-}
-
-/** Client-side validation: a `specs` predicate is malformed (blank `ns`/`key`, an
- * `op` outside the seven, or a value shape contradicting the op) — rejected BEFORE
- * any network call, the twin of {@link invalidFilter} for `ship_to`. Distinct
- * machine code `invalid_spec`; `field` names the offending predicate index/field.
- * No `recovery: sil_register` — auth is fine; the predicate is the problem. */
-function invalidSpec(field: string) {
-  return jsonResult({
-    status: "invalid_request",
-    error: "invalid_spec",
-    message:
-      `The \`${field}\` spec predicate is malformed. Each predicate needs a`
-      + " non-empty `ns` and `key`, an `op` of eq/neq/gte/lte/in/nin/exists, and a"
-      + " `value` matching the op: a number for gte/lte, a non-empty array for"
-      + " in/nin, a scalar for eq/neq, and NO value for exists.",
-  });
-}
-
-/** Success: the resolved canonicalizations — no token, no Bearer header. The `ok`
- * outcome carries `resolved` directly; spread its payload (minus the `kind`
- * discriminant) onto the agent-facing `{ status: "ok", resolved }` envelope. */
-function specsResult(api: PluginAPI, outcome: Extract<SpecsOutcome, { kind: "ok" }>) {
-  const { kind: _kind, ...payload } = outcome;
-  return jsonResult({ status: "ok", ...payload, ...wiringAdvisories(api) });
-}
-
-/** Client-side validation: no usable canonicalization input (a blank `query` or an
- * empty/all-dropped `specs`). Distinct from a sil-api 400 — this never hit the
- * network. No `recovery: sil_register` (auth is fine; the input is the problem). */
-function invalidSpecsInput() {
-  return jsonResult({
-    status: "invalid_request",
-    error: "empty_specs_input",
-    message:
-      "Provide a non-empty `query` and at least one coined spec definition to"
-      + " canonicalize.",
-  });
-}
-
-/** Client-side validation: a `specs` definition is malformed (blank
- * `namespace`/`key`/`display_name`, or a `data_type` outside
- * number/text/boolean/enum) — the WHOLE request is rejected BEFORE any network call,
- * so no coined spec is silently dropped from canonicalization. Machine code
- * `invalid_spec`; `field` names the offending definition. No `recovery: sil_register`. */
-function invalidSpecDefinition(field: string) {
-  return jsonResult({
-    status: "invalid_request",
-    error: "invalid_spec",
-    message:
-      `The \`${field}\` spec definition is malformed. Each definition needs a`
-      + " non-empty `namespace`, `key`, and `display_name`, and a `data_type` of"
-      + " number, text, boolean, or enum.",
-  });
-}
-
-/** sil-api rejected the request (a structured 400, e.g. empty_search_input).
- * Surface the server's `{ error, message }` so the agent fixes its query — NOT a
- * re-register (auth is fine) and NOT a transient retry (retrying the same bad
- * request won't help). Distinct from both the empty-match success and the 5xx. */
-function invalidRequest(error: string, message: string) {
-  return jsonResult({ status: "invalid_request", error, message });
-}
-
-/** Terminal: the session is dead — reached only after the shared refresh-and-retry
- * choreography ({@link refreshAndRetryOnce}) has exhausted its one refresh + one
- * retry (a second 401, or a dead `invalid_grant` refresh token). Re-register. The
- * `tool` name keeps the message actionable while the taxonomy stays shared. */
-function mustReregister(tool: string) {
-  return jsonResult({
-    status: "must_reregister",
-    message:
-      `Your sil session has expired. Run sil_register to sign in again, then call ${tool} again.`,
-    recovery: "sil_register",
-  });
-}
-
-/** Terminal-but-distinct: a 403 — the token is valid but the user isn't provisioned
- * (or a principal mismatch / other reason). Refreshing would not help (a 403 is not
- * a 401). Surfaces the SAME envelope `sil_whoami`'s `forbidden()` (identity.ts) emits
- * — `{ status:"forbidden", reason, message, recovery:"sil_register" }`, byte-identical
- * including the reason-driven message branch — so the three sil-api tools speak ONE
- * error vocabulary (AC5). `user_not_provisioned` reads as an actionable onboarding
- * prompt; any other reason is the generic forbidden copy carrying the reason. The
- * recovery hint is always `sil_register` (the message names it, tool-agnostic — the
- * parity with `sil_whoami`'s envelope is byte-exact, so it carries no per-tool name).
- * The dead-token CLEAR is NOT here — it is the caller's decision (gated on
- * `user_not_provisioned`), so a `principal_mismatch` that still wants the legible
- * envelope does not have its token wiped. */
-function forbidden(reason: string) {
-  const message =
-    reason === "user_not_provisioned"
-      ? "Your sil account is not fully set up. Complete onboarding (run"
-        + " sil_register) and try again."
-      : "sil rejected this request (" + reason + "). Run sil_register to"
-        + " re-establish your session, then try again.";
-  return jsonResult({ status: "forbidden", reason, message, recovery: "sil_register" });
-}
-
-/** Transient: a retryable blip — try again, NOT a re-register (a false terminal on
- * a transient would send the agent down a recovery path that can't fix it). The two
- * causally-distinct transient failures share `status: "retryable"` (both succeed on
- * backoff) but split on ATTRIBUTION, which is the whole point of this card:
- *
- *   - `source` ABSENT (outcome a) — sil itself / the network / transport is down,
- *     OR a refresh-leg blip. The agent retries the same call; the copy stays the
- *     GENERIC "sil is temporarily unavailable" and names no source it cannot
- *     identify (attribution honesty).
- *   - `source` PRESENT (outcome b) — a specific catalog source is down or
- *     rate-limited. The copy NAMES that source and must NEVER say "sil is …
- *     unavailable" / "sil is down": sil is healthy, one source is degraded, often
- *     for seconds, and mis-attributing it to sil makes the agent abandon a working
- *     platform. `detail` (the upstream cause) is relayed when present.
- *
- * The source is named ONLY when the wire actually carried it (the classifier gates
- * on a real `source` field — see `retryableFromBody` in sil-client). The named-source
- * copy is SELF-AUTHORED around the source token rather than echoing the raw upstream
- * `detail` prose verbatim — the upstream wording is sil-api's to change and could
- * itself contain "sil is …" phrasing that would muddy the attribution; `detail` is
- * surfaced as a separate, clearly-delimited field instead. The `tool` name keeps the
- * retry guidance actionable; the status taxonomy is shared. */
-function transient(tool: string, source?: string, detail?: string) {
-  if (source === undefined) {
-    return jsonResult({
-      status: "retryable",
-      message: `sil is temporarily unavailable. Please try ${tool} again.`,
-    });
-  }
-  return jsonResult({
-    status: "retryable",
-    message:
-      `The catalog source "${source}" is temporarily unavailable.`
-      + ` sil itself is fine — retry ${tool} shortly.`,
-    ...(detail !== undefined ? { detail } : {}),
-  });
+/** Why this `callId` will resolve nothing, logged where the decision is made. The pull
+ * says only `not_found` — deliberately — so this line is the whole of an operator's
+ * account of a search a client could not render. */
+function skipped(api: PluginAPI, callId: string, reason: string): void {
+  logSearchResults(api, "info", "skipped", { callId, reason });
 }

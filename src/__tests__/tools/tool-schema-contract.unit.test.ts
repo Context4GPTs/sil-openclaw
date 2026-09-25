@@ -1,40 +1,13 @@
 /**
- * UNIT — agent-facing tool-schema contract is invariant across the
- * TypeBox 0.34 → 1.x migration (tier: unit, <100ms, no I/O, mock api).
- *
- * Card: migrate-openclaw-tool-schemas-to-typebox-1-x. The migration is a
- * dependency-major swap ONLY — the JSON-schema object each tool publishes
- * in `parameters` (the value the OpenClaw host serializes and presents to
- * agents) must be equivalent before and after. This file pins that
- * equivalence OBSERVATIONALLY against the known-good literals captured in
- * the card's Risks section, so an unexpected emission drift fails the
- * build rather than silently reaching an agent.
- *
- * Scope: the identity surface (`sil_register`, `sil_whoami`) — both
- * no-argument tools whose `parameters` is `Type.Object({})`. The catalog
- * tools' schemas (`sil_search`, `sil_product_get`) carry structure and are
- * independently owned by `search.test.ts` / `product-get.test.ts`; they are
- * deliberately NOT re-asserted here. This file deep-equals the WHOLE schema
- * (order-insensitive) so the empty-object shape cannot silently grow a
- * spurious `required` or property during the dependency bump.
- *
- * CONTRACT NOTE (architect Risk — load-bearing for these assertions):
- * TypeBox 1.x reorders JSON-schema keys vs 0.34 (e.g. `required` before
- * `properties`, nested `type` before `description`). JSON-Schema objects
- * are UNORDERED key sets; the host serializes and validates by key, not
- * byte order. So every schema assertion below uses `toEqual` (deep,
- * order-insensitive) — NEVER `expect(JSON.stringify(a)).toBe(<0.34
- * byte-literal>)`, which would flip RED on a pure dependency bump even
- * though the contract is intact.
- *
- * Runs entirely against createMockPluginApi() — no host, no network, no
- * filesystem.
+ * UNIT — every agent-facing string and schema the plugin registers (mock api, no
+ * I/O). Schemas are compared with `toEqual`, never a serialized byte-literal:
+ * JSON-Schema key order is not contract, so a TypeBox bump that reorders keys
+ * must not flip RED while a grown `required` must.
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { registerIdentityTools } from "../../tools/identity.js";
 import { registerCatalogTools } from "../../tools/catalog.js";
-import { registerProfileTools } from "../../tools/profile.js";
 import { registerDoctorTools } from "../../tools/doctor.js";
 import {
   createMockPluginApi,
@@ -42,44 +15,63 @@ import {
   registeredToolNames,
   type MockPluginAPI,
 } from "../helpers/mock-plugin-api.js";
+import { categoryAsDomainOffenders } from "../helpers/domain-vocabulary.js";
 import { perNicheExpertOffenders } from "../helpers/per-niche-expert.js";
+import {
+  SHOPPING_TOOLS,
+  artifact,
+  artifactParameters,
+} from "../helpers/shopping-wire.js";
+import {
+  honestyExclusionOffenders,
+  notFoundLicenceOffenders,
+  overPromiseOffenders,
+  overTriggerOffenders,
+  retiredV0Offenders,
+  RETIRED_V0_TOKENS,
+} from "../helpers/honesty-vocabulary.js";
 
-/**
- * The agent-facing tool contract for the identity surface, captured from
- * the live 0.34.14 emission (transcribed verbatim from the card's Risks
- * section). The migration must keep each tool's `parameters` JSON-schema
- * deep-equal to the value here. `name` / `label` / `description` are plain
- * string literals (TypeBox-independent) and must not be incidentally
- * edited during the import swap.
- *
- * Both identity tools publish the same `Type.Object({})` empty schema — the
- * shape most likely to silently grow a spurious `required` under a key
- * reorder, which is exactly what the deep-equal below pins.
- */
+/** Both account tools publish this — the shape most likely to silently grow a
+ * spurious `required` under a dependency key reorder, which the deep-equal pins. */
 const EMPTY_OBJECT_SCHEMA = { type: "object", properties: {} } as const;
 
-/** Every identity tool the plugin registers, with the agent-visible
- * contract each must honour after the migration. The set is itself part of
- * the contract: exactly these two, no additions / removals / renames. */
+/**
+ * Every account tool the plugin registers, with the agent-visible contract each
+ * must honour — the description VERBATIM, because it is almost the whole of what
+ * an agent learns the tool from, so an incidental edit has to be deliberate. The
+ * set is part of the contract: exactly these two, no additions or renames.
+ */
 const TOOL_CONTRACT = {
   sil_register: {
     label: "Register on sil",
     description:
-      "Start browser-based registration on sil. Returns an auth URL for the"
-      + " user to open in a browser. The plugin polls the session in the"
-      + " background until registration completes (then it stores credentials"
-      + " locally), the link expires, or the attempt times out. Call this tool"
-      + " again afterwards to confirm registration completed.",
+      "Hand the buyer a link that opens. `open` is the whole link: show it on its"
+      + " own line so nothing breaks it, and let the buyer open it themselves. The"
+      + " plugin polls in the background and stores the credentials once they"
+      + " finish, so call sil_register again to confirm — it answers"
+      + " already_registered. A buyer who is already registered gets that answer"
+      + " straight away: carry on with what they asked for, nothing is offered and"
+      + " nothing is created.",
     parameters: EMPTY_OBJECT_SCHEMA,
   },
   sil_whoami: {
     label: "Who am I on sil",
     description:
-      "Return the registered user's identity (name and addresses) from sil,"
-      + " using the credentials stored by sil_register. If the stored session token"
-      + " has expired it is refreshed transparently and the read is retried. If you"
-      + " are not registered, or the session has fully expired, the result names"
-      + " the recovery action (run sil_register).",
+      "The buyer's name, country, `gender`, `currency` and the addresses on file, and"
+      + " the `measurements` and `preferences` sil already holds for them — read live from"
+      + " sil with the credentials sil_register stored, a stale session token refreshed"
+      + " once and the read retried. `gender` is `male`, `female` or `other`, and is"
+      + " absent where the buyer never stated one; on anything worn it is the product"
+      + " spec `gender` in the registry's own spelling (male → `mens`, female →"
+      + " `womens`), asked once where this answers none and never inferred. `currency` is"
+      + " the ISO 4217 code they price in, absent where nothing on file says it: a money"
+      + " row that means theirs leaves `currency` off — with none on file, it names its"
+      + " own — and sil converts nothing. Call it at the start of a chat: it"
+      + " says where the buyer is, what they price in, how they measure and what they"
+      + " lastingly prefer, and you never ask them for anything it answers."
+      + " shopping_profile_edit is what writes those last three back. If they are not"
+      + " registered, or the session is past refreshing, the result names the recovery"
+      + " (sil_register).",
     parameters: EMPTY_OBJECT_SCHEMA,
   },
 } as const;
@@ -101,7 +93,7 @@ describe("identity tool-set invariant — exactly the two contracted tools", () 
   });
 });
 
-describe("tool string fields are invariant across the migration (TypeBox-independent literals)", () => {
+describe("the account tools' agent-facing strings are pinned verbatim", () => {
   let api: MockPluginAPI;
 
   beforeEach(() => {
@@ -109,7 +101,7 @@ describe("tool string fields are invariant across the migration (TypeBox-indepen
   });
 
   for (const [name, contract] of Object.entries(TOOL_CONTRACT)) {
-    it(`${name}: name, label, and description equal their pre-migration values verbatim`, () => {
+    it(`${name}: name, label, and description equal the contracted text verbatim`, () => {
       const tool = getTool(api, name);
       expect(tool.name).toBe(name);
       expect(tool.label).toBe(contract.label);
@@ -168,16 +160,15 @@ describe("TypeBox introspection metadata never leaks into the agent-visible sche
  * VOCABULARY — no registered tool DESCRIPTION frames the surface as a per-niche
  * expert (card: audit-tool-skill-surface-for-single-shopper-pivot).
  *
- * The single-shopper pivot shipped as targeted slices; the four catalog/identity
- * tools (`sil_register`, `sil_whoami`, `sil_search`, `sil_product_get`) were never
- * opened, so their descriptions could regress to implicit per-niche-expert framing
- * without anyone touching them — and an agent learns the model it is driving almost
- * entirely from these descriptions. This guard runs the SHARED whole-word
+ * The single-shopper pivot shipped as targeted slices, and the account tools were
+ * never opened by any of them, so their descriptions could regress to implicit
+ * per-niche-expert framing without anyone touching them — and an agent learns the
+ * model it is driving almost entirely from these descriptions. This guard runs the SHARED whole-word
  * `\bexperts?\b` + 28-char retro-allowance check (`perNicheExpertOffenders`, the
  * very check the skill-prose guard uses, so the discipline can never drift) over
- * EVERY registered tool description — the four pivot-untouched tools and the five
- * profile verbs (`sil_profile_*` + `sil_remember`). Green on the current tree; a
- * future `expert` reintroduction into any description turns it RED.
+ * EVERY registered tool description, the pivot-untouched account tools included.
+ * Green on the current tree; a future `expert` reintroduction into any description
+ * turns it RED.
  *
  * This is a VOCABULARY guard, DISTINCT from the exact-tool-SET guards (the identity
  * set assertion above, index.test.ts, manifest-contract): it pins HOW a description
@@ -187,17 +178,16 @@ describe("TypeBox introspection metadata never leaks into the agent-visible sche
  * reference ("unlike the retired per-niche expert…") would not false-RED.
  * ------------------------------------------------------------------------- */
 
-describe("registered tool descriptions carry NO per-niche-expert vocabulary (whole-word `expert`, retro-allowance)", () => {
-  function allRegisteredTools(): MockPluginAPI {
-    const api = createMockPluginApi();
-    registerIdentityTools(api);
-    registerCatalogTools(api);
-    registerProfileTools(api);
-    registerDoctorTools(api);
-    return api;
-  }
+function allRegisteredTools(): MockPluginAPI {
+  const api = createMockPluginApi();
+  registerIdentityTools(api);
+  registerCatalogTools(api);
+  registerDoctorTools(api);
+  return api;
+}
 
-  it("every registered tool description scans clean — incl. the four pivot-untouched tools and the five profile verbs", () => {
+describe("registered tool descriptions carry NO per-niche-expert vocabulary (whole-word `expert`, retro-allowance)", () => {
+  it("every registered tool description scans clean — the pivot-untouched account tools included", () => {
     const tools = [...allRegisteredTools()._tools.entries()];
     // Guard against a vacuous green: descriptions must actually exist AND be
     // non-blank to be scanned. (NOT a tool count/set pin — passes for any tool set.)
@@ -213,5 +203,432 @@ describe("registered tool descriptions carry NO per-niche-expert vocabulary (who
     }
     expect(emptyDescriptions).toEqual([]);
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * THE SHOPPING SURFACE — the registered contract, and the cross-cutting scans over every
+ * agent-facing string (the tool description AND every parameter description, because an
+ * agent reads both and a rule enforced on one is not enforced).
+ *
+ * The scanners live in `helpers/honesty-vocabulary.ts`, imported by BOTH this file and
+ * `skill-bundle-contract.integration.test.ts` — one module, so the tool-description guard
+ * and the skill-prose guard can never drift apart. Their bite (and their allowance for
+ * the sentence the product NEEDS) is proved in `lib/honesty-vocabulary.test.ts`.
+ */
+
+/** A tool's description plus every one of its parameter descriptions. */
+function agentFacingText(api: MockPluginAPI, name: string): string {
+  const tool = getTool(api, name);
+  const schema = tool.parameters as unknown as Record<string, unknown>;
+  const props = (schema["properties"] ?? {}) as Record<string, Record<string, unknown>>;
+  const nested = JSON.stringify(schema).match(/"description"\s*:\s*"(?:[^"\\]|\\.)*"/g) ?? [];
+  return [
+    tool.description ?? "",
+    ...Object.values(props).map((p) => (p["description"] as string | undefined) ?? ""),
+    // Nested parameter descriptions (a spec's `op`, a key's `unit`) are agent-facing too
+    // and would otherwise escape every scan below.
+    ...nested.map((raw) => JSON.parse(`{${raw}}`).description as string),
+  ].join("\n");
+}
+
+/** Every agent-facing string across the WHOLE registered surface. */
+function wholeSurface(api: MockPluginAPI): [string, string][] {
+  return [...api._tools.keys()].map((name) => [name, agentFacingText(api, name)]);
+}
+
+describe("the shopping tools' parameters ARE the committed request artifacts", () => {
+  it.each(SHOPPING_TOOLS)(
+    "%s publishes its artifact verbatim, minus the three FILE annotations",
+    (tool) => {
+      // The one bar that makes "the plugin adds no shape of its own" checkable. A
+      // hand-written schema here would be a second copy of the request contract and the
+      // first thing to drift from it; deep-equality against the committed bytes is what
+      // makes that impossible rather than merely discouraged.
+      const registered = getTool(allRegisteredTools(), tool).parameters as unknown as Record<
+        string,
+        unknown
+      >;
+      expect(registered).toEqual(artifactParameters(tool));
+    },
+  );
+
+  it.each(SHOPPING_TOOLS)("%s strips `$schema` / `$id` / `title` before the host sees it", (tool) => {
+    // They describe the FILE, not the argument the model has to build, and a `$id` on a
+    // tool input invites a host to resolve a URL nobody serves.
+    const registered = getTool(allRegisteredTools(), tool).parameters as unknown as Record<
+      string,
+      unknown
+    >;
+    for (const annotation of ["$schema", "$id", "title"]) {
+      expect(registered).not.toHaveProperty(annotation);
+    }
+    // Guard-of-the-guard: the artifact really carries all three, so the strip is doing
+    // work rather than agreeing with an empty file.
+    for (const annotation of ["$schema", "$id", "title"]) {
+      expect(artifact(tool, "request")).toHaveProperty(annotation);
+    }
+  });
+
+  it.each(SHOPPING_TOOLS)("%s's description is bounded — enough to act on, short enough to read", (tool) => {
+    // An agent reads this at pick-time under context pressure; the clause that survives
+    // is the short one. The ceiling is generous — it fails a parameter tutorial, not
+    // tight prose — and the floor fails a one-liner that teaches nothing.
+    const description = getTool(allRegisteredTools(), tool).description ?? "";
+    expect(description.length).toBeGreaterThan(150);
+    expect(description.length).toBeLessThanOrEqual(1400);
+  });
+});
+
+describe("the retired tool NAMES cannot come back", () => {
+  it("no registered tool is named for the wire the contract replaced", () => {
+    // Proved by BITE, not by a literal list: every registered name is run through the
+    // shape the old wire used, so a resurrected `sil_search` or a stray `sil_doc_*` is
+    // caught whether or not anybody remembered to enumerate it here.
+    const retired = /^sil_(search|product_get|stores|lookup|domain_find|domain_create|doc_[a-z]+)$/;
+    const names = [...registeredToolNames(allRegisteredTools())];
+    expect(names.filter((n) => retired.test(n))).toEqual([]);
+    // Guard-of-the-guard: the pattern bites the names it is written for.
+    expect(
+      ["sil_search", "sil_product_get", "sil_stores", "sil_domain_find", "sil_doc_write"].filter(
+        (n) => !retired.test(n),
+      ),
+    ).toEqual([]);
+  });
+
+  it("the loop's tools are all named `shopping_*` — only the account tools keep `sil_`", () => {
+    // The contract's own rule: every tool the loop calls is named for what it does for
+    // the shopper. A loop tool left under `sil_` is one the agent cannot find by name.
+    const names = [...registeredToolNames(allRegisteredTools())].sort();
+    expect(names.filter((n) => n.startsWith("sil_")).sort()).toEqual([
+      "sil_doctor",
+      "sil_register",
+      "sil_whoami",
+    ]);
+    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(11);
+  });
+});
+
+describe("the retired VOCABULARY is gone from every agent-facing string", () => {
+  it("no registered description names a field the wire does not have", () => {
+    const offenders: string[] = [];
+    for (const [name, text] of wholeSurface(allRegisteredTools())) {
+      for (const token of retiredV0Offenders(text)) offenders.push(`${name} → ${token}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("guard-of-the-guard: every RETIRED_V0_TOKENS needle is lower-case", () => {
+    expect(RETIRED_V0_TOKENS.filter((t) => t !== t.toLowerCase())).toEqual([]);
+  });
+});
+
+describe("no honesty field is ever framed as an exclusion", () => {
+  it("NO registered tool teaches dropping / filtering / hiding on `unknown`, an absent `fit` key, an empty `variants` or `webpage_info`", () => {
+    // The named prior failure: a seller tool leading the agent to drop `unknown` sellers
+    // undoes the route's fail-closed design one layer up, and the shortlist collapses
+    // while looking like it filtered. The scan runs over the WHOLE surface — an account
+    // tool that learned the habit would be just as wrong.
+    const offenders: string[] = [];
+    for (const [name, text] of wholeSurface(allRegisteredTools())) {
+      for (const sentence of honestyExclusionOffenders(text)) {
+        offenders.push(`${name}: ${sentence}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("guard-of-the-guard: the scanned corpus is substantial (an empty surface scans clean)", () => {
+    const total = wholeSurface(allRegisteredTools())
+      .map(([, text]) => text.trim().length)
+      .reduce((a, b) => a + b, 0);
+    expect(total).toBeGreaterThan(1000);
+  });
+});
+
+describe("no description out-promises its route", () => {
+  it("no 'current price' where an offer is dated, no 'ships to you' where `ships` can be `unknown`", () => {
+    const offenders: string[] = [];
+    for (const [name, text] of wholeSurface(allRegisteredTools())) {
+      for (const sentence of overPromiseOffenders(text)) offenders.push(`${name}: ${sentence}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("no over-trigger: a description states when THIS tool applies", () => {
+  it("no registered tool claims the general category ('search the web', 'find anything')", () => {
+    const offenders: string[] = [];
+    for (const [name, text] of wholeSurface(allRegisteredTools())) {
+      for (const sentence of overTriggerOffenders(text)) offenders.push(`${name}: ${sentence}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("each shopping tool carries its discipline clause", () => {
+  /**
+   * Pinned on the clause's LOAD-BEARING tokens, never on the wording — this repo already
+   * deleted a 1341-line prose test that pinned wording and stayed green through a live
+   * behavioural bug. Each entry is the one thing an agent that loses it gets wrong.
+   */
+  const DISCIPLINE: Record<(typeof SHOPPING_TOOLS)[number], RegExp[]> = {
+    // The read that licenses the mint, and the bound on how often it is taken.
+    shopping_domain_search: [/matches: \[\]/, /licens/i, /\b(2|two)\b/],
+    // sil SHIPS this document (ruling, 2026-09-19), so the description has to say what
+    // the agent is being handed: markdown that names what goes wrong, what to trust and
+    // what buying it online takes, plus each key's own `description` — which is what
+    // makes a question about that key worth the buyer's turn. Then what the keys are
+    // for, and which of them identify a purchasable option.
+    shopping_domain_get: [
+      /markdown/i,
+      /goes wrong/i,
+      /to trust/i,
+      /buying it online/i,
+      /moves the fit/i,
+      /variant_spec/,
+      /product_spec/,
+      /operators?/i,
+    ],
+    // The FALLBACK, not a peer of the read: sil ships a document for the domains it
+    // holds. Then the permanent write, the two things that must hold first, the
+    // guide it has to produce, the vocabulary it may not coin, and the inheritance rule
+    // in three parts — no rename, a re-declaration that binds the subtree, and the mark
+    // that lets the agent use a key it did not mint.
+    shopping_domain_create: [
+      /\bFALLBACK\b/,
+      /curated/i,
+      /markdown/i,
+      /goes wrong/i,
+      /go to a shop/i,
+      /research|read(ing)? up/i,
+      /undo|permanent/i,
+      /never .{0,20}to coin/i,
+      /rename/i,
+      /subtree/i,
+      /inherited/,
+      /shopping_domain_get/,
+    ],
+    // One brief for the whole session, the id the rest of it is named by, the narrative
+    // that IS the spec of the buy (ruling, 2026-09-19), and the quote every `reason` is —
+    // the founder's live session wrote four first-person paraphrases, one of them a want
+    // ("new") the buyer never stated. A NEW chat opens its own brief off what the earlier
+    // ones hold (2026-09-18: the warm session searched on the previous session's brief),
+    // and what the buyer wears is a spec sil already answers.
+    shopping_brief_create: [
+      /per SESSION/i,
+      /never one per domain/i,
+      /`id`/,
+      /spec of the buy/i,
+      /verbatim/i,
+      /carry every spec/i,
+      /`gender eq mens`/,
+      /`gender eq womens`/,
+    ],
+    // The want is written AS it is settled, a write REPLACES rather than appends, the
+    // `reason` is the buyer's words verbatim, a measurement is not the spec it becomes,
+    // and a `decision` is a mind changed, written about the buyer — not a note of what
+    // was just written down in their voice. The refusal is the one moment a want silently
+    // disappears, so what to do with an `invalid_request` is stated at the call that
+    // answers it: the row is fixed and RE-SENT, and the want is never given up.
+    shopping_brief_edit: [
+      /as it is settled/i,
+      /next call drops/i,
+      /replace/i,
+      /`decision`/,
+      /verbatim/i,
+      /their mind/i,
+      /MEASUREMENT is never the spec/i,
+      /in their voice/i,
+      /never a log/i,
+      /invalid_request/,
+      /send it again/i,
+      /never give the want up/i,
+    ],
+    // The bare read is a listing, it comes before the first question, and what it answers
+    // is READ rather than searched — this session's brief is its own.
+    shopping_brief_read: [/newest first/i, /before you ask/i, /never on an earlier session/i],
+    // An entry is keyed by its name, writing that name again replaces it, and only an
+    // unambiguous statement about the buyer reaches it at all. "Prices in dollars from now
+    // on" is a `currency` written here, never a price converted.
+    shopping_profile_edit: [
+      /same `name`/,
+      /before the next search/i,
+      /unambiguous/i,
+      /snake_case/,
+      /`currency`/,
+      /converts nothing/i,
+    ],
+    // The brief rides on every call, its specs travel unchanged, `n` counts variants,
+    // the query is shop words, and the honesty the whole answer turns on (`fit` says
+    // "unknown" for what sil could not test, `printed` is the page talking, a variant
+    // with no option values is a listing whose sizes are unread).
+    //
+    // The per-category call bound, the "wait for the guide before the first call"
+    // precondition and the "price the pick before you recommend" gate were RETIRED by
+    // the 2026-09-19 ruling — the agent loops freely. What replaces them is pinned in
+    // the opposite direction: the description must say searching is cheap and repeatable,
+    // so a bound cannot creep back in as folklore.
+    shopping_search: [
+      /`brief`/,
+      /as often as the job needs/i,
+      /never on the search/i,
+      /counts VARIANTS/,
+      /never a sentence/i,
+      /"unknown"/,
+      /`printed`/,
+      /no option values/i,
+      /gap/i,
+      /unchanged/i,
+    ],
+    // What the dossier adds over the shortlist, that a miss is an absence, and that a
+    // sizeless listing opens here like any other id.
+    shopping_product_get: [/sources/, /absent/i, /opaque/i, /no option values/i],
+    // The brief and the ids are the WHOLE ask (sil reads the seller rows, the ceiling, the
+    // address and the currency itself), a sizeless listing is priced as its page prints,
+    // what dates a price, why the spread is the answer, that the buyer's-currency-first
+    // order is the server's — and what pricing a whole shortlist COSTS the buyer. That
+    // last one is a cost tip, never a gate: the ruling retired "never for a shortlist".
+    shopping_offers: [
+      /`brief`/,
+      /nothing else/i,
+      /pricing a whole shortlist/i,
+      /observed_at/,
+      /spread/i,
+      /convert/i,
+      /never re-rank/i,
+      /no option values/i,
+    ],
+    // The three states, that the third one keeps its seller, and that ids are the whole ask.
+    shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i, /nothing else/i],
+  };
+
+  it.each(SHOPPING_TOOLS)("%s's description carries every load-bearing token of its clause", (tool) => {
+    const description = getTool(allRegisteredTools(), tool).description ?? "";
+    const missing = DISCIPLINE[tool].filter((re) => !re.test(description)).map((re) => re.source);
+    expect(missing).toEqual([]);
+  });
+
+  /**
+   * `seller_specs` is still sayable in the mint's description — as the field
+   * shopping_domain_get answers, never as one this call takes — so an occurrence is
+   * cleared by its ATTRIBUTION rather than by its wording.
+   */
+  const ATTRIBUTED_SELLER_SPECS = /shopping_domain_get[^.]{0,60}seller_specs/g;
+
+  it("no description names a field the signed wire took off its request", () => {
+    // The map above only proves a clause is PRESENT: a description can carry every token
+    // and still tell the agent to send a field the route no longer takes, which is what
+    // all three were before the signed wire. An agent sends what it reads.
+    const api = allRegisteredTools();
+    const mint = getTool(api, "shopping_domain_create").description ?? "";
+    expect(mint.replace(ATTRIBUTED_SELLER_SPECS, "")).not.toMatch(/seller_specs/);
+    expect(getTool(api, "shopping_seller_get").description ?? "").not.toMatch(/ship_to/);
+    expect(getTool(api, "shopping_offers").description ?? "").not.toMatch(/seller_specs|ship_to/);
+    // Guard-of-the-guard: the strip clears a real occurrence, so the bar is not passing
+    // over prose that simply dropped the pointer to where seller terms come from.
+    expect(mint).toMatch(/seller_specs/);
+  });
+});
+
+describe("a market is a SELLER spec — `ship_to` is an address label", () => {
+  it("`ship_to`'s own parameter description says it excludes no seller, and names `country` on the brief", () => {
+    // 2026-09-16: the model could not find a market filter, so it sent `ship_to: "Home"`
+    // on all six searches and reported it back as "Greece only" — six searches that
+    // filtered nothing and a buyer told they had. The rule has to sit on the PARAMETER
+    // the agent is filling: prose in a skill file three reads away is what failed.
+    const schema = getTool(allRegisteredTools(), "shopping_search").parameters as unknown as {
+      properties: Record<string, { description?: string }>;
+    };
+    const shipTo = schema.properties["ship_to"]?.description ?? "";
+    expect(shipTo.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(shipTo).toMatch(/\blabel\b/i);
+    expect(shipTo).toMatch(/excludes no seller/i);
+    expect(shipTo).toMatch(/`country`/);
+    expect(shipTo).toMatch(/on the brief/i);
+  });
+});
+
+describe("the registry's concept is a DOMAIN, never a category", () => {
+  it("no agent-facing string names a domain's path, guide, keys or specs a `category`'s", () => {
+    // Founder ruling, 2026-09-19: sil ships the domain document, and "domain" is the
+    // user-facing word for what the registry holds. An agent reading "the category's
+    // guide" in one description and `domain` in the next is being handed two names for
+    // one thing, and coins its spec keys under whichever it read last.
+    //
+    // Runs over the WHOLE surface — descriptions AND parameter descriptions — because a
+    // rule enforced on one is not enforced. The scan is narrow by construction (the
+    // possessive, or the registry's own nouns) so the generic English sense the bundle
+    // still uses legitimately cannot false-RED; its bite is proved in
+    // `skill-bundle-contract.integration.test.ts`, which runs the same module.
+    // De-duplicated: `agentFacingText` deliberately reads each property description
+    // twice (once directly, once through the nested-schema sweep), which costs the other
+    // scanners nothing but would print every offender here twice.
+    const offenders = new Set<string>();
+    for (const [name, text] of wholeSurface(allRegisteredTools())) {
+      for (const ctx of categoryAsDomainOffenders(text)) offenders.add(`${name}: …${ctx}…`);
+    }
+    expect([...offenders]).toEqual([]);
+  });
+});
+
+describe("AC15 — `not_found` is never stated as a bare licence to write", () => {
+  it("AC15 — no registered description hands out the re-mint licence, and one still explains the status", () => {
+    // The agent decides what to do next from these descriptions alone, and
+    // `not_found` is the one status that can read as "so make a fresh one". Stated
+    // bare over a read sil merely could not complete, that instruction writes over
+    // whatever was there.
+    //
+    // Runs over the WHOLE registered surface (descriptions AND parameter
+    // descriptions), derived from the live registration, so a tool that learns the
+    // habit is caught for free.
+    const api = allRegisteredTools();
+    const offenders: string[] = [];
+    for (const [name, text] of wholeSurface(api)) {
+      for (const sentence of notFoundLicenceOffenders(text)) offenders.push(`${name}: ${sentence}`);
+    }
+    expect(offenders).toEqual([]);
+
+    // Guard-of-the-guard: the cheapest way to pass a forbid-scan is to stop naming
+    // `not_found` anywhere, which leaves the agent reading a wire status no
+    // description explains. The registry read answers it, so it must keep saying so.
+    // The floor is NAMING it, never a listing qualifier: sil scopes every lookup to
+    // the account and lists nothing to decide a 404.
+    const names = wholeSurface(api)
+      .filter(([, text]) => /\bnot_found\b/.test(text))
+      .map(([name]) => name);
+    expect(names).toContain("shopping_domain_get");
+  });
+});
+
+describe("no agent-facing string points at a tool that does not exist", () => {
+  it("every `sil_*` / `shopping_*` token in a description names a REGISTERED tool", () => {
+    // The general form of a defect this card creates by existing: `sil_domain_create`
+    // is new, so any older prose that named a mint by some other spelling now
+    // competes with a real tool for the same intention. A dangling pointer is
+    // worse than a missing one — the agent tries it, fails, and has no recovery.
+    //
+    // Derived from the registered set, never a literal list: a tool added later is
+    // covered for free, and a tool REMOVED turns every stale mention red (which is
+    // the direction the one-directional bundle guard cannot cover).
+    const api = allRegisteredTools();
+    const registered = registeredToolNames(api);
+    const offenders: string[] = [];
+    for (const [name, text] of wholeSurface(api)) {
+      for (const match of text.match(/\b(?:sil|shopping)_[a-z0-9_]+/g) ?? []) {
+        if (!registered.has(match)) offenders.push(`${name} → ${match}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("guard-of-the-guard: the scan finds tool tokens at all", () => {
+    // A regex that matched nothing would pass forever. The descriptions really do
+    // cross-reference each other — that is the point of the recovery pointers.
+    const api = allRegisteredTools();
+    const found = wholeSurface(api).flatMap(
+      ([, text]) => text.match(/\b(?:sil|shopping)_[a-z0-9_]+/g) ?? [],
+    );
+    expect(new Set(found).size).toBeGreaterThan(3);
   });
 });

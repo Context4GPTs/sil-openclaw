@@ -77,7 +77,6 @@ import type { PluginAPI } from "openclaw/plugin-sdk";
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerDoctorTools } from "../tools/doctor.js";
 import { registerIdentityTools } from "../tools/identity.js";
-import { registerProfileTools } from "../tools/profile.js";
 import { sortFindings, type Finding } from "../lib/findings.js";
 import * as allowlist from "../lib/openclaw-allowlist.js";
 import { setApiUrl, setWebUrl } from "../lib/config.js";
@@ -223,14 +222,24 @@ function probeUnreachable(): void {
   fetchSpy.mockRejectedValue(new Error("ENETDOWN — the network is down"));
 }
 
-/** sil-api answers a real, EMPTY catalog search — a success, not an error. */
+/** sil-api answers a real, EMPTY shopping search — a success, not an error. An empty
+ * shortlist on a body that states `status: "ok"` is what the 200 gate admits; a body
+ * that did not state it would classify `retryable`, and every advisory assertion below
+ * would run against an error envelope. */
 function catalogEmptyOk(): void {
   fetchSpy.mockImplementation(async (input: unknown) => {
     const url = typeof input === "string" ? input : String(input);
-    if (url.includes("/catalog/search")) return jsonResponse({ products: [] });
+    if (url.includes("/catalog/search")) return jsonResponse({ status: "ok", products: [] });
     return jsonResponse({ package: { name: "@4gpts/sil", latestVersion: null, tags: {} } });
   });
 }
+
+/** The one shopping call this file drives — the route is domain-gated and `n` required. */
+const SEARCH_PARAMS = {
+  domain: "product.furniture.seating.task_chairs",
+  query: "chair",
+  n: 5,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Data dir + HOME. HOME is redirected so the rule-10 decoy below is hermetic and
@@ -322,14 +331,22 @@ type Payload = Record<string, unknown> & { advisories?: Finding[] };
 function registerAll(api: PluginAPI): void {
   registerIdentityTools(api);
   registerCatalogTools(api);
-  registerProfileTools(api);
   registerDoctorTools(api);
 }
 
 let lastApi: MockPluginAPI;
+/** How many content blocks the last run emitted — the seam `blocksOf` bars read. */
+let lastBlocks: number;
 
-/** `hostVersion` omitted ⇒ the api carries NO runtime, which is the honest
- * default: the compat check is inconclusive and emits nothing. */
+/**
+ * `hostVersion` omitted ⇒ the api carries NO runtime, which is the honest default: the
+ * compat check is inconclusive and emits nothing.
+ *
+ * WHICH BLOCK carries the advisory differs by tool and is pinned separately below: a
+ * shopping tool's payload is the API's contract, so its advisory rides a SECOND content
+ * block, while a plugin-owned envelope folds it in. This helper reads whichever, because
+ * AC3 is about the finding reaching the agent — never about the frame it arrived in.
+ */
 async function runTool(
   name: string,
   params: Record<string, unknown>,
@@ -340,8 +357,11 @@ async function runTool(
   lastApi = api;
   registerAll(api);
   const result = await getTool(api, name).execute("call-1", params);
-  expect(result.content).toHaveLength(1);
-  return JSON.parse(result.content[0]?.text as string) as Payload;
+  lastBlocks = result.content.length;
+  expect(lastBlocks).toBeGreaterThanOrEqual(1);
+  const blocks = result.content.map((c) => JSON.parse(c.text as string) as Payload);
+  const carried = blocks.slice(1).find((b) => b.advisories !== undefined);
+  return carried === undefined ? blocks[0]! : { ...blocks[0]!, advisories: carried.advisories };
 }
 
 async function runDoctor(config: Config, hostVersion?: string): Promise<DoctorReport> {
@@ -349,10 +369,21 @@ async function runDoctor(config: Config, hostVersion?: string): Promise<DoctorRe
 }
 
 /**
- * The four real `sil_*` success paths this file drives — one per tool group, so
- * "EVERY `sil_*` result" (AC3) is proven across the whole surface rather than on
- * one convenient tool. Each is a genuine success against real state: no stub
- * asserts a stubbed response here.
+ * The CARRIER every bar below that is not about a specific tool drives: `sil_register`
+ * short-circuits on stored tokens (`already_registered`), so it is a genuine success
+ * that opens no socket and needs no catalog fixture — which is what the zero-network
+ * and never-wrote-anything bars are asserted on.
+ */
+async function runCarrier(config: Config, hostVersion?: string): Promise<Payload> {
+  writeTokensFile();
+  return runTool("sil_register", {}, config, hostVersion);
+}
+
+/**
+ * The two real `sil_*` success paths this file drives — one per tool group that folds,
+ * so "EVERY `sil_*` result" (AC3) is proven across the whole surface rather than on one
+ * convenient tool. Each is a genuine success against real state: no stub asserts a
+ * stubbed response here.
  */
 const SUCCESS_PATHS: Array<{
   tool: string;
@@ -360,12 +391,17 @@ const SUCCESS_PATHS: Array<{
   /** Real state the success needs, beyond a temp data dir. */
   setup?: () => void;
 }> = [
-  // profile — an empty store is `status: ok`, zero network.
-  { tool: "sil_profile_search", params: {} },
   // identity — `already_registered` short-circuits on stored tokens, zero network.
   { tool: "sil_register", params: {}, setup: writeTokensFile },
   // catalog — an empty match IS a success (`status: ok, products: []`).
-  { tool: "sil_search", params: { query: "chair" }, setup: () => { writeTokensFile(); catalogEmptyOk(); } },
+  {
+    tool: "shopping_search",
+    params: { ...SEARCH_PARAMS },
+    setup: () => {
+      writeTokensFile();
+      catalogEmptyOk();
+    },
+  },
 ];
 
 const advisoryIds = (payload: Payload): string[] => (payload.advisories ?? []).map((a) => a.id).sort();
@@ -440,7 +476,7 @@ describe("AC3 — skill attached by id: the tools are the only surviving messeng
     // AC3: "the finding is byte-identical whichever surface carries it". Both read
     // the EFFECTIVE wiring from the same `api.config`, so anything else would mean
     // two detectors — i.e. two things to drift apart.
-    const payload = await runTool("sil_profile_search", {}, misattachedConfig());
+    const payload = await runCarrier(misattachedConfig());
     const report = await runDoctor(misattachedConfig());
 
     const fromTool = payload.advisories!.find((a) => a.id === SKILL_MISATTACHED);
@@ -462,18 +498,42 @@ describe("AC3 — skill attached by id: the tools are the only surviving messeng
     // misconfiguration is exactly what a fire-once advisory lets rot — and this one
     // was silent enough to cause incident #1. A cooldown here is a documented
     // regression, not a cleanup.
-    const first = await runTool("sil_profile_search", {}, misattachedConfig());
-    const second = await runTool("sil_profile_search", {}, misattachedConfig());
-    const third = await runTool("sil_profile_search", {}, misattachedConfig());
+    const first = await runCarrier(misattachedConfig());
+    const second = await runCarrier(misattachedConfig());
+    const third = await runCarrier(misattachedConfig());
     expect(advisoryIds(first)).toEqual([SKILL_MISATTACHED]);
     expect(advisoryIds(second)).toEqual([SKILL_MISATTACHED]);
     expect(advisoryIds(third)).toEqual([SKILL_MISATTACHED]);
   });
 
+  it("a shopping tool's advisory rides its OWN block — never a key beside the API's", async () => {
+    // The payload of a shopping tool IS the sil-api 200 body, handed over verbatim, so
+    // an `advisories` key spread into it would teach a consumer to expect a field
+    // sil-services never sends — and could collide with one it does.
+    writeTokensFile();
+    catalogEmptyOk();
+    const api = createMockPluginApi({ config: misattachedConfig(), runtime: hostRuntime() });
+    lastApi = api;
+    registerAll(api);
+    const result = await getTool(api, "shopping_search").execute("call-1", SEARCH_PARAMS);
+    expect(result.content).toHaveLength(2);
+    const body = JSON.parse(result.content[0]!.text as string) as Payload;
+    const beside = JSON.parse(result.content[1]!.text as string) as Payload;
+    expect(body).toEqual({ status: "ok", products: [] });
+    expect(beside.advisories).toBeDefined();
+  });
+
+  it("a HEALTHY shopping tool emits exactly ONE block — the advisory frame is drift-only", async () => {
+    writeTokensFile();
+    catalogEmptyOk();
+    await runTool("shopping_search", SEARCH_PARAMS, healthyConfig());
+    expect(lastBlocks).toBe(1);
+  });
+
   it("compat NEVER rides a tool result — it is a doctor-only question (the catalogue)", async () => {
-    // A gateway-compat gap answers a question nobody asked mid-`sil_search`. The
+    // A gateway-compat gap answers a question nobody asked mid-`shopping_search`. The
     // fold is earned by the self-carry paradox, which applies ONLY to wiring.
-    const payload = await runTool("sil_profile_search", {}, allDriftConfig());
+    const payload = await runCarrier(allDriftConfig());
     expect(advisoryIds(payload)).not.toContain(GATEWAY_COMPAT);
     for (const advisory of payload.advisories ?? []) {
       expect(advisory.id.startsWith("wiring.")).toBe(true);
@@ -593,7 +653,7 @@ describe("AC6 — a healthy host is SILENT everywhere (absence of a problem is n
     // The auto-load-everything default: sil IS allowed. Flagging it would fire a
     // false advisory on a correctly-working default install — on every sil_* result,
     // forever. This is the easiest false positive in the card to ship.
-    const payload = await runTool("sil_profile_search", {}, healthyConfig());
+    const payload = await runCarrier(healthyConfig());
     const report = await runDoctor(healthyConfig());
     expect(payload).not.toHaveProperty("advisories");
     expect(wiringFindings(report)).toEqual([]);
@@ -605,7 +665,7 @@ describe("AC6 — a healthy host is SILENT everywhere (absence of a problem is n
       tools: { alsoAllow: [PLUGIN_ID] },
       gateway: { version: HOST_FINE },
     };
-    const payload = await runTool("sil_profile_search", {}, config);
+    const payload = await runCarrier(config);
     expect(payload).not.toHaveProperty("advisories");
     expect(wiringFindings(await runDoctor(config))).toEqual([]);
   });
@@ -627,7 +687,7 @@ describe("AC6 — a healthy host is SILENT everywhere (absence of a problem is n
   it("is NOT VACUOUS — the same surfaces DO speak when the host is drifted", async () => {
     // Without this, an implementation that folds nothing anywhere passes every
     // silence assertion in this block.
-    const payload = await runTool("sil_profile_search", {}, allDriftConfig());
+    const payload = await runCarrier(allDriftConfig());
     const report = await runDoctor(allDriftConfig());
     expect(payload.advisories!.length).toBeGreaterThan(0);
     expect(wiringFindings(report).length).toBeGreaterThan(0);
@@ -760,7 +820,8 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
     expect(config).toEqual(before);
 
     registerAll(api);
-    await getTool(api, "sil_profile_search").execute("call-1", {});
+    writeTokensFile();
+    await getTool(api, "sil_register").execute("call-1", {});
     expect(config).toEqual(before);
 
     await getTool(api, "sil_doctor").execute("call-2", {});
@@ -778,7 +839,8 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
 
     expect(() => capturedRegisterFn!(api)).not.toThrow();
     registerAll(api);
-    await expect(getTool(api, "sil_profile_search").execute("call-1", {})).resolves.toBeDefined();
+    writeTokensFile();
+    await expect(getTool(api, "sil_register").execute("call-1", {})).resolves.toBeDefined();
     await expect(getTool(api, "sil_doctor").execute("call-2", {})).resolves.toBeDefined();
   });
 
@@ -795,7 +857,8 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
     lastApi = api;
     capturedRegisterFn!(api);
     registerAll(api);
-    await getTool(api, "sil_profile_search").execute("call-1", {});
+    writeTokensFile();
+    await getTool(api, "sil_register").execute("call-1", {});
     await getTool(api, "sil_doctor").execute("call-2", {});
 
     expect(spy).not.toHaveBeenCalled();
@@ -805,7 +868,7 @@ describe("AC12 — `api.config` is the host's live tree, and we never write to i
     const config = allDriftConfig();
     const before = structuredClone(config);
     for (let i = 0; i < 3; i += 1) {
-      await runTool("sil_profile_search", {}, config);
+      await runCarrier(config);
       await runDoctor(config);
     }
     expect(config).toEqual(before);
@@ -834,7 +897,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
       expect(finding.status).toBe("advisory");
     }
 
-    const payload = await runTool("sil_profile_search", {}, allDriftConfig());
+    const payload = await runCarrier(allDriftConfig());
     for (const advisory of payload.advisories!) {
       expect(advisory.appliedAction).toBeNull();
       expect(advisory.status).toBe("advisory");
@@ -850,7 +913,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     mkdirSync(openclawDir, { recursive: true, mode: 0o700 });
     writeFileSync(join(openclawDir, "openclaw.json"), JSON.stringify(healthyConfig()), { mode: 0o600 });
 
-    const payload = await runTool("sil_profile_search", {}, misattachedConfig());
+    const payload = await runCarrier(misattachedConfig());
     expect(advisoryIds(payload)).toEqual([SKILL_MISATTACHED]);
   });
 
@@ -863,7 +926,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     mkdirSync(openclawDir, { recursive: true, mode: 0o700 });
     writeFileSync(join(openclawDir, "openclaw.json"), JSON.stringify(allDriftConfig()), { mode: 0o600 });
 
-    const payload = await runTool("sil_profile_search", {}, healthyConfig());
+    const payload = await runCarrier(healthyConfig());
     const report = await runDoctor(healthyConfig());
     expect(payload).not.toHaveProperty("advisories");
     expect(wiringFindings(report)).toEqual([]);
@@ -880,7 +943,8 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     lastApi = api;
     capturedRegisterFn!(api);
     registerAll(api);
-    await getTool(api, "sil_profile_search").execute("call-1", {});
+    writeTokensFile();
+    await getTool(api, "sil_register").execute("call-1", {});
     await getTool(api, "sil_doctor").execute("call-2", {});
 
     // No write, no chmod, no new file, and nothing under $HOME touched at all —
@@ -898,14 +962,13 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     // ⚠️ THIS LIST IS A WHITELIST, NOT A SWEEP. A module absent from it is invisible
     // to this guard — SILENTLY, with a green suite. That is worse than a red: the
     // module ships unguarded on the posture the manifest declares. ADD EVERY NEW
-    // audit-scope module here (add-only). `creation-entrypoint.ts` was added by card
-    // `creation-bin-unreachable-on-clawhub-installs` (AC D2): it resolves and probes
-    // the creation script's path, and the ONE thing it must never do is RUN it —
-    // naming a path is not spawning it, which is what keeps `noChildProcess` true.
+    // audit-scope module here (add-only). `allowlist-script.ts` is here because it
+    // resolves the tool-admission script's path, and the ONE thing it must never do is
+    // RUN it — naming a path is not spawning it, which keeps `noChildProcess` true.
     for (const file of [
       "src/lib/host-wiring.ts",
       "src/lib/version-advisory.ts",
-      "src/lib/creation-entrypoint.ts",
+      "src/lib/allowlist-script.ts",
     ]) {
       const source = readFileSync(join(REPO_ROOT, file), "utf8");
       for (const forbidden of [
@@ -922,10 +985,8 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
   });
 
   it("AC D1 — NO plugin source module reaches for a child process (a SWEEP, not a whitelist)", () => {
-    // The manifest declares `security.noChildProcess: true`, and this card's Out of
-    // scope exists to protect it: creation stays a separate operator script, and
-    // `sil_doctor` REPORTS the path rather than spawning it. Naming a path is not
-    // running it.
+    // The manifest declares `security.noChildProcess: true`: every operator script
+    // stays a separate process the plugin names and never spawns.
     //
     // Deliberately a SWEEP over every source file tsc compiles into `dist/` — the
     // whitelist above cannot carry this claim, because a module absent from that list
@@ -955,7 +1016,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
 
     // Anti-vacuity: a walk that found nothing would pass this test forever.
     expect(sources.length).toBeGreaterThan(10);
-    expect(sources.some((p) => p.endsWith("creation-entrypoint.ts"))).toBe(true);
+    expect(sources.some((p) => p.endsWith("allowlist-script.ts"))).toBe(true);
 
     const offenders = sources.filter((path) =>
       /child_process|\bexecSync\b|\bspawnSync\b|\bexecFileSync\b|\bspawn\(/.test(
@@ -993,7 +1054,7 @@ describe("AC11 — six flat fields, folded into the doctor's existing determinis
   });
 
   it("the folded advisories on a tool result carry the same six fields", async () => {
-    const payload = await runTool("sil_profile_search", {}, allDriftConfig());
+    const payload = await runCarrier(allDriftConfig());
     for (const advisory of payload.advisories!) {
       expect(Object.keys(advisory).sort(), advisory.id).toEqual([
         "appliedAction",
@@ -1022,22 +1083,17 @@ describe("AC11 — six flat fields, folded into the doctor's existing determinis
     for (const i of ourIndices) expect(i).toBeLessThan(firstInfo);
   });
 
-  it("sil_doctor's report carries EXACTLY the seven top-level keys — no extras", async () => {
+  it("sil_doctor's report carries EXACTLY the six top-level keys — no extras", async () => {
     // A SECOND exact-set mirror of the report shape (the first is
     // `REPORT_KEYS` in `tools/doctor.test.ts`) — this one over the REAL `execute()`
     // rather than the pure assembler, so it also proves the tool actually threads
-    // the field through. Both are `toEqual`, never a subset: an exact set is what
-    // catches drift in BOTH directions.
-    //
-    // Bumped ADD-ONLY by card `creation-bin-unreachable-on-clawhub-installs`, which
-    // adds `creationEntrypoint`. This test's previous title claimed "this card adds
-    // no report key" — true of #67, which wrote it, and false now. A key change
-    // bites HERE as well as in `tools/doctor.test.ts` and (silently, since a
-    // structural cast tolerates extras) `doctor.integration.test.ts`'s local mirror.
+    // the fields through. Both are `toEqual`, never a subset: an exact set is what
+    // catches drift in BOTH directions. A key change bites HERE as well as in
+    // `tools/doctor.test.ts` and (silently, since a structural cast tolerates extras)
+    // `doctor.integration.test.ts`'s local mirror.
     const report = await runDoctor(allDriftConfig(), HOST_TOO_OLD);
     expect(Object.keys(report).sort()).toEqual([
       "counts",
-      "creationEntrypoint",
       "dataDir",
       "findings",
       "healthy",
@@ -1077,7 +1133,7 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
       expect(emittedStrings(report), secret).not.toContain(secret);
     }
 
-    const payload = await runTool("sil_profile_search", {}, config);
+    const payload = await runCarrier(config);
     for (const secret of ALL_SECRETS) {
       expect(emittedStrings(payload), secret).not.toContain(secret);
     }
@@ -1102,7 +1158,7 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
     // The agent id IS a wiring fact and is required by the fix string. The agent's
     // `env` block sitting beside it is NOT — a naive implementation that serializes
     // the whole agent entry to name it leaks in the same breath as it helps.
-    const payload = await runTool("sil_profile_search", {}, secretBearingConfig());
+    const payload = await runCarrier(secretBearingConfig());
     const advisory = payload.advisories!.find((a) => a.id === SKILL_MISATTACHED)!;
 
     expect(advisory.detected).toContain("shopper");
@@ -1113,13 +1169,14 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
   it("the wiring + compat path issues ZERO network calls", async () => {
     // This card is 100% local — a stronger property than "no network on the hot
     // path", and one that falls out of the design rather than being engineered. Two
-    // surfaces that make no request of their own prove it: register(), and a profile
-    // read (local-only by contract).
+    // surfaces that make no request of their own prove it: register(), and the
+    // already-registered short-circuit.
     const api = createMockPluginApi({ config: allDriftConfig() });
     lastApi = api;
     capturedRegisterFn!(api);
     registerAll(api);
-    await getTool(api, "sil_profile_search").execute("call-1", {});
+    writeTokensFile();
+    await getTool(api, "sil_register").execute("call-1", {});
 
     expect(fetchSpy).not.toHaveBeenCalled();
   });

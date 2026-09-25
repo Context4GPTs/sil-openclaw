@@ -128,22 +128,28 @@ describe("plugin entry — registration contract", () => {
     // register() runs the real tool groups (no mock), so it populates the
     // api with exactly the real tools and NO example stub. This pins the
     // wiring AND the card's "absence" goal: sil_ping / sil_echo gone.
-    // The sil-doctor-tool-data-store-identity-health card ADDS sil_doctor in a
-    // NEW group (registerDoctorTools — so it also needs the src/index.ts wiring
-    // line, unlike a tool joining an existing group) → 10 → 11, add-only.
+    // 14: the local document store and its Brief compile are deleted (a GROUP removal
+    // — `registerDocTools` / `registerBriefCompileTool` are gone from src/index.ts), and
+    // the brief and profile the contract signed are registered in their place, so
+    // nothing of the buyer's is kept on the agent's disk. Exact on purpose: loosening it
+    // to `toContain` stops it catching a silent removal, which is how a shipped tool
+    // disappears under a green suite.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
+      "shopping_brief_create",
+      "shopping_brief_edit",
+      "shopping_brief_read",
+      "shopping_domain_create",
+      "shopping_domain_get",
+      "shopping_domain_search",
+      "shopping_offers",
+      "shopping_product_get",
+      "shopping_profile_edit",
+      "shopping_search",
+      "shopping_seller_get",
       "sil_doctor",
-      "sil_learn",
-      "sil_product_get",
-      "sil_profile_get",
-      "sil_profile_materialize",
-      "sil_profile_remove",
-      "sil_profile_search",
       "sil_register",
-      "sil_search",
-      "sil_specs",
       "sil_whoami",
     ]);
   });

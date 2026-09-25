@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-offers-request.schema.json",
+  "title": "sil shopping_offers — request",
+  "type": "object",
+  "required": [
+    "brief",
+    "ids"
+  ],
+  "properties": {
+    "brief": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Names the session's brief, so sil records this call against the want behind it. A brief that is not the buyer's answers `not_found`."
+    },
+    "ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "An id sil minted, passed back verbatim."
+      },
+      "minItems": 1,
+      "maxItems": 10,
+      "description": "Sends the picked variant ids and nothing else: sil reads the brief's seller specs and price, the buyer's address and currency, off the brief and the profile."
+    }
+  },
+  "additionalProperties": false
+}

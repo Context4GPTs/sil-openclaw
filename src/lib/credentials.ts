@@ -40,9 +40,8 @@ import { randomBytes } from "node:crypto";
 
 /** Owner read/write only. The bearer pair must never be group/world-readable. */
 const FILE_MODE = 0o600;
-/** Owner read/write/execute only on the data dir itself. Exported so the one
- * other writer of a `$SIL_DATA_DIR` sub-tree (`profile-store.ts`, the SDS
- * artefact store) shares this single source of truth for the data-home mode
+/** Owner read/write/execute only on the data dir itself. Exported so
+ * `sil_doctor`'s mode check shares one source of truth for the data-home mode
  * rather than duplicating the literal. */
 export const DIR_MODE = 0o700;
 

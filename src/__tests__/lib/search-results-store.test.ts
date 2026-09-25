@@ -1,7 +1,7 @@
 /**
  * UNIT — the search-results delivery buffer (tier: unit, pure module, no I/O).
  *
- * The store `sil_search` writes each `ok` page into and `sil.search_results`
+ * The store `shopping_search` writes each `ok` page into and `sil.search_results`
  * reads back out of. It is a DELIVERY BUFFER, not scrollback and not history:
  * bounded by a product-chosen retention window and an entry ceiling, in-memory,
  * process-local, and TIMER-FREE (the plugin's `register()` opens nothing, so a
@@ -26,6 +26,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import type { SearchResultPage } from "../../lib/search-results-store.js";
+import { contractResponse } from "../helpers/shopping-wire.js";
 import {
   RETENTION_MS,
   MAX_ENTRIES,
@@ -35,35 +36,19 @@ import {
   __resetSearchResultsStore,
 } from "../../lib/search-results-store.js";
 
-/** A real projected search page — the exact shape a client's decoder accepts
- * (`{status:"ok", products:[...], cursor?, specs_status?}`) with a genuine
- * `SearchProduct`: product identity + provenance plus the nested featured variant
- * carrying a non-empty `checkout_url`. Anti-false-green: a store that hands back a
- * placeholder rather than what it was given cannot satisfy the deep-equality
- * assertions below. */
-function page(
-  label: string,
-  extra: { cursor?: string; specs_status?: { ns: string; key: string; applied: boolean }[] } = {},
-): SearchResultPage {
-  return {
-    status: "ok",
-    products: [
-      {
-        id: `gid://product/${label}`,
-        title: `Product ${label}`,
-        source: "shop",
-        variant: {
-          id: `gid://variant/${label}-1`,
-          title: `Product ${label} — Default`,
-          price: { amount: 4999, currency: "USD" },
-          availability: { available: true, status: "in_stock" },
-          checkout_url: `https://buy.example.com/${label}`,
-        },
-      },
-    ],
-    ...(extra.cursor !== undefined ? { cursor: extra.cursor } : {}),
-    ...(extra.specs_status !== undefined ? { specs_status: extra.specs_status } : {}),
-  };
+/**
+ * A real search page — the agent contract's own `shopping_search` 200, which is exactly
+ * what the tool buffers. Anti-false-green: a store that hands back a placeholder rather
+ * than what it was given cannot satisfy the deep-equality assertions below, and one that
+ * keeps only `products` strips the honesty rails the client renders from.
+ */
+function page(label: string): SearchResultPage {
+  const body = contractResponse("shopping_search");
+  const products = (body["products"] as Record<string, unknown>[]).map((product) => ({
+    ...product,
+    id: `${product["id"] as string}#${label}`,
+  }));
+  return { ...body, status: "ok", products } as SearchResultPage;
 }
 
 const PRINCIPAL = "user-42";
@@ -85,9 +70,9 @@ describe("retention + capacity are declared bounds (D1, D2)", () => {
   it("RETENTION_MS is FIFTEEN MINUTES — the product decision, not an arbitrary TTL", () => {
     // D1 is a product bound with a stated reason: long enough for the settle
     // edge, a client reload, a reconnect and a short step-away; short enough that
-    // a shopper is never rendered a grid of prices that are no longer true
-    // (price / availability / checkout_url are exactly the fields sil_product_get's
-    // own contract says to re-fetch before buying). Changing this number is a
+    // a shopper is never rendered a grid of prices that are no longer true (a card's
+    // range carries no date at all, which is why `shopping_offers` re-reads it live
+    // before a buy). Changing this number is a
     // PRODUCT decision — it does not get quietly tuned to make a test pass.
     expect(RETENTION_MS).toBe(15 * 60_000);
   });
@@ -131,16 +116,19 @@ describe("the key is the host callId, verbatim (A3, B3)", () => {
     expect(getSearchResult("call_AbC", PRINCIPAL)).not.toBeNull();
   });
 
-  it("returns the page BY VALUE-EQUALITY, preserving cursor and specs_status siblings", () => {
-    // `cursor` and `specs_status` are siblings of `products` on the page the
-    // client decodes; a store that keeps only `products` silently strips the
-    // pagination handle and the honesty rail.
-    const stored = page("a", {
-      cursor: "opaque-cursor-token",
-      specs_status: [{ ns: "product", key: "capacity_gb", applied: false }],
-    });
+  it("returns the page BY VALUE-EQUALITY, preserving every honesty rail", () => {
+    // `fit`, `variants` and `printed` are what the client renders the honesty from;
+    // a store that kept only the titles would show a shortlist it cannot qualify.
+    const stored = page("a");
     putSearchResult("call_1", stored, PRINCIPAL);
-    expect(getSearchResult("call_1", PRINCIPAL)).toEqual(stored);
+    const read = getSearchResult("call_1", PRINCIPAL);
+    expect(read).toEqual(stored);
+    const products = read!.products as Record<string, unknown>[];
+    // The cold body's `unknown` fit answers and its `printed` words survive the round
+    // trip — both say "sil holds none of this", and an absent one reads as verified.
+    expect(products[0]).toHaveProperty("fit");
+    expect(products[0]).toHaveProperty("printed");
+    expect(Object.values(products[0]["fit"] as Record<string, unknown>)).toContain("unknown");
   });
 
   it("an unknown callId is a MISS, never another entry's page", () => {
@@ -270,10 +258,10 @@ describe("principal scoping (C3, C4, C6)", () => {
     const stored = page("a");
     putSearchResult("call_1", stored, PRINCIPAL);
 
-    const foreign = getSearchResult("call_1", "user-99");
-    expect(foreign).toBeNull();
-    expect(JSON.stringify(foreign)).not.toContain("gid://product/a");
-    expect(JSON.stringify(foreign)).not.toContain("checkout_url");
+    // `null`, not a redaction: the two "and it leaked no field either" lines that used
+    // to sit here scanned a page that no longer carries those fields, so they asserted
+    // nothing. A miss is the whole answer.
+    expect(getSearchResult("call_1", "user-99")).toBeNull();
   });
 
   it("the SAME principal resolves — a second paired device of one shopper is not locked out", () => {

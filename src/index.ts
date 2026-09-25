@@ -1,21 +1,23 @@
 /**
  * sil OpenClaw plugin — entry point.
  *
- * A UCP commerce plugin for sil. It registers its real tool groups —
- * identity (`sil_register`, `sil_whoami`) and catalog (`sil_search`,
- * `sil_product_get`) — so they load in an OpenClaw host. There is no
- * transport, no persistent service, and no background work at register
- * time — `register()` is strictly synchronous and opens nothing.
+ * A UCP commerce plugin for sil. It registers its real tool groups — the account
+ * tools (`sil_register`, `sil_whoami`, `sil_doctor`) and the eleven `shopping_*`
+ * catalog tools — so they load in an OpenClaw host.
+ * There is no transport, no persistent service, and no background work at
+ * register time — `register()` is strictly synchronous and opens nothing.
  *
  * `register()` MUST stay synchronous and side-effect-free beyond
- * registering tools, ensuring the data dir, and logging. The reference
- * adapter (`klodi-plugin/adapters/openclaw`) carries a smoke gate
- * precisely because an eager connection opened in `register()` once held
- * the host's install subprocess event loop open and blocked gateway
- * startup. Keep it that way: all I/O lives inside a tool's `execute()` —
- * no timers, no sockets, no unawaited promises here. The one synchronous
- * `mkdirSync` (via `ensureDataDir()`) is exempt: it returns immediately
- * and holds no resource open.
+ * registering tools, ensuring the data dir, reading the shopping
+ * artifacts, and logging. The reference adapter
+ * (`klodi-plugin/adapters/openclaw`) carries a smoke gate precisely
+ * because an eager connection opened in `register()` once held the host's
+ * install subprocess event loop open and blocked gateway startup. Keep it
+ * that way: all NETWORK I/O lives inside a tool's `execute()` — no timers,
+ * no sockets, no unawaited promises here. Two synchronous filesystem reads
+ * are exempt because they return immediately and hold no resource open:
+ * `ensureDataDir()`'s `mkdirSync`, and the `readFileSync` each artifact-backed
+ * tool makes to publish its request artifact as its `parameters`.
  *
  * To add a tool, see `src/tools/identity.ts` (the reference group — it
  * sets the `jsonResult` success shape and structured-error envelope every
@@ -38,7 +40,6 @@ import { detectWiringDrift, readSilWiringFacts } from "./lib/host-wiring.js";
 import { registerCatalogTools } from "./tools/catalog.js";
 import { registerDoctorTools } from "./tools/doctor.js";
 import { registerIdentityTools } from "./tools/identity.js";
-import { registerProfileTools } from "./tools/profile.js";
 
 export default definePluginEntry({
   id: "sil",
@@ -52,10 +53,10 @@ export default definePluginEntry({
     );
 
     // Guarantee the data home exists from the instant register() returns — not
-    // lazily on first write — so tokens, config, and SDS profile artefacts have
-    // one consistent home from load. One-shot synchronous mkdir (recursive,
-    // 0700): it returns immediately and holds no resource open, so the
-    // register()-stays-synchronous / opens-nothing invariant is preserved.
+    // lazily on first write — so tokens and config have one consistent home from
+    // load. One-shot synchronous mkdir (recursive, 0700): it returns immediately
+    // and holds no resource open, so the register()-stays-synchronous /
+    // opens-nothing invariant is preserved.
     //
     // Fail-closed: an uncreatable home (parent unwritable, path occupied by a
     // file → ENOTDIR, no space) is logged LOUDLY and DISTINCTLY (the path + OS
@@ -70,10 +71,10 @@ export default definePluginEntry({
       const cause = err instanceof Error ? err.message : String(err);
       api.logger.error("sil_plugin_data_dir_failed", {
         message:
-          "sil could NOT create its data directory at registration, so tokens,"
-          + " config, and profiles have no home. Fix the data directory (it must"
-          + " be writable — check permissions / free space / that $SIL_DATA_DIR"
-          + " is a directory), then reload the plugin.",
+          "sil could NOT create its data directory at registration, so its tokens"
+          + " and config have no home. Fix the data directory (it must be writable"
+          + " — check permissions / free space / that $SIL_DATA_DIR is a"
+          + " directory), then reload the plugin.",
         data_dir: getDataDir(),
         cause,
       });
@@ -82,13 +83,12 @@ export default definePluginEntry({
 
     registerIdentityTools(api);
     registerCatalogTools(api);
-    registerProfileTools(api);
     registerDoctorTools(api);
 
     // The pull surface a paired client resolves a search page from. Registering
     // a closure opens nothing — no socket, no timer — so the invariant above
     // holds; the store behind it is touched only inside the handler and inside
-    // sil_search's execute(). NOT a tool and NOT a `registerXTools` group: it
+    // shopping_search's execute(). NOT a tool and NOT a `registerXTools` group: it
     // never reaches the model, and the manifest's `contracts` vocabulary has no
     // gateway-method key, so this call IS the declaration.
     registerSearchResultsMethod(api);

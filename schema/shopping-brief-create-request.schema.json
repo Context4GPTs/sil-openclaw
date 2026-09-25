@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-brief-create-request.schema.json",
+  "title": "sil shopping_brief_create — request",
+  "type": "object",
+  "required": [
+    "title",
+    "narrative"
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Names the job in a few words, so the buyer picks it out of their list."
+    },
+    "narrative": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "description": "Writes what a good buy looks like for THIS buyer, in their own terms — what they are after, what it has to do for them, and what would make it a bad buy. It is the spec of the job, so a want no keyed spec can carry stays here and still counts."
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+      "maxLength": 255,
+      "description": "Names the domain the specs below sit under: a domain path for product specs, `seller` for the seller specs, which belong to the whole brief."
+    },
+    "specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "op",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Names the key from the domain read; `price` is a key every domain has."
+          },
+          "op": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "eq"
+              },
+              {
+                "type": "string",
+                "const": "neq"
+              },
+              {
+                "type": "string",
+                "const": "gte"
+              },
+              {
+                "type": "string",
+                "const": "lte"
+              },
+              {
+                "type": "string",
+                "const": "in"
+              },
+              {
+                "type": "string",
+                "const": "nin"
+              }
+            ],
+            "description": "Sends the operator the domain read listed for this key."
+          },
+          "value": {
+            "description": "Sends the desired value, typed by the key's type."
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "minLength": 3,
+            "maxLength": 3,
+            "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Quotes the buyer's own words behind the spec, verbatim — never a paraphrase, never a sentence they did not say; a spec the guide derives from a measurement quotes the measurement. Reads them back before proposing to relax it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 32,
+      "description": "Writes the wants it can already express, keyed and typed by the domain read."
+    }
+  },
+  "additionalProperties": false
+}

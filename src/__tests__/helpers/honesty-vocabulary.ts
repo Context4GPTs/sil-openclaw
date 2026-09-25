@@ -1,0 +1,331 @@
+/**
+ * The honesty-field vocabulary discipline, as a SINGLE source of truth shared by
+ * the tool-description guard (unit — `tools/tool-schema-contract.unit.test.ts`)
+ * and the skill-prose guard (integration —
+ * `skill-bundle-contract.integration.test.ts`). Same split, same reason, as
+ * `per-niche-expert.ts`: one module means the allowance can never drift between
+ * the two surfaces that carry the same rule.
+ *
+ * WHAT IT PROTECTS. The wire answers with honesty fields — `ships: unknown`, a `fit` key
+ * answered `"unknown"`, a variant with no option values, the `printed` pairs of a page
+ * sil read cold, a `webpage_info` block on the dossier, a price in a currency the bound
+ * could not be tested against. Every one of them is an ORDINARY answer that KEEPS its
+ * subject. The agent learns what to do with them almost entirely from the tool
+ * descriptions, and prose is the only carrier of the rule — so prose is what is guarded.
+ *
+ * `unknown` is the one that silently breaks the product. The seller read fails closed:
+ * `not_serviceable` is a positive claim needing a policy sil actually read, so `unknown`
+ * is a common answer. A description that reads as "drop the unknowns" undoes that
+ * fail-closed design one layer up and collapses the shortlist to near-empty WHILE
+ * LOOKING LIKE IT FILTERED. Nothing downstream can detect that.
+ *
+ * WHY IT IS NOT A BLANKET FORBID. The correct description must NAME the state in
+ * order to keep it ("`unknown` … never a reason to drop a seller: keep it"). A
+ * flat ban on "drop" near "unknown" would fail the exact sentence the product
+ * needs. So the scan is SENTENCE-scoped and carries a keep/negation allowance —
+ * the same shape as `perNicheExpertOffenders`' retro-allowance.
+ *
+ * Every regex below is proved to BITE (and to spare the approved wording) in
+ * `lib/honesty-vocabulary.test.ts`. A scanner nobody has watched fail is a
+ * scanner that passes for the wrong reason.
+ */
+
+/**
+ * The honesty states, as they are actually written in agent-facing prose — bare
+ * (`unknown`, a `gap`), backticked (`printed`, `webpage_info`), or as the phrase the
+ * contract uses for the two with no field of their own (a variant with no option values,
+ * a bound in another currency sil could not test). The empty-`variants` token stays: the
+ * search no longer answers a zero-variant product, and the prose must not learn to drop
+ * one if it ever does again.
+ */
+const HONESTY_TOKEN =
+  /\b(unknown|printed|webpage_info|unverified|gap)\b|\bnot\s+(?:yet\s+)?verified\b|\bcould\s+not\s+test\b|\bno option values\b|variants\s*[`'":=]*\s*\[\s*\]|\bempty\s+variants\b/i;
+
+/**
+ * Verbs that remove a subject from what the buyer sees. `deprioritise` is here
+ * because a description that says "rank unknowns last" has quietly reintroduced
+ * the exclusion as an ordering — the shortlist still collapses, just slower.
+ */
+const EXCLUSION =
+  /\b(filters?|filtered|filtering|excludes?|excluded|excluding|exclusion|drops?|dropped|dropping|skips?|skipped|skipping|discards?|discarded|omits?|omitted|omitting|removes?|removed|hides?|hidden|hiding|ignores?|ignored|ignoring|deprioriti[sz]e[sd]?|deprioriti[sz]ing|suppress(?:es|ed)?|disregards?)\b/i;
+
+/**
+ * Phrases that mean exclusion with no honesty token beside them — "present only
+ * serviceable sellers" names no state yet forbids two of the three. Absolutes
+ * still get the keep/negation allowance, so prose may disavow them by name.
+ */
+const ABSOLUTE_EXCLUSION = [
+  /\bonly\s+(?:the\s+|show\s+|present\s+|list\s+|return\s+|keep\s+)*serviceable\b/i,
+  /\bserviceable\s+(?:sellers?\s+|results?\s+|ones?\s+)?only\b/i,
+  /\bonly\s+(?:the\s+|show\s+|present\s+|list\s+|return\s+|keep\s+)*verified\b/i,
+  /\bverified\s+(?:products?\s+|results?\s+|ones?\s+)?only\b/i,
+  /\bsoft(?:er)?\s+not_serviceable\b/i,
+  /\bunknown\s+means\s+(?:it\s+)?(?:can(?:not|'t)\s+ship|no\b|not\s+available)/i,
+  /\btreat\s+unknown\s+as\s+(?:not_serviceable|unavailable|no\b)/i,
+];
+
+/**
+ * The negation allowance, read in a LOOKBACK WINDOW immediately before the
+ * exclusion verb — never sentence-wide. A sentence-wide `\bnot\b` excuses
+ * "Suppress the unset fields so the buyer is not confused", which is the defect
+ * itself; the negation has to be attached to the verb it cancels.
+ *
+ * 44 characters covers the longest real form the product ruling uses ("and
+ * never a reason to drop") without reaching the previous clause.
+ *
+ * `\bnot\b` does NOT match inside `not_serviceable` (`_` is a word character),
+ * which is load-bearing: otherwise every sentence naming the negative state
+ * would excuse itself.
+ */
+const NEGATION_LOOKBACK = 44;
+const NEGATION = /\b(never|not|nor|n't|no reason|rather than|instead of)\b/i;
+
+/**
+ * A keep verb anywhere in the sentence also clears it — the instruction to keep
+ * the subject is what the exclusion verb is being contrasted against.
+ */
+const KEEP_VERB = /\b(keeps?|keeping|kept|stays?|remains?|retains?)\b/i;
+
+/**
+ * The route's OWN vocabulary, which is definitionally an exclusion and must
+ * stay sayable: `not_serviceable` MEANS the seller's policy excludes the
+ * destination. Without this the correct three-state definition would false-RED,
+ * and the only fix would be a weaker description.
+ */
+const ROUTE_VOCABULARY = [
+  /\bexcludes?\s+the\s+destination\b/i,
+  /\bpolicy\b[^.]{0,48}?\bexcludes?\b/i,
+];
+
+/**
+ * Sentence scope. Markdown bullets and newlines end a sentence too — a
+ * paragraph-wide window would let a keep-clause three sentences away excuse an
+ * exclusion the agent reads on its own.
+ */
+function sentences(body: string): string[] {
+  return body
+    .split(/(?<=[.!?;])\s+|\n+|(?:^|\s)[-*•]\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/** Every index in `sentence` at which `re` matches. */
+function matchIndices(sentence: string, re: RegExp): number[] {
+  const global = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
+  const found: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = global.exec(sentence)) !== null) {
+    found.push(m.index);
+    if (m[0].length === 0) global.lastIndex += 1;
+  }
+  return found;
+}
+
+/** Is the exclusion at `index` part of a phrase the route itself owns? */
+function isRouteVocabulary(sentence: string, index: number): boolean {
+  return ROUTE_VOCABULARY.some((re) =>
+    matchIndices(sentence, re).some((start) => {
+      const match = new RegExp(re.source, re.flags).exec(sentence.slice(start));
+      return match !== null && index >= start && index < start + match[0].length;
+    }),
+  );
+}
+
+/**
+ * Sentences that teach the agent to drop, filter, hide or deprioritise on an
+ * honesty field. Empty ⇒ clean. Returns the offending sentences so a red names
+ * the prose, not just the file.
+ */
+export function honestyExclusionOffenders(body: string): string[] {
+  const offenders: string[] = [];
+  for (const sentence of sentences(body)) {
+    const candidates = [
+      ...(HONESTY_TOKEN.test(sentence) ? matchIndices(sentence, EXCLUSION) : []),
+      ...ABSOLUTE_EXCLUSION.flatMap((re) => matchIndices(sentence, re)),
+    ];
+    if (candidates.length === 0) continue;
+    if (KEEP_VERB.test(sentence)) continue;
+    const uncleared = candidates.filter(
+      (index) =>
+        !isRouteVocabulary(sentence, index) &&
+        !NEGATION.test(sentence.slice(Math.max(0, index - NEGATION_LOOKBACK), index)),
+    );
+    if (uncleared.length > 0) offenders.push(sentence.replace(/\s+/g, " "));
+  }
+  return offenders;
+}
+
+/**
+ * Claims a route cannot honour. Each names a state the wire can genuinely be in: a price
+ * range on a card is dated by nothing and is not "the current price"; a seller whose
+ * `ships` is `unknown` does not "ship to you"; a product whose `fit` is silent on a key
+ * does not "match your requirements"; a shortlist bounded by `n` is not "everything
+ * available".
+ *
+ * Same sentence scope and same negation allowance — prose must be able to
+ * forbid the claim by quoting it.
+ */
+const OVER_PROMISE = [
+  /\bthe\s+current\s+price\b/i,
+  /\bprices?\s+(?:are\s+)?(?:always\s+)?(?:up[- ]to[- ]date|current)\b/i,
+  /\bguaranteed\s+(?:to\s+)?(?:ship|deliver)/i,
+  /\bwill\s+ship\s+to\s+(?:you|the\s+buyer)\b/i,
+  /\bships?\s+to\s+you\b/i,
+  /\bmatch(?:es|ing)?\s+(?:all\s+)?(?:your|the\s+buyer's)\s+requirements\b/i,
+  /\bevery(?:thing)?\s+(?:item\s+)?available\b/i,
+  /\ball\s+(?:the\s+)?sellers?\s+(?:that\s+)?exists?\b/i,
+  /\bexhaustive\b/i,
+  /\bcomplete\s+list\s+of\b/i,
+];
+
+export function overPromiseOffenders(body: string): string[] {
+  const offenders: string[] = [];
+  for (const sentence of sentences(body)) {
+    const uncleared = OVER_PROMISE.flatMap((re) => matchIndices(sentence, re)).filter(
+      (index) =>
+        !NEGATION.test(sentence.slice(Math.max(0, index - NEGATION_LOOKBACK), index)),
+    );
+    if (uncleared.length > 0) offenders.push(sentence.replace(/\s+/g, " "));
+  }
+  return offenders;
+}
+
+/**
+ * Over-trigger: a description that claims the general category instead of what THIS tool
+ * does. `shopping_search` searches sil's catalog in ONE settled category — an agent told
+ * it "searches the web" will reach for it constantly and for the wrong thing.
+ *
+ * NO negation allowance: unlike the honesty rules, there is no legitimate reason
+ * for a tool description to quote an over-broad trigger at all, and the phrases
+ * are the ones a model pattern-matches on regardless of the words around them.
+ */
+const OVER_TRIGGER = [
+  /\bsearch(?:es)?\s+the\s+web\b/i,
+  /\bweb\s+search\b/i,
+  /\bfind\s+any(?:thing)?\b/i,
+  /\bfind\s+(?:any\s+)?products?\s+(?:anywhere|online|on\s+the\s+(?:web|internet))\b/i,
+  /\blook\s+anything\s+up\b/i,
+  /\bgeneral[- ]purpose\b/i,
+  /\bany\s+(?:online\s+)?(?:store|shop|retailer|merchant)\b/i,
+  /\banything\s+you\s+(?:want|need)\b/i,
+];
+
+export function overTriggerOffenders(body: string): string[] {
+  return sentences(body)
+    .filter((s) => OVER_TRIGGER.some((re) => re.test(s)))
+    .map((s) => s.replace(/\s+/g, " "));
+}
+
+/**
+ * The FOURTH honesty state: `not_found`. Every route answering it scopes its lookup
+ * to the buyer's account, so it means "not yours", never "it does not exist". Read as
+ * an absence it licenses two wrong writes — a second brief opened over the one the
+ * buyer is working from, and a mint of a category that already stands elsewhere.
+ *
+ * Same shape as the scanners above (sentence scope, the offending sentence
+ * returned), and the same reason for it: an agent reads the sentence on its own,
+ * so a qualifier three sentences away does not reach it.
+ */
+const NOT_FOUND_TOKEN = /\bnot_found\b/i;
+
+/** What `not_found` is being said to MEAN. */
+const ABSENCE_CLAIM =
+  /\b(absent|already[ -]gone|gone|missing|does\s+not\s+exist|doesn'?t\s+exist|isn'?t\s+there|no\s+such|never\s+written|nothing\s+(?:is\s+)?there)\b/i;
+
+/** What that meaning LICENSES — the two acts this rule exists to gate. */
+const ABSENCE_LICENCE =
+  /\b(mints?|minting|creates?|re-?mint\w*|write\s+a\s+fresh|fresh\s+(?:one|document)|repeat\s+call|safe|deleted|removed|delete\s+landed)\b/i;
+
+/**
+ * The ALLOWANCE, not the rule: prose may make an absence claim where it also says what
+ * was listed. Matched as a listing verb NEXT TO a container noun, in either order, so
+ * the wording stays free. Deliberately narrow on the noun — a bare "list what you have"
+ * would clear the very sentence being guarded.
+ */
+const LISTED_QUALIFIER =
+  /\b(?:list\w*|enumerat\w+|scan\w*)\b[^.;]{0,30}\b(?:director\w+|folder|briefs|containing|would\s+hold)\b|\b(?:director\w+|folder|briefs|containing)\b[^.;]{0,30}\b(?:list\w*|enumerat\w+|scan\w*)\b|\bunlistable\b/i;
+
+/**
+ * This rule needs a CLAIM and its QUALIFIER in one unit, so unlike the scanners
+ * above it cannot treat a physical line break as a unit break: the bundle's prose
+ * is hard-wrapped, and the agent reads the rendered sentence, not the column
+ * width. Wrapped lines are joined; a blank line and a new bullet are still real
+ * boundaries.
+ */
+function unwrapped(body: string): string[] {
+  return sentences(body.replace(/\n(?!\s*\n)(?!\s*[-*•]\s)/g, " "));
+}
+
+/**
+ * Sentences that state `not_found` as a bare licence to write, or as proof a thing is
+ * gone. Empty ⇒ every such sentence carries the listing qualifier.
+ */
+export function notFoundLicenceOffenders(body: string): string[] {
+  return unwrapped(body)
+    .filter(
+      (s) =>
+        NOT_FOUND_TOKEN.test(s)
+        && (ABSENCE_CLAIM.test(s) || ABSENCE_LICENCE.test(s))
+        && !LISTED_QUALIFIER.test(s),
+    )
+    .map((s) => s.replace(/\s+/g, " "));
+}
+
+/**
+ * Vocabulary the pre-contract request surface retired, as TEXT — every entry is a dead string
+ * that cannot appear innocently in English prose, so a blanket forbid is right.
+ *
+ * `ship_to` is deliberately NOT here any more: the search takes it as a request field, so
+ * forbidding the word would fight the wire it guards.
+ *
+ * The retired PARAMETER names that ARE innocent words (`category`, `cursor`) are
+ * deliberately absent: they are guarded STRUCTURALLY instead, off each tool's own
+ * `parameters` schema (exact, and free of the false RED a bare "category" would
+ * cause in prose that legitimately says "research how the category is bought"). In
+ * prose they are caught in their BACKTICKED form below — backticks are how prose
+ * names a parameter.
+ *
+ * `` `condition` `` left this list when the contract made it a live product spec at
+ * the `product` root: the brief legitimately writes `condition eq new`, so forbidding
+ * the backticked key would fight the registry it guards.
+ *
+ * Lower-case only: bodies are lowered before matching, so an upper-case needle
+ * would sit here looking protective while matching nothing. Guarded by a
+ * guard-of-the-guard at both call sites.
+ */
+export const RETIRED_V0_TOKENS = [
+  "auth_url",
+  "next_step",
+  "checkout_url",
+  "price_min",
+  "price_max",
+  "local_merchants",
+  "specs_status",
+  "filters.specs",
+  "ns.key",
+  "sil_lookup",
+  "mint_domain",
+  "`cursor`",
+  "`category`",
+];
+
+/** Retired tokens present in `body`, in the order listed. Empty ⇒ clean. */
+export function retiredV0Offenders(body: string): string[] {
+  const lower = body.toLowerCase();
+  return RETIRED_V0_TOKENS.filter((token) => lower.includes(token));
+}
+
+/**
+ * The wordings two live draws failed under. They are ordinary English, not dead
+ * strings — `shopping_domain_search`'s `q` IS free text — so they are scanned over
+ * the BUNDLE alone, never over a tool description.
+ */
+export const RETIRED_V0_PHRASES = ["free text", "filled understanding"];
+
+/** Phrase needles through `unwrapped()`, then whitespace-collapsed: the bundle wraps
+ * at ~88 columns and indents a bullet's continuation, so a byte-wise `includes` reads
+ * `filled\nunderstanding` as absent and a joined `free\n  text` as two spaces. */
+export function retiredPhraseOffenders(body: string): string[] {
+  const units = unwrapped(body).map((s) => s.toLowerCase().replace(/\s+/g, " "));
+  return RETIRED_V0_PHRASES.filter((phrase) => units.some((u) => u.includes(phrase)));
+}

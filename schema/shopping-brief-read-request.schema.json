@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-brief-read-request.schema.json",
+  "title": "sil shopping_brief_read — request",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Reads this brief whole; without it, the list of the buyer's briefs comes back."
+    }
+  },
+  "additionalProperties": false
+}

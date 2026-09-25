@@ -1,505 +1,356 @@
 /**
- * INTEGRATION — cross-tool 401 parity (tier: integration).
+ * INTEGRATION — the refusal envelope is UNIFORM across every sil-api-calling tool, and
+ * it is one shared path, never a per-tool handler.
  *
- * THE structural guard against FLAG-10 re-entry. The card's deliverable is that
- * `sil_search`, `sil_product_get`, `sil_whoami`, AND `sil_specs` present the IDENTICAL
- * 401 choreography — one transparent refresh via `refreshStoredTokens()`, one retry of
- * the original read, and the same terminal/transient/ok envelope CLASS for each of
- * the four refresh sub-outcomes (retry-ok, second-401, invalid_grant, refresh-5xx).
- * The divergence the goal forbids re-enters the moment a NEW tool copies catalog's OLD
- * terminal branch instead of the shared path — so parity is enforced here by a real
- * shared-behaviour assertion that FAILS if any one tool drifts, not left to reviewer
- * vigilance. `sil_specs` (card sds-specs-client-tool) is the 4th sil-api tool folded
- * into this guard so the shared seam cannot drift for the new tool.
+ * Twelve tools reach sil-api with a Bearer: the eleven `shopping_*` tools and
+ * `sil_whoami`. Each drives `refreshAndRetryOnce` — at most one refresh, at most one
+ * retry, no loop. The failure this file forecloses is DRIFT: a tool that refreshes twice,
+ * retries a dead token, clears credentials on a transient blip, or (worst) succeeds where
+ * another goes terminal, so the agent's recovery depends on which tool happened to notice
+ * the expiry first.
  *
- * This is deliberately NOT three independent per-tool suites (those live in
- * whoami / catalog-search / catalog-lookup integration). Here we drive the SAME
- * scenario through all four tools in one test and assert their observable 401
- * behaviour is the same — the equality IS the assertion. A tool whose 401 stayed
- * terminal (no refresh) shows refresh.length 0 where the others show 1, or maps a
- * recovered 401 to a re-register where the others map to ok — and the parity check
- * fails.
- *
- * The ONLY thing mocked is `fetch`. Real `sil-client` + `credentials` +
- * `refreshStoredTokens`, real `SIL_DATA_DIR` token seeding — stub-free, exactly as
- * the per-tool suites. The fetch double routes the FOUR sil-api read endpoints
- * (`/identity` GET, `/catalog/search`, `/catalog/lookup`, `/catalog/specs`) plus the
- * sil-web `/auth/refresh` leg, and exposes per-tool read + refresh call counts.
- *
- * EXPECT RED until every tool routes 401 through the shared `refreshAndRetryOnce`
- * helper. For the sds-specs-client-tool card specifically: `sil_specs` is not
- * registered yet, so `setupTool("specs")` throws "Tool not registered" — every parity
- * `it` observes all FOUR tools, so the specs slot fails until the tool exists and
- * adopts the shared path. GREEN only once sil_specs' 401 matches the other three.
+ * The proof is a matrix — the same scenario, driven through every tool, asserted to
+ * produce the same STATUS, the same credential side effect and the same call counts.
+ * Parity is asserted across the set, not tool by tool, so a divergence names itself. It
+ * is also why the per-tool files do not each re-assert the shared arms: one code path,
+ * one bar, driven twelve ways.
  */
 
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-} from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerIdentityTools } from "../tools/identity.js";
-import { setWebUrl, setApiUrl } from "../lib/config.js";
-import { getDataDir, getTokensPath, readTokens } from "../lib/credentials.js";
+import { setApiUrl, setWebUrl } from "../lib/config.js";
+import { readTokens } from "../lib/credentials.js";
+import { createMockPluginApi, getTool, type MockPluginAPI } from "./helpers/mock-plugin-api.js";
+import { SHOPPING_TOOLS } from "../tools/catalog.js";
 import {
-  createMockPluginApi,
-  getTool,
-  type MockPluginAPI,
-} from "./helpers/mock-plugin-api.js";
+  SIL_API,
+  SIL_WEB,
+  installRouter,
+  ok,
+  payloadOf,
+  rotated,
+  seedTokens,
+  type Reply,
+  type RouteKind,
+  type Router,
+} from "./helpers/shopping-harness.js";
+import { AUTH, SEARCH_400, contractResponse } from "./helpers/shopping-wire.js";
 
-const SIL_WEB = "https://sil-web.test.example.com"; // refresh origin
-const SIL_API = "https://sil-api.test.example.com"; // read origin (all four reads)
+const ACCESS = "at-live-token";
+const REFRESH = "rt-live-token";
 
-/** A real identity envelope (sil_whoami's ok shape). */
-function identityEnvelope(): unknown {
-  return {
-    protocol: "ucp",
-    version: "0.1",
-    domain: "identity",
-    result: {
-      name: "Ada Lovelace",
-      addresses: [{ line1: "12 Analytical Engine Way", city: "London", country: "GB" }],
-    },
-  };
-}
+/** Every tool that reaches sil-api with a Bearer, with a valid call and its 200. */
+const BEARER_TOOLS = [
+  {
+    tool: "shopping_domain_search",
+    params: { q: "ski boots" },
+    success: (): unknown => contractResponse("shopping_domain_search"),
+  },
+  {
+    tool: "shopping_domain_get",
+    params: { path: "product.sports.winter.ski.boots" },
+    success: (): unknown => contractResponse("shopping_domain_get"),
+  },
+  {
+    // The mint, on the registry search's own path with the opposite verb. Every
+    // scenario below drives it, so each one really does exercise the write path.
+    tool: "shopping_domain_create",
+    params: { path: "product.sports.winter.ski.boots", guide: "how they are bought", specs: [] },
+    success: (): unknown => contractResponse("shopping_domain_create"),
+  },
+  {
+    tool: "shopping_brief_create",
+    params: { title: "Ski boots", narrative: "Advanced skier, short wide foot." },
+    success: (): unknown => contractResponse("shopping_brief_create"),
+  },
+  {
+    tool: "shopping_brief_edit",
+    params: { id: "b1", decision: "Ceiling raised." },
+    success: (): unknown => contractResponse("shopping_brief_edit"),
+  },
+  {
+    tool: "shopping_brief_read",
+    params: {},
+    success: (): unknown => contractResponse("shopping_brief_read"),
+  },
+  {
+    tool: "shopping_profile_edit",
+    params: { measurements: [{ name: "foot_length", value: 27.2, unit: "cm" }] },
+    success: (): unknown => contractResponse("shopping_profile_edit"),
+  },
+  {
+    tool: "shopping_search",
+    params: { brief: "b1", domain: "product.sports.winter.ski.boots", query: "boots", n: 5 },
+    success: (): unknown => contractResponse("shopping_search"),
+  },
+  {
+    tool: "shopping_product_get",
+    params: { ids: ["v1"] },
+    success: (): unknown => contractResponse("shopping_product_get"),
+  },
+  {
+    tool: "shopping_offers",
+    params: { brief: "b1", ids: ["v1"] },
+    success: (): unknown => contractResponse("shopping_offers"),
+  },
+  {
+    tool: "shopping_seller_get",
+    params: { ids: ["s1"] },
+    success: (): unknown => contractResponse("shopping_seller_get"),
+  },
+  {
+    tool: "sil_whoami",
+    params: {},
+    success: (): unknown => ({ name: "Test Shopper", addresses: [] }),
+  },
+];
 
-/** A real search body with one product (sil_search's ok shape). FLAT shape
- * (`{ products, pagination }` — top level, no `result` wrapper), the only shape
- * sil-api emits. */
-function searchEnvelope(): unknown {
-  return {
-    products: [
-      {
-        id: "gid://product/a",
-        title: "Aeron Chair",
-        source: "herman-miller",
-        variants: [
-          {
-            id: "gid://variant/a1",
-            title: "Aeron Chair — Graphite",
-            price: { amount: 159900, currency: "USD" },
-            availability: { available: true, status: "in_stock" },
-            checkout_url: "https://buy.example.com/aeron-a1",
-          },
-        ],
-      },
-    ],
-    pagination: { has_next_page: false },
-  };
-}
-
-/** A real specs body with one resolution (sil_specs's ok shape). BARE shape
- * (`{ resolved }` — top level, no `ucp`/`result` wrapper), the only shape sil-api
- * emits for `/catalog/specs`. The `matched` entry carries a usable canonical ref so
- * `extractSpecsResult` accepts it (anti-false-green). */
-function specsEnvelope(): unknown {
-  return {
-    resolved: [
-      {
-        namespace: "product",
-        key: "waterproof_rating",
-        display_name: "Waterproof Rating",
-        data_type: "number",
-        unit: "mm",
-        is_filterable: true,
-        is_comparable: true,
-        submitted: { namespace: "product", key: "waterproofing" },
-        canonical: { namespace: "product", key: "waterproof_rating" },
-        status: "matched",
-      },
-    ],
-  };
-}
-
-/** A real lookup body with one product (sil_product_get's ok shape). FLAT shape
- * (`{ products }` — top level, no `result` wrapper), the only shape sil-api emits. */
-function lookupEnvelope(): unknown {
-  return {
-    products: [
-      {
-        id: "gid://product/a",
-        title: "Aeron Chair",
-        description: { plain: "An ergonomic office chair." },
-        price_range: { min: { amount: 159900, currency: "USD" }, max: { amount: 159900, currency: "USD" } },
-        source: "herman-miller",
-        variants: [
-          {
-            id: "gid://variant/a1",
-            title: "Aeron Chair — Graphite",
-            price: { amount: 159900, currency: "USD" },
-            availability: { available: true, status: "in_stock" },
-            checkout_url: "https://buy.example.com/aeron-a1",
-            inputs: [{ id: "gid://product/a", match: "featured" }],
-          },
-        ],
-      },
-    ],
-  };
-}
-
+let api: MockPluginAPI;
 let dataDir: string;
-let priorSilDataDir: string | undefined;
-
-/** One recorded outbound request. */
-interface Recorded {
-  url: string;
-  method: string;
-  bearer: string | null;
-  body: unknown;
-}
-
-type Reply = { status: number; body: unknown } | "network-error";
-type ReadKind = "identity" | "search" | "lookup" | "specs";
-type Kind = ReadKind | "refresh" | "other";
-
-/** What a recording double returns to the caller. */
-interface Buckets {
-  all: Recorded[];
-  read: Recorded[]; // the tool's sil-api read endpoint (identity|search|lookup|specs)
-  refresh: Recorded[]; // the sil-web /auth/refresh leg
-}
-
-/**
- * A URL-routing fetch double covering all four sil-api read endpoints + the
- * sil-web refresh leg. `readKind` selects which read endpoint THIS tool uses, so
- * the `read` bucket counts only that tool's reads (the parity assertion compares
- * read + refresh counts across tools). `replyRead(nthRead)` and
- * `replyRefresh(nthRefresh)` drive the two legs independently.
- */
-function installRouter(
-  readKind: ReadKind,
-  replyRead: (nthRead: number) => Reply,
-  replyRefresh: (nthRefresh: number) => Reply,
-): Buckets {
-  const all: Recorded[] = [];
-  const read: Recorded[] = [];
-  const refresh: Recorded[] = [];
-
-  vi.spyOn(globalThis, "fetch").mockImplementation(
-    (input: unknown, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : String(input);
-      const headers = (init?.headers ?? {}) as Record<string, string>;
-      const bearer = headers["Authorization"] ?? headers["authorization"] ?? null;
-      const method = (init?.method ?? "GET").toUpperCase();
-      let body: unknown = null;
-      if (typeof init?.body === "string") {
-        try {
-          body = JSON.parse(init.body);
-        } catch {
-          body = init.body;
-        }
-      }
-      const req: Recorded = { url, method, bearer, body };
-      all.push(req);
-
-      let kind: Kind;
-      if (url.includes("/auth/refresh")) kind = "refresh";
-      else if (url.includes("/catalog/search")) kind = "search";
-      else if (url.includes("/catalog/lookup")) kind = "lookup";
-      else if (url.includes("/catalog/specs")) kind = "specs";
-      else if (url.includes("/identity")) kind = "identity";
-      else kind = "other";
-
-      let r: Reply;
-      if (kind === "refresh") {
-        refresh.push(req);
-        r = replyRefresh(refresh.length - 1);
-      } else if (kind === readKind) {
-        read.push(req);
-        r = replyRead(read.length - 1);
-      } else {
-        // A read endpoint that is NOT this tool's, or an unexpected URL — a tool
-        // must hit ONLY its own read endpoint + refresh. Fail loudly.
-        return Promise.reject(
-          new Error(`unexpected fetch to ${url} (kind=${kind}) for readKind=${readKind}`),
-        );
-      }
-
-      if (r === "network-error") {
-        return Promise.reject(new Error("simulated network failure"));
-      }
-      return Promise.resolve(
-        new Response(JSON.stringify(r.body), {
-          status: r.status,
-          headers: { "content-type": "application/json" },
-        }),
-      );
-    },
-  );
-
-  return { all, read, refresh };
-}
-
-/** Parse a ToolResult payload. */
-function payloadOf(result: { content: { text?: string }[] }): Record<string, unknown> {
-  const text = result.content[0]?.text;
-  if (typeof text !== "string") throw new Error("no tool payload");
-  return JSON.parse(text) as Record<string, unknown>;
-}
-
-/** Seed a stored token pair so each tool proceeds to its read. */
-function seedTokens(access: string, refresh: string): void {
-  const dir = getDataDir();
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    getTokensPath(),
-    JSON.stringify({ access_token: access, refresh_token: refresh }),
-    { mode: 0o600 },
-  );
-}
-
-/** The ok-shape envelope a given tool's read endpoint returns on success. */
-function okEnvelopeFor(readKind: ReadKind): unknown {
-  if (readKind === "identity") return identityEnvelope();
-  if (readKind === "search") return searchEnvelope();
-  if (readKind === "specs") return specsEnvelope();
-  return lookupEnvelope();
-}
-
-/** Register the right tool group and return the tool name for a given read kind. */
-function setupTool(readKind: ReadKind): { api: MockPluginAPI; tool: string } {
-  const api = createMockPluginApi();
-  if (readKind === "identity") {
-    registerIdentityTools(api);
-    return { api, tool: "sil_whoami" };
-  }
-  registerCatalogTools(api);
-  if (readKind === "search") return { api, tool: "sil_search" };
-  if (readKind === "specs") return { api, tool: "sil_specs" };
-  return { api, tool: "sil_product_get" };
-}
-
-/** Invoke a tool with the call args its schema requires. */
-function callArgs(readKind: ReadKind): Record<string, unknown> {
-  if (readKind === "search") return { query: "chair" };
-  if (readKind === "lookup") return { ids: ["gid://product/a"] };
-  if (readKind === "specs") {
-    return {
-      query: "hiking gloves",
-      specs: [
-        { namespace: "product", key: "waterproofing", display_name: "Waterproofing", data_type: "number" },
-      ],
-    };
-  }
-  return {}; // whoami takes no params
-}
-
-/** The per-tool silent-success operator marker each tool MUST emit on a recovered
- * 401 (review-round-1 fix; card line 161). The marker name is tool-specific but
- * the BEHAVIOUR (emit exactly once on silent recovery) must be uniform — that
- * uniformity is what this parity guard pins so the seam cannot drift per-tool. */
-function refreshedMarkerFor(readKind: ReadKind): string {
-  if (readKind === "search") return "sil_search_refreshed";
-  if (readKind === "lookup") return "sil_product_get_refreshed";
-  if (readKind === "specs") return "sil_specs_refreshed";
-  return "sil_whoami_refreshed";
-}
-
-/** Count `api.logger.info(marker, …)` calls whose first positional arg is `marker`. */
-function infoMarkerCount(api: MockPluginAPI, marker: string): number {
-  return vi
-    .mocked(api.logger.info)
-    .mock.calls.filter((c) => c[0] === marker).length;
-}
-
-/** One observation of a tool's 401 behaviour under a given refresh-leg scenario. */
-interface Observation {
-  readKind: ReadKind;
-  status: unknown;
-  hasRecoveryHint: boolean;
-  readCount: number;
-  refreshCount: number;
-  tokensCleared: boolean;
-  /** How many times THIS tool emitted its own `<tool>_refreshed` operator marker
-   * (review-round-1 fix). 1 on a recovered 401, 0 otherwise — folded into the
-   * anti-divergence guard so the restored seam cannot disappear per-tool again. */
-  refreshedMarkerCount: number;
-}
-
-/**
- * Drive a SINGLE refresh-leg scenario through ALL FOUR tools and return one
- * Observation per tool. `replyRead(readKind, nthRead)` makes the first read 401
- * and lets the caller return each tool's OWN ok envelope on the retry; `replyRefresh`
- * decides the refresh-leg outcome. Each tool runs in its own fresh token seed +
- * fetch double so the runs are independent.
- */
-async function observeAllTools(
-  replyRead: (readKind: ReadKind, nthRead: number) => Reply,
-  replyRefresh: (nthRefresh: number) => Reply,
-): Promise<Observation[]> {
-  const kinds: ReadKind[] = ["identity", "search", "lookup", "specs"];
-  const out: Observation[] = [];
-  for (const readKind of kinds) {
-    // Fresh seed per tool (the prior tool's run may have cleared tokens).
-    rmSync(getTokensPath(), { force: true });
-    seedTokens("expired-at", "valid-rt");
-    const rec = installRouter(readKind, (nthRead) => replyRead(readKind, nthRead), replyRefresh);
-    const { api, tool } = setupTool(readKind);
-    const payload = payloadOf(await getTool(api, tool).execute("c1", callArgs(readKind)));
-    out.push({
-      readKind,
-      status: payload["status"],
-      hasRecoveryHint: payload["recovery"] === "sil_register",
-      readCount: rec.read.length,
-      refreshCount: rec.refresh.length,
-      tokensCleared: !existsSync(getTokensPath()),
-      refreshedMarkerCount: infoMarkerCount(api, refreshedMarkerFor(readKind)),
-    });
-    vi.restoreAllMocks();
-  }
-  return out;
-}
+let priorDataDir: string | undefined;
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "sil-parity-int-"));
-  priorSilDataDir = process.env["SIL_DATA_DIR"];
+  dataDir = mkdtempSync(join(tmpdir(), "sil-401-parity-"));
+  priorDataDir = process.env["SIL_DATA_DIR"];
   process.env["SIL_DATA_DIR"] = dataDir;
   setWebUrl(SIL_WEB);
   setApiUrl(SIL_API);
+  api = createMockPluginApi();
+  registerCatalogTools(api);
+  registerIdentityTools(api);
+  seedTokens(ACCESS, REFRESH);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   setWebUrl("");
   setApiUrl("");
-  delete process.env["SIL_WEB_URL"];
-  delete process.env["SIL_API_URL"];
-  if (priorSilDataDir === undefined) delete process.env["SIL_DATA_DIR"];
-  else process.env["SIL_DATA_DIR"] = priorSilDataDir;
+  if (priorDataDir === undefined) delete process.env["SIL_DATA_DIR"];
+  else process.env["SIL_DATA_DIR"] = priorDataDir;
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe("cross-tool 401 parity — all four tools share ONE refresh-and-retry-once choreography", () => {
-  it("sub-outcome retry-ok: every tool refreshes once, retries once, and returns a NORMAL ok result (no tool dead-ends)", async () => {
-    // AC[integration]: identical scenario (expired token → 401 → good refresh →
-    // retry ok) through search / product_get / whoami / specs. All four must look the
-    // same: exactly 1 refresh, exactly 2 reads, status ok, NO recovery hint. The
-    // retry returns each tool's OWN ok envelope (via okEnvelopeFor).
-    const observed = await observeAllTools(
-      (readKind, nthRead) =>
-        nthRead === 0
-          ? { status: 401, body: { error: "unauthorized" } }
-          : { status: 200, body: okEnvelopeFor(readKind) },
-      () => ({ status: 200, body: { access_token: "rotated-at", refresh_token: "rotated-rt" } }),
-    );
+/** One scenario, run against one tool. Returns everything parity is asserted on. */
+async function drive(
+  spec: (typeof BEARER_TOOLS)[number],
+  refreshReply: Reply,
+  apiReplies: (nth: number) => Reply,
+): Promise<{ status: unknown; recovery: unknown; tokensCleared: boolean; apiCalls: number; refreshCalls: number }> {
+  seedTokens(ACCESS, REFRESH);
+  const router: Router = installRouter((kind: RouteKind, nth: number) => {
+    if (kind === "refresh") return refreshReply;
+    return apiReplies(nth);
+  });
+  const payload = payloadOf(await getTool(api, spec.tool).execute("call-1", spec.params));
+  const apiCalls = router.all.length - router.refresh.length;
+  return {
+    status: payload["status"],
+    recovery: payload["recovery"],
+    tokensCleared: readTokens() === null,
+    apiCalls,
+    refreshCalls: router.refresh.length,
+  };
+}
 
-    // PARITY: every tool maps the recovered 401 to ok, with identical call counts.
-    for (const o of observed) {
-      expect(o.status).toBe("ok");
-      expect(o.hasRecoveryHint).toBe(false);
-      expect(o.refreshCount).toBe(1); // exactly one refresh
-      expect(o.readCount).toBe(2); // failed read + one retry
-      // OBSERVABILITY-SEAM PARITY (review-round-1 fix; card line 161): every tool
-      // emits its own `<tool>_refreshed` operator marker EXACTLY ONCE on this
-      // silent-recovery path — the seam restored uniformly across all four. Folded
-      // into THIS anti-divergence guard so the marker cannot drift/disappear
-      // per-tool again (the same FLAG-10 failure mode, applied to logging). RED
-      // until all four tools emit the marker via the helper's `refreshed:true`.
-      expect(o.refreshedMarkerCount).toBe(1);
+/** Assert every tool produced the SAME observable outcome, naming any divergence. */
+function expectParity<T>(results: [string, T][]): void {
+  const [, first] = results[0];
+  const divergent = results.filter(([, r]) => JSON.stringify(r) !== JSON.stringify(first));
+  expect(divergent.map(([name, r]) => `${name}: ${JSON.stringify(r)}`)).toEqual([]);
+}
+
+describe("A9 — every sil-api tool recovers from a first 401 identically", () => {
+  it("refresh once, retry once, and the agent sees NO error", async () => {
+    const results: [string, unknown][] = [];
+    for (const spec of BEARER_TOOLS) {
+      vi.restoreAllMocks();
+      const r = await drive(spec, rotated("at-rotated", "rt-rotated"), (nth: number) =>
+        nth === 0 ? { status: 401, body: AUTH.unauthorized } : ok(spec.success()),
+      );
+      results.push([
+        spec.tool,
+        { status: r.status, tokensCleared: r.tokensCleared, apiCalls: r.apiCalls, refreshCalls: r.refreshCalls },
+      ]);
     }
-    // The equality across tools IS the guard: collapse each dimension to a set.
-    expect(new Set(observed.map((o) => o.status)).size).toBe(1);
-    expect(new Set(observed.map((o) => o.refreshCount)).size).toBe(1);
-    expect(new Set(observed.map((o) => o.readCount)).size).toBe(1);
-    // The marker-emission behaviour is uniform across tools (all 1). A tool that
-    // silently recovered WITHOUT emitting its marker would show 0 here while the
-    // others show 1 — set size 2, and the seam has drifted. Pin it to size 1.
-    expect(new Set(observed.map((o) => o.refreshedMarkerCount)).size).toBe(1);
+    expectParity(results);
+    expect(results[0][1]).toEqual({
+      status: "ok",
+      tokensCleared: false,
+      apiCalls: 2,
+      refreshCalls: 1,
+    });
   });
 
-  it("sub-outcome second-401: every tool refreshes EXACTLY once, retries once, then terminates re-register (no tool storms)", async () => {
-    // AC[integration]: a freshly-rotated token still 401 is terminal for ALL four
-    // — exactly 1 refresh, exactly 2 reads, status must_reregister with the hint.
-    const observed = await observeAllTools(
-      () => ({ status: 401, body: { error: "unauthorized" } }), // read ALWAYS 401
-      () => ({ status: 200, body: { access_token: "rotated-at", refresh_token: "rotated-rt" } }),
-    );
-
-    for (const o of observed) {
-      expect(o.status).toBe("must_reregister");
-      expect(o.hasRecoveryHint).toBe(true);
-      expect(o.refreshCount).toBe(1); // exactly one refresh, NEVER a second
-      expect(o.readCount).toBe(2); // initial + exactly one retry
+  it("the rotated token is what the retry carries — never the dead one", async () => {
+    for (const spec of BEARER_TOOLS) {
+      vi.restoreAllMocks();
+      seedTokens(ACCESS, REFRESH);
+      const router = installRouter((kind: RouteKind, nth: number) => {
+        if (kind === "refresh") return rotated("at-rotated", "rt-rotated");
+        return nth === 0 ? { status: 401, body: AUTH.unauthorized } : ok(spec.success());
+      });
+      await getTool(api, spec.tool).execute("call-1", spec.params);
+      const apiRequests = router.all.filter((r: { url: string }) => !r.url.includes("/auth/refresh"));
+      expect({ tool: spec.tool, bearer: apiRequests[1]?.bearer }).toEqual({
+        tool: spec.tool,
+        bearer: "Bearer at-rotated",
+      });
     }
-    expect(new Set(observed.map((o) => o.status)).size).toBe(1);
-    expect(new Set(observed.map((o) => o.refreshCount)).size).toBe(1);
-    expect(new Set(observed.map((o) => o.readCount)).size).toBe(1);
+  });
+});
+
+describe("A9 — every tool goes terminal identically, and never storms", () => {
+  it("a SECOND 401 → must_reregister, tokens cleared, exactly ONE refresh", async () => {
+    const results: [string, unknown][] = [];
+    for (const spec of BEARER_TOOLS) {
+      vi.restoreAllMocks();
+      const r = await drive(spec, rotated("at-rotated", "rt-rotated"), () => ({
+        status: 401,
+        body: AUTH.unauthorized,
+      }));
+      results.push([spec.tool, r]);
+    }
+    expectParity(results);
+    expect(results[0][1]).toEqual({
+      status: "must_reregister",
+      recovery: "sil_register",
+      tokensCleared: true,
+      apiCalls: 2,
+      refreshCalls: 1,
+    });
   });
 
-  it("sub-outcome invalid_grant: every tool refreshes once, does NOT retry, terminates re-register, and clears tokens", async () => {
-    // AC[integration]: a dead refresh token. ALL four: 1 refresh, NO retry (1
-    // read), status must_reregister + hint, tokens.json cleared.
-    const observed = await observeAllTools(
-      () => ({ status: 401, body: { error: "unauthorized" } }),
-      () => ({ status: 401, body: { error: "invalid_grant" } }),
-    );
-
-    for (const o of observed) {
-      expect(o.status).toBe("must_reregister");
-      expect(o.hasRecoveryHint).toBe(true);
-      expect(o.refreshCount).toBe(1);
-      expect(o.readCount).toBe(1); // the original 401 only — NO retry without a rotated token
-      expect(o.tokensCleared).toBe(true);
+  it("a dead refresh token (`invalid_grant`) → terminal, tokens cleared, NO retry", async () => {
+    const results: [string, unknown][] = [];
+    for (const spec of BEARER_TOOLS) {
+      vi.restoreAllMocks();
+      const r = await drive(spec, { status: 401, body: { error: "invalid_grant" } }, () => ({
+        status: 401,
+        body: AUTH.unauthorized,
+      }));
+      results.push([spec.tool, r]);
     }
-    expect(new Set(observed.map((o) => o.status)).size).toBe(1);
-    expect(new Set(observed.map((o) => o.readCount)).size).toBe(1);
-    expect(new Set(observed.map((o) => o.tokensCleared)).size).toBe(1);
+    expectParity(results);
+    expect(results[0][1]).toEqual({
+      status: "must_reregister",
+      recovery: "sil_register",
+      tokensCleared: true,
+      apiCalls: 1,
+      refreshCalls: 1,
+    });
   });
 
-  it("sub-outcome refresh-5xx: every tool surfaces TRANSIENT retryable with NO re-register hint, does NOT retry, keeps tokens", async () => {
-    // AC[integration]: a refresh-leg 5xx is a blip, not a dead session, for ALL
-    // four — status retryable, NO hint, 1 refresh, NO retry (1 read), tokens kept.
-    const observed = await observeAllTools(
-      () => ({ status: 401, body: { error: "unauthorized" } }),
-      () => ({ status: 503, body: { error: "unavailable" } }),
-    );
-
-    for (const o of observed) {
-      expect(o.status).toBe("retryable");
-      expect(o.hasRecoveryHint).toBe(false); // a refresh blip is NOT a dead session
-      expect(o.refreshCount).toBe(1);
-      expect(o.readCount).toBe(1); // NO retry — no rotated token
-      expect(o.tokensCleared).toBe(false); // the pair may be fine
+  it("a refresh 5xx → retryable, tokens SURVIVE, NO retry, no re-register hint", async () => {
+    // Re-registering cannot fix a blip, and destroying a valid pair over one
+    // derails the user for a reason that has already passed.
+    const results: [string, unknown][] = [];
+    for (const spec of BEARER_TOOLS) {
+      vi.restoreAllMocks();
+      const r = await drive(spec, { status: 503, body: { error: "unavailable" } }, () => ({
+        status: 401,
+        body: AUTH.unauthorized,
+      }));
+      results.push([spec.tool, r]);
     }
-    expect(new Set(observed.map((o) => o.status)).size).toBe(1);
-    expect(new Set(observed.map((o) => o.hasRecoveryHint)).size).toBe(1);
-    expect(new Set(observed.map((o) => o.tokensCleared)).size).toBe(1);
+    expectParity(results);
+    expect(results[0][1]).toEqual({
+      status: "retryable",
+      recovery: undefined,
+      tokensCleared: false,
+      apiCalls: 1,
+      refreshCalls: 1,
+    });
+  });
+});
+
+describe("A9 — the 403 split is uniform too (the exact-equality gate)", () => {
+  it("`user_not_provisioned` clears the tokens on EVERY tool", async () => {
+    const results: [string, unknown][] = [];
+    for (const spec of BEARER_TOOLS) {
+      vi.restoreAllMocks();
+      const r = await drive(spec, ok({}), () => ({ status: 403, body: AUTH.userNotProvisioned }));
+      results.push([
+        spec.tool,
+        { status: r.status, recovery: r.recovery, tokensCleared: r.tokensCleared, refreshCalls: r.refreshCalls },
+      ]);
+    }
+    expectParity(results);
+    expect(results[0][1]).toEqual({
+      status: "forbidden",
+      recovery: "sil_register",
+      tokensCleared: true,
+      // A 403 is not a 401 — no refresh is attempted, on any tool.
+      refreshCalls: 0,
+    });
   });
 
-  it("the FLAG-10 regression canary: a tool whose 401 stayed terminal (no refresh) breaks parity (refreshCount diverges from the others)", async () => {
-    // This is the explicit anti-divergence assertion the card requires: if any one
-    // tool does NOT refresh on a 401 (the old terminal catalog branch), its
-    // refreshCount is 0 while the refreshing tools' is 1 — so the cross-tool set
-    // has size 2 and this fails. With all four on the shared helper, the set
-    // collapses to {1}. (Against current code, the two catalog tools are terminal
-    // and whoami refreshes — so this is RED until catalog adopts the shared path.)
-    const observed = await observeAllTools(
-      (readKind, nthRead) =>
-        nthRead === 0
-          ? { status: 401, body: { error: "unauthorized" } }
-          : { status: 200, body: okEnvelopeFor(readKind) },
-      () => ({ status: 200, body: { access_token: "rotated-at", refresh_token: "rotated-rt" } }),
-    );
+  it("`principal_mismatch` leaves the tokens INTACT on EVERY tool", async () => {
+    const results: [string, unknown][] = [];
+    for (const spec of BEARER_TOOLS) {
+      vi.restoreAllMocks();
+      const r = await drive(spec, ok({}), () => ({ status: 403, body: AUTH.principalMismatch }));
+      results.push([spec.tool, { status: r.status, tokensCleared: r.tokensCleared, refreshCalls: r.refreshCalls }]);
+    }
+    expectParity(results);
+    expect(results[0][1]).toEqual({ status: "forbidden", tokensCleared: false, refreshCalls: 0 });
+  });
+});
 
-    // Every tool must have attempted the refresh — the FLAG-10 divergence is
-    // precisely "one tool refreshes, another doesn't". One shared refresh count.
-    for (const o of observed) {
-      expect(o.refreshCount).toBe(1);
+describe("guard-of-the-guard: the matrix actually covers the surface", () => {
+  it("every shopping tool the plugin REGISTERS is in BEARER_TOOLS", async () => {
+    // A new sil-api tool omitted here does not fail — it silently narrows the parity
+    // proof, which is the failure mode this repo has documented twice. The expected set
+    // is the production table itself, so a tool added there joins this matrix or reds it.
+    const expected = [...SHOPPING_TOOLS.map((t) => t.name), "sil_whoami"].sort();
+    expect(BEARER_TOOLS.map((s) => s.tool).sort()).toEqual(expected);
+    expect([...api._tools.keys()]).toEqual(expect.arrayContaining(expected));
+  });
+});
+
+describe("the refusal envelope is uniform across the surface", () => {
+  it("a 400 carries the route's message VERBATIM, and no tool names a next call", async () => {
+    // One status covers several causes on a route, so the message IS the agent's
+    // recourse and no fixed next call can fit it. Driven without `drive()`, whose parity
+    // object cannot carry a message: the terminal ones it also serves name their own tool.
+    const results: [string, unknown][] = [];
+    const recoveries: [string, unknown][] = [];
+    for (const spec of BEARER_TOOLS) {
+      if (spec.tool === "sil_whoami") continue; // the identity read has no 400 arm
+      vi.restoreAllMocks();
+      seedTokens(ACCESS, REFRESH);
+      installRouter((kind: RouteKind) =>
+        kind === "refresh" ? ok({}) : { status: 400, body: SEARCH_400 },
+      );
+      const payload = payloadOf(await getTool(api, spec.tool).execute("call-1", spec.params));
+      results.push([spec.tool, { status: payload["status"], message: payload["message"] }]);
+      recoveries.push([spec.tool, payload["recovery"]]);
     }
-    expect(new Set(observed.map((o) => o.refreshCount)).size).toBe(1);
-    // And every tool retried exactly once after the refresh (2 reads) — the second
-    // structural half of the shared choreography.
-    for (const o of observed) {
-      expect(o.readCount).toBe(2);
+    expectParity(results);
+    expect(results[0][1]).toEqual({ status: "invalid_request", message: SEARCH_400.message });
+    expect(recoveries.filter(([, recovery]) => recovery !== undefined)).toEqual([]);
+  });
+
+  it("a 5xx is `retryable` on every tool — tokens survive, nothing is re-registered", async () => {
+    const results: [string, unknown][] = [];
+    for (const spec of BEARER_TOOLS) {
+      vi.restoreAllMocks();
+      const r = await drive(spec, ok({}), () => ({ status: 503, body: { error: "unavailable" } }));
+      results.push([
+        spec.tool,
+        { status: r.status, recovery: r.recovery, tokensCleared: r.tokensCleared, refreshCalls: r.refreshCalls },
+      ]);
     }
-    expect(new Set(observed.map((o) => o.readCount)).size).toBe(1);
+    expectParity(results);
+    expect(results[0][1]).toEqual({
+      status: "retryable",
+      recovery: undefined,
+      tokensCleared: false,
+      refreshCalls: 0,
+    });
   });
 });

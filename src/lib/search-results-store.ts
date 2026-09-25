@@ -1,7 +1,7 @@
 /**
  * The search-results delivery buffer.
  *
- * `sil_search` returns its full page to the agent exactly as it always has —
+ * `shopping_search` returns its full page to the agent exactly as it always has —
  * this store is a pure SIDE EFFECT on the `ok` path, invisible to every
  * channel. It exists because the host's projection of a tool result is not a
  * dependable transport for structured data: under codex `data.result` is absent
@@ -24,7 +24,7 @@
  *
  * In-memory, by choice. Process death is the strongest retention ceiling
  * available and costs nothing; an on-disk buffer would put prices, seller
- * identity, and `checkout_url` at rest, widen the plugin's declared filesystem
+ * identity, and buy URLs at rest, widen the plugin's declared filesystem
  * scope, and — with no timers allowed — leave the last pages there forever once
  * the user stops searching.
  *
@@ -35,18 +35,16 @@
  * screen on the first refresh.
  */
 
-import type { SearchProduct, SpecStatus } from "./sil-client.js";
-
 /**
- * The stored page — EXACTLY the shape a client's decoder accepts, and a strict
- * subset of the agent-facing envelope. No `advisories`: host-misconfiguration
- * guidance is operator/agent copy, not product data.
+ * The stored page: the `shopping_search` 200 body, verbatim — the same object the agent
+ * got, under the same `status: "ok"`. `products` is declared because the pull surface
+ * counts it; nothing else is, because nothing else is read here and a mirror of the
+ * response artifact would be the copy that drifts from it. No `advisories`:
+ * host-misconfiguration guidance is operator copy, not product data.
  */
-export interface SearchResultPage {
+export interface SearchResultPage extends Record<string, unknown> {
   status: "ok";
-  products: SearchProduct[];
-  cursor?: string;
-  specs_status?: SpecStatus[];
+  products: unknown[];
 }
 
 /** Why a lookup missed. OPERATOR-LOG ONLY — all three answer the client with
@@ -55,8 +53,8 @@ export interface SearchResultPage {
 export type SearchResultMiss = "unknown" | "expired" | "principal_mismatch";
 
 /**
- * Fifteen minutes. A search result is point-in-time — price, availability, and
- * `checkout_url` are exactly the fields a shopper must re-fetch before buying —
+ * Fifteen minutes. A search result is point-in-time — the price range and the page it
+ * was read off are exactly what a shopper must re-read before buying —
  * so this is long enough for the settle edge, a client reload, a reconnect, and
  * a short step-away, and short enough that nothing renders as stale truth. It
  * is a delivery buffer, not scrollback and not history.

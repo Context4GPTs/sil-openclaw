@@ -2,7 +2,7 @@
  * INTEGRATION — `sil.search_results`, the whole seam (tier: integration).
  *
  * The REAL plugin entry: `register()` wires the tool groups AND the gateway
- * method, `sil_search` runs through the real sil-client against a mocked `fetch`
+ * method, `shopping_search` runs through the real sil-client against a mocked `fetch`
  * (the host/network boundary — the only thing doubled), the page lands in the
  * real store, and the real handler answers a real `respond`. Nothing about the
  * delivery leg is stubbed.
@@ -12,7 +12,7 @@
  * to, or trimmed. A red over there is a regression in the unchanged path, and the
  * whole point of the additive re-scope is that its assertions still stand.
  *
- * WHAT IS LOAD-BEARING HERE. The FIRST describe block. `sil_search`'s tool result
+ * WHAT IS LOAD-BEARING HERE. The FIRST describe block. `shopping_search`'s tool result
  * must be byte-identical with and without this card's machinery in play, because
  * that single property is what keeps Telegram, WhatsApp and a plain CLI
  * untouched. Everything below it is the new pull surface; that block is the
@@ -48,7 +48,9 @@ import {
   RETENTION_MS,
   MAX_ENTRIES,
   getSearchResult,
+  putSearchResult,
   __resetSearchResultsStore,
+  type SearchResultPage,
 } from "../lib/search-results-store.js";
 import {
   createMockPluginApi,
@@ -60,7 +62,7 @@ import {
   type MockPluginAPI,
 } from "./helpers/mock-plugin-api.js";
 
-const TOOL = "sil_search";
+const TOOL = "shopping_search";
 const METHOD = "sil.search_results";
 const SIL_WEB = "https://sil-web.test.example.com";
 const SIL_API = "https://sil-api.test.example.com";
@@ -86,38 +88,36 @@ beforeAll(async () => {
 // Fixtures — the REAL sil-api wire shape
 // ---------------------------------------------------------------------------
 
-/** One real `SilCatalogProduct`: a required `source`, and a variant with a
- * non-empty `checkout_url` + an `availability` object. Anti-false-green — a
- * `{stub:true}` echo carries none of these, so nothing here can pass against a
- * placeholder. */
+/**
+ * One real product off the wire, carrying what the agent's honesty reading is computed
+ * from — a filled `fit` beside an `unknown` for a key the ask named and sil holds nothing
+ * for, a priced `variants` entry, and the shop's own `printed` words. Anti-false-green: a
+ * `{stub:true}` echo carries none of these, and neither would a projection that kept only
+ * what it knew.
+ */
 function wireProduct(n: number): Record<string, unknown> {
   return {
-    id: `gid://product/${n}`,
+    id: `p-${String(n).padStart(4, "0")}`,
     title: `Ergonomic Task Chair ${n}`,
-    description: { plain: `A height-adjustable task chair, model ${n}.` },
-    price_range: {
-      min: { amount: 100_000 + n, currency: "USD" },
-      max: { amount: 200_000 + n, currency: "USD" },
-    },
+    brand: `Maker ${n % 7}`,
+    image: `https://shop.example/i/chair-${n}.jpg`,
+    fit: { seat_height: 440 + n, armrest_travel: "unknown" },
+    price: [{ from: `${1000 + n}.99`, to: `${1100 + n}.99`, currency: "USD" }],
     variants: [
       {
-        id: `gid://variant/${n}-1`,
-        title: `Ergonomic Task Chair ${n} — Graphite`,
-        description: { plain: `A height-adjustable task chair, model ${n}.` },
-        price: { amount: 100_000 + n, currency: "USD" },
-        availability: { available: true, status: "in_stock" },
-        checkout_url: `https://buy.example.com/chair-${n}`,
+        id: `v-${String(n).padStart(4, "0")}`,
+        colour: "Graphite",
+        price: [{ from: `${1000 + n}.99`, to: `${1000 + n}.99`, currency: "USD" }],
       },
     ],
-    source: `merchant-${n % 7}`,
+    host: "shop.example",
+    printed: { "Seat height": "42–52 cm", Back: "mesh", Warranty: "twelve years" },
   };
 }
 
-function searchEnvelope(
-  products: unknown[],
-  pagination: unknown = { has_next_page: false },
-): unknown {
-  return { products, pagination };
+/** The `shopping_search` 200 body — `status` and the shortlist, and nothing else. */
+function searchEnvelope(products: Record<string, unknown>[]): unknown {
+  return { status: "ok", products };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,8 +237,8 @@ function logBlob(api: MockPluginAPI): string {
  *
  * The handler fails closed on a throw (correctly — an opaque gateway error would
  * leave a shopper's item spinning forever). That catch also MASKS a defect: a
- * page stored from a non-`ok` outcome has no `products`, so the handler throws
- * reading `products.length` and answers the uniform not-found — the exact body a
+ * page stored from a non-`ok` outcome has no `results`, so the handler throws
+ * reading `results.length` and answers the uniform not-found — the exact body a
  * clean miss produces. A wire-only assertion therefore passes against an
  * implementation that stores every outcome. So we also read the store directly,
  * and demand the miss was a genuine `unknown` rather than a swallowed failure.
@@ -262,10 +262,17 @@ async function expectNothingStored(
 }
 
 /** Run one `ok` search and hand back everything the assertions need. */
+/** A valid `shopping_search` call — `domain` and `n` are required. */
+const SEARCH_PARAMS = {
+  domain: "product.furniture.seating.task_chairs",
+  query: "office chair",
+  n: 10,
+} as const;
+
 async function runSearch(
   api: MockPluginAPI,
   callId: string,
-  params: Record<string, unknown> = { query: "office chair" },
+  params: Record<string, unknown> = { ...SEARCH_PARAMS },
 ): Promise<{ raw: string; payload: Record<string, unknown> }> {
   const result = await getTool(api, TOOL).execute(callId, params);
   return { raw: rawOf(result), payload: payloadOf(result) };
@@ -299,7 +306,7 @@ afterEach(() => {
 // A1 — THE LOAD-BEARING GUARD: the envelope every channel gets is UNCHANGED
 // ===========================================================================
 
-describe("A1 — the sil_search envelope is byte-identical, with or without this card", () => {
+describe("A1 — the shopping_search envelope is byte-identical, with or without this card", () => {
   it("returns the SAME BYTES whether or not the gateway method is registered", async () => {
     // The whole promise of the additive re-scope. A plugin whose tool result
     // changes shape when a client happens to be able to pull it is not
@@ -326,9 +333,9 @@ describe("A1 — the sil_search envelope is byte-identical, with or without this
     expect(a.raw).toBe(b.raw);
   });
 
-  it("carries the FULL products body — no result_ref, no reference, no digest", async () => {
+  it("carries the FULL result body — no result_ref, no reference, no digest", async () => {
     // The mutation this kills is the ORIGINAL (superseded) premise: replacing the
-    // body with a reference. The agent still receives every product, so nothing
+    // body with a reference. The agent still receives every result, so nothing
     // about what it can truthfully say changes.
     installRouter((kind) =>
       kind === "search"
@@ -341,11 +348,18 @@ describe("A1 — the sil_search envelope is byte-identical, with or without this
     expect(payload["status"]).toBe("ok");
     const products = payload["products"] as Record<string, unknown>[];
     expect(products).toHaveLength(3);
-    // Real projected products, not placeholders.
-    expect(products[0]!["id"]).toBe("gid://product/1");
-    expect((products[0]!["variant"] as Record<string, unknown>)["checkout_url"]).toBe(
-      "https://buy.example.com/chair-1",
-    );
+    // The real body, not a placeholder and not a projection: what the agent reads the
+    // honesty off is all present on the page it receives.
+    expect(products[0]!["id"]).toBe("p-0001");
+    expect(products[0]!["fit"]).toEqual({ seat_height: 441, armrest_travel: "unknown" });
+    expect(products[0]!["variants"]).toEqual([
+      {
+        id: "v-0001",
+        colour: "Graphite",
+        price: [{ from: "1001.99", to: "1001.99", currency: "USD" }],
+      },
+    ]);
+    expect(products[0]).toHaveProperty("printed");
     // Nothing was ADDED to the envelope.
     expect(payload).not.toHaveProperty("result_ref");
     expect(payload).not.toHaveProperty("callId");
@@ -357,15 +371,15 @@ describe("A1 — the sil_search envelope is byte-identical, with or without this
   it("the envelope's top-level key set is exactly what the outcome carries — nothing extra", async () => {
     installRouter((kind) =>
       kind === "search"
-        ? { status: 200, body: searchEnvelope([wireProduct(1)], { has_next_page: false }) }
+        ? { status: 200, body: searchEnvelope([wireProduct(1)]) }
         : { status: 500, body: {} },
     );
     const api = registerPlugin();
     const { payload } = await runSearch(api, "call_1");
 
-    // `advisories` rides host-wiring drift and is outside this card's control,
-    // so it is tolerated — but no OTHER key may appear.
-    const allowed = new Set(["status", "products", "cursor", "specs_status", "advisories"]);
+    // The body is the API's, verbatim. `advisories` rides its OWN content block now, so
+    // not even the wiring channel may add a key here.
+    const allowed = new Set(["status", "products"]);
     for (const key of Object.keys(payload)) {
       expect(allowed.has(key)).toBe(true);
     }
@@ -397,34 +411,36 @@ describe("A1 — the sil_search envelope is byte-identical, with or without this
 // ===========================================================================
 
 describe("what the ok path stores (A2, A4, A5)", () => {
-  it("stores EXACTLY the page — the envelope minus `advisories` — under the host callId", async () => {
-    // Host-misconfiguration guidance is operator/agent copy, not product data; a
-    // client rendering a grid must never receive it. The comparison is on BYTES,
-    // so a reordered or re-wrapped page fails too.
+  it("stores EXACTLY the page the agent got — and the advisory rides its OWN block", async () => {
+    // Host-misconfiguration guidance is operator copy, not product data; a client
+    // rendering a grid must never receive it. Since the body's keys are the API's
+    // contract, the advisory cannot ride beside them at all — it is a SECOND content
+    // block, which is also why the stored page and the agent's first block are the
+    // same bytes.
     installRouter((kind) =>
       kind === "search"
         ? { status: 200, body: searchEnvelope([wireProduct(1), wireProduct(2)]) }
         : { status: 500, body: {} },
     );
-    // A drifting host config so `wiringAdvisories` actually folds something on —
-    // otherwise this assertion is vacuous.
+    // A drifting host config so the advisory actually rides — otherwise this is vacuous.
     const api = createMockPluginApi({
       config: { agents: { list: [{ id: "shopper", skills: ["sil"] }] } },
     });
     capturedRegisterFn!(api);
 
-    const { payload } = await runSearch(api, "call_1");
-    expect(payload).toHaveProperty("advisories"); // premise of this test
+    const result = await getTool(api, TOOL).execute("call_1", { ...SEARCH_PARAMS });
+    expect(result.content).toHaveLength(2);
+    const payload = JSON.parse(result.content[0]!.text!) as Record<string, unknown>;
+    const second = JSON.parse(result.content[1]!.text!) as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("advisories");
+    expect(second).toHaveProperty("advisories"); // premise of this test
 
     const body = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_1" }));
     expect(body).not.toHaveProperty("advisories");
-
-    const expected = { ...payload };
-    delete expected["advisories"];
-    expect(JSON.stringify(body)).toBe(JSON.stringify(expected));
+    expect(JSON.stringify(body)).toBe(JSON.stringify(payload));
   });
 
-  it("an EMPTY match is stored and resolves as a genuine `{status:'ok', products:[]}` (A4)", async () => {
+  it("an EMPTY match is stored and resolves as a genuine `{status:'ok', results:[]}` (A4)", async () => {
     // An empty match is a SUCCESS. If it stored nothing, a client would resolve
     // the uniform not-found and render a delivery failure for what is actually an
     // honest "0 results".
@@ -442,10 +458,24 @@ describe("what the ok path stores (A2, A4, A5)", () => {
   });
 
   it.each([
-    ["invalid_request (client-side empty input)", { status: 200, body: searchEnvelope([]) }, {}],
-    ["invalid_request (sil-api 400)", { status: 400, body: { error: "bad_query", message: "no" } }, { query: "x" }],
-    ["retryable (sil-api 500)", { status: 500, body: {} }, { query: "x" }],
-    ["forbidden (403)", { status: 403, body: { reason: "principal_mismatch" } }, { query: "x" }],
+    // The pre-v0 "client-side empty input" row is GONE: v0 has no client-side
+    // validator (every route refuses before spend and names the offender), so
+    // there is no such outcome to buffer. Its replacement is the row below it —
+    // a 200 that FAILS THE STRUCTURAL GATE, which is the v0-specific non-ok and
+    // the most dangerous one to buffer: a body missing `predicates` would render
+    // as a shortlist the client cannot qualify.
+    [
+      "retryable (a 200 that fails the four-key gate)",
+      { status: 200, body: { results: [wireProduct(1)], sources: {} } },
+      SEARCH_PARAMS,
+    ],
+    [
+      "invalid_request (sil-api 400)",
+      { status: 400, body: { error: "invalid_request", message: "no" } },
+      SEARCH_PARAMS,
+    ],
+    ["retryable (sil-api 500)", { status: 500, body: {} }, SEARCH_PARAMS],
+    ["forbidden (403)", { status: 403, body: { error: "principal_mismatch" } }, SEARCH_PARAMS],
   ])("stores NOTHING on a non-ok outcome — %s (A5)", async (_label, reply, params) => {
     // These envelopes steer the AGENT's recovery and carry no product data to
     // deliver. A store write here would make an error resolvable as if it were
@@ -563,9 +593,7 @@ describe("resolving a stored page (B1, B2, B3, F1)", () => {
     const api = registerPlugin();
     const { payload } = await runSearch(api, "call_big");
 
-    const stored = { ...payload };
-    delete stored["advisories"];
-    const storedJson = JSON.stringify(stored);
+    const storedJson = JSON.stringify(payload);
     // The test proves its own premise: a page that is not actually large would
     // make this a round-trip of nothing in particular.
     expect(storedJson.length).toBeGreaterThan(12 * 1024);
@@ -607,7 +635,7 @@ describe("D3 — every intermediate search in a run stays resolvable", () => {
       expect(JSON.stringify(body["products"])).toBe(expected.get(callId));
     }
 
-    // Every page is distinct — no two callIds resolved to the same products.
+    // Every page is distinct — no two callIds resolved to the same results.
     expect(new Set(expected.values()).size).toBe(RUN_SEARCHES);
   });
 });
@@ -630,7 +658,7 @@ describe("the failure paths are ONE body on the wire (C1, C2, C3, C4)", () => {
     // indistinguishable from a genuine empty match, or it renders a silent empty
     // grid for what is actually a delivery failure.
     expect(body["status"]).not.toBe("ok");
-    expect(body).not.toHaveProperty("products");
+    expect(body).not.toHaveProperty("results");
     // Machine-readable — a stable code, not prose to parse.
     expect(typeof body["error"]).toBe("string");
     expect((body["error"] as string).length).toBeGreaterThan(0);
@@ -839,6 +867,224 @@ describe("C7 — behaviour never varies with client presence", () => {
 });
 
 // ===========================================================================
+// The operator log — the callId and the cause, in the MESSAGE
+// ===========================================================================
+
+/** The MESSAGE of every marker logged, which is the only half a container log prints:
+ * the host hands a plugin's structured fields to the log FILE and renders the console
+ * line from the message alone. */
+function logMessages(api: MockPluginAPI): string[] {
+  return [api.logger.info, api.logger.warn, api.logger.error, api.logger.debug].flatMap((fn) =>
+    vi.mocked(fn).mock.calls.map((c) => String(c[0])),
+  );
+}
+
+describe("every sil_search_results_* marker carries its callId and cause in the message", () => {
+  it("a resolve that missed names the callId it was asked for, and which cause it was", async () => {
+    // Measured every buyer round: a truncated frame sends the pull a callId that was
+    // never stored, and `[plugins] sil_search_results_miss` on its own cannot say
+    // whether the page expired, was another account's, or never existed at all.
+    installRouter((kind) =>
+      kind === "search" ? { status: 200, body: searchEnvelope([wireProduct(1)]) } : { status: 500, body: {} },
+    );
+    const api = registerPlugin();
+    await runSearch(api, "call_1");
+    seedAccount(ACCOUNT_B);
+
+    await callGatewayMethod(api, METHOD, { callId: "call_1" });
+    await callGatewayMethod(api, METHOD, { callId: "call_never" });
+    await callGatewayMethod(api, METHOD, { callId: 42 });
+
+    expect(logMessages(api)).toEqual(
+      expect.arrayContaining([
+        "sil_search_results_miss callId=call_1 reason=principal_mismatch found=false",
+        "sil_search_results_miss callId=call_never reason=unknown found=false",
+        "sil_search_results_invalid reason=invalid_call_id",
+      ]),
+    );
+  });
+
+  it("the skip line rides BESIDE the refusal — ONE block, and the bytes are the route's", async () => {
+    // `execute` now does work on the path that returns a refusal, and the refusal is the
+    // whole of what the agent reads there. Reading `content[0]` alone would pass over a
+    // second block appended beside it, so the COUNT is pinned too — under a drifting host
+    // config, so that appending `wiringAdvisoryBlocks(api)` here actually produces one.
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 400, body: { error: "invalid_request", message: "no" } }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi({
+      config: { agents: { list: [{ id: "shopper", skills: ["sil"] }] } },
+    });
+    capturedRegisterFn!(api);
+
+    const result = await getTool(api, TOOL).execute("call_refused", { ...SEARCH_PARAMS });
+
+    expect(result.content).toHaveLength(1);
+    expect(rawOf(result)).toBe(JSON.stringify({ status: "invalid_request", message: "no" }, null, 2));
+  });
+
+  it.each([
+    [
+      "not_registered",
+      (): void => {
+        rmSync(getTokensPath(), { force: true });
+        installRouter(() => ({ status: 500, body: {} }));
+      },
+    ],
+    [
+      // A 401 whose refresh is itself refused: the session is dead, not blipping.
+      "must_reregister",
+      (): void => {
+        installRouter((kind) =>
+          kind === "other" ? { status: 500, body: {} } : { status: 401, body: {} },
+        );
+      },
+    ],
+    [
+      "invalid_request",
+      (): void => {
+        installRouter((kind) =>
+          kind === "search"
+            ? { status: 400, body: { error: "invalid_request", message: "no" } }
+            : { status: 500, body: {} },
+        );
+      },
+    ],
+    [
+      "not_found",
+      (): void => {
+        installRouter((kind) =>
+          kind === "search"
+            ? { status: 404, body: { error: "not_found", message: "no such domain" } }
+            : { status: 500, body: {} },
+        );
+      },
+    ],
+    [
+      "already_exists",
+      (): void => {
+        installRouter((kind) =>
+          kind === "search"
+            ? { status: 409, body: { error: "domain_exists", message: "already" } }
+            : { status: 500, body: {} },
+        );
+      },
+    ],
+    [
+      "forbidden",
+      (): void => {
+        installRouter((kind) =>
+          kind === "search"
+            ? { status: 403, body: { error: "principal_mismatch" } }
+            : { status: 500, body: {} },
+        );
+      },
+    ],
+    ["retryable", (): void => void installRouter(() => ({ status: 500, body: {} }))],
+  ])("the skip names the refusal by the envelope's OWN status — %s", async (expected, wire) => {
+    // All seven arms of `RefusalStatus`, because a mis-mapped one names a status the
+    // agent never saw and an operator then debugs a refusal that did not happen. Two
+    // mis-mappings (forbidden→retryable, not_registered→forbidden) left the tier green
+    // while only `invalid_request` was driven. The expected reason is READ BACK from the
+    // envelope, never typed here; the status assertion is the row's own premise.
+    wire();
+    const api = registerPlugin();
+    const { payload } = await runSearch(api, "call_refusal");
+
+    expect(payload["status"]).toBe(expected);
+    expect(logMessages(api)).toContain(
+      `sil_search_results_skipped callId=call_refusal reason=refused:${String(payload["status"])}`,
+    );
+  });
+
+  it("a handler FAULT logs one bounded line, and the wire still answers the uniform not_found", async () => {
+    // The catch is the only surface a plugin bug has: the wire says exactly what it says
+    // for a miss, by design. Its `cause` is an arbitrary Error message — long, and
+    // multiline the moment it carries a stack fragment — so it is the one field an
+    // attacker never has to supply for the line to break.
+    const CAUSE = `boom ${"x".repeat(300)}\nsil_search_results_hit callId=victim count=99 found=true`;
+    const api = registerPlugin();
+    // A page whose `products` throws on read: the fault the handler's own comment names,
+    // driven through the real store rather than a mocked module.
+    putSearchResult(
+      "call_boom",
+      {
+        status: "ok",
+        get products(): unknown[] {
+          throw new Error(CAUSE);
+        },
+      } as unknown as SearchResultPage,
+      ACCOUNT_A,
+    );
+
+    const faulted = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_boom" }));
+    const missed = bodyOf(await callGatewayMethod(api, METHOD, { callId: "call_never" }));
+    expect(JSON.stringify(faulted)).toBe(JSON.stringify(missed));
+
+    const failed = logMessages(api).filter((m) => m.startsWith("sil_search_results_failed"));
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).not.toContain("\n");
+    expect(failed[0]!.split(" ")).toHaveLength(2); // the marker and ONE `cause=` pair
+    expect(failed[0]!.length).toBeLessThan(200);
+    expect(failed[0]).toContain("cause=boom_"); // the real cause, not an empty pair
+  });
+
+  it("a hostile callId cannot forge a marker, inject a pair, or run the line away", async () => {
+    // The callId is the CLIENT's string and the wire deliberately tells nothing, so this
+    // line IS the account of a delivery failure. Unrendered, a newline in it prints a
+    // complete second marker on its own console line (the host's writer strips no
+    // control characters — it only redacts secrets), and a long one prints a line as
+    // long as the input.
+    const FORGERY =
+      "x reason=hit found=true\nsil_search_results_hit callId=victim count=99 found=true";
+    const api = registerPlugin();
+
+    await callGatewayMethod(api, METHOD, { callId: FORGERY });
+    await callGatewayMethod(api, METHOD, { callId: "c".repeat(200_000) });
+
+    const messages = logMessages(api).filter((m) => m.startsWith("sil_search_results_"));
+    expect(messages).toHaveLength(2); // one marker per call, never three
+    for (const message of messages) {
+      expect(message).not.toContain("\n");
+      // The whole hostile id collapses into ONE `callId=` token, so nothing it carries
+      // can be read as a pair of its own — and the line stays bounded.
+      const tokens = message.split(" ");
+      expect(tokens).toHaveLength(4);
+      expect(tokens[0]).toBe("sil_search_results_miss");
+      expect(tokens[1]!.startsWith("callId=")).toBe(true);
+      expect(tokens.slice(2)).toEqual(["reason=unknown", "found=false"]);
+      expect(message.length).toBeLessThan(200);
+    }
+    // The raw value still reaches the structured fields, which go to the log file.
+    const fields = vi
+      .mocked(api.logger.info)
+      .mock.calls.find((c) => String(c[0]).startsWith("sil_search_results_miss"))?.[1];
+    expect(fields).toMatchObject({ callId: FORGERY });
+  });
+
+  it.each([
+    ["no_principal", () => rmSync(join(getDataDir(), "config.json"), { force: true })],
+    ["no_products", () => undefined],
+  ])("an `ok` search the buffer had to skip names %s with its callId", async (reason, strip) => {
+    // Both are `ok` to the agent and unresolvable to a client — the split a wire that
+    // answers one `not_found` for everything can never show an operator.
+    installRouter((kind) =>
+      kind === "search"
+        ? { status: 200, body: reason === "no_products" ? { status: "ok" } : searchEnvelope([wireProduct(1)]) }
+        : { status: 500, body: {} },
+    );
+    const api = registerPlugin();
+    strip();
+
+    const { payload } = await runSearch(api, "call_skipped");
+    expect(payload["status"]).toBe("ok"); // premise: the agent was answered
+    expect(logMessages(api)).toContain(`sil_search_results_skipped callId=call_skipped reason=${reason}`);
+  });
+});
+
+// ===========================================================================
 // Registration shape + operator-log privacy
 // ===========================================================================
 
@@ -857,19 +1103,26 @@ describe("registration shape (C5) and log privacy", () => {
     expect(getGatewayMethod(api, METHOD).opts?.scope).toBe("operator.read");
   });
 
-  it("registering the gateway method does not change the tool set (still 11)", () => {
+  // Despite living in a gateway-method file, this is a full tool-set MIRROR — any
+  // sil_* add or removal must bump it, count in the title included. It went
+  // undocumented for a release because nobody greps a "…-method…" file for tool
+  // tests; see docs/knowledge/adding-a-sil-tool-fans-out-to-exact-set-mirrors.md.
+  it("registering the gateway method does not change the tool set (still fourteen)", () => {
     const api = registerPlugin();
     expect([...api._tools.keys()].sort()).toEqual([
+      "shopping_brief_create",
+      "shopping_brief_edit",
+      "shopping_brief_read",
+      "shopping_domain_create",
+      "shopping_domain_get",
+      "shopping_domain_search",
+      "shopping_offers",
+      "shopping_product_get",
+      "shopping_profile_edit",
+      "shopping_search",
+      "shopping_seller_get",
       "sil_doctor",
-      "sil_learn",
-      "sil_product_get",
-      "sil_profile_get",
-      "sil_profile_materialize",
-      "sil_profile_remove",
-      "sil_profile_search",
       "sil_register",
-      "sil_search",
-      "sil_specs",
       "sil_whoami",
     ]);
     // The method is NOT a tool and must never leak into the tool surface.
@@ -889,8 +1142,8 @@ describe("registration shape (C5) and log privacy", () => {
     await callGatewayMethod(api, METHOD, { callId: "call_1" });
 
     expect(api.logger.info).toHaveBeenCalledWith(
-      "sil_search_results_hit",
-      expect.objectContaining({ found: true, count: 2 }),
+      "sil_search_results_hit callId=call_1 count=2 found=true",
+      expect.objectContaining({ found: true, count: 2, callId: "call_1" }),
     );
     const blob = logBlob(api);
     // No product, no price, no checkout_url, no id material, no token.

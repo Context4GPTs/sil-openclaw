@@ -21,10 +21,10 @@
  *   AC8 — config-path precedence (OPENCLAW_CONFIG_PATH wins) + missing-config
  *         fail-closed (no write, no parent dir created, structured error, exit 1).
  *
- * The script imports the COMPILED lib (`dist/lib/openclaw-allowlist.js`), so the
- * suite builds the lib once in beforeAll FROM THE CURRENT SOURCE — never relying
- * on a possibly-stale dist (a stale dist would silently test old logic). The
- * build is the same `tsc -p tsconfig.build.json` the script's `dist` import needs.
+ * The script imports the COMPILED lib (`dist/lib/openclaw-allowlist.js`), built FROM
+ * THE CURRENT SOURCE by `globalSetup` (`helpers/build-dist.ts`) — once per run and
+ * installed by rename, so a stale dist cannot silently test old logic and a
+ * half-emitted one cannot kill a spawned script at ESM load.
  *
  * The two invariants this suite defends (product-owner): AC6 (idempotent) and the
  * additive half of AC1 (klodi survives). Every other case guards those two.
@@ -38,7 +38,6 @@ import {
   describe,
   it,
   expect,
-  beforeAll,
   beforeEach,
   afterEach,
 } from "vitest";
@@ -63,21 +62,23 @@ const SCRIPT = join(REPO_ROOT, "scripts", "allowlist-openclaw.mjs");
 
 // sil's real facts (asserted against, sourced from the manifest the script reads).
 const SIL_ID = "sil";
-// The real 11-tool floor after the sil-doctor-tool-data-store-identity-health
-// card added sil_doctor (report-first data-store/identity/version health) in
-// the new doctor group. Drives `tools_added === SIL_TOOLS.length` and the
-// per-tool not-enumerated-into-config scan below.
+// The real fourteen-tool set — the eleven `shopping_*` tools of the agent contract plus the
+// three account tools. Drives `tools_added === SIL_TOOLS.length` and the per-tool
+// not-enumerated-into-config scan below.
 const SIL_TOOLS = [
+  "shopping_brief_create",
+  "shopping_brief_edit",
+  "shopping_brief_read",
+  "shopping_domain_create",
+  "shopping_domain_get",
+  "shopping_domain_search",
+  "shopping_offers",
+  "shopping_product_get",
+  "shopping_profile_edit",
+  "shopping_search",
+  "shopping_seller_get",
   "sil_doctor",
-  "sil_learn",
-  "sil_product_get",
-  "sil_profile_get",
-  "sil_profile_materialize",
-  "sil_profile_remove",
-  "sil_profile_search",
   "sil_register",
-  "sil_search",
-  "sil_specs",
   "sil_whoami",
 ] as const;
 
@@ -137,21 +138,6 @@ function freshConfig(): unknown {
 
 let workdir: string;
 let configPath: string;
-
-beforeAll(() => {
-  // The script imports dist/lib/openclaw-allowlist.js — build the lib from the
-  // CURRENT source so the integration tier exercises what the dev actually
-  // wrote, never a stale dist. Fails loud if the build breaks. We invoke the
-  // TypeScript compiler's real JS entry (node_modules/.bin/tsc is a shell
-  // wrapper that `node` cannot run directly).
-  execFileSync("node", ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"], {
-    cwd: REPO_ROOT,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  if (!existsSync(join(REPO_ROOT, "dist", "lib", "openclaw-allowlist.js"))) {
-    throw new Error("build did not emit dist/lib/openclaw-allowlist.js — script import would 404");
-  }
-}, 60_000);
 
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "sil-allowlist-it-"));
@@ -219,7 +205,7 @@ describe("AC1 / AC3 — fresh merge writes sil into all three surfaces (no-warni
     expect(m["plugins_allow_size"] as number).toBeGreaterThan(0);
   });
 
-  it("does NOT enumerate the 11 tool NAMES into the written config (plugin-id admission only)", () => {
+  it("does NOT enumerate the 10 tool NAMES into the written config (plugin-id admission only)", () => {
     writeConfig(freshConfig());
     runHelper({ OPENCLAW_CONFIG_PATH: configPath });
     const raw = readFileSync(configPath, "utf8");

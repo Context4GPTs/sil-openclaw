@@ -161,20 +161,25 @@ describe("plugin load — data dir is created by the FULL real register() (card 
       .mock.calls.filter(([marker]) => marker === "sil_plugin_loaded");
     expect(markerCalls).toHaveLength(1);
     // The full real tool set — the data-dir creation does not add/drop a tool.
-    // 11 tools after the sil-doctor-tool-data-store-identity-health card added
-    // sil_doctor (report-first data-store/identity/version health) in the new
-    // doctor group.
+    // 14 tools: the local document store and its Brief compile are deleted (a group
+    // removal in src/index.ts), and the brief and profile the contract signed are
+    // registered in their place. The set is exact in BOTH directions on purpose —
+    // loosening it to `toContain` stops it catching a silent removal, which is how a
+    // shipped tool disappears under a green suite.
     expect([...api._tools.keys()].sort()).toEqual([
+      "shopping_brief_create",
+      "shopping_brief_edit",
+      "shopping_brief_read",
+      "shopping_domain_create",
+      "shopping_domain_get",
+      "shopping_domain_search",
+      "shopping_offers",
+      "shopping_product_get",
+      "shopping_profile_edit",
+      "shopping_search",
+      "shopping_seller_get",
       "sil_doctor",
-      "sil_learn",
-      "sil_product_get",
-      "sil_profile_get",
-      "sil_profile_materialize",
-      "sil_profile_remove",
-      "sil_profile_search",
       "sil_register",
-      "sil_search",
-      "sil_specs",
       "sil_whoami",
     ]);
   });
@@ -423,10 +428,14 @@ describe("plugin load — the register path is SOURCE-authoritative, immune to a
     expect([...api._tools.keys()].sort()).toEqual([...manifestToolNames()].sort());
   });
 
-  it("does NOT resurrect the since-deleted sil_profile_list (an old-correct dist can no longer mask a source regression)", () => {
+  it("does NOT resurrect a since-deleted tool (an old-correct dist can no longer mask a source regression)", () => {
+    // Retargeted from `sil_profile_list` to the surface THIS release deleted: an
+    // unrebuilt `dist/` on the checkout still holds `lib/profile-store.js` and
+    // `tools/profile.js`, so the phantom a stale artefact would reintroduce today is
+    // the profile group, not the tool folded away two releases ago.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
-    expect([...api._tools.keys()]).not.toContain("sil_profile_list");
+    expect([...api._tools.keys()].filter((n) => /^sil_(profile_|learn$)/.test(n))).toEqual([]);
     expect(api._tools.size).toBe(manifestToolNames().length);
   });
 });

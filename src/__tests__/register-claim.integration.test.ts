@@ -65,6 +65,16 @@ import {
 
 const TOOL = "sil_register";
 const HOST = "https://sil-web.test.example.com";
+/** The whole path of `open`: the session id is the ONLY segment under /authorize. */
+const OPEN_PATH_RE =
+  /^\/authorize\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+/** The session id, read back the only way the wire now offers it. */
+function sessionOf(open: unknown): string {
+  const match = OPEN_PATH_RE.exec(new URL(open as string).pathname);
+  if (match === null) throw new Error(`open has no session path segment: ${String(open)}`);
+  return match[1]!;
+}
 
 let dataDir: string;
 let priorSilDataDir: string | undefined;
@@ -228,7 +238,7 @@ describe("claim lifecycle — 200 success persists credentials exactly once", ()
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
     await vi.advanceTimersByTimeAsync(10_000);
 
-    const sessionId = payload["session_id"] as string;
+    const sessionId = sessionOf(payload["open"]);
     expect(claimUrl).toBe(`${HOST}/api/v1/sessions/${sessionId}/claim`);
     const parsed = JSON.parse(claimBody as string) as { code_verifier?: string };
     expect(typeof parsed.code_verifier).toBe("string");
@@ -275,7 +285,7 @@ describe("claim lifecycle — 200 pending keeps polling (NOT terminal)", () => {
 describe("claim lifecycle — terminal status codes stop the loop", () => {
   // NOTE (`sil-register-stops-polling-on-premature-not-found`): 404 was REMOVED
   // from this terminal table. A claim 404 is the normal pre-session early state
-  // (the row is INSERTed server-side only when the user opens the auth URL), so
+  // (the row is INSERTed server-side only when the buyer opens the link), so
   // it now KEEPS POLLING — its keep-polling/timeout behaviour is asserted in the
   // dedicated "premature 404 keeps polling" + "perpetual 404 → timeout" blocks
   // below, NOT here. Only the genuine terminals (410 expired / 409 already_claimed)
@@ -306,7 +316,7 @@ describe("claim lifecycle — terminal status codes stop the loop", () => {
 
 describe("claim lifecycle — a premature 404 KEEPS POLLING (the headline regression)", () => {
   // `sil-register-stops-polling-on-premature-not-found`: the bug is that the
-  // FIRST poll tick fires (~3s) before the human has opened the auth URL, so the
+  // FIRST poll tick fires (~3s) before the human has opened the link, so the
   // session row does not exist yet and the claim 404s — and the loop wrongly
   // treats that 404 as terminal (`claimStep` → `done:true`, `handleDone` logs
   // `sil_register_not_found`) and dies ~3s in, before the user could plausibly
@@ -453,14 +463,9 @@ describe("system-browser steer — the awaiting_browser return carries the steer
   // real auth-URL build, real poll, real persistence) + a real sil_whoami, the
   // awaiting_browser return must carry the system-browser steer in BOTH `message`
   // and `instructions`, AND the end-to-end claim→token-persist→whoami round-trip
-  // must be byte-for-byte the same as before this card — same session_id, same
-  // persisted tokens, same `ok` identity. This card adds NO new state, NO new
-  // tool, NO wire change — only the two copy fields. Mocks only the host-SDK +
-  // `fetch` boundary (via installFetch), never the logic.
-  //
-  // RED today: the awaiting_browser `message`/`instructions` carry no steer, so
-  // the steer assertions fail; the round-trip assertions stay GREEN (this card
-  // changes none of that path).
+  // must hold end to end: the same session drives the claim, the same tokens
+  // persist, and whoami answers `ok`. Mocks only the host-SDK + `fetch` boundary
+  // (via installFetch), never the logic.
 
   const SIL_API_STEER = "https://sil-api.steer.example.com";
   const IDENTITY_ENVELOPE_STEER = {
@@ -508,13 +513,12 @@ describe("system-browser steer — the awaiting_browser return carries the steer
     expect(instructions).toMatch(POSITIVE_STEER_RE);
     expect(instructions).toMatch(NEGATIVE_SURFACE_RE);
 
-    // auth_url rides through byte-unchanged (the #24 invariant; the steer is copy
-    // around the link, never the wire value) — it carries both params, unwrapped.
-    const authUrl = payload["auth_url"] as string;
-    const sessionId = payload["session_id"] as string;
-    const u = new URL(authUrl);
-    expect(u.pathname).toBe("/authorize");
-    expect(u.searchParams.get("session")).toBe(sessionId);
+    // `open` is the wire value the steer wraps, never re-encodes: the session in the
+    // path, `code_challenge` the only query parameter, and it is what the claim polls.
+    const open = payload["open"] as string;
+    const u = new URL(open);
+    expect(u.pathname).toMatch(OPEN_PATH_RE);
+    expect([...u.searchParams.keys()]).toEqual(["code_challenge"]);
     expect(u.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
     // ── The claim→persist round-trip is UNCHANGED. ──
@@ -539,7 +543,7 @@ describe("system-browser steer — the awaiting_browser return carries the steer
   it("a SECOND sil_register after completion confirms already_registered (the confirmation path is unchanged) — and no longer steers a browser (nothing to open)", async () => {
     // The card's "same already_registered confirmation path" guarantee: once the
     // first registration has persisted tokens, a re-run of sil_register short-
-    // circuits to already_registered with the claimed user — no auth URL, no
+    // circuits to already_registered with the claimed user — no link, no
     // poll, and therefore no browser steer (there is nothing to open). This pins
     // that the steer is scoped to the awaiting_browser return ONLY and does not
     // bleed into the already_registered confirmation.
@@ -561,8 +565,8 @@ describe("system-browser steer — the awaiting_browser return carries the steer
     const second = payloadOf(await getTool(api, TOOL).execute("c2", {}));
     expect(second["status"]).toBe("already_registered");
     expect((second["user"] as { id?: string }).id).toBe("user-42");
-    // The confirmation carries no auth_url and no awaiting_browser steer copy.
-    expect(second["auth_url"]).toBeUndefined();
+    // The confirmation carries no link and no awaiting_browser steer copy.
+    expect(second["open"]).toBeUndefined();
     expect(second["message"]).toBeUndefined();
   });
 });
@@ -773,7 +777,7 @@ describe("SC8 (in-repo) — two instances, two data dirs, independent tokens", (
       await waitForTokens();
 
       // Distinct sessions.
-      expect(payloadA["session_id"]).not.toBe(payloadB["session_id"]);
+      expect(sessionOf(payloadA["open"])).not.toBe(sessionOf(payloadB["open"]));
 
       // Each dir holds its OWN token pair — no cross-contamination.
       const tokA = JSON.parse(readFileSync(join(dirA, "tokens.json"), "utf8")) as StoredTokens;

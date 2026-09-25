@@ -235,10 +235,15 @@ describe("compiled-artifact load runs against a FRESH dist, never the planted st
     expect([...api._tools.keys()].sort()).toEqual([...contractsTools()].sort());
   });
 
-  it("does NOT register the since-deleted sil_profile_list (the 0.3.6 phantom 9th tool)", () => {
+  it("does NOT register a since-deleted tool (the 0.3.6 phantom, and the profile group this release retires)", () => {
+    // Widened from the bare `sil_profile_list` literal in lockstep with the source-side
+    // twin in `plugin-load.integration.test.ts`. An unrebuilt `dist/` on this checkout
+    // still holds `lib/profile-store.js` and `tools/profile.js`, so the phantom a stale
+    // COMPILED artefact would reintroduce today is the whole profile group — the one
+    // name that used to be pinned here is the least likely of the six.
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
-    expect([...api._tools.keys()]).not.toContain("sil_profile_list");
+    expect([...api._tools.keys()].filter((n) => /^sil_(profile_|learn$)/.test(n))).toEqual([]);
     expect(api._tools.size).toBe(contractsTools().length);
   });
 
@@ -259,36 +264,42 @@ describe("compiled-artifact load runs against a FRESH dist, never the planted st
 
 // ===========================================================================
 // AC2 — ONE register() on the COMPILED entry yields ONE store across BOTH
-// surfaces (the writer `sil_search` and the reader `sil.search_results`)
+// surfaces (the writer `shopping_search` and the reader `sil.search_results`)
 // ===========================================================================
 
 const METHOD = "sil.search_results";
 const SIL_API = "https://sil-api.compiled.test.example.com";
 const ACCOUNT = "user-compiled";
 
-/** One real `SilCatalogProduct` off the sil-api wire — a required `source`, and a
- * variant carrying a non-empty `checkout_url`. Anti-false-green: a `{stub:true}`
- * echo carries none of these, so nothing below can pass against a placeholder. */
+/** A valid `shopping_search` call — the route is domain-gated and `n` is required. */
+const SEARCH_PARAMS = {
+  domain: "product.furniture.seating.task_chairs",
+  query: "office chair",
+  n: 10,
+} as const;
+
+/**
+ * One real product off the sil-api wire, carrying what the agent's honesty reading is
+ * computed from — a filled `fit` with an `unknown` beside it, a priced `variants` entry,
+ * the shop's own `printed` words. Anti-false-green: a `{stub:true}` echo carries none of
+ * these, and neither does a body the compiled client's 200 gate would refuse.
+ */
 function wireProduct(n: number): Record<string, unknown> {
   return {
-    id: `gid://product/${n}`,
+    id: `p-compiled-${n}`,
     title: `Ergonomic Task Chair ${n}`,
-    description: { plain: `A height-adjustable task chair, model ${n}.` },
-    price_range: {
-      min: { amount: 100_000 + n, currency: "USD" },
-      max: { amount: 200_000 + n, currency: "USD" },
-    },
+    brand: `Maker ${n}`,
+    fit: { seat_height: 480, armrest_travel: "unknown" },
+    price: [{ from: `${1000 + n}.99`, to: `${1000 + n}.99`, currency: "USD" }],
     variants: [
       {
-        id: `gid://variant/${n}-1`,
-        title: `Ergonomic Task Chair ${n} — Graphite`,
-        description: { plain: `A height-adjustable task chair, model ${n}.` },
-        price: { amount: 100_000 + n, currency: "USD" },
-        availability: { available: true, status: "in_stock" },
-        checkout_url: `https://buy.example.com/chair-${n}`,
+        id: `v-compiled-${n}`,
+        colour: "Black",
+        price: [{ from: `${1000 + n}.99`, to: `${1000 + n}.99`, currency: "USD" }],
       },
     ],
-    source: `merchant-${n}`,
+    host: "shop.example",
+    printed: { "Seat height": "42–52 cm", Back: "mesh", Warranty: "five years" },
   };
 }
 
@@ -308,8 +319,12 @@ function seedSession(): void {
   );
 }
 
-/** The catalog-search boundary — the ONLY thing doubled. Records every outbound
- * URL so "the compiled client, at the configured origin" is assertable by count. */
+/** The catalog-search boundary — the ONLY thing doubled. Records every outbound URL so
+ * "the compiled client, at the configured origin" is assertable by count.
+ *
+ * The body is the route's own 200. A body that did not state `status: "ok"` classifies
+ * `retryable`, so the resolve would have nothing to serve and every assertion here would
+ * pass vacuously against an error envelope. */
 function installSearchRouter(products: unknown[]): { urls: string[] } {
   const urls: string[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation((input: unknown) => {
@@ -319,7 +334,7 @@ function installSearchRouter(products: unknown[]): { urls: string[] } {
     return Promise.resolve(
       new Response(
         JSON.stringify(
-          isSearch ? { products, pagination: { has_next_page: false } } : {},
+          isSearch ? { status: "ok", products } : {},
         ),
         {
           status: isSearch ? 200 : 500,
@@ -337,7 +352,7 @@ function payloadOf(result: { content: { text?: string }[] }): Record<string, unk
   return JSON.parse(text) as Record<string, unknown>;
 }
 
-describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and the sil.search_results READER share ONE store", () => {
+describe("AC2 — one register() on dist/index.js ⇒ the shopping_search WRITER and the sil.search_results READER share ONE store", () => {
   // The gap 0.4.5's suite structurally could not close. Its ~30 assertions drove
   // the SOURCE modules through a harness that imports the tool and the handler
   // separately; nothing proved that the artefact a host actually loads yields one
@@ -354,7 +369,7 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
     vi.restoreAllMocks();
   });
 
-  it("resolves the page the COMPILED sil_search just wrote, under the same host callId", async () => {
+  it("resolves the page the COMPILED shopping_search just wrote, under the same host callId", async () => {
     const rec = installSearchRouter([wireProduct(1), wireProduct(2)]);
     seedSession();
 
@@ -366,14 +381,14 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
 
     const CALL_ID = "call_compiled_hit";
     const payload = payloadOf(
-      await getTool(api, "sil_search").execute(CALL_ID, { query: "office chair" }),
+      await getTool(api, "shopping_search").execute(CALL_ID, SEARCH_PARAMS),
     );
     // Premise of the whole test: the search really succeeded and carries real
-    // projected products, not an error envelope the resolve could never store.
+    // real v0 results, not an error envelope the resolve could never store.
     expect(payload["status"]).toBe("ok");
     const products = payload["products"] as Record<string, unknown>[];
     expect(products).toHaveLength(2);
-    expect(products[0]!["id"]).toBe("gid://product/1");
+    expect(products[0]!["id"]).toBe("p-compiled-1");
     // The COMPILED config module resolved the pluginConfig override — the request
     // went to the test origin, so this is the compiled client's own leg.
     expect(rec.urls.filter((u) => u.startsWith(SIL_API))).toHaveLength(1);
@@ -402,7 +417,7 @@ describe("AC2 — one register() on dist/index.js ⇒ the sil_search WRITER and 
 
     const CALL_ID = "call_compiled_instance";
     const payload = payloadOf(
-      await getTool(api, "sil_search").execute(CALL_ID, { query: "office chair" }),
+      await getTool(api, "shopping_search").execute(CALL_ID, SEARCH_PARAMS),
     );
     expect(payload["status"]).toBe("ok");
 

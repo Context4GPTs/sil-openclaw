@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-domain-get-request.schema.json",
+  "title": "sil shopping_domain_get — request",
+  "type": "object",
+  "required": [
+    "path"
+  ],
+  "properties": {
+    "path": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+      "maxLength": 255,
+      "description": "Sends one standing path. A path that does not stand answers `not_found`; the root `product` always stands."
+    }
+  },
+  "additionalProperties": false
+}

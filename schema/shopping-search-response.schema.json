@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-search-response.schema.json",
+  "title": "sil shopping_search — response",
+  "type": "object",
+  "required": [
+    "status",
+    "products"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "fit",
+          "price",
+          "variants"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Writes it into the Brief as the pick, so the next session names the same product."
+          },
+          "title": {
+            "type": "string",
+            "description": "Draws the card with it."
+          },
+          "brand": {
+            "type": "string",
+            "description": "Names the maker to the buyer."
+          },
+          "image": {
+            "type": "string",
+            "description": "Shows it on the card."
+          },
+          "fit": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "description": "Answers each requested key with the value sil holds, or `\"unknown\"` where it holds none — what to dig into or to say as unverified, never a miss."
+          },
+          "price": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "from",
+                "to",
+                "currency"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                  "description": "Quotes the low end of what the product costs in this currency."
+                },
+                "to": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                  "description": "Quotes the high end."
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$",
+                  "minLength": 3,
+                  "maxLength": 3,
+                  "description": "Reads which currency the range is in; sil converts nothing."
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Quotes the range over the variants that came back; a currency other than the ask's is a bound sil could not test."
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "price"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Passes it to `shopping_product_get` and `shopping_offers`."
+                },
+                "price": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "from",
+                      "to",
+                      "currency"
+                    ],
+                    "properties": {
+                      "from": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                        "description": "Quotes the low end of what the product costs in this currency."
+                      },
+                      "to": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                        "description": "Quotes the high end."
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$",
+                        "minLength": 3,
+                        "maxLength": 3,
+                        "description": "Reads which currency the range is in; sil converts nothing."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "description": "Quotes what THIS option costs, over its own offers; a currency other than the ask's is a bound sil could not test."
+                }
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "description": "A variant that answers the ask, and every option value that identifies it. One carrying none is a listing sil has not read sizes from."
+            },
+            "description": "Passes an `id` on to the dossier and the offers; names the option to the buyer."
+          },
+          "host": {
+            "type": "string",
+            "description": "Names the shop whose page sil read in this request."
+          },
+          "printed": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "type": "string"
+              }
+            },
+            "description": "Reads the page's own labelled pairs that no key catches — a provisional read of what sil could not verify. Absent on a product sil already holds."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Shows the shortlist in this order, and never re-ranks it."
+    }
+  },
+  "additionalProperties": false
+}

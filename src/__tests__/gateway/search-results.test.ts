@@ -33,6 +33,7 @@ import { join } from "node:path";
 import { registerSearchResultsMethod, SEARCH_RESULTS_METHOD } from "../../gateway/search-results.js";
 import type { SearchResultPage } from "../../lib/search-results-store.js";
 import { putSearchResult, __resetSearchResultsStore } from "../../lib/search-results-store.js";
+import { contractResponse } from "../helpers/shopping-wire.js";
 import { getDataDir, getTokensPath } from "../../lib/credentials.js";
 import {
   createMockPluginApi,
@@ -48,23 +49,12 @@ const CALL_ID = "call_FSW68ywnbj8V6pZ5U8avz9Sn";
 let dataDir: string;
 let priorSilDataDir: string | undefined;
 
-const PAGE: SearchResultPage = {
-  status: "ok",
-  products: [
-    {
-      id: "gid://product/a",
-      title: "Aeron Chair",
-      source: "herman-miller",
-      variant: {
-        id: "gid://variant/a1",
-        title: "Aeron Chair — Graphite",
-        price: { amount: 159_900, currency: "USD" },
-        availability: { available: true, status: "in_stock" },
-        checkout_url: "https://buy.example.com/aeron-a1",
-      },
-    },
-  ],
-};
+/**
+ * A real page — the agent contract's own `shopping_search` 200, which is what the tool
+ * buffers. The handler reads `products.length` for its hit log, so a page missing that
+ * key would make every assertion below pass for the wrong reason.
+ */
+const PAGE = contractResponse("shopping_search") as unknown as SearchResultPage;
 
 function seedSession(id = ACCOUNT): void {
   const dir = getDataDir();

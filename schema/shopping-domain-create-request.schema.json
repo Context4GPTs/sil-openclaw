@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-domain-create-request.schema.json",
+  "title": "sil shopping_domain_create — request",
+  "type": "object",
+  "required": [
+    "path",
+    "guide",
+    "name",
+    "specs"
+  ],
+  "properties": {
+    "path": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+      "maxLength": 255,
+      "description": "Mints this path; only its root must already stand. A path directly under `product` is refused — name the family the thing is shelved in, as `product.sports.winter.ski.boots` does."
+    },
+    "guide": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "Writes the domain document every later buyer inherits, in markdown: what the thing is bought on, what goes wrong and what that costs the buyer, what to trust and what not to, and what buying it online takes in place of handling it. A domain sil has curated already carries one — write one only for a domain the registry does not hold."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Names the thing in English, and there is ONE. A name a standing domain already answers to is refused, naming that domain."
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "minItems": 1,
+      "maxItems": 20,
+      "description": "Seeds the market's own words for the thing, in any language — `καφετιέρα φίλτρου`, `dripper`. sil asks the indexes in them and grows more from the titles it holds."
+    },
+    "specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "display_name",
+          "type"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Coins the key here; naming one an ancestor defines redefines it for this subtree, or answers `inherited: true` when the declaration states nothing new."
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Names the key for a reader in the buyer's words."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Writes how this one key moves the fit, for every agent that reads this domain after you — what it decides, what goes wrong at either end of it, and how a measurement or a stated preference becomes a value for it."
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "number"
+              },
+              {
+                "type": "string",
+                "const": "boolean"
+              },
+              {
+                "type": "string",
+                "const": "enum"
+              },
+              {
+                "type": "string",
+                "const": "money"
+              }
+            ],
+            "description": "Types the value the agent sends and reads for this key."
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Declares the unit every value of this key is in."
+          },
+          "allowed_values": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "description": "Declares the closed set an enum takes."
+          },
+          "step": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Declares the increment the maker prints this numeric axis in — 0.5 for a Mondopoint size. Only on a number."
+          },
+          "forms": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "maxProperties": 100,
+            "description": "Declares what pages print for a value, mapped to the value — `{\"1-4 cups\": \"02\", \"43⅓\": \"43.3\"}` — so a page sil has never read keys it without a model."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Maps the headings pages print this key under — `Flex`, `Flex Index`, `Ευρετήριο Flex` — so a page sil has never read keys the value without a model."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Maps the names another agent may send for this key — `mondopoint`, `mondo` — so a search naming one of them is answered on this key instead of refused."
+          },
+          "variant_spec": {
+            "type": "boolean",
+            "const": true,
+            "description": "Marks a key that, alone or with the others so marked, identifies a purchasable variant."
+          },
+          "product_spec": {
+            "type": "boolean",
+            "const": true,
+            "description": "Marks a key that, with the brand and the others so marked, tells one product from the next."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 50,
+      "description": "Coins the keys this domain is bought by; the registry derives the operators."
+    }
+  },
+  "additionalProperties": false
+}
