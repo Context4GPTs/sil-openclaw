@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-brief-edit-response.schema.json",
+  "title": "sil shopping_brief_edit — response",
+  "type": "object",
+  "required": [
+    "status",
+    "id"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Confirms which brief was written."
+    }
+  },
+  "additionalProperties": false
+}

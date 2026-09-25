@@ -5,7 +5,8 @@
   "type": "object",
   "required": [
     "status",
-    "matches"
+    "matches",
+    "tree"
   ],
   "properties": {
     "status": {
@@ -36,7 +37,55 @@
         "additionalProperties": false
       },
       "maxItems": 20,
-      "description": "Reads what already stands for this category; an empty list is the one thing that licenses a mint."
+      "description": "Reads what already stands for this domain; an empty list is the one thing that licenses a mint."
+    },
+    "tree": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "family",
+          "domains",
+          "paths"
+        ],
+        "properties": {
+          "family": {
+            "type": "string",
+            "description": "Reads the family this thing would be shelved in, as a specialist shop would."
+          },
+          "domains": {
+            "type": "integer",
+            "description": "Sees how much of the tree already sits under it."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "name"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+                  "maxLength": 255,
+                  "description": "Reads it with `shopping_domain_get`, or descends from it."
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "Sees what this leaf already stands for before coining a second one."
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Adopts one of these, or coins a sibling leaf beside them."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Places a new leaf where a specialist shop would shelve it, and sees that a setup of several things is several leaves: every standing path below the root, by family."
     }
   },
   "additionalProperties": false

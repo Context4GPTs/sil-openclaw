@@ -6,10 +6,11 @@
  * `per-niche-expert.ts`: one module means the allowance can never drift between
  * the two surfaces that carry the same rule.
  *
- * WHAT IT PROTECTS. The wire answers with honesty fields — `ships: unknown`, a key
- * absent from `fit`, an empty `variants`, a `webpage_info` block, a price in a currency
- * the bound could not be tested against. Every one of them is an ORDINARY answer that
- * KEEPS its subject. The agent learns what to do with them almost entirely from the tool
+ * WHAT IT PROTECTS. The wire answers with honesty fields — `ships: unknown`, a `fit` key
+ * answered `"unknown"`, a variant with no option values, the `printed` pairs of a page
+ * sil read cold, a `webpage_info` block on the dossier, a price in a currency the bound
+ * could not be tested against. Every one of them is an ORDINARY answer that KEEPS its
+ * subject. The agent learns what to do with them almost entirely from the tool
  * descriptions, and prose is the only carrier of the rule — so prose is what is guarded.
  *
  * `unknown` is the one that silently breaks the product. The seller read fails closed:
@@ -31,12 +32,14 @@
 
 /**
  * The honesty states, as they are actually written in agent-facing prose — bare
- * (`unknown`, a `gap`), backticked (`webpage_info`), or as the phrase the contract uses
- * for the two that have no field of their own (an empty `variants`, a bound in another
- * currency sil could not test).
+ * (`unknown`, a `gap`), backticked (`printed`, `webpage_info`), or as the phrase the
+ * contract uses for the two with no field of their own (a variant with no option values,
+ * a bound in another currency sil could not test). The empty-`variants` token stays: the
+ * search no longer answers a zero-variant product, and the prose must not learn to drop
+ * one if it ever does again.
  */
 const HONESTY_TOKEN =
-  /\b(unknown|webpage_info|unverified|gap)\b|\bnot\s+(?:yet\s+)?verified\b|\bcould\s+not\s+test\b|variants\s*[`'":=]*\s*\[\s*\]|\bempty\s+variants\b/i;
+  /\b(unknown|printed|webpage_info|unverified|gap)\b|\bnot\s+(?:yet\s+)?verified\b|\bcould\s+not\s+test\b|\bno option values\b|variants\s*[`'":=]*\s*\[\s*\]|\bempty\s+variants\b/i;
 
 /**
  * Verbs that remove a subject from what the buyer sees. `deprioritise` is here
@@ -214,21 +217,14 @@ export function overTriggerOffenders(body: string): string[] {
 }
 
 /**
- * The FOURTH honesty state, and the one that lives on the document surface:
- * `not_found`. It is a POSITIVE claim — sil listed the directory that would hold
- * the document and it was not in it — and the agent acts on it by minting a fresh
- * document, or by believing a delete landed. Stated bare, it is the re-mint
- * instruction: over a directory sil merely could not read, the buyer's own words
- * are gone in one call.
+ * The FOURTH honesty state: `not_found`. Every route answering it scopes its lookup
+ * to the buyer's account, so it means "not yours", never "it does not exist". Read as
+ * an absence it licenses two wrong writes — a second brief opened over the one the
+ * buyer is working from, and a mint of a category that already stands elsewhere.
  *
  * Same shape as the scanners above (sentence scope, the offending sentence
  * returned), and the same reason for it: an agent reads the sentence on its own,
  * so a qualifier three sentences away does not reach it.
- *
- * NOT a clause match. The qualifier is matched as a listing verb NEXT TO a
- * container noun, in either order, so any wording that says sil could (or could
- * not) list the directory holding the document satisfies it — the rule is pinned,
- * the sentence is free.
  */
 const NOT_FOUND_TOKEN = /\bnot_found\b/i;
 
@@ -241,9 +237,10 @@ const ABSENCE_LICENCE =
   /\b(mints?|minting|creates?|re-?mint\w*|write\s+a\s+fresh|fresh\s+(?:one|document)|repeat\s+call|safe|deleted|removed|delete\s+landed)\b/i;
 
 /**
- * `store` is deliberately NOT a container noun here: this prose says "the sil
- * shopper's store" constantly, so accepting it would let an unrelated "list what
- * you have" clear the very sentence being guarded.
+ * The ALLOWANCE, not the rule: prose may make an absence claim where it also says what
+ * was listed. Matched as a listing verb NEXT TO a container noun, in either order, so
+ * the wording stays free. Deliberately narrow on the noun — a bare "list what you have"
+ * would clear the very sentence being guarded.
  */
 const LISTED_QUALIFIER =
   /\b(?:list\w*|enumerat\w+|scan\w*)\b[^.;]{0,30}\b(?:director\w+|folder|briefs|containing|would\s+hold)\b|\b(?:director\w+|folder|briefs|containing)\b[^.;]{0,30}\b(?:list\w*|enumerat\w+|scan\w*)\b|\bunlistable\b/i;
@@ -260,8 +257,8 @@ function unwrapped(body: string): string[] {
 }
 
 /**
- * Sentences that state `not_found` as a bare licence to mint, or as proof a
- * delete landed. Empty ⇒ every such sentence carries the listing qualifier.
+ * Sentences that state `not_found` as a bare licence to write, or as proof a thing is
+ * gone. Empty ⇒ every such sentence carries the listing qualifier.
  */
 export function notFoundLicenceOffenders(body: string): string[] {
   return unwrapped(body)
@@ -274,25 +271,23 @@ export function notFoundLicenceOffenders(body: string): string[] {
     .map((s) => s.replace(/\s+/g, " "));
 }
 
-/** Does this body teach `not_found` WITH its qualifier at all? The forbid-scan
- * above passes vacuously over prose that simply deleted the vocabulary. */
-export function statesQualifiedNotFound(body: string): boolean {
-  return unwrapped(body).some((s) => NOT_FOUND_TOKEN.test(s) && LISTED_QUALIFIER.test(s));
-}
-
 /**
  * Vocabulary the pre-contract request surface retired, as TEXT — every entry is a dead string
  * that cannot appear innocently in English prose, so a blanket forbid is right.
  *
- * `ship_to` is deliberately NOT here any more: the search and the offers take it as a
- * request field, so forbidding the word would fight the wire it guards.
+ * `ship_to` is deliberately NOT here any more: the search takes it as a request field, so
+ * forbidding the word would fight the wire it guards.
  *
- * The retired PARAMETER names that ARE innocent words (`category`, `condition`,
- * `cursor`) are deliberately absent: they are guarded STRUCTURALLY instead, off
- * each tool's own `parameters` schema (exact, and free of the false RED a bare
- * "category" would cause in prose that legitimately says "research how the
- * category is bought"). In prose they are caught in their BACKTICKED form
- * below — backticks are how prose names a parameter.
+ * The retired PARAMETER names that ARE innocent words (`category`, `cursor`) are
+ * deliberately absent: they are guarded STRUCTURALLY instead, off each tool's own
+ * `parameters` schema (exact, and free of the false RED a bare "category" would
+ * cause in prose that legitimately says "research how the category is bought"). In
+ * prose they are caught in their BACKTICKED form below — backticks are how prose
+ * names a parameter.
+ *
+ * `` `condition` `` left this list when the contract made it a live product spec at
+ * the `product` root: the brief legitimately writes `condition eq new`, so forbidding
+ * the backticked key would fight the registry it guards.
  *
  * Lower-case only: bodies are lowered before matching, so an upper-case needle
  * would sit here looking protective while matching nothing. Guarded by a
@@ -312,7 +307,6 @@ export const RETIRED_V0_TOKENS = [
   "mint_domain",
   "`cursor`",
   "`category`",
-  "`condition`",
 ];
 
 /** Retired tokens present in `body`, in the order listed. Empty ⇒ clean. */
@@ -323,8 +317,8 @@ export function retiredV0Offenders(body: string): string[] {
 
 /**
  * The wordings two live draws failed under. They are ordinary English, not dead
- * strings — `shopping_doc_find`'s `query` IS a free-text substring — so they are
- * scanned over the BUNDLE alone, never over a tool description.
+ * strings — `shopping_domain_search`'s `q` IS free text — so they are scanned over
+ * the BUNDLE alone, never over a tool description.
  */
 export const RETIRED_V0_PHRASES = ["free text", "filled understanding"];
 

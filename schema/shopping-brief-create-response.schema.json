@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-brief-create-response.schema.json",
+  "title": "sil shopping_brief_create — response",
+  "type": "object",
+  "required": [
+    "status",
+    "id"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Holds it for the session and names it on every search and offers call."
+    }
+  },
+  "additionalProperties": false
+}

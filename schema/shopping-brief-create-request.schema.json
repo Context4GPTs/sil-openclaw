@@ -1,38 +1,30 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.sil.com/shopping-search-request.schema.json",
-  "title": "sil shopping_search — request",
+  "$id": "https://schemas.sil.com/shopping-brief-create-request.schema.json",
+  "title": "sil shopping_brief_create — request",
   "type": "object",
   "required": [
-    "brief",
-    "domain",
-    "query",
-    "n"
+    "title",
+    "narrative"
   ],
   "properties": {
-    "brief": {
+    "title": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 256,
-      "description": "Names the session's brief, so sil records this call against the want behind it. A brief that is not the buyer's answers `not_found`."
+      "maxLength": 128,
+      "description": "Names the job in a few words, so the buyer picks it out of their list."
+    },
+    "narrative": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "description": "Writes what a good buy looks like for THIS buyer, in their own terms — what they are after, what it has to do for them, and what would make it a bad buy. It is the spec of the job, so a want no keyed spec can carry stays here and still counts."
     },
     "domain": {
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Sends the path the domain read returned."
-    },
-    "query": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 512,
-      "description": "Sends the shopping words: the thing as a shop lists it and the numbers that pick the product, never a sentence."
-    },
-    "n": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 10,
-      "description": "Asks for this many variants — one size or one colour each, grouped under their products."
+      "description": "Names the domain the specs below sit under: a domain path for product specs, `seller` for the seller specs, which belong to the whole brief."
     },
     "specs": {
       "type": "array",
@@ -88,18 +80,18 @@
             "minLength": 3,
             "maxLength": 3,
             "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Quotes the buyer's own words behind the spec, verbatim — never a paraphrase, never a sentence they did not say; a spec the guide derives from a measurement quotes the measurement. Reads them back before proposing to relax it."
           }
         },
         "additionalProperties": false
       },
       "maxItems": 32,
-      "description": "Sends the product specs this search asks, written by the agent from the brief's; a key the domain does not hold is recorded, never refused."
-    },
-    "ship_to": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64,
-      "description": "Leave this out: sil then localizes the search to the buyer's default address. Send it only when the buyer named another address, as the exact `label` `sil_whoami` lists — never a word like \"default\", never a country. It excludes no seller anywhere else — where the seller is, is the seller spec `country`, on the brief, for the offers to read."
+      "description": "Writes the wants it can already express, keyed and typed by the domain read."
     }
   },
   "additionalProperties": false

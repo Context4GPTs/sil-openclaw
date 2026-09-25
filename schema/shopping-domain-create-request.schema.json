@@ -6,6 +6,7 @@
   "required": [
     "path",
     "guide",
+    "name",
     "specs"
   ],
   "properties": {
@@ -19,7 +20,24 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 4096,
-      "description": "Writes what the category is and how it is bought — the prose a read hands back."
+      "description": "Writes the domain document every later buyer inherits, in markdown: what the thing is bought on, what goes wrong and what that costs the buyer, what to trust and what not to, and what buying it online takes in place of handling it. A domain sil has curated already carries one — write one only for a domain the registry does not hold."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Names the thing in English, and there is ONE. A name a standing domain already answers to is refused, naming that domain."
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "minItems": 1,
+      "maxItems": 20,
+      "description": "Seeds the market's own words for the thing, in any language — `καφετιέρα φίλτρου`, `dripper`. sil asks the indexes in them and grows more from the titles it holds."
     },
     "specs": {
       "type": "array",
@@ -46,7 +64,7 @@
           "description": {
             "type": "string",
             "maxLength": 1024,
-            "description": "Says what the key means, for whoever reads this domain next."
+            "description": "Writes how this one key moves the fit, for every agent that reads this domain after you — what it decides, what goes wrong at either end of it, and how a measurement or a stated preference becomes a value for it."
           },
           "type": {
             "anyOf": [
@@ -83,6 +101,44 @@
             "minItems": 1,
             "description": "Declares the closed set an enum takes."
           },
+          "step": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Declares the increment the maker prints this numeric axis in — 0.5 for a Mondopoint size. Only on a number."
+          },
+          "forms": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "maxProperties": 100,
+            "description": "Declares what pages print for a value, mapped to the value — `{\"1-4 cups\": \"02\", \"43⅓\": \"43.3\"}` — so a page sil has never read keys it without a model."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Maps the headings pages print this key under — `Flex`, `Flex Index`, `Ευρετήριο Flex` — so a page sil has never read keys the value without a model."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Maps the names another agent may send for this key — `mondopoint`, `mondo` — so a search naming one of them is answered on this key instead of refused."
+          },
           "variant_spec": {
             "type": "boolean",
             "const": true,
@@ -97,7 +153,7 @@
         "additionalProperties": false
       },
       "maxItems": 50,
-      "description": "Coins the keys this category is bought by; the registry derives the operators."
+      "description": "Coins the keys this domain is bought by; the registry derives the operators."
     }
   },
   "additionalProperties": false

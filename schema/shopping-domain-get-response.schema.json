@@ -7,6 +7,8 @@
     "status",
     "path",
     "guide",
+    "name",
+    "labels",
     "specs",
     "seller_specs"
   ],
@@ -22,7 +24,21 @@
     },
     "guide": {
       "type": "string",
-      "description": "Copies into `## Buying guide`; translates the buyer facts through it; reads from it which keys decide the buy."
+      "description": "Reads the domain document — markdown on how this thing is bought well: what it is bought on, what goes wrong and what that costs the buyer, what to trust, and what buying it online takes in place of handling it. It is what sil knows about the domain, so reason from it rather than reciting it, and never send the buyer to a shop it already tells you how to do without."
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Calls the thing this in English — there is one, and this is it."
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64
+      },
+      "maxItems": 20,
+      "description": "Reads every other word for the thing — the market's own, in any language, folded to the form sil maps under. sil asks each index in them; the agent never sends them."
     },
     "specs": {
       "type": "array",
@@ -50,7 +66,7 @@
           "description": {
             "type": "string",
             "maxLength": 1024,
-            "description": "Phrases the question to the buyer from it."
+            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back."
           },
           "type": {
             "anyOf": [
@@ -120,6 +136,31 @@
             "minItems": 1,
             "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
           },
+          "step": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value."
+          },
+          "forms": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "type": "string"
+              }
+            },
+            "description": "Reads what pages print for a value, mapped to the value — `{\"27/27.5\": \"27.5\"}`. Never sent: the request takes the value, and this is how sil recognises it in the wild."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Sends any of these as the key and reaches this one: the names sil maps here — the headings pages print it under and the keys other agents send for it, one mapping with no origin between them. Folded to the form the mapping stores, best-attested first, at most 20."
+          },
           "variant_spec": {
             "type": "boolean",
             "const": true,
@@ -128,7 +169,7 @@
           "product_spec": {
             "type": "boolean",
             "const": true,
-            "description": "Sends it as a hard row when the buyer names it; never treats two products that differ on it as one."
+            "description": "Writes it into the brief when the buyer names it; never treats two products that differ on it as one."
           }
         },
         "additionalProperties": false
@@ -161,7 +202,7 @@
           "description": {
             "type": "string",
             "maxLength": 1024,
-            "description": "Phrases the question to the buyer from it."
+            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back."
           },
           "type": {
             "anyOf": [
@@ -230,11 +271,36 @@
             },
             "minItems": 1,
             "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
+          },
+          "step": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value."
+          },
+          "forms": {
+            "type": "object",
+            "patternProperties": {
+              "^.*$": {
+                "type": "string"
+              }
+            },
+            "description": "Reads what pages print for a value, mapped to the value — `{\"27/27.5\": \"27.5\"}`. Never sent: the request takes the value, and this is how sil recognises it in the wild."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Sends any of these as the key and reaches this one: the names sil maps here — the headings pages print it under and the keys other agents send for it, one mapping with no origin between them. Folded to the form the mapping stores, best-attested first, at most 20."
           }
         },
         "additionalProperties": false
       },
-      "description": "Builds seller rows with keys the registry holds — the base every category shares and this category's own branch — and sends them to `shopping_offers`."
+      "description": "Builds seller rows with keys the registry holds — the base every domain shares and this domain's own branch — and sends them to `shopping_offers`."
     }
   },
   "additionalProperties": false

@@ -12,62 +12,65 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
-- **The twelve `shopping_*` tools, on the agent contract.** Seven catalog tools 1:1 with
-  the sil-api routes — `shopping_domain_search` (read the registry in the buyer's words),
+- **The eleven `shopping_*` tools, on the agent contract.** 1:1 with the sil-api routes —
+  `shopping_domain_search` (read the registry in the buyer's words),
   `shopping_domain_get` (a category's buying guide and the keys it is bought by),
   `shopping_domain_create` (coin a new one), `shopping_search`, `shopping_product_get`
-  (the whole dossier on 1–10 variants), `shopping_offers` (dated prices and the seller
-  terms you asked for, per offer, read live) and `shopping_seller_get` (one seller's
-  whole terms) — plus the four document verbs, renamed `shopping_doc_find` / `read` / `write` /
-  `remove`, and `shopping_brief_compile`. Every tool the loop calls is named for what it
-  does for the shopper; only `sil_register`, `sil_whoami` and `sil_doctor` keep the
-  `sil_` name.
-- **The sixteen schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
+  (the whole dossier on 1–10 variants), `shopping_offers` (dated prices and the brief's
+  seller terms, per offer, read live) and `shopping_seller_get` (one seller's
+  whole terms). Every tool the loop calls is named for what it does for the shopper;
+  only `sil_register`, `sil_whoami` and `sil_doctor` keep the `sil_` name.
+- **The brief and the profile are tools now: `shopping_brief_create`,
+  `shopping_brief_edit`, `shopping_brief_read` and `shopping_profile_edit`.** One brief
+  per session, held in sil under the buyer's account and named by `brief` on every
+  search and offers call: a title, a narrative in their own terms, the product specs by
+  category and the seller specs under `seller`, and the `decision` sentence behind each
+  change. A spec is `key · op · value · currency? · reason?` — there is no hard or soft
+  on it, and a want no spec can carry stays in the narrative. `shopping_brief_read` with
+  no `id` lists the buyer's briefs, newest first, which is what a new chat opens on.
+  `shopping_profile_edit` writes what is true of them whatever they buy — a measurement
+  with its unit, a size as printed, a lasting taste, the `currency` they price in — and an
+  entry replaces the one of the same `name`.
+- **`sil_whoami` answers the buyer's `measurements`, `preferences` and `currency`**, beside
+  the name, country and addresses, so a foot length written last session is never asked
+  for again. A money row on the brief or a search that names no currency means theirs;
+  sil converts nothing, so a new currency changes which offers come first, never a price.
+- **The twenty-two schema artifacts, in `schema/`.** Each shopping tool's `parameters` IS
   its committed request artifact, copied verbatim from `sil-services`
   (`schema/PROVENANCE.md` names the commit), and each `ok` result IS the API's 200 body,
   handed over untouched. The plugin adds no shape of its own in either direction, so
   there is nothing here for the contract to drift from.
-- **`shopping_brief_compile`, the Brief as the calls it makes.** Name a Brief and one of
-  its `## Items` rows and get that item's `domain`, its own subsection prose as `query`,
-  its `## Hard constraints` and `## Preferences` rows as `specs`, and its `seller` rows as
-  `seller_specs` — hard rows first, each value typed by the key the domain read holds. One
-  registry read, no catalog call, nothing written. `specs` goes to `shopping_search` with
-  `n` and `ship_to`; `seller_specs` goes to `shopping_offers` with the shortlisted variant
-  ids. A row the registry cannot take is refused by name before any spend; a key the
-  registry does not hold travels as written.
 - **`ship_to` is the LABEL of an address the buyer has on file**, as `sil_whoami` lists
-  them — never a country. It localizes a search to that address and is what
-  `shopping_offers` reads `ships` against; absent, sil uses the buyer's default address.
-  `shopping_seller_get` takes `ids` and nothing else — its `ships` answers for that
-  default address.
-- **Seller terms are asked and answered per OFFER, and never coined by the agent.**
-  `shopping_offers` takes `seller_specs` — keys of the domain read's own `seller_specs`,
-  which are sil's base plus whatever branch research has coined — and answers `seller_fit`
-  on each offer: `ships` always (serviceable, not_serviceable or unknown for that address),
-  plus each requested key with that seller's value where sil holds one.
-  `shopping_seller_get` is the details read beside it, carrying every seller key sil holds
-  as `specs`.
+  them — never a country. It localizes a search to that address; absent, sil uses the
+  buyer's default address. `shopping_offers` and `shopping_seller_get` take no address:
+  their `ships` answers for the default one.
+- **Seller terms live on the brief, are answered per OFFER, and are never coined by the
+  agent.** `shopping_offers` takes the brief's id and the picked variant ids and nothing
+  else: sil reads the brief's `seller` specs — keys of the domain read's own
+  `seller_specs`, sil's base plus whatever branch research has coined — its price ceiling,
+  and the buyer's default address and currency, looks on the web for shops it does not
+  hold, and answers `seller_fit` on each offer: `ships` always (serviceable,
+  not_serviceable or unknown for that address), plus each seller key on the brief with that
+  seller's value where sil holds one. Offers in the buyer's currency and market come
+  first. `shopping_seller_get` is the details read beside it, carrying every seller key sil
+  holds as `specs`.
 - **A key the domain does not hold is recorded, never refused.** The search takes any
   well-formed key, answers the products it found and leaves that key absent from `fit`,
-  writing the ask on the search row so research can coin what buyers need. The skill sends
-  it and also keeps it as a `## Notes / open` row, judged at beat 6 from what pages print.
+  writing the ask on the search row so research can coin what buyers need. The skill keeps
+  it in the brief exactly as the buyer stated it and sends it with every other spec.
 - **`shopping_domain_create` coins PRODUCT keys, marked `variant_spec` or
   `product_spec`** — what identifies a purchasable variant, and what tells one product
   from the next. The registry derives each key's operators from its `type`. A key an
   ancestor already defines with the same type and unit is not coined again: the mint
   answers `ok` and reports it `inherited: true`, so the agent may filter on it.
-- **The shopper's documents, four operations over one ref scheme.** `ref` is `"shopper"`
-  (the person) or `"brief:<slug>"` (one shopping job, many items, many domains). `find`
-  returns coordinates only, never bodies. `write` takes the WHOLE reconciled markdown —
-  no append, no section patch — with `mode: create` failing if the ref exists and
-  `mode: replace` failing if it does not. `remove` takes one Brief and never cascades.
-- **The skill drives the eight beats** at their real cadences — BRIEF once per job,
-  DOMAIN…FEEDBACK per item, VERDICT out of band per bought item. BRIEF and DOMAIN are
-  split (a job is scoped in the buyer's words before any category is settled, and an
-  unclassified item is a legal state); **ASK is its own beat**, so `## Notes / open` is
-  read back as its input rather than written as sediment; and **VERDICT** is the
-  out-of-band *did it work?* read that writes `## Past purchases`, `## Fit` and any
-  `## Shopping` section it contradicts.
+- **The skill drives one loop over the brief sil holds, and every tool it names now
+  answers.** Every chat opens on `sil_whoami` and a bare `shopping_brief_read`, so a
+  size, a width, a budget or a market already on file is never asked again. Then: settle the category, write every want as a
+  spec and every lasting fact to the profile **before** the next search, find the products
+  that fit the brief's product specs, price them and read the sellers against its seller
+  specs, and — when nothing fits — name the spec in the way, propose ONE relaxation, wait,
+  and write the buyer's word as a spec plus the one-sentence `decision` that says why.
+  One brief per conversation, never one per category.
 
 ### Changed
 
@@ -80,8 +83,17 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   plugin still mints the session id and claims with it.
 - **`sil_whoami` carries the buyer's `country` inside `identity`**, beside `name`, when the
   read has one — absent when nothing on file says it, never inferred from an address.
+- **BREAKING — `shopping_search` and `shopping_offers` name the brief.** `brief` is
+  required on both, and sil records the call against the want behind it. The search
+  carries the brief's product specs, written FROM the brief's — all of them, the same
+  ones. The offers carry the brief and the picked ids and nothing else: sil reads the
+  `seller` specs, `country` among them, off the brief, and they never ride on the search.
+  `ship_to` stays what it was on the search, the label of an address that localizes and
+  rules no seller out — never a market filter. To change what is asked, change the brief
+  with the buyer's decision; a spec is never left out of one call.
 - **BREAKING — the catalog answer is the agent contract's, and the pre-contract one is
-  deleted.** `shopping_search` takes `domain` · `query` · `n` · `specs` · `ship_to` and
+  deleted.** `shopping_search` takes `brief` · `domain` · `query` · `n` · `specs` ·
+  `ship_to` and
   answers with `products[]`, each carrying `fit` (only what sil verified — a key absent
   from it is a gap to name, never a miss), the `variants` that fit, a price range per
   currency, and `webpage_info` where sil has not read the page yet. It asks nothing about
@@ -92,20 +104,16 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   listed option fits. A price in another currency is a bound sil could not test. On an
   offer's `seller_fit`, `ships: unknown` keeps that offer and a requested seller key
   absent is a term sil has not read — never a term the seller lacks.
-- **BREAKING — the shopper's store is FLAT, and the pre-0.5 layout migrates in one hop on
-  first touch of a document tool.** `shopper/user_spec.md` + `shopper/briefs/<slug>.md`
-  replace `shopper/domains/<slug>/`. A legacy source file is deleted **only once its own
-  section is in the re-read document**; one that will not parse is reported and left in
-  place, and bytes under a legacy `assets/` directory are never deleted.
-- **The `≤4` search-call bound is PER ITEM**, not per request. On a two-item job the old
-  reading either halved the second item's budget or blew the bound.
+- **The `≤4` search-call bound is PER CATEGORY**, not per request. On a brief covering
+  boots and a helmet the old reading either halved the second category's budget or blew
+  the bound.
 - **`sil.search_results` carries the `shopping_search` body** (`{status, products}`). The
   method name, its two-layer authz and its one not-found body are untouched.
 - **`openclaw.build.openclawVersion` / `pluginSdkVersion` record `2026.9.3`**, the host
   this plugin is verified against. Diagnostics only; the `compat` floor stays
   `>=2026.7.1` — nothing here needs a newer API.
 - **A category inherits every ancestor key and may RE-DECLARE one for its own subtree.**
-  `shopping_domain_create`'s description and the beat-2 reference carry the signed rule:
+  `shopping_domain_create`'s description and the category reference carry the signed rule:
   a key is never renamed; declaring an ancestor's key with another unit, allowed-value set
   or variant/product mark makes that definition win below the new path, converting
   nothing; declaring it with nothing the ancestor does not already say is not a second
@@ -114,13 +122,20 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Removed
 
+- **BREAKING — the local document store, its four verbs and `shopping_brief_compile`.**
+  The buyer's brief and measurements live in sil's backend under their account, so the
+  plugin keeps NOTHING of theirs on the agent's disk: `shopping_doc_find` / `read` /
+  `write` / `remove` and `shopping_brief_compile` do not register, there is no
+  deprecation stub and no read path for the old store. `$SIL_DATA_DIR` holds
+  `tokens.json` and `config.json` alone, and `sil_doctor` no longer reports
+  `store.unreadable:*`. A `shopper/` folder an earlier version left behind is read by
+  nothing and can be deleted.
 - **BREAKING — the shopper-creation ceremony, whole.** Gone: the
   `sil-openclaw-create-shopper` bin and its engine, the onboarding ladder and its
   per-search pitch, `sil_register`'s `next_step: "offer_shopper"` breadcrumb (contract
   §5), and `sil_doctor`'s `creationEntrypoint` field and `creation.entrypoint_present`
-  finding. A shopping intent runs the eight beats on whatever agent holds the plugin,
-  and the shopper document is created by the first
-  `shopping_doc_write { ref: "shopper", mode: "create" }` a saved fact makes.
+  finding. A shopping intent runs the loop on whatever agent holds the plugin, with
+  nothing to set up first.
 - **BREAKING — `sil_search`, `sil_product_get`, `sil_stores`, `sil_domain_find`,
   `sil_domain_create` and the four `sil_doc_*` verbs.** Renamed, never aliased: the old
   names do not register, and there is no deprecation stub.
@@ -151,15 +166,6 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   renamed `agents.list` (an array) to `agents.entries` (a map keyed by id), and the
   detector went blind on it — reporting a healthy install as mis-wired, or the reverse.
   It reads both shapes now.
-- **A directory sil cannot list no longer reads as an absent document.** The document
-  verbs decided absence with `existsSync` — a boolean over a stat that swallows every
-  errno, so an unlistable `briefs/` answered `not_found` for a Brief sitting on disk. The
-  answer *was* the re-mint instruction, and the buyer's own words went with it; on a
-  remove it claimed a delete that never happened. Every gate that decides absence now
-  runs one probe — **ENOENT alone is absence**; every other errno leaves presence
-  unknown, and unknown is stated as `unreadable` (`recovery: "inspect_document"`), never
-  guessed. `sil_doctor` inherits the new `unreadable[]` entries, so the operator and
-  agent surfaces describe one state.
 - **A delivery miss says WHICH callId and WHY, where an operator reads it.** The host
   writes a plugin's structured fields to the log file and renders the console line from
   the message alone, so a container log showed `[plugins] sil_search_results_miss` and

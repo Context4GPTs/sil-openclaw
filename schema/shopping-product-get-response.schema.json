@@ -105,7 +105,7 @@
               },
               "text": {
                 "type": "string",
-                "description": "Reads the page's own words for a provisional pick, never as verified. On the search it is the page's labelled lines first, then its description, then the rest, within 1500 characters; on the dossier it is the whole page."
+                "description": "Reads the whole page in the shop's own words for what sil has not keyed yet — a provisional read, never a verified one."
               }
             },
             "additionalProperties": false,

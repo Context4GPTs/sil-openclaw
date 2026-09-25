@@ -2,19 +2,18 @@
  * INTEGRATION — the refusal envelope is UNIFORM across every sil-api-calling tool, and
  * it is one shared path, never a per-tool handler.
  *
- * Nine tools reach sil-api with a Bearer: the seven catalog `shopping_*` tools, the one
- * registry read `shopping_brief_compile` makes, and `sil_whoami`. Each drives
- * `refreshAndRetryOnce` — at most one refresh, at most one retry, no loop. The failure
- * this file forecloses is DRIFT: a tool that refreshes twice, retries a dead token,
- * clears credentials on a transient blip, or (worst) succeeds where another goes
- * terminal, so the agent's recovery depends on which tool happened to notice the expiry
- * first.
+ * Twelve tools reach sil-api with a Bearer: the eleven `shopping_*` tools and
+ * `sil_whoami`. Each drives `refreshAndRetryOnce` — at most one refresh, at most one
+ * retry, no loop. The failure this file forecloses is DRIFT: a tool that refreshes twice,
+ * retries a dead token, clears credentials on a transient blip, or (worst) succeeds where
+ * another goes terminal, so the agent's recovery depends on which tool happened to notice
+ * the expiry first.
  *
  * The proof is a matrix — the same scenario, driven through every tool, asserted to
  * produce the same STATUS, the same credential side effect and the same call counts.
  * Parity is asserted across the set, not tool by tool, so a divergence names itself. It
  * is also why the per-tool files do not each re-assert the shared arms: one code path,
- * one bar, driven nine ways.
+ * one bar, driven twelve ways.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -22,10 +21,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { registerBriefCompileTool } from "../tools/brief-compile.js";
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerIdentityTools } from "../tools/identity.js";
-import { writeDocument } from "../lib/doc-store.js";
 import { setApiUrl, setWebUrl } from "../lib/config.js";
 import { readTokens } from "../lib/credentials.js";
 import { createMockPluginApi, getTool, type MockPluginAPI } from "./helpers/mock-plugin-api.js";
@@ -42,12 +39,10 @@ import {
   type RouteKind,
   type Router,
 } from "./helpers/shopping-harness.js";
-import { AUTH, BRIEF_COMPILE, SEARCH_400, contractResponse } from "./helpers/shopping-wire.js";
+import { AUTH, SEARCH_400, contractResponse } from "./helpers/shopping-wire.js";
 
 const ACCESS = "at-live-token";
 const REFRESH = "rt-live-token";
-const DOMAIN = "product.sports.winter.ski.boots";
-const BRIEF_REF = "brief:chamonix";
 
 /** Every tool that reaches sil-api with a Bearer, with a valid call and its 200. */
 const BEARER_TOOLS = [
@@ -69,8 +64,28 @@ const BEARER_TOOLS = [
     success: (): unknown => contractResponse("shopping_domain_create"),
   },
   {
+    tool: "shopping_brief_create",
+    params: { title: "Ski boots", narrative: "Advanced skier, short wide foot." },
+    success: (): unknown => contractResponse("shopping_brief_create"),
+  },
+  {
+    tool: "shopping_brief_edit",
+    params: { id: "b1", decision: "Ceiling raised." },
+    success: (): unknown => contractResponse("shopping_brief_edit"),
+  },
+  {
+    tool: "shopping_brief_read",
+    params: {},
+    success: (): unknown => contractResponse("shopping_brief_read"),
+  },
+  {
+    tool: "shopping_profile_edit",
+    params: { measurements: [{ name: "foot_length", value: 27.2, unit: "cm" }] },
+    success: (): unknown => contractResponse("shopping_profile_edit"),
+  },
+  {
     tool: "shopping_search",
-    params: { domain: "product.sports.winter.ski.boots", query: "boots", n: 5 },
+    params: { brief: "b1", domain: "product.sports.winter.ski.boots", query: "boots", n: 5 },
     success: (): unknown => contractResponse("shopping_search"),
   },
   {
@@ -80,29 +95,13 @@ const BEARER_TOOLS = [
   },
   {
     tool: "shopping_offers",
-    params: { ids: ["v1"] },
+    params: { brief: "b1", ids: ["v1"] },
     success: (): unknown => contractResponse("shopping_offers"),
   },
   {
     tool: "shopping_seller_get",
     params: { ids: ["s1"] },
     success: (): unknown => contractResponse("shopping_seller_get"),
-  },
-  {
-    // The one tool whose Bearer call is not its first act: it reads the Brief off disk
-    // (no fetch), then reads that item's domain from the registry. Every arm below is
-    // therefore driven through the SAME choreography as the eight, one local read later.
-    tool: BRIEF_COMPILE,
-    params: { ref: BRIEF_REF, item: "ski boots" },
-    success: (): unknown => ({
-      status: "ok",
-      path: DOMAIN,
-      guide: "how they are bought",
-      specs: [
-        { key: "mondo_size", display_name: "Mondopoint size", type: "number", operators: ["eq"] },
-      ],
-      seller_specs: [],
-    }),
   },
   {
     tool: "sil_whoami",
@@ -124,19 +123,7 @@ beforeEach(() => {
   api = createMockPluginApi();
   registerCatalogTools(api);
   registerIdentityTools(api);
-  registerBriefCompileTool(api);
   seedTokens(ACCESS, REFRESH);
-  // `shopping_brief_compile` reaches its Bearer call only through a Brief on disk. The
-  // other eight ignore it.
-  writeDocument({
-    ref: BRIEF_REF,
-    mode: "create",
-    title: "Chamonix",
-    body:
-      "## Items\n\n| item | domain | status |\n|---|---|---|\n"
-      + `| ski boots | ${DOMAIN} | open |\n\n### ski boots\nboots for the season\n`
-      + "search: ski boots 27.5 flex 110\n",
-  });
 });
 
 afterEach(() => {
@@ -319,7 +306,7 @@ describe("guard-of-the-guard: the matrix actually covers the surface", () => {
     // A new sil-api tool omitted here does not fail — it silently narrows the parity
     // proof, which is the failure mode this repo has documented twice. The expected set
     // is the production table itself, so a tool added there joins this matrix or reds it.
-    const expected = [...SHOPPING_TOOLS.map((t) => t.name), BRIEF_COMPILE, "sil_whoami"].sort();
+    const expected = [...SHOPPING_TOOLS.map((t) => t.name), "sil_whoami"].sort();
     expect(BEARER_TOOLS.map((s) => s.tool).sort()).toEqual(expected);
     expect([...api._tools.keys()]).toEqual(expect.arrayContaining(expected));
   });

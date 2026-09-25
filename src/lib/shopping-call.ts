@@ -16,9 +16,8 @@ import {
 } from "./sil-client.js";
 import { jsonResult } from "./tool-result.js";
 
-/** The guide read — the one route two tools take (`shopping_domain_get`, and
- * `shopping_brief_compile` under its own name). Two spellings of one path is a route
- * nobody owns. */
+/** The guide read, as one route constant: two spellings of one path is a route nobody
+ * owns. */
 export const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
 
 /**

@@ -70,10 +70,10 @@ describe("shopping_search — one route, the ask verbatim", () => {
     expect((router.search[0].body as typeof ASK).specs).toEqual(ASK.specs);
   });
 
-  it("the search carries NO seller side — seller rows are the offers' ask", async () => {
-    // `seller_specs` moved to `shopping_offers`, where a term is answered per seller.
-    // A search that still carried them would be refused by the route, and the agent
-    // would read the refusal as a bad product row.
+  it("the search carries NO seller side — seller rows are the brief's", async () => {
+    // The offers read them off the brief and answer a term per seller. A search that
+    // carried them would be refused by the route, and the agent would read the refusal
+    // as a bad product row.
     seedTokens(ACCESS, REFRESH);
     const router = installRouter(() => ok(contractResponse(TOOL)));
     await run();
@@ -106,9 +106,10 @@ describe("shopping_search — one route, the ask verbatim", () => {
 });
 
 describe("shopping_search — what the answer means", () => {
-  it("the contract's COLD 200 arrives verbatim — empty `fit`, `webpage_info` intact", async () => {
-    // The cold body is the one a projection would quietly ruin: `fit: {}` and a
-    // `webpage_info` block are exactly what tells the agent nothing is verified yet.
+  it("the contract's COLD 200 arrives verbatim — `unknown` fit answers, `printed` intact", async () => {
+    // The cold body is the one a projection would quietly ruin: an `unknown` per key sil
+    // holds nothing for, and the shop's own `printed` words, are what say nothing is
+    // verified yet.
     seedTokens(ACCESS, REFRESH);
     installRouter(() => ok(contractResponse(TOOL)));
     expect(await run()).toEqual(contractResponse(TOOL));

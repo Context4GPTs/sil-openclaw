@@ -60,7 +60,8 @@
 
 import { describe, it, expect } from "vitest";
 
-import { classifyClaimResponse } from "../../lib/sil-client.js";
+import { SHOPPING_TOOLS } from "../../tools/catalog.js";
+import { classifyClaimResponse, requestTimeoutMs } from "../../lib/sil-client.js";
 
 /** A well-formed success body per claim/route.ts:134-138. */
 const SUCCESS_BODY = {
@@ -213,5 +214,28 @@ describe("classifyClaimResponse — retryable (transient) failures", () => {
     // session were dead. It must stay retryable so the budget governs.
     const out = classifyClaimResponse(503, {});
     expect(["expired", "not_found", "already_claimed"]).not.toContain(out.kind);
+  });
+});
+
+describe("requestTimeoutMs — the search outlives its web leg, every other route does not", () => {
+  // Pinned BY VALUE against the contract's own number: the web leg answers within 120 s,
+  // so an abort under that is sil having billed the index, read the pages and written the
+  // row while the agent is told the call failed. Read off the PRODUCTION route table, so a
+  // renamed search path reds here rather than silently dropping back to 45 s.
+  const route = (name: string): { method: "GET" | "POST"; path: string } => {
+    const found = SHOPPING_TOOLS.find((t) => t.name === name);
+    if (found === undefined) throw new Error(`no registered route for ${name}`);
+    return found;
+  };
+
+  it("shopping_search waits 130 s — past the 120 s the contract gives the web leg", () => {
+    expect(requestTimeoutMs(route("shopping_search"))).toBe(130_000);
+    expect(requestTimeoutMs(route("shopping_search"))).toBeGreaterThan(120_000);
+  });
+
+  it("every other shopping route keeps the shared 45 s", () => {
+    const others = SHOPPING_TOOLS.filter((t) => t.name !== "shopping_search");
+    expect(others.length).toBeGreaterThan(0); // guard-of-the-guard
+    expect(others.filter((t) => requestTimeoutMs(t) !== 45_000).map((t) => t.name)).toEqual([]);
   });
 });

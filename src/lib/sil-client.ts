@@ -1,6 +1,6 @@
 /**
  * Typed HTTP wrappers for every endpoint the plugin calls — the two sil-web auth
- * endpoints, the sil-api identity read and the seven shopping routes — each returning
+ * endpoints, the sil-api identity read and the eleven shopping routes — each returning
  * a DISCRIMINATED UNION over the documented outcomes so the status taxonomy lives in
  * exactly one place and the caller switches on `kind` rather than re-deriving meaning
  * from `res.status` at every site.
@@ -36,7 +36,7 @@
  * request body:
  *
  *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
- *     200 { name, country?, addresses }                   → ok (carries identity)
+ *     200 { name, country?, addresses, measurements?, preferences? } → ok
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     5xx / network / abort                               → retryable
@@ -72,10 +72,15 @@
 import { getWebUrl } from "./config.js";
 import { readTokens, writeTokens } from "./credentials.js";
 
-/** Per-request timeout: a stalled endpoint must not wedge a call forever. 45 s because a live
- * cold search is one shopping call, up to three page calls and 20 s of fetching real pages —
- * at 15 s the plugin refused 7 of 12 live searches sil-api went on to finish (2026-09-15). */
+/** Per-request timeout: a stalled endpoint must not wedge a call forever. 45 s for every
+ * route that answers from what sil already holds — at 15 s the plugin refused 7 of 12 live
+ * calls sil-api went on to finish (2026-09-15). */
 const REQUEST_TIMEOUT_MS = 45_000;
+
+/** The search alone waits out its web leg, which the agent contract gives 120 s. Aborting
+ * short of that changes nothing sil does — the index is billed, the pages are read and the
+ * row is written — it only hides the answer from the agent that asked for it. */
+const SEARCH_TIMEOUT_MS = 130_000;
 
 /** The user identity sil-web returns inside a successful claim. */
 export interface ClaimedUser {
@@ -127,7 +132,25 @@ export interface IdentityAddress extends Record<string, unknown> {
 export interface Identity {
   name: string;
   country?: string;
+  /** `male`, `female` or `other` where the buyer stated one at onboarding; absent
+   * otherwise. Typed as a string: the vocabulary is the route's, not the plugin's. */
+  gender?: string;
+  /** The ISO 4217 code the buyer prices in; a money row naming none means this one. */
+  currency?: string;
   addresses: IdentityAddress[];
+  /** What `shopping_profile_edit` wrote: a number with its unit, or a size as
+   * printed. Opaque, exactly as `addresses` are — empty is a real answer. */
+  measurements: ProfileEntry[];
+  /** A lasting taste in the buyer's own words. Same opacity. */
+  preferences: ProfileEntry[];
+}
+
+/** A profile entry as the identity read returns it. The named fields are HINTS —
+ * the entries pass through opaque, and extra fields ride along untyped. */
+export interface ProfileEntry extends Record<string, unknown> {
+  name?: string;
+  value?: unknown;
+  unit?: string;
 }
 
 /**
@@ -152,8 +175,16 @@ export interface ShoppingRoute {
   readonly query?: readonly string[];
 }
 
+/** The search route, the one call that waits out a web leg. Resolved by PATH so a route
+ * renamed in the tool table falls back to the shared ceiling loudly — `lib/sil-client.test.ts`
+ * reads this off the production table. */
+const SEARCH_PATH = "/catalog/search";
+
+export const requestTimeoutMs = (route: ShoppingRoute): number =>
+  route.path === SEARCH_PATH ? SEARCH_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+
 /**
- * The outcome of any shopping call — ONE union for all seven, because they share one
+ * The outcome of any shopping call — ONE union for all eleven, because they share one
  * origin, one Bearer, one auth plugin and the contract's one error vocabulary (§4).
  *
  * `ok` carries the API's own 200 body, unread and unreshaped. `unauthorized` is the
@@ -169,7 +200,7 @@ export type ShoppingOutcome =
   | { kind: "retryable"; source?: string; detail?: string };
 
 /**
- * Classify a shopping response. One classifier for all seven routes — the contract
+ * Classify a shopping response. One classifier for all eleven routes — the contract
  * gives them one error vocabulary, so a second one could only drift.
  *
  * The 200 gate is the whole of what the plugin owns: a plain object stating
@@ -378,10 +409,11 @@ export async function callShopping(
   const url = `${stripTrailingSlash(silApiUrl)}${path}`;
   let res: Response;
   try {
+    const timeoutMs = requestTimeoutMs(route);
     res =
       route.method === "GET"
-        ? await getJson(url, { authorization: `Bearer ${token}` })
-        : await postJson(url, args, { authorization: `Bearer ${token}` });
+        ? await getJson(url, { authorization: `Bearer ${token}` }, timeoutMs)
+        : await postJson(url, args, { authorization: `Bearer ${token}` }, timeoutMs);
   } catch {
     return { kind: "retryable" };
   }
@@ -591,10 +623,34 @@ function extractIdentity(body: unknown): Identity | null {
     (a): a is IdentityAddress => asRecord(a) !== null,
   );
 
-  // `country` is optional on the read and is passed through only as a string —
-  // an absent or non-string one is dropped, never coerced or inferred.
+  // The profile halves are NOT a gate: a read that carries neither is a buyer who
+  // has told sil nothing yet, and `[]` says exactly that — refusing here would
+  // strand them on a `retryable` no retry can clear.
+  const measurements = plainObjects(source["measurements"]);
+  const preferences = plainObjects(source["preferences"]);
+
+  // `country`, `gender` and `currency` are optional on the read and pass through only as
+  // strings — an absent or non-string one is dropped, never coerced or inferred. The VALUE
+  // is the route's to decide: a literal allow-list here would drop a vocabulary sil adds.
   const country = source["country"];
-  return typeof country === "string" ? { name, country, addresses } : { name, addresses };
+  const gender = source["gender"];
+  const currency = source["currency"];
+  return {
+    name,
+    addresses,
+    measurements,
+    preferences,
+    ...(typeof country === "string" ? { country } : {}),
+    ...(typeof gender === "string" ? { gender } : {}),
+    ...(typeof currency === "string" ? { currency } : {}),
+  };
+}
+
+/** The elements of `value` that are plain objects, as `addresses` are filtered:
+ * absent or shapeless is `[]`, never a partial read of a malformed entry. */
+function plainObjects(value: unknown): ProfileEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((e): e is ProfileEntry => asRecord(e) !== null);
 }
 
 /** Pull the actionable reason out of a 403 body (`user_not_provisioned` /
@@ -697,9 +753,10 @@ async function postJson(
   url: string,
   body: Record<string, unknown>,
   extraHeaders?: Record<string, string>,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
       method: "POST",
@@ -721,9 +778,10 @@ async function postJson(
 async function getJson(
   url: string,
   extraHeaders?: Record<string, string>,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
       method: "GET",

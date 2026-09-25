@@ -42,9 +42,13 @@ const CALL: Record<ShoppingToolName, Record<string, unknown>> = {
     guide: "how they are bought",
     specs: [{ key: "mondo_size", display_name: "Mondopoint size", type: "number" }],
   },
-  shopping_search: { domain: "product.sports.winter.ski.boots", query: "boots", n: 3 },
+  shopping_brief_create: { title: "Ski boots", narrative: "Advanced skier, short wide foot." },
+  shopping_brief_edit: { id: "b1", decision: "Ceiling raised 350 → 400 EUR." },
+  shopping_brief_read: {},
+  shopping_profile_edit: { measurements: [{ name: "foot_length", value: 27.2, unit: "cm" }] },
+  shopping_search: { brief: "b1", domain: "product.sports.winter.ski.boots", query: "boots", n: 3 },
   shopping_product_get: { ids: ["v1"] },
-  shopping_offers: { ids: ["v1"] },
+  shopping_offers: { brief: "b1", ids: ["v1"] },
   shopping_seller_get: { ids: ["s1"] },
 };
 

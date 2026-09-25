@@ -1,14 +1,14 @@
 /**
  * Reading + SCOPING primitives for the `sil-shopping` bundle, shared by the two
  * files that guard its prose — `skill-bundle-contract.integration.test.ts` (the
- * load-bearing contract) and `eight-beat-loop.integration.test.ts` (the beats).
+ * load-bearing contract) and `skill-rules.integration.test.ts` (the rules).
  * Same reason as `honesty-vocabulary.ts` and `per-niche-expert.ts`: one module,
  * so the two surfaces carrying the same rule cannot drift apart.
  *
  * SCOPING IS THE POINT. A corpus-wide `probe` + `not licensed` pair passes on the
  * very wording the guards reject, because both strings already sit three lines
  * apart in different paragraphs. Everything here narrows the window a rule is
- * allowed to be satisfied in: a statement, a file, or one beat's own section.
+ * allowed to be satisfied in: a statement, a file, or one heading's own section.
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -68,114 +68,79 @@ export const unsatisfied = (candidates: string[], rule: (s: string) => boolean):
   candidates.some(rule) ? [] : candidates;
 
 // ===========================================================================
-// Beat sections — the scope every eight-beat bar is asserted inside.
+// Sections — the scope a prose bar is asserted inside.
 // ===========================================================================
 
-/** The eight beats of `SIL-DOMAINS-AND-SPECS.md` §5, in order. The NAME is part of
- * the contract: an agent routes on it, and a renamed beat is a beat it cannot find. */
-export const BEAT_NAMES = [
-  "BRIEF",
-  "DOMAIN",
-  "FILL",
-  "ASK",
-  "SEARCH",
-  "REFLECT",
-  "FEEDBACK",
-  "VERDICT",
-] as const;
-
-export interface BeatSection {
-  /** Bundle-relative path of the file whose heading opens the beat. */
-  file: string;
-  heading: string;
-  /** The heading line plus everything under it, to the next same-or-higher heading. */
-  body: string;
-}
+/** The fallback document, by path: the mint discipline is the whole of what it says,
+ * so the file IS the scope. */
+export const MINT = "references/mint.md";
 
 /**
- * Map beat number → the section that owns it, derived from HEADINGS on disk.
- *
- * THE ONE FORMAT CONTRACT this helper imposes: each beat is opened by a markdown
- * heading naming `Beat <n>`. That is already the bundle's own convention, and it is
- * what makes "the decision lives at the beat that owns it" a checkable claim rather
- * than a corpus-wide grep.
- *
- * THE MOST SPECIFIC heading wins. `# Beats 3 (FILL), 4 (ASK), 7 and 8` is a FILE
- * index whose section runs to EOF, so taking it would hand beat 3 the whole file —
- * and the C7 bar, which forbids an ask inside FILL, would read beat 4's own prose as
- * its offender. So each beat keeps only the sections naming the FEWEST beats, and
- * several equally-specific sections (a beat discussed in two references) concatenate.
- *
- * `examples/` is EXCLUDED. A worked run DEMONSTRATING a beat is not the reference
- * that STATES its discipline: the agent loads the reference at the moment of use and
- * may never open the example. Without this the walkthrough — one file naming all
- * eight beats — would satisfy every beat-scoped bar on its own.
+ * SKILL.md's own headings, by the short name the bars call them. The HEADING is part
+ * of the contract — the agent reads the file top-down and finds a rule under the
+ * heading that frames it — so a renamed one throws here rather than quietly widening
+ * the scope of every bar beneath it.
  */
-export function beatSections(): Map<number, BeatSection> {
-  const candidates = new Map<number, Array<BeatSection & { breadth: number }>>();
-  for (const rel of bundleFiles().filter((p) => !p.startsWith("examples/"))) {
-    const lines = read(rel).split(/\r?\n/);
-    for (let i = 0; i < lines.length; i += 1) {
-      const h = /^(#{1,6})\s+(.*)$/.exec(lines[i] as string);
-      if (!h) continue;
-      const level = (h[1] as string).length;
-      const heading = h[2] as string;
-      // A PLURAL heading is a beat LIST — `# Beats 3 (FILL), 4 (ASK), 7 and 8` repeats
-      // no "Beat" before the later numbers, so anchoring on the word would read it as
-      // beat 3 alone, at breadth 1, and it would tie with (and swallow) beat 3's own
-      // section. Every bare 1–8 in a plural heading is one of its beats.
-      const numbers = /\bbeats\b/i.test(heading)
-        ? [...new Set([...heading.matchAll(/\b([1-8])\b/g)].map((m) => Number(m[1])))]
-        : [...new Set([...heading.matchAll(/\bbeat\s+([1-8])\b/gi)].map((m) => Number(m[1])))];
-      if (numbers.length === 0) continue;
-      let end = i + 1;
-      while (end < lines.length) {
-        const next = /^(#{1,6})\s+/.exec(lines[end] as string);
-        if (next && (next[1] as string).length <= level) break;
-        end += 1;
-      }
-      const body = lines.slice(i, end).join("\n");
-      for (const n of numbers) {
-        const list = candidates.get(n) ?? [];
-        list.push({ file: rel, heading, body, breadth: numbers.length });
-        candidates.set(n, list);
-      }
-    }
-  }
+export const SKILL_SECTIONS = {
+  reading: "Start by reading",
+  tools: "The tools",
+  using: "Using sil well",
+  seller: "Don't take a seller's word",
+  traps: "Common traps",
+  pick: "Showing a pick",
+} as const;
+export type SkillSection = keyof typeof SKILL_SECTIONS;
 
-  const found = new Map<number, BeatSection>();
-  for (const [n, list] of candidates) {
-    const breadth = Math.min(...list.map((c) => c.breadth));
-    const best = list.filter((c) => c.breadth === breadth);
-    found.set(n, {
-      file: (best[0] as BeatSection).file,
-      heading: (best[0] as BeatSection).heading,
-      body: best.map((c) => c.body).join("\n"),
-    });
-  }
-  return found;
-}
+const HEADINGS = (body: string): string[] =>
+  body.split(/\r?\n/).flatMap((l) => /^#{1,6}\s+(.*)$/.exec(l)?.[1] ?? []);
 
-/** The beat's own section, or a LOUD throw. Never "" — an empty scope makes every
- * `unsatisfied()` bar below it pass vacuously, which is worse than a red. */
-export function beatBody(n: number): string {
-  const section = beatSections().get(n);
-  if (section === undefined) {
+/**
+ * One file's section: the heading line plus everything under it, to the next
+ * same-or-higher heading.
+ *
+ * Throws rather than returning "" — an empty scope makes every `unsatisfied()` bar
+ * below it pass vacuously, which is worse than a red. The throw prints the headings
+ * the file actually has, so a rename is one read to fix.
+ */
+export function section(rel: string, heading: string): string {
+  const lines = read(rel).split(/\r?\n/);
+  const open = new RegExp(`^(#{1,6})\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+  const start = lines.findIndex((l) => open.test(l));
+  if (start < 0) {
     throw new Error(
-      `no bundle heading opens beat ${n} (expected a markdown heading naming "Beat ${n}") —`
-        + ` found: ${[...beatSections().keys()].sort((a, b) => a - b).join(", ") || "none"}`,
+      `${rel}: no heading opens "${heading}" — found: ${HEADINGS(read(rel)).join(" · ")}`,
     );
   }
-  return section.body;
+  const level = (/^(#+)/.exec(lines[start] as string)?.[1] as string).length;
+  let end = start + 1;
+  while (end < lines.length && !new RegExp(`^#{1,${level}}\\s`).test(lines[end] as string)) {
+    end += 1;
+  }
+  return lines.slice(start, end).join("\n");
 }
 
-/** Bundle-relative path of the file that owns a beat — so a bar can name WHERE a
- * decision must live without hardcoding a filename the next rename invalidates. */
-export function beatFile(n: number): string {
-  const section = beatSections().get(n);
-  if (section === undefined) throw new Error(`no bundle heading opens beat ${n}`);
-  return section.file;
+export const skillSection = (name: SkillSection): string =>
+  section("SKILL.md", SKILL_SECTIONS[name]);
+
+export const skillSectionStatements = (name: SkillSection): string[] =>
+  splitStatements(skillSection(name));
+
+export const mintStatements = (): string[] => splitStatements(read(MINT));
+
+/**
+ * SKILL.md above its first `##` — the three things that carry the job. Scoped apart
+ * from the rest of the file because it is the frame the agent reads everything else
+ * under: a claim about what sil SHIPS that slides down into a tip is a claim the
+ * agent meets after it has already decided how to work.
+ */
+export function skillPreamble(): string {
+  const body = frontmatter().body;
+  const cut = body.search(/^##\s+/m);
+  if (cut <= 0) {
+    throw new Error("SKILL.md: nothing above the first `## ` heading — the preamble that"
+      + " frames the file is gone, and every bar scoped to it would pass over nothing");
+  }
+  return body.slice(0, cut);
 }
 
-/** The beat's section, cut into statements. */
-export const beatStatements = (n: number): string[] => splitStatements(beatBody(n));
+export const preambleStatements = (): string[] => splitStatements(skillPreamble());

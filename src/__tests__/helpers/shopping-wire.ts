@@ -26,19 +26,12 @@ const SCHEMA_DIR = join(HERE, "..", "..", "..", "schema");
 const EXAMPLES = join(HERE, "..", "fixtures", "contract-examples.json");
 
 /**
- * The seven names, in the contract's own order — DERIVED from the production route
- * table, never restated. A second list here is a list that quietly covers six.
+ * The eleven names, in the contract's own order — DERIVED from the production route
+ * table, never restated. A second list here is a list that quietly covers six. Every one
+ * of them is a committed artifact, so this is also the artifact set.
  */
 export const SHOPPING_TOOLS: readonly ShoppingToolName[] = SHOPPING_ROUTES.map((t) => t.name);
 
-/** The compile tool answers locally, so it is in no route table — but it publishes a
- * request artifact and checks its answer against a response artifact like the rest. */
-export const BRIEF_COMPILE = "shopping_brief_compile";
-
-/** Every tool whose shape is a committed artifact: the seven routes and the compile. */
-export const ARTIFACT_TOOLS: readonly ArtifactTool[] = [...SHOPPING_TOOLS, BRIEF_COMPILE];
-
-export type ArtifactTool = ShoppingToolName | typeof BRIEF_COMPILE;
 export type { ShoppingToolName };
 type SchemaSide = "request" | "response";
 
@@ -53,7 +46,7 @@ const examples = (): Record<string, ContractExample> =>
   JSON.parse(readFileSync(EXAMPLES, "utf8")) as Record<string, ContractExample>;
 
 /** The committed artifact's bytes, parsed. Fresh per call. */
-export function artifact(tool: ArtifactTool, side: SchemaSide): Record<string, unknown> {
+export function artifact(tool: ShoppingToolName, side: SchemaSide): Record<string, unknown> {
   const stem = tool.slice("shopping_".length).replaceAll("_", "-");
   return JSON.parse(
     readFileSync(join(SCHEMA_DIR, `shopping-${stem}-${side}.schema.json`), "utf8"),
@@ -61,7 +54,7 @@ export function artifact(tool: ArtifactTool, side: SchemaSide): Record<string, u
 }
 
 /** The artifact as the host receives it: the three FILE annotations stripped. */
-export function artifactParameters(tool: ArtifactTool): Record<string, unknown> {
+export function artifactParameters(tool: ShoppingToolName): Record<string, unknown> {
   const schema = artifact(tool, "request");
   for (const annotation of ["$schema", "$id", "title"]) delete schema[annotation];
   return schema;
@@ -69,24 +62,24 @@ export function artifactParameters(tool: ArtifactTool): Record<string, unknown> 
 
 /** The contract's own 200 body for this tool. Fresh clone per call — a test that
  * mutates it must not poison the next. */
-export function contractResponse(tool: ArtifactTool): Record<string, unknown> {
+export function contractResponse(tool: ShoppingToolName): Record<string, unknown> {
   return clone(example(tool).response);
 }
 
 /** §3.4's warm answer, or §3.3's mint request — the second worked body of a section. */
-export function contractAlternate(tool: ArtifactTool): Record<string, unknown> {
+export function contractAlternate(tool: ShoppingToolName): Record<string, unknown> {
   const alternate = example(tool).alternate;
   if (alternate === undefined) throw new Error(`§ for ${tool} carries one example only`);
   return clone(alternate);
 }
 
-export function contractRequest(tool: ArtifactTool): Record<string, unknown> {
+export function contractRequest(tool: ShoppingToolName): Record<string, unknown> {
   const request = example(tool).request;
   if (request === undefined) throw new Error(`§ for ${tool} shows no request`);
   return clone(request);
 }
 
-function example(tool: ArtifactTool): ContractExample {
+function example(tool: ShoppingToolName): ContractExample {
   const found = examples()[tool];
   if (found === undefined) throw new Error(`contract-examples.json holds no ${tool}`);
   return found;
@@ -103,7 +96,7 @@ export function clone<T>(value: T): T {
  * Returns the errors, so a red names the field.
  */
 export function artifactErrors(
-  tool: ArtifactTool,
+  tool: ShoppingToolName,
   side: SchemaSide,
   body: unknown,
 ): string[] {
@@ -129,6 +122,13 @@ export const SEARCH_400 = {
 export const SPEC_400 = {
   error: "invalid_request",
   message: 'spec "flex_index": operator "in" needs an enum key, not a number',
+} as const;
+
+/** The one 404 the brief, the search and the offers answer: an id that is not the
+ * caller's. An unknown id gets the same sentence, so neither says the other exists. */
+export const BRIEF_404 = {
+  error: "not_found",
+  message: 'no brief "b1" on this account — `shopping_brief_read` with no `id` lists them',
 } as const;
 
 export const DOMAIN_GET_404 = {

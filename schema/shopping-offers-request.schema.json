@@ -4,9 +4,16 @@
   "title": "sil shopping_offers — request",
   "type": "object",
   "required": [
+    "brief",
     "ids"
   ],
   "properties": {
+    "brief": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Names the session's brief, so sil records this call against the want behind it. A brief that is not the buyer's answers `not_found`."
+    },
     "ids": {
       "type": "array",
       "items": {
@@ -17,74 +24,7 @@
       },
       "minItems": 1,
       "maxItems": 10,
-      "description": "Sends the variant ids it wants priced."
-    },
-    "ship_to": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64,
-      "description": "Reads every seller's `ships` and shipping terms against one of the buyer's addresses on file, named by its label; the default address when absent."
-    },
-    "seller_specs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "key",
-          "op",
-          "value"
-        ],
-        "properties": {
-          "key": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64,
-            "description": "Names the key from the domain read; `price` is a key every domain has."
-          },
-          "op": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "eq"
-              },
-              {
-                "type": "string",
-                "const": "neq"
-              },
-              {
-                "type": "string",
-                "const": "gte"
-              },
-              {
-                "type": "string",
-                "const": "lte"
-              },
-              {
-                "type": "string",
-                "const": "in"
-              },
-              {
-                "type": "string",
-                "const": "nin"
-              }
-            ],
-            "description": "Sends the operator the domain read listed for this key."
-          },
-          "value": {
-            "description": "Sends the desired value, typed by the key's type."
-          },
-          "currency": {
-            "type": "string",
-            "pattern": "^[A-Z]{3}$",
-            "minLength": 3,
-            "maxLength": 3,
-            "description": "Required on money: sil holds no exchange rate, so the bound is tested against offers in this currency only, and `eur` matches no offer sil stores."
-          }
-        },
-        "additionalProperties": false
-      },
-      "maxItems": 32,
-      "description": "Sends the desired seller terms — keys of the domain read's `seller_specs` — one per hard row or preference."
+      "description": "Sends the picked variant ids and nothing else: sil reads the brief's seller specs and price, the buyer's address and currency, off the brief and the profile."
     }
   },
   "additionalProperties": false

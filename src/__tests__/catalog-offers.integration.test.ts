@@ -1,6 +1,5 @@
 /**
- * INTEGRATION — `shopping_offers` on the wire: the beat-6 prices and seller terms, read
- * live.
+ * INTEGRATION — `shopping_offers` on the wire: the prices and seller terms, read live.
  *
  * Several offers on one variant ARE the price spread, and the spread is the answer. The
  * assertion that matters here is that every one of them crosses intact, each still
@@ -21,19 +20,14 @@ import {
   seedTokens,
   useShoppingHarness,
 } from "./helpers/shopping-harness.js";
-import { contractResponse } from "./helpers/shopping-wire.js";
+import { artifactErrors, contractResponse } from "./helpers/shopping-wire.js";
 
 const TOOL = "shopping_offers";
 const ACCESS = "at-live-token";
 const REFRESH = "rt-live-token";
 
-/** Beat 6's ask, as §3.6 states it: the shortlisted variants, the Brief's seller rows,
- * and the address label they are read against. */
-const ASK = {
-  ids: ["v1"],
-  ship_to: "home",
-  seller_specs: [{ key: "return_window_days", op: "gte", value: 14 }],
-};
+/** §3.6's ask: the session's brief and the picked variants. sil reads the rest. */
+const ASK = { brief: "b1", ids: ["v1"] };
 
 const harness = useShoppingHarness("offers");
 
@@ -55,20 +49,14 @@ describe("shopping_offers — one route, one request", () => {
     expect(router.other).toEqual([]);
   });
 
-  it("a seller row travels as the Brief compiled it — never re-spelled, never dropped", async () => {
-    // This is the whole seller ask now: a row lost here is a term the agent then reports
-    // as unchecked, and a row re-spelled is one no seller can meet.
-    seedTokens(ACCESS, REFRESH);
-    const router = installRouter(() => ok(contractResponse(TOOL)));
-    await run();
-    expect((router.offers[0].body as typeof ASK).seller_specs).toEqual(ASK.seller_specs);
-  });
-
-  it("with no address the key is OMITTED — the route fills the buyer's default", async () => {
-    seedTokens(ACCESS, REFRESH);
-    const router = installRouter(() => ok(contractResponse(TOOL)));
-    await run({ ids: ["v1"] });
-    expect(router.offers[0].body).toEqual({ ids: ["v1"] });
+  it("the request is the brief and the ids and NOTHING else — seller rows and an address are refused", () => {
+    // sil reads the brief's seller rows, its ceiling, the default address and the
+    // profile's currency itself. The artifact IS the tool's `parameters`, so a field it
+    // re-admitted is one the agent sends and the route never agreed to take.
+    const sellerRows = [{ key: "return_window_days", op: "gte", value: 14 }];
+    expect(artifactErrors(TOOL, "request", ASK)).toEqual([]);
+    expect(artifactErrors(TOOL, "request", { ...ASK, seller_specs: sellerRows })).not.toEqual([]);
+    expect(artifactErrors(TOOL, "request", { ...ASK, ship_to: "home" })).not.toEqual([]);
   });
 });
 
@@ -89,7 +77,7 @@ describe("shopping_offers — what the answer means", () => {
   });
 
   it("`seller_fit` reaches the agent on EVERY offer, `ships` inside it", async () => {
-    // The beat-6 veto reads seller rows here and nowhere else. `ships` is always present
+    // The brief's seller rows are answered here and nowhere else. `ships` is always present
     // and `unknown` is an ordinary value of it — an offer arriving without `seller_fit`
     // would read as a seller with no terms rather than one sil has not read.
     seedTokens(ACCESS, REFRESH);

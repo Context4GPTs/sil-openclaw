@@ -81,6 +81,8 @@ const REAL_IDENTITY = {
   addresses: [
     { line1: "12 Analytical Engine Way", city: "London", country: "GB" },
   ],
+  measurements: [{ name: "foot_length", value: 27.2, unit: "cm" }],
+  preferences: [{ name: "fit", value: "snug over the forefoot" }],
 };
 
 /** The agreed real-read response: identity in a UCP envelope's `result`. */
@@ -289,6 +291,8 @@ describe("sil_whoami — happy path (valid access token)", () => {
 
     // The whole envelope, structurally: `{ status: "ok", identity: { name,
     // country, addresses } }` — the shape an agent reads to know where the buyer is.
+    // What `identity` carries INSIDE it is `tools/whoami.test.ts`'s, through the same
+    // `execute()`; re-asserting it here would be two tests of one classifier.
     expect(payload["status"]).toBe("ok");
     const identity = payload["identity"] as {
       name?: unknown;

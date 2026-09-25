@@ -2,8 +2,9 @@
  * INTEGRATION — ask 1 of the contract's journey over ONE scripted `fetch`: a cold
  * category read, minted, searched, opened, priced and checked for shipping.
  *
- *   shopping_domain_search (matches: []) → shopping_domain_create → shopping_search
- *     → shopping_product_get → shopping_offers → shopping_seller_get
+ *   shopping_domain_search (matches: []) → shopping_domain_create
+ *     → shopping_brief_create → shopping_search → shopping_product_get
+ *     → shopping_offers → shopping_seller_get
  *
  * THE READ IS PART OF THE CHAIN. Without it the cold start is an empty shelf straight
  * into a permanent, un-undoable global write, with only the agent's judgement in
@@ -52,6 +53,7 @@ function scriptTheJourney(): Router {
     if (kind === "domainSearch") return ok({ status: "ok", matches: [] });
     if (kind === "domains") return ok(contractResponse("shopping_domain_create"));
     if (kind === "domainGet") return ok(contractResponse("shopping_domain_get"));
+    if (kind === "briefCreate") return ok(contractResponse("shopping_brief_create"));
     if (kind === "search") return ok(contractResponse("shopping_search"));
     if (kind === "product") return ok(contractResponse("shopping_product_get"));
     if (kind === "offers") return ok(contractResponse("shopping_offers"));
@@ -68,11 +70,11 @@ const call = async (
   payloadOf(await getTool(harness.api, tool).execute(callId, params));
 
 describe("ask 1 — the cold-start journey terminates at one seller's terms", () => {
-  it("runs beat 2 → 6, each tool once, ending on a seller that came out of an offer", async () => {
+  it("runs GATHER → PRICE, each tool once, ending on a seller that came out of an offer", async () => {
     seedTokens(ACCESS, REFRESH);
     const router = scriptTheJourney();
 
-    // Beat 2 — the read, in the buyer's own words. `matches: []` is a real answer and
+    // GATHER — the read, in the buyer's own words. `matches: []` is a real answer and
     // the one thing that licenses the write below; anything else — a match to adopt, a
     // failed read — ends the cold start here.
     const read = await call("shopping_domain_search", { q: "ski boots" }, "j1");
@@ -81,22 +83,35 @@ describe("ask 1 — the cold-start journey terminates at one seller's terms", ()
     // The write is still un-entered at this point in the journey.
     expect(router.domains).toEqual([]);
 
-    // Beat 2's mint, at the path the agent meant, now that the read named nothing to
+    // GATHER's mint, at the path the agent meant, now that the read named nothing to
     // adopt. (The research that produces `guide` is web work, outside the tool surface.)
     const minted = await call("shopping_domain_create", contractRequest("shopping_domain_create"), "j2");
     expect(minted["status"]).toBe("ok");
     expect(minted["path"]).toBe(DOMAIN);
 
-    // Beat 5 — the same path, searched. Never a shallower or re-spelled one.
+    // GATHER's brief — ONE per session, opened before the first search, because both
+    // priced steps name it. The id it answers is what the rest of the chain carries.
+    const opened = await call(
+      "shopping_brief_create",
+      contractRequest("shopping_brief_create"),
+      "j3",
+    );
+    expect(opened["status"]).toBe("ok");
+    const brief = opened["id"] as string;
+    expect(typeof brief).toBe("string");
+
+    // 1 FIND — the same path, searched, under that brief. Never a shallower or
+    // re-spelled path, and never a second brief.
     const results = await call(
       "shopping_search",
       {
+        brief,
         domain: DOMAIN,
-        query: "ski boots for an advanced skier",
+        query: "ski boots 27.5 flex 110",
         n: 3,
         specs: [{ key: "mondo_size", op: "eq", value: 27.5 }],
       },
-      "j3",
+      "j4",
     );
     expect(results["status"]).toBe("ok");
     const products = results["products"] as Record<string, unknown>[];
@@ -105,22 +120,28 @@ describe("ask 1 — the cold-start journey terminates at one seller's terms", ()
       .map((v) => v["id"] as string);
     expect(variantIds.length).toBeGreaterThan(0);
 
-    // Beat 6 — the dossier, by ids sil minted, then the live prices for the pick.
-    const dossier = await call("shopping_product_get", { ids: variantIds }, "j4");
+    // The dossier, by ids sil minted, then 2 PRICE — the live prices for the pick,
+    // under the SAME brief id the search carried.
+    const dossier = await call("shopping_product_get", { ids: variantIds }, "j5");
     expect(dossier["status"]).toBe("ok");
 
-    const offers = await call("shopping_offers", { ids: [variantIds[0]] }, "j5");
+    const offers = await call("shopping_offers", { brief, ids: [variantIds[0]] }, "j6");
     const sellerIds = (offers["offers"] as Record<string, unknown>[]).map(
       (o) => o["seller_id"] as string,
     );
     expect(sellerIds.length).toBeGreaterThan(0);
 
-    // Beat 6's last read — whether those sellers ship to the buyer, and on what terms.
-    const sellers = await call("shopping_seller_get", { ids: sellerIds }, "j6");
+    // PRICE's last read — whether those sellers ship to the buyer, and on what terms.
+    const sellers = await call("shopping_seller_get", { ids: sellerIds }, "j7");
     expect(sellers["status"]).toBe("ok");
     for (const seller of sellers["sellers"] as Record<string, unknown>[]) {
       expect(["serviceable", "not_serviceable", "unknown"]).toContain(seller["ships"]);
     }
+
+    // ONE brief, named by both priced legs — the link sil records the calls against.
+    expect(router.search[0].body).toMatchObject({ brief });
+    expect(router.offers[0].body).toMatchObject({ brief });
+    expect(router.briefCreate).toHaveLength(1);
 
     // Each route hit exactly once, and nothing reached an unrouted path.
     expect(router.domainSearch).toHaveLength(1);
@@ -131,7 +152,7 @@ describe("ask 1 — the cold-start journey terminates at one seller's terms", ()
     expect(router.sellers).toHaveLength(1);
     expect(router.refresh).toEqual([]);
     expect(router.other).toEqual([]);
-    expect(router.all).toHaveLength(6);
+    expect(router.all).toHaveLength(7);
     // The two `/catalog/domains` calls are ONE read and ONE write, told apart by the
     // verb — never two of either.
     expect(router.domainSearch[0].method).toBe("GET");
@@ -165,8 +186,12 @@ describe("ask 1 — the cold-start journey terminates at one seller's terms", ()
     // that is that it invents none of them.
     seedTokens(ACCESS, REFRESH);
     scriptTheJourney();
-    const results = await call("shopping_search", { domain: DOMAIN, query: "boots", n: 3 }, "k1");
-    const offers = await call("shopping_offers", { ids: ["v1"] }, "k2");
+    const results = await call(
+      "shopping_search",
+      { brief: "b1", domain: DOMAIN, query: "boots", n: 3 },
+      "k1",
+    );
+    const offers = await call("shopping_offers", { brief: "b1", ids: ["v1"] }, "k2");
     const sellers = await call("shopping_seller_get", { ids: ["s1"] }, "k3");
 
     const wireStrings = new Set<string>();
@@ -203,7 +228,7 @@ describe("no tool stands in for another, across the whole journey", () => {
     // that pre-fetched the dossier would spend the agent's budget without being asked.
     seedTokens(ACCESS, REFRESH);
     const router = scriptTheJourney();
-    await call("shopping_search", { domain: DOMAIN, query: "boots", n: 3 }, "m1");
+    await call("shopping_search", { brief: "b1", domain: DOMAIN, query: "boots", n: 3 }, "m1");
     expect(router.domains).toEqual([]);
     expect(router.product).toEqual([]);
     expect(router.all).toHaveLength(1);
@@ -220,7 +245,7 @@ describe("no tool stands in for another, across the whole journey", () => {
   it("`shopping_offers` never reads a seller's terms — that is `shopping_seller_get`'s", async () => {
     seedTokens(ACCESS, REFRESH);
     const router = scriptTheJourney();
-    await call("shopping_offers", { ids: ["v1"] }, "m3");
+    await call("shopping_offers", { brief: "b1", ids: ["v1"] }, "m3");
     expect(router.sellers).toEqual([]);
     expect(router.all).toHaveLength(1);
   });

@@ -25,6 +25,17 @@ export const RETIRED_TOKENS = [
   "sil_doc_", "maturity", "unset", "predicates", "applied", "option_set",
   "charged_currency", "handoff", "data_type", "level:", "axis:", "capped",
   "validated_at", "value_set",
+  // The local document store and the loop it drove. The brief and the profile are
+  // sil's now, one spec vocabulary with no hardness on it — prose that still writes a
+  // document, compiles a Brief or sorts a want into `## Hard constraints` is prose
+  // driving tools the wire does not have. A spec is `key · op · value`: prose that
+  // still grades one as relaxable or not sends the agent widening on its own.
+  "shopping_doc_", "shopping_brief_compile", "eight-beat", "hard constraint", "hard row",
+  // The ordered loop and the four reference files that carried it, retired 2026-09-19: sil
+  // prescribes no sequence, so prose naming a numbered step or one of those files is prose
+  // driving a shape the wire no longer has. Dangling LINKS were already caught; the bound
+  // itself ("at most four searches per domain") re-entered green until these landed.
+  "three-step", "steps.md", "category.md", "session_walkthrough", "per-search toll",
 ];
 
 /** The bundle rule: a blanket forbid, no allowance, every needle. */
@@ -37,17 +48,16 @@ export const retiredTokenOffenders = (body: string): string[] => {
  * so without this literal a new live identifier containing a needle switches it
  * off across all of `docs/` with no red. */
 export const DOCS_EXCLUDED_NEEDLES = [
-  "canonical",
-  "method.md",
-  "prd",
-  "domainslug",
-  // The agent contract's retirements whose STRING survives in live source for an
-  // unrelated reason: `appliedAction` on a finding, `capped` in the store's eviction
-  // prose, `unset` in the document store's, and the `sil_search_results_*` markers of
-  // the `sil.search_results` gateway method. The BUNDLE still forbids all four.
+  // Needles whose STRING survives in live source for an unrelated reason:
+  // `appliedAction` on a finding, `canonical` in the search-results store's prose,
+  // `capped` in its eviction prose, and the `sil_search_results_*` markers of the
+  // `sil.search_results` gateway method. The BUNDLE still forbids all four.
+  //
+  // `method.md`, `prd`, `domainslug` and `unset` left this list when the local
+  // document store was deleted — exactly the self-healing the derivation promises.
   "applied",
+  "canonical",
   "capped",
-  "unset",
   "sil_search",
 ];
 

@@ -144,6 +144,66 @@ describe("classifyIdentityResponse — status taxonomy (the auth branch)", () =>
     if (nonString.kind === "ok") expect(nonString.identity).not.toHaveProperty("country");
   });
 
+  it.each([
+    ["gender", "male"],
+    ["currency", "EUR"],
+  ])("200 → `%s` passes through when the read carries a string, and is ABSENT otherwise", (field, value) => {
+    // The skill reads each off this one field — `gender eq mens` on anything worn, a money
+    // row with no `currency` meaning this one — so a classifier that drops it makes the
+    // tool description a promise the tool breaks, and the agent asks what sil answered.
+    const withField = classifyIdentityResponse(200, { ...REAL_IDENTITY, [field]: value });
+    expect(withField.kind).toBe("ok");
+    if (withField.kind === "ok") expect(withField.identity).toHaveProperty(field, value);
+
+    // Never stated: absent, never defaulted.
+    const without = classifyIdentityResponse(200, REAL_IDENTITY);
+    expect(without.kind).toBe("ok");
+    if (without.kind === "ok") expect(without.identity).not.toHaveProperty(field);
+
+    const nonString = classifyIdentityResponse(200, { ...REAL_IDENTITY, [field]: 1 });
+    expect(nonString.kind).toBe("ok");
+    if (nonString.kind === "ok") expect(nonString.identity).not.toHaveProperty(field);
+  });
+
+  it("200 → `measurements` and `preferences` pass through OPAQUE, and a shapeless one is `[]`", () => {
+    // What `shopping_profile_edit` wrote is what stops the agent re-asking a foot
+    // length the buyer gave yesterday, so it has to survive the read whole — entry
+    // fields verbatim, extras included. Absent is `[]`, never a missing key: a
+    // buyer who has told sil nothing is not a broken read.
+    const out = classifyIdentityResponse(200, {
+      ...REAL_IDENTITY,
+      measurements: [{ name: "foot_length", value: 27.2, unit: "cm", noted_at: "yesterday" }],
+      preferences: [{ name: "fit", value: "snug" }],
+    });
+    expect(out.kind).toBe("ok");
+    if (out.kind === "ok") {
+      expect(out.identity.measurements).toEqual([
+        { name: "foot_length", value: 27.2, unit: "cm", noted_at: "yesterday" },
+      ]);
+      expect(out.identity.preferences).toEqual([{ name: "fit", value: "snug" }]);
+    }
+
+    const bare = classifyIdentityResponse(200, REAL_IDENTITY);
+    expect(bare.kind).toBe("ok");
+    if (bare.kind === "ok") {
+      expect(bare.identity.measurements).toEqual([]);
+      expect(bare.identity.preferences).toEqual([]);
+    }
+
+    // Garbage is dropped element by element, exactly as an address is — a string
+    // where an entry should be must not reach the agent as one.
+    const garbage = classifyIdentityResponse(200, {
+      ...REAL_IDENTITY,
+      measurements: ["foot_length", null, 7, { name: "forefoot_width", value: 101 }],
+      preferences: "snug",
+    });
+    expect(garbage.kind).toBe("ok");
+    if (garbage.kind === "ok") {
+      expect(garbage.identity.measurements).toEqual([{ name: "forefoot_width", value: 101 }]);
+      expect(garbage.identity.preferences).toEqual([]);
+    }
+  });
+
   it("200 with the identity wrapped in a UCP envelope → ok (unwraps result)", () => {
     const out = classifyIdentityResponse(200, ENVELOPED_IDENTITY);
     expect(out.kind).toBe("ok");
