@@ -1,39 +1,16 @@
 #!/usr/bin/env node
 /**
- * Build, pack, and publish to npm and ClawHub.
- *
- * The two registries publish under DIFFERENT names, by hard constraint:
- *   - npm:     `sil-openclaw`  (unscoped — the bare `sil` is taken upstream)
- *   - ClawHub: `@4gpts/sil`    (the plugin id `sil` cannot be claimed on its own;
- *              it is already owned by the @4gpts/sil package, so ClawHub publishes
- *              under the scoped @<owner>/<plugin-id> name. The runtime plugin id
- *              stays `sil`, but install uses the scoped name `openclaw plugins install clawhub:@4gpts/sil`.)
- *
- * One clean build, then the SAME file content to both registries: npm gets the
- * packed `sil-openclaw` tarball as-is; ClawHub gets those identical files
- * re-packed with only package.json#name rewritten to `@4gpts/sil` (ClawHub
- * requires --name to equal the tarball's package.json#name). Same content, the
- * name field is the only difference — no drift in what the two registries serve.
- *
- * Usage:
- *   pnpm release        publish for real (npm + ClawHub)
- *   pnpm release:dry    dry-run both: build + pack + preview, upload NOTHING
- *
- * Real-publish preflight (skipped under --dry-run, which is a pure preview):
- *   - clean git working tree
- *   - HEAD carries the v<version> tag  (run `pnpm version <bump>` first)
- *   - `npm whoami` succeeds            (run `npm login`)
- *   - `clawhub` CLI on PATH            (npm i -g clawhub && clawhub login)
- *
- * ClawHub attribution: --family code-plugin, --owner (env CLAWHUB_OWNER,
- * default below), --source-repo (derived from package.json#repository),
- * --source-commit HEAD, and --tags latest on a real publish.
+ * One build, one tarball: STAGED on npm (`sil-openclaw`), public only once a maintainer
+ * approves it with 2FA, then the same files to ClawHub (`@4gpts/sil`). Re-running resumes.
+ *   pnpm release        stage → wait for the 2FA approval → verify → ClawHub
+ *   pnpm release:dry    build + pack + preview both, upload nothing
  */
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, dirname, basename } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -43,6 +20,10 @@ const DRY_RUN = process.argv.includes("--dry-run");
 const DEFAULT_CLAWHUB_OWNER = "4gpts";
 const CLAWHUB_OWNER = process.env.CLAWHUB_OWNER || DEFAULT_CLAWHUB_OWNER;
 const CLAWHUB_FAMILY = "code-plugin";
+const APPROVAL_POLL_MS = 15_000;
+const APPROVAL_TIMEOUT_MIN = 30;
+// Bounds every registry call, so a hung npm cannot stall the approval wait unseen.
+const REGISTRY_CALL_TIMEOUT_MS = 60_000;
 
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
 const version = pkg.version;
@@ -59,9 +40,9 @@ const CLAWHUB_PLUGIN_ID = JSON.parse(
 const CLAWHUB_NAME = `@${CLAWHUB_OWNER}/${CLAWHUB_PLUGIN_ID}`;
 
 const log = (msg) => console.log(`[release] ${msg}`);
+// Throws, never exits: the tarball cleanup in `finally` must run on every failure.
 function fail(msg) {
-  console.error(`[release] ${msg}`);
-  process.exit(1);
+  throw new Error(msg);
 }
 
 /** Run a command, inheriting stdio (output streams to the terminal). */
@@ -70,7 +51,11 @@ function runInherit(cmd, args) {
 }
 /** Run a command and capture trimmed stdout. */
 function capture(cmd, args) {
-  return execFileSync(cmd, args, { cwd: ROOT, encoding: "utf8" }).trim();
+  return execFileSync(cmd, args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    timeout: REGISTRY_CALL_TIMEOUT_MS,
+  }).trim();
 }
 /** Capture stdout, or null on any non-zero exit / spawn failure. */
 function tryCapture(cmd, args) {
@@ -121,24 +106,76 @@ function preflight() {
   }
 }
 
-/** Clean-build dist, then pack a single tarball. Returns its absolute path. */
+/** Clean-build dist, then pack a single tarball. */
 function buildAndPack() {
   log("building (clean dist → tsc)…");
   runInherit("pnpm", ["build"]);
   log("packing tarball…");
   // --ignore-scripts: dist is already fresh from the explicit build above, so
   // skip prepack here and keep `npm pack --json` stdout pure JSON.
-  const out = capture("npm", ["pack", "--json", "--ignore-scripts"]);
-  const filename = JSON.parse(out)?.[0]?.filename;
-  if (!filename) fail("`npm pack --json` did not report a tarball filename.");
-  return resolve(ROOT, filename);
+  const [packed] = JSON.parse(capture("npm", ["pack", "--json", "--ignore-scripts"]));
+  if (!packed?.filename) fail("`npm pack --json` did not report a tarball filename.");
+  return { path: resolve(ROOT, packed.filename), shasum: packed.shasum, integrity: packed.integrity };
 }
 
-function publishNpm(tarball) {
-  const args = ["publish", tarball];
-  if (DRY_RUN) args.push("--dry-run");
-  log(`npm publish${DRY_RUN ? " --dry-run" : ""} ${basename(tarball)}`);
-  runInherit("npm", args);
+/** The integrity npm serves publicly for this version, or null while it is not public. */
+function publicIntegrity() {
+  // --prefer-online: the packument cache would otherwise hide the approval for minutes.
+  return (
+    tryCapture("npm", ["view", `${pkg.name}@${version}`, "dist.integrity", "--prefer-online"]) ||
+    null
+  );
+}
+
+function stagedEntry() {
+  const staged = JSON.parse(tryCapture("npm", ["stage", "list", pkg.name, "--json"]) || "[]");
+  return staged.find((s) => s.version === version) ?? null;
+}
+
+/**
+ * npm, staged: `npm stage publish` needs no 2FA from any token; approval does, so a human
+ * is present for every public version. ClawHub waits for it — a rejected stage never
+ * reaches the other registry. Resumes from whichever state a previous run left.
+ */
+async function releaseNpm(tarball) {
+  if (DRY_RUN) {
+    log(`npm stage publish --dry-run ${basename(tarball.path)}`);
+    runInherit("npm", ["stage", "publish", tarball.path, "--dry-run"]);
+    return;
+  }
+  let served = publicIntegrity();
+  if (!served) {
+    let staged = stagedEntry();
+    if (!staged) {
+      log(`npm stage publish ${basename(tarball.path)}`);
+      runInherit("npm", ["stage", "publish", tarball.path]);
+      staged = stagedEntry();
+      if (!staged) fail(`npm reports no staged ${pkg.name}@${version} after staging.`);
+    }
+    if (staged.shasum !== tarball.shasum) {
+      fail(
+        `staged ${pkg.name}@${version} (${staged.shasum}) is not this build (${tarball.shasum}). ` +
+          `Run \`npm stage reject ${staged.id}\`, then re-run.`,
+      );
+    }
+    // `npm stage approve` returned 404 for a stage `npm stage view` could read (npm 11.17,
+    // web-login token, 2026-09-25), so the website comes first.
+    log(`staged ${pkg.name}@${version} (${staged.status}, id ${staged.id}). Approve it with 2FA:`);
+    log("    npmjs.com → Staged Packages → Approve");
+    log(`    or: npm stage approve ${staged.id}`);
+    log(`waiting up to ${APPROVAL_TIMEOUT_MIN} min for it to go public…`);
+    const deadline = Date.now() + APPROVAL_TIMEOUT_MIN * 60_000;
+    while (!(served = publicIntegrity())) {
+      if (Date.now() > deadline) {
+        fail(`not approved within ${APPROVAL_TIMEOUT_MIN} min. Approve, then re-run \`pnpm release\` — it resumes here.`);
+      }
+      await sleep(APPROVAL_POLL_MS);
+    }
+  }
+  if (served !== tarball.integrity) {
+    fail(`npm serves a different ${pkg.name}@${version} (${served}) than ${tag} builds (${tarball.integrity}).`);
+  }
+  log(`npm serves ${pkg.name}@${version}, identical to this build.`);
 }
 
 /**
@@ -209,20 +246,22 @@ function publishClawhub(npmTarball) {
   }
 }
 
-log(`${DRY_RUN ? "DRY-RUN " : ""}release ${pkg.name}@${version} (npm) + ${CLAWHUB_NAME}@${version} (ClawHub)`);
-preflight();
-const tarball = buildAndPack();
-try {
-  publishNpm(tarball);
-  publishClawhub(tarball);
-} finally {
-  rmSync(tarball, { force: true });
-}
-log(
-  DRY_RUN
-    ? "dry-run complete — nothing was uploaded."
-    : `published ${pkg.name}@${version} (npm) + ${CLAWHUB_NAME}@${version} (ClawHub).`,
-);
-if (!DRY_RUN) {
+async function main() {
+  log(`${DRY_RUN ? "DRY-RUN " : ""}release ${pkg.name}@${version} (npm) + ${CLAWHUB_NAME}@${version} (ClawHub)`);
+  preflight();
+  const tarball = buildAndPack();
+  try {
+    await releaseNpm(tarball);
+    publishClawhub(tarball.path);
+  } finally {
+    rmSync(tarball.path, { force: true });
+  }
+  if (DRY_RUN) return log("dry-run complete — nothing was uploaded.");
+  log(`published ${pkg.name}@${version} (npm) + ${CLAWHUB_NAME}@${version} (ClawHub).`);
   log(`next: \`clawhub package readiness ${CLAWHUB_NAME}\` to check ClawHub readiness blockers.`);
 }
+
+main().catch((err) => {
+  console.error(`[release] ${err.message}`);
+  process.exitCode = 1;
+});
