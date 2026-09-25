@@ -60,7 +60,6 @@ interface Manifest {
   activation?: { onCapabilities?: string[]; onStartup?: boolean };
   contracts?: { tools?: string[] };
   configSchema?: { type?: string; properties?: Record<string, unknown> };
-  security?: { packagingNote?: string; filesystemScope?: string[] };
 }
 
 describe("package.json — OpenClaw ESM plugin shape", () => {

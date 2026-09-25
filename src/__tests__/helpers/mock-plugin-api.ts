@@ -31,7 +31,7 @@ import type {
   PluginAPI,
   RespondFn,
   ToolDefinition,
-} from "openclaw/plugin-sdk";
+} from "openclaw/plugin-sdk/plugin-entry";
 
 /** One `registerGatewayMethod` registration, exactly as the plugin passed it —
  * handler AND options. The options are recorded because the declared `scope` IS

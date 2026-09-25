@@ -86,12 +86,16 @@ const INSTALLED = JSON.parse(
   readFileSync(join(REPO_ROOT, "package.json"), "utf8"),
 ).version as string;
 
-/** The manifest's DECLARED outbound surface — the probe must target one of these
+/** SECURITY.md's DECLARED outbound surface — the probe must target one of these
  * and nothing else. Derived, never hardcoded: the test cannot drift from the
  * security declaration a reviewer audits. */
 const declaredEndpoints = (): string[] =>
-  JSON.parse(readFileSync(join(REPO_ROOT, "openclaw.plugin.json"), "utf8"))
-    .security.networkEndpoints as string[];
+  [
+    ...readFileSync(join(REPO_ROOT, "SECURITY.md"), "utf8")
+      .split("### Network endpoints")[1]!
+      .split("\n### ")[0]!
+      .matchAll(/^- `(https:\/\/[^`]+)`/gm),
+  ].map((m) => m[1]!);
 
 // ---------------------------------------------------------------------------
 // Token fixtures. The decoy claim + the token bytes are what a leak looks like.
@@ -1441,17 +1445,17 @@ describe("the ClawHub probe — one declared host, no credentials, nothing else"
     expect(requests).toHaveLength(1);
   });
 
-  it("targets a host DECLARED in openclaw.plugin.json#security.networkEndpoints", async () => {
+  it("targets a host DECLARED in SECURITY.md", async () => {
     await runDoctor();
     const declared = declaredEndpoints();
     const origin = new URL(requests[0]!.url).origin;
-    // Derived from the manifest, so the test cannot drift from the security
+    // Derived from SECURITY.md, so the test cannot drift from the security
     // declaration a reviewer audits. An undeclared outbound host is a contract
     // violation, not a detail.
     expect(declared.map((e) => new URL(e).origin)).toContain(origin);
   });
 
-  it("the manifest declares the ClawHub endpoint — the founder-accepted third host", async () => {
+  it("SECURITY.md declares the ClawHub endpoint — the founder-accepted third host", async () => {
     const declared = declaredEndpoints();
     // Two (sil-api, sil-web) become three. A deliberate, declared security-
     // surface change: it must not land silently, and it must not grow further.

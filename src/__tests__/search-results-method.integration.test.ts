@@ -39,7 +39,7 @@ import {
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PluginAPI } from "openclaw/plugin-sdk";
+import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 
 import { registerCatalogTools } from "../tools/catalog.js";
 import { setWebUrl, setApiUrl } from "../lib/config.js";

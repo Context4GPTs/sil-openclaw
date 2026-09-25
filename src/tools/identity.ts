@@ -1,4 +1,4 @@
-import type { PluginAPI } from "openclaw/plugin-sdk";
+import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 import { Type } from "typebox";
 
 import { getWebUrl, getWebUrlSource, getApiUrl } from "../lib/config.js";

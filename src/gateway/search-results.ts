@@ -28,7 +28,7 @@
  * log marker, and nothing on the wire has a field, shape, or timing tell.
  */
 
-import type { PluginAPI, RespondFn } from "openclaw/plugin-sdk";
+import type { PluginAPI, RespondFn } from "openclaw/plugin-sdk/plugin-entry";
 
 import { hasTokens, readConfig } from "../lib/credentials.js";
 import { logSearchResults } from "../lib/search-results-log.js";

@@ -9,7 +9,7 @@
  * one uniform envelope across the whole tool surface.
  */
 
-import type { ToolResult } from "openclaw/plugin-sdk";
+import type { ToolResult } from "openclaw/plugin-sdk/plugin-entry";
 
 /**
  * Format a JSON payload as a tool result. Each extra part becomes its OWN content

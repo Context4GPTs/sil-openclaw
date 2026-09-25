@@ -37,7 +37,7 @@ import {
 import { randomBytes } from "node:crypto";
 import { join, relative } from "node:path";
 
-import type { PluginAPI } from "openclaw/plugin-sdk";
+import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 import { Type } from "typebox";
 
 import {
