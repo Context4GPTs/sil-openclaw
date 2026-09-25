@@ -96,11 +96,13 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   `ship_to` and
   answers with `products[]`, each carrying `fit` (only what sil verified — a key absent
   from it is a gap to name, never a miss), the `variants` that fit, a price range per
-  currency, and `webpage_info` where sil has not read the page yet. It asks nothing about
+  currency, and `host` · `printed` where the page was read in this request and sil does
+  not hold the product yet. It asks nothing about
   sellers: the dossier, the offers with their seller terms, and one seller's whole terms
   are three separate reads now. Nothing is projected on the way back.
-- **The honesty vocabulary the agent reads.** `webpage_info` present means sil has not
-  read that page; its absence means the values were verified. An empty `variants` says no
+- **The honesty vocabulary the agent reads.** `printed` and `host` on a search result, like
+  `webpage_info` on the dossier, are the shop's own words — a claim, not a reading; their
+  absence means sil read the page itself. An empty `variants` says no
   listed option fits. A price in another currency is a bound sil could not test. On an
   offer's `seller_fit`, `ships: unknown` keeps that offer and a requested seller key
   absent is a term sil has not read — never a term the seller lacks.
