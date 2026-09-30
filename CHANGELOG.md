@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-30
+
 ### Changed
 
 - **Host floor raised to OpenClaw `>=2026.9.3`**, the version the plugin is built
