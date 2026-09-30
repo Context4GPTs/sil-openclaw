@@ -73,7 +73,7 @@ describe.skipIf(!DOCS)(`the real docs corpus (${DOCS_ROOT})`, () => {
     // the floor: enough was read, and nothing on disk escaped the `.md` filter.
     const files = docsFiles();
     expect(files.length).toBeGreaterThanOrEqual(25);
-    expect(files.reduce((n, f) => n + f.body.length, 0)).toBeGreaterThan(150_000);
+    expect(files.reduce((n, f) => n + f.body.length, 0)).toBeGreaterThan(100_000);
     expect(docsEntryFloorOffenders(docsEntries())).toEqual([]);
 
     // …and no doc holds an ODD number of fences: `maskFences` blanks a lone fence

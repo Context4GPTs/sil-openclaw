@@ -64,7 +64,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { PluginAPI } from "openclaw/plugin-sdk";
+import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 // The SOURCE store instance — deliberately a DIFFERENT module instance from the
 // one inside the freshly-built dist. Used below to prove the compiled tool and
 // the compiled gateway method resolve each other through their OWN store, not

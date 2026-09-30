@@ -492,8 +492,8 @@ describe("buildGatewayCompatFinding — host below our floor → advise, else si
   });
 
   it("`suggestedAction` directs the user to update OpenClaw — the plugin ships no installer", () => {
-    // The plugin cannot be its own installer (noChildProcess + noInstallScripts +
-    // read-only api.config + it cannot hot-swap its own running code). It points at
+    // The plugin cannot be its own installer (it spawns no process, ships no install
+    // script, sees a read-only api.config, cannot hot-swap its own code). It points at
     // OpenClaw's own trusted update path and stops.
     const finding = buildGatewayCompatFinding("2026.4.14", ">=2026.4.15")!;
     expect(finding.suggestedAction).not.toBeNull();

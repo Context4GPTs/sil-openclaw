@@ -1,23 +1,10 @@
 /**
- * OpenClaw Plugin SDK type declarations.
- *
- * These types are provided by the OpenClaw runtime at load time — they
- * are NOT an npm dependency, so this ambient declaration is the only
- * place the plugin's TypeScript sees the SDK surface.
- * See: https://docs.openclaw.ai/plugins/sdk-overview
- *
- * This is the *minimal* subset the skeleton's stub tools touch, lifted
- * from the reference adapter (`klodi-plugin/adapters/openclaw/src/types/
- * openclaw.d.ts`). The SDK surface the skeleton does not use —
- * `registerService` / `ServiceDefinition`, `registerHttpRoute` /
- * `HttpRouteDescriptor`, `runtime` / `RuntimeAPI` / `SystemAPI`, and the
- * wake-event plumbing — is intentionally dropped: a skeleton declares no
- * service, owns no HTTP route, and pushes no system events. Add back the
- * exact member a tool needs the moment a tool needs it, so the type
- * surface always tracks what the code actually consumes.
+ * Ambient types for the OpenClaw plugin SDK, which the host supplies at load
+ * time (not an npm dependency). Declared on the focused `plugin-entry` subpath,
+ * never the legacy root barrel. Minimal subset: add a member when code uses it.
  */
 
-declare module "openclaw/plugin-sdk" {
+declare module "openclaw/plugin-sdk/plugin-entry" {
   import type { TObject, TSchema } from "typebox";
 
   export interface PluginAPI {
@@ -31,8 +18,8 @@ declare module "openclaw/plugin-sdk" {
      *
      * Declared from `vendor/openclaw` @ 2026.7.2
      * (`src/plugins/plugin-api.types.ts:217`), live-proven on
-     * `openclaw/openclaw:2026.7.1` — which is why the manifest floor is
-     * `>=2026.7.1`. A host below it is refused by the host's own
+     * `openclaw/openclaw:2026.7.1`; the manifest floor is at or above it.
+     * A host below the floor is refused by the host's own
      * `checkMinHostVersion`; there is deliberately no
      * `typeof api.registerGatewayMethod === "function"` soft-guard, which
      * would ship a silently search-broken plugin instead of a loud refusal.
@@ -160,10 +147,6 @@ declare module "openclaw/plugin-sdk" {
   }
 
   export type PluginRegisterFn = (api: PluginAPI) => void | Promise<void>;
-}
-
-declare module "openclaw/plugin-sdk/plugin-entry" {
-  import type { PluginRegisterFn } from "openclaw/plugin-sdk";
 
   export interface PluginEntry {
     id: string;

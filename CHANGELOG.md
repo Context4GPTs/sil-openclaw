@@ -10,6 +10,18 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Changed
+
+- **Host floor raised to OpenClaw `>=2026.9.3`**, the version the plugin is built
+  and tested against (`compat.pluginApi`, `compat.minGatewayVersion`,
+  `install.minHostVersion`). An older host refuses the plugin; update OpenClaw first.
+- **The security declaration moved from `openclaw.plugin.json#security` to
+  `SECURITY.md`.** The manifest has no such field (ClawHub `manifest-unknown-fields`).
+  Same claims: network endpoints, filesystem scope, credentials, timers, processes.
+- SDK types now import from the `openclaw/plugin-sdk/plugin-entry` subpath instead
+  of the legacy root barrel (ClawHub `legacy-root-sdk-import`). Type-only, no
+  runtime change.
+
 ## [0.5.0] - 2026-09-25
 
 ### Added

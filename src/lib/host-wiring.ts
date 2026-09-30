@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { PluginAPI } from "openclaw/plugin-sdk";
+import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 
 import { resolveAllowlistScript } from "./allowlist-script.js";
 import type { Finding } from "./findings.js";

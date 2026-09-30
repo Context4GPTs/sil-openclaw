@@ -2,8 +2,8 @@
 /**
  * Install-time helper: trust `sil` in the host OpenClaw config.
  *
- * Operator-invoked (NEVER an npm lifecycle hook — `openclaw.plugin.json#
- * security.noInstallScripts: true` is a shipped guarantee that the package
+ * Operator-invoked (NEVER an npm lifecycle hook — SECURITY.md's "no install
+ * scripts" is a shipped guarantee that the package
  * runs nothing automatically; an operator explicitly running this is the
  * opposite of an install hook and honours it). This is a standalone script in
  * the same class as `scripts/release.mjs` — it is NOT the plugin process, so

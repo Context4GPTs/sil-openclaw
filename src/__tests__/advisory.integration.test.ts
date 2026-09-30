@@ -72,7 +72,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { PluginAPI } from "openclaw/plugin-sdk";
+import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 
 import { registerCatalogTools } from "../tools/catalog.js";
 import { registerDoctorTools } from "../tools/doctor.js";
@@ -948,23 +948,23 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
     await getTool(api, "sil_doctor").execute("call-2", {});
 
     // No write, no chmod, no new file, and nothing under $HOME touched at all —
-    // so `security.filesystemScope` needs no widening (OQ1).
+    // so SECURITY.md's filesystem scope needs no widening (OQ1).
     expect(snapshot(homeDir)).toEqual(before);
   });
 
   it("the wiring modules reach for no installer, no child process, and no host config file", async () => {
-    // The audit-scope half a behavioural assertion cannot reach: the manifest
-    // declares `noChildProcess` + `noInstallScripts`, and this card's whole premise
+    // The audit-scope half a behavioural assertion cannot reach: SECURITY.md
+    // declares no child process and no install scripts, and this card's whole premise
     // is that the plugin can't be its own installer and doesn't try. A source scan
     // is the honest guard for "this code CANNOT do X", rather than "it happened not
     // to today".
     //
     // ⚠️ THIS LIST IS A WHITELIST, NOT A SWEEP. A module absent from it is invisible
     // to this guard — SILENTLY, with a green suite. That is worse than a red: the
-    // module ships unguarded on the posture the manifest declares. ADD EVERY NEW
+    // module ships unguarded on the posture SECURITY.md declares. ADD EVERY NEW
     // audit-scope module here (add-only). `allowlist-script.ts` is here because it
     // resolves the tool-admission script's path, and the ONE thing it must never do is
-    // RUN it — naming a path is not spawning it, which keeps `noChildProcess` true.
+    // RUN it — naming a path is not spawning it.
     for (const file of [
       "src/lib/host-wiring.ts",
       "src/lib/version-advisory.ts",
@@ -985,7 +985,7 @@ describe("AC7 — detect and surface only: nothing is applied, nothing outside t
   });
 
   it("AC D1 — NO plugin source module reaches for a child process (a SWEEP, not a whitelist)", () => {
-    // The manifest declares `security.noChildProcess: true`: every operator script
+    // SECURITY.md declares the plugin process spawns nothing: every operator script
     // stays a separate process the plugin names and never spawns.
     //
     // Deliberately a SWEEP over every source file tsc compiles into `dist/` — the
@@ -1185,9 +1185,12 @@ describe("AC14 — `api.config` is the WHOLE config tree, and none of it may esc
     // The ClawHub entry is sil-doctor's (founder ruling, §8.3 CLOSED). This card
     // adds none: if a detection ever needed a host, THIS assertion is the one that
     // must be argued with first, in a security declaration a reviewer audits.
-    const endpoints: string[] = JSON.parse(
-      readFileSync(join(REPO_ROOT, "openclaw.plugin.json"), "utf8"),
-    ).security.networkEndpoints;
+    const endpoints = [
+      ...readFileSync(join(REPO_ROOT, "SECURITY.md"), "utf8")
+        .split("### Network endpoints")[1]!
+        .split("\n### ")[0]!
+        .matchAll(/^- `(https:\/\/[^`]+)`/gm),
+    ].map((m) => m[1]!);
     expect([...endpoints].sort()).toEqual([
       "https://clawhub.ai",
       "https://sil-api.4gpts.com",
