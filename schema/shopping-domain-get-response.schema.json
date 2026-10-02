@@ -170,6 +170,11 @@
             "type": "boolean",
             "const": true,
             "description": "Writes it into the brief when the buyer names it; never treats two products that differ on it as one."
+          },
+          "several": {
+            "type": "boolean",
+            "const": true,
+            "description": "Reads a list for it under `fit`: a product holds several of these at once. `eq`/`in` match a product holding any value asked; `neq`/`nin` one holding none of them."
           }
         },
         "additionalProperties": false
