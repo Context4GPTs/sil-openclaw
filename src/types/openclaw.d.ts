@@ -8,7 +8,9 @@ declare module "openclaw/plugin-sdk/plugin-entry" {
   import type { TObject, TSchema } from "typebox";
 
   export interface PluginAPI {
-    registerTool(tool: ToolDefinition): void;
+    /** A factory is called per agent run with that run's context; `name` declares what
+     * it returns, since the host cannot read a name off a function. */
+    registerTool(tool: ToolDefinition | ToolFactory, opts?: { name?: string }): void;
     /**
      * Register a plugin-owned gateway RPC method, dispatched to paired
      * clients over the already-authenticated `deviceToken` WS. `scope` is
@@ -93,6 +95,16 @@ declare module "openclaw/plugin-sdk/plugin-entry" {
       params: Record<string, unknown>,
     ): Promise<ToolResult>;
   }
+
+  /** The host's `OpenClawPluginToolContext` (2026.9.3 `src/plugins/tool-types.ts`), cut to
+   * what sil reads. `sessionKey` is left undeclared on purpose: it carries chat handles. */
+  export interface ToolContext {
+    /** The conversation's UUID, regenerated on /new and /reset. */
+    sessionId?: string;
+    activeModel?: { provider?: string; modelId?: string };
+  }
+
+  export type ToolFactory = (ctx: ToolContext) => ToolDefinition;
 
   /** The host's closed operator-privilege set
    * (`src/gateway/operator-scopes.ts:4`). `operator.read` is also satisfied by

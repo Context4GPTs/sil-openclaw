@@ -30,8 +30,17 @@ import type {
   OperatorScope,
   PluginAPI,
   RespondFn,
+  ToolContext,
   ToolDefinition,
+  ToolFactory,
 } from "openclaw/plugin-sdk/plugin-entry";
+
+/** The run every registered factory is resolved against unless a test passes its own —
+ * a host run that carries both a conversation and a model, as a chat turn does. */
+export const DEFAULT_TOOL_CONTEXT: ToolContext = {
+  sessionId: "0b6f2c4e-9a51-4d7e-8c3a-5f1e2d7b9a10",
+  activeModel: { provider: "openai", modelId: "gpt-5.4" },
+};
 
 /** One `registerGatewayMethod` registration, exactly as the plugin passed it —
  * handler AND options. The options are recorded because the declared `scope` IS
@@ -49,7 +58,9 @@ export interface RegisteredGatewayMethod {
 }
 
 export interface MockPluginAPI extends PluginAPI {
+  /** Every tool, resolved against {@link DEFAULT_TOOL_CONTEXT}. */
   _tools: Map<string, ToolDefinition>;
+  _factories: Map<string, ToolFactory>;
   _gatewayMethods: Map<string, RegisteredGatewayMethod>;
 }
 
@@ -76,14 +87,22 @@ export function createMockPluginApi(
   options: CreateMockPluginApiOptions = {},
 ): MockPluginAPI {
   const tools = new Map<string, ToolDefinition>();
+  const factories = new Map<string, ToolFactory>();
   const gatewayMethods = new Map<string, RegisteredGatewayMethod>();
 
   return {
     _tools: tools,
+    _factories: factories,
     _gatewayMethods: gatewayMethods,
 
-    registerTool(tool: ToolDefinition): void {
-      tools.set(tool.name, tool);
+    // As the host does (`registry-registrars-tools-hooks.ts`): a plain tool is a factory
+    // that ignores its context, and a factory is named only by `opts.name`.
+    registerTool(tool: ToolDefinition | ToolFactory, opts?: { name?: string }): void {
+      const factory: ToolFactory = typeof tool === "function" ? tool : () => tool;
+      const name = typeof tool === "function" ? opts?.name : tool.name;
+      if (name === undefined) throw new Error("a tool factory registered without opts.name");
+      factories.set(name, factory);
+      tools.set(name, factory(DEFAULT_TOOL_CONTEXT));
     },
 
     /**
@@ -124,18 +143,22 @@ export function createMockPluginApi(
   } as unknown as MockPluginAPI;
 }
 
-/** Retrieve a registered tool by name. Throws (listing what IS
- * registered) if not found — a missing tool name should produce a
- * legible failure, not an undefined-deref three lines later. */
-export function getTool(api: MockPluginAPI, name: string): ToolDefinition {
-  const tool = api._tools.get(name);
-  if (!tool) {
-    const registered = [...api._tools.keys()].join(", ") || "(none)";
+/** Retrieve a registered tool by name, resolved for the run `ctx`. Throws (listing what
+ * IS registered) if not found — a missing tool name should produce a legible failure,
+ * not an undefined-deref three lines later. */
+export function getTool(
+  api: MockPluginAPI,
+  name: string,
+  ctx: ToolContext = DEFAULT_TOOL_CONTEXT,
+): ToolDefinition {
+  const factory = api._factories.get(name);
+  if (!factory) {
+    const registered = [...api._factories.keys()].join(", ") || "(none)";
     throw new Error(
       `Tool "${name}" not registered. Registered tools: ${registered}`,
     );
   }
-  return tool;
+  return factory(ctx);
 }
 
 /** The set of tool names registered against the mock api. The drift

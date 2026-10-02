@@ -10,6 +10,14 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Added
+
+- **Every `shopping_*` call says who is calling**, as sil-api now requires: the
+  conversation (`sil-session-id`), the tool call (`sil-tool-call-id`, `sil-attempt` —
+  `2` on the one retry after a refreshed sign-in), the model (`sil-model`) and both
+  versions (`sil-openclaw-version`, `sil-plugin-version`). The tools are registered as
+  per-run factories to read these from the host. Never the chat-handle session key.
+
 ### Changed
 
 - **Host floor raised to OpenClaw `>=2026.9.3`**, the version the plugin is built
