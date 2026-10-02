@@ -79,6 +79,26 @@ describe("caller headers", () => {
       .toEqual([["call_retry", "1"], ["call_retry", "2"]]);
   });
 
+  it("a Responses-transport composite call id travels unchanged", async () => {
+    seedTokens("at", "rt");
+    const router = installRouter(() => ok({ status: "ok" }));
+    await apiFor(CTX)("shopping_brief_read").execute("call_8Kx2|fc_68e1a0b7c3", {});
+
+    expect(router.briefRead[0].headers["sil-tool-call-id"]).toBe("call_8Kx2|fc_68e1a0b7c3");
+  });
+
+  it("a value a header cannot carry is left off, and the call still goes out", async () => {
+    seedTokens("at", "rt");
+    const router = installRouter(() => ok({ status: "ok" }));
+    const ctx = { sessionId: SESSION_ID, activeModel: { provider: "local", modelId: "qwen 3 – 中文" } };
+    const result = await apiFor(ctx)("shopping_brief_read").execute("call_1", {});
+
+    expect(router.briefRead).toHaveLength(1);
+    expect(router.briefRead[0].headers).not.toHaveProperty("sil-model");
+    expect(router.briefRead[0].headers["sil-session-id"]).toBe(SESSION_ID);
+    expect(JSON.stringify(result)).not.toContain("retryable");
+  });
+
   it("a run without a session or a whole model sends the call without those headers", async () => {
     seedTokens("at", "rt");
     const router = installRouter(() => ok({ status: "ok" }));

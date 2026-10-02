@@ -437,18 +437,22 @@ export interface Caller {
   readonly pluginVersion: string;
 }
 
+/** sil-api's rule for every caller header. A value outside it is dropped, not sent: fetch
+ * throws on a non-Latin-1 header before sending, and the catch would read that as retryable. */
+const HEADER_VALUE = /^[\x21-\x7E]+$/;
+
 function callerHeaders(caller: Caller, attempt: 1 | 2): Record<string, string> {
-  const optional: [string, string | undefined][] = [
+  const headers: [string, string | undefined][] = [
     ["sil-session-id", caller.sessionId],
+    ["sil-tool-call-id", caller.toolCallId],
+    ["sil-attempt", String(attempt)],
     ["sil-model", caller.model],
     ["sil-openclaw-version", caller.openclawVersion],
+    ["sil-plugin-version", caller.pluginVersion],
   ];
-  return {
-    "sil-tool-call-id": caller.toolCallId,
-    "sil-attempt": String(attempt),
-    "sil-plugin-version": caller.pluginVersion,
-    ...Object.fromEntries(optional.filter(([, value]) => value !== undefined)),
-  };
+  return Object.fromEntries(
+    headers.filter((h): h is [string, string] => h[1] !== undefined && HEADER_VALUE.test(h[1])),
+  );
 }
 
 /**
