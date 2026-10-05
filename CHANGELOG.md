@@ -18,6 +18,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   versions (`sil-openclaw-version`, `sil-plugin-version`). The tools are registered as
   per-run factories to read these from the host. Never the chat-handle session key.
 
+## [0.5.1] - 2026-09-30
+
 ### Changed
 
 - **Host floor raised to OpenClaw `>=2026.9.3`**, the version the plugin is built
