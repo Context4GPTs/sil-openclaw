@@ -295,7 +295,40 @@
             "eq"
           ]
         }
-      ]
+      ],
+      "reach": [
+        {
+          "from": "product",
+          "via": "own",
+          "keys": [
+            "brand",
+            "condition",
+            "weight"
+          ]
+        },
+        {
+          "from": "product.sports",
+          "via": "own",
+          "keys": [
+            "gender"
+          ]
+        },
+        {
+          "from": "product.sports.winter.ski.boots",
+          "via": "own",
+          "keys": [
+            "mondo_size",
+            "last_width",
+            "sole_norm",
+            "skill_level",
+            "flex_index",
+            "discipline",
+            "model_year"
+          ]
+        }
+      ],
+      "families": [],
+      "components": []
     }
   },
   "shopping_search": {

@@ -37,7 +37,7 @@
         "additionalProperties": false
       },
       "maxItems": 20,
-      "description": "Reads what already stands for this domain; an empty list is the one thing that licenses a mint."
+      "description": "Reads the nodes that stand for this thing, best first."
     },
     "tree": {
       "type": "array",
@@ -75,17 +75,17 @@
                 "name": {
                   "type": "string",
                   "maxLength": 64,
-                  "description": "Sees what this leaf already stands for before coining a second one."
+                  "description": "Sees what this node stands for."
                 }
               },
               "additionalProperties": false
             },
-            "description": "Adopts one of these, or coins a sibling leaf beside them."
+            "description": "Adopts one of these, or descends from one."
           }
         },
         "additionalProperties": false
       },
-      "description": "Places a new leaf where a specialist shop would shelve it, and sees that a setup of several things is several leaves: every standing path below the root, by family."
+      "description": "Sees where a specialist shop would shelve the thing, and that a setup of several things is several nodes: the standing paths below the root, by family."
     }
   },
   "additionalProperties": false

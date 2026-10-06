@@ -10,7 +10,10 @@
     "name",
     "labels",
     "specs",
-    "seller_specs"
+    "seller_specs",
+    "reach",
+    "families",
+    "components"
   ],
   "properties": {
     "status": {
@@ -306,6 +309,158 @@
         "additionalProperties": false
       },
       "description": "Builds seller rows with keys the registry holds — the base every domain shares and this domain's own branch — and sends them to `shopping_offers`."
+    },
+    "reach": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "from",
+          "via",
+          "keys"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Reads the node that brings these keys: the root, one above, or this one."
+          },
+          "via": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "own"
+              },
+              {
+                "type": "string",
+                "const": "family"
+              },
+              {
+                "type": "string",
+                "const": "component"
+              }
+            ],
+            "description": "Reads how: the node's own list, a family it takes, or a part it is made of."
+          },
+          "family": {
+            "type": "string",
+            "description": "Names the family, where `via` is one."
+          },
+          "component": {
+            "type": "string",
+            "description": "Names the part, where `via` is one."
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "description": "Reads the keys, in the order the node lists them."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Reads where each key comes from: the root, each node above, this node, a family, a part."
+    },
+    "families": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "keys"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the family."
+          },
+          "name": {
+            "type": "string",
+            "description": "Calls the family this."
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "description": "Reads the keys the family brings."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Reads the families this node takes, and the keys each brings."
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "presence",
+          "how",
+          "keys"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Calls the part this."
+          },
+          "presence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "always"
+              },
+              {
+                "type": "string",
+                "const": "optional"
+              }
+            ],
+            "description": "Knows whether every one of these things has the part."
+          },
+          "how": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "built in"
+              },
+              {
+                "type": "string",
+                "const": "in the box"
+              },
+              {
+                "type": "string",
+                "const": "sold separately"
+              }
+            ],
+            "description": "Knows whether the part is built in, in the box, or bought apart."
+          },
+          "node": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Reads the part on its own node, where shops sell it alone."
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "description": "Reads the keys the part is bought on, here."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Reads what the thing is made of, and the keys each part is bought on."
     }
   },
   "additionalProperties": false
