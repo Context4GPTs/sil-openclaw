@@ -79,8 +79,8 @@ past one. Each tool's parameters live in its own definition.
   kettle: find each one, then search each in its own. A kettle searched under coffee
   makers runs on the wrong keys and comes back looking fine.
 - **Before a want you cannot write as a spec, re-read the document with
-  `shopping_domain_get`.** It grows as sil reads pages, so a value the enum lacked or a key
-  the domain never had may be there now — read again before you decide it cannot be asked.
+  `shopping_domain_get`.** Its keys and closed sets are fixed, but sil keeps learning the
+  words pages print for them — read again before you decide a want cannot be asked.
 - **Ask for what is missing in one question, and give each thing its consequence.** Each
   key's `description` says what goes wrong when that key is wrong, in the buyer's own life.
   Say *that* — never which field it fills. Naming the fields back answers a question nobody

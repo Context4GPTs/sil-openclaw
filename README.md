@@ -95,19 +95,19 @@ agent  done — here's your checkout link, ready to pay:
 
 ## Turn your OpenClaw into your personal shopping expert
 
-So far your *general* agent did the shopping. Go one step further, with **nothing to set up**: install the plugin and the agent you already have shops **any** niche like a specialist, learning how to buy well in each one the first time you shop it and getting sharper every session.
+So far your *general* agent did the shopping. Go one step further, with **nothing to set up**: install the plugin and the agent you already have shops **any** niche like a specialist, getting sharper about *you* every session.
 
-**Spec-Driven Shopping (SDS).** There is no setup step and no interview — just say what you want. The plugin **classifies** what you're buying, takes the closest of sil's **domains**, and reads sil's guide to buying it well (fit, gearing, geometry, the trade-offs) — the **dimensions** every request in that niche is decomposed along. A new niche gets the same, keeping *you* the same across all of them. On **every query** it reads sil's shared registry for how that category is bought, decomposes what you asked, and **learns your facts and taste as it goes** (your measurements, your budget, a brand you won't touch) — captured once, never re-asked. It recommends with a "why" that cites *what you asked*, *a fact it remembered*, and *a niche mechanic you'd never have named*.
+**Spec-Driven Shopping (SDS).** There is no setup step and no interview — just say what you want. The plugin finds the node in sil's **domain graph** for what you're buying and reads sil's guide to buying it well (fit, gearing, geometry, the trade-offs) — the **specs** every request there is decomposed along. It decomposes what you asked, **learns your facts and taste as it goes** (your measurements, your budget, a brand you won't touch) — captured once, never re-asked — and recommends with a "why" that cites *what you asked*, *a fact it remembered*, and *a niche mechanic you'd never have named*.
 
-**It learns a niche the first time you shop it, and keeps *you* across all of them:**
+**Every niche reads sil's own node, and keeps *you* across all of them:**
 
 ```text
 you    find me a road bike, ~€1500
 
-agent  New niche for us — road cycling. Let me learn how to buy one
-       well (fit from height AND inseam, endurance-vs-race geometry,
-       gearing, the comfort/speed trade-offs) — and two numbers I'll
-       keep so I never re-ask: your height and inseam.
+agent  [shopping_domain_search "road bike" → shopping_domain_get]
+       Road bikes are bought on fit from height AND inseam, endurance
+       vs race geometry, and gearing. Two numbers I'll keep so I never
+       re-ask: your height and inseam.
 
 you    178cm, 81cm inseam. Secondhand is fine
 
@@ -122,14 +122,14 @@ agent  searched sil — endurance, 54cm for your fit, ~€1500:
 
 you    later — find me a backpacking tent for two, under €250
 
-agent  Different niche — camping. Learning how to buy a backpacking
-       tent (season rating, packed weight, floor area)… and your
-       returns rule carries straight over, no need to re-ask.
+agent  [shopping_domain_search "backpacking tent" → shopping_domain_get]
+       Tents are bought on season rating, packed weight and floor
+       area… and your returns rule carries straight over.
 ```
 
-> **You teach it once; it stays sharp.** How a category is bought comes from sil's shared registry — read before the web, so it is current without you teaching it twice — and your own facts, taste and shopping jobs belong to your sil account rather than to one agent. Nothing to re-answer, and sharper every session.
+> **You teach it once; it stays sharp.** How a thing is bought comes from sil's domain graph, the same for every agent, and your own facts, taste and shopping jobs belong to your sil account rather than to one agent. Nothing to re-answer, and sharper every session.
 
-**What it keeps on your machine: nothing of yours.** The plugin stores your sil credentials and its own configuration under `$SIL_DATA_DIR` (owner-only `0600`) and nothing else — no notes about you, no shopping jobs, no measurements. A shopping call reads that credential, rewrites it when sil refreshes it, and deletes it when the session is past refreshing. What your agent learns about you lives in your sil account, is **never pooled across users**, and is never used for training or aggregation. Research reads public sources to learn how a *category* is bought; it does not upload anything about you. If an earlier version left a `shopper/` folder under that directory, nothing reads it any more and you can delete it.
+**What it keeps on your machine: nothing of yours.** The plugin stores your sil credentials and its own configuration under `$SIL_DATA_DIR` (owner-only `0600`) and nothing else — no notes about you, no shopping jobs, no measurements. A shopping call reads that credential, rewrites it when sil refreshes it, and deletes it when the session is past refreshing. What your agent learns about you lives in your sil account, is **never pooled across users**, and is never used for training or aggregation. If an earlier version left a `shopper/` folder under that directory, nothing reads it any more and you can delete it.
 
 ---
 

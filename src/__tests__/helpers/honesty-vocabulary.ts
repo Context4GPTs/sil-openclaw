@@ -219,8 +219,8 @@ export function overTriggerOffenders(body: string): string[] {
 /**
  * The FOURTH honesty state: `not_found`. Every route answering it scopes its lookup
  * to the buyer's account, so it means "not yours", never "it does not exist". Read as
- * an absence it licenses two wrong writes — a second brief opened over the one the
- * buyer is working from, and a mint of a category that already stands elsewhere.
+ * an absence it licenses a wrong write — a second brief opened over the one the
+ * buyer is working from.
  *
  * Same shape as the scanners above (sentence scope, the offending sentence
  * returned), and the same reason for it: an agent reads the sentence on its own,
