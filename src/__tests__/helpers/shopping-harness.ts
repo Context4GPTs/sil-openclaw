@@ -8,19 +8,9 @@
  * every "exactly one fetch, to exactly its own path" assertion reads as a failure rather
  * than silently ignoring.
  *
- * ROUTING IS BY METHOD **AND** PATHNAME, because `/catalog/domains` is served by two
- * verbs: `GET` is the registry search, `POST` is the mint. Path alone cannot express
- * that, and the two cheap alternatives are both wrong:
- *
- *   - matching the raw URL by suffix drops the search entirely —
- *     `…/catalog/domains?q=ski+boots` does not END WITH `/catalog/domains`, so it lands
- *     in `other` and reads as an unrouted request;
- *   - loosening the suffix match to ignore the querystring is worse — the search and the
- *     mint would then share ONE bucket, silently disarming the mint's "exactly ONE write
- *     is attempted" bar and its `nthOfKind` sequencing.
- *
- * `domainGet` is split off the same prefix for the same reason: it is a THIRD kind on
- * one path root, told apart by carrying a segment after it.
+ * `/catalog/domains` is a path root carrying two GETs: the bare root is the registry search
+ * and `domainGet` carries a segment after it. Both are matched on the PATHNAME, never the
+ * raw URL, so the search's querystring cannot make it look unrouted.
  *
  * `fetch` is the ONLY thing mocked. The real sil-client, the real credentials module,
  * the real `refreshAndRetryOnce` and the real tools run above it.
@@ -41,26 +31,20 @@ export const SIL_WEB = "https://sil-web.test.example.com";
 /** The catalog origin — every shopping route, at its bare path. */
 export const SIL_API = "https://sil-api.test.example.com";
 
-/**
- * The POST routes, at the bare paths the architecture pins (no `/api/v1`). A 1:1
- * name→path map, which is exactly why the two GETs are NOT in it: `/catalog/domains` is
- * a path root carrying three kinds, and one map key cannot hold them.
- */
+/** The POST routes, at the bare paths the architecture pins (no `/api/v1`). The two
+ * GETs share one path root, so one map key cannot hold them. */
 const ROUTE_PATH = {
   search: "/catalog/search",
   product: "/catalog/product",
   offers: "/catalog/offers",
   sellers: "/catalog/sellers",
-  domains: "/catalog/domains",
   briefCreate: "/briefs/create",
   briefEdit: "/briefs/edit",
   briefRead: "/briefs/read",
   profileEdit: "/profile/edit",
 } as const;
 
-/** `GET /catalog/domains` — the registry search, sharing the mint's path. Kept as its
- * own constant beside `ROUTE_PATH` rather than inside it so the search and the mint can
- * never collapse into one bucket by a careless map edit. */
+/** `GET /catalog/domains` — the registry search. */
 const DOMAIN_SEARCH_ROUTE = { method: "GET", path: "/catalog/domains" } as const;
 
 /** `GET /catalog/domains/<path>` — the guide read. The segment after the root is the
@@ -92,9 +76,7 @@ export interface Router {
   product: Recorded[];
   offers: Recorded[];
   sellers: Recorded[];
-  /** `POST /catalog/domains` — the MINT bucket, and only the mint. */
-  domains: Recorded[];
-  /** `GET /catalog/domains` — the registry search. Never the same list as `domains`. */
+  /** `GET /catalog/domains` — the registry search. */
   domainSearch: Recorded[];
   /** `GET /catalog/domains/<path>` — the guide read. */
   domainGet: Recorded[];
@@ -124,7 +106,6 @@ export function installRouter(
     product: [],
     offers: [],
     sellers: [],
-    domains: [],
     domainSearch: [],
     domainGet: [],
     briefCreate: [],

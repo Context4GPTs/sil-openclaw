@@ -3,9 +3,9 @@
  * by path.
  *
  * The path is a PATH SEGMENT, and that is the whole risk in this file. Concatenating it
- * would let a stray `/` re-route the call — to the registry search, to the mint's own
- * path, or off the route table entirely — so the segment is URL-encoded and the router
- * is asked which bucket the request actually landed in.
+ * would let a stray `/` re-route the call — to the registry search, or off the route
+ * table entirely — so the segment is URL-encoded and the router is asked which bucket
+ * the request actually landed in.
  */
 
 import { describe, it, expect } from "vitest";
@@ -46,7 +46,6 @@ describe("shopping_domain_get — the path is a segment, not a query", () => {
     expect(req.url).toBe(`${getApiUrl()}/catalog/domains/${PATH}`);
     expect(bearerToken(req)).toBe(ACCESS);
     expect(router.domainSearch).toEqual([]);
-    expect(router.domains).toEqual([]);
     expect(router.other).toEqual([]);
   });
 

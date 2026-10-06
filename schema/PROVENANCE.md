@@ -1,4 +1,4 @@
-# Where these twenty-two files come from
+# Where these twenty files come from
 
 Copied verbatim from `sil-services` `packages/schemas/schema/`, commit
 `2a022663b0eb2e86cb379ad81b62a08dfada2c7f`. One request and one response artifact per

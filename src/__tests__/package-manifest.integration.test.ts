@@ -109,7 +109,7 @@ describe("package.json — OpenClaw ESM plugin shape", () => {
     const artifacts = readdirSync(join(REPO_ROOT, "schema")).filter((f) =>
       f.endsWith(".schema.json"),
     );
-    expect(artifacts).toHaveLength(22);
+    expect(artifacts).toHaveLength(20);
   });
 
   it("declares build and test scripts", () => {
@@ -244,22 +244,6 @@ describe("skill basename is sil-unique — no stale `./skill` literal, ships und
   it("the `sil-shopping/` directory + SKILL.md exist on disk, and the old `skill/` is GONE", () => {
     expect(existsSync(join(REPO_ROOT, "sil-shopping", "SKILL.md"))).toBe(true);
     expect(existsSync(join(REPO_ROOT, "skill"))).toBe(false);
-  });
-
-  it("the skill's references/ subtree moved under sil-shopping/ intact", () => {
-    // A representative-but-stable probe: the folder is populated. Deliberately NOT the
-    // file set — it churns as the skill is reshaped, and this guard proves the subtree
-    // shipped, not which exact files it holds today. The literal was already replaced by
-    // a count twice over (`method_and_prds.md`, then `agent_creation_engine.md`).
-    //
-    // `examples/` left this bar when the 2026-09-19 ruling deleted the worked
-    // walkthrough: a skill that is tips rather than a procedure has no run to walk. That
-    // every link in the bundle still resolves is `skill-bundle-contract`'s.
-    expect(
-      readdirSync(join(REPO_ROOT, "sil-shopping", "references")).filter((f) =>
-        f.endsWith(".md"),
-      ).length,
-    ).toBeGreaterThan(0);
   });
 
   it("no stale `./skill` / top-level `skill` literal survives in the publish-path config (AC8 sweep)", () => {

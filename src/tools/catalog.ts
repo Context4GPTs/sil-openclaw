@@ -1,10 +1,10 @@
 /**
- * The eleven `shopping_*` tools, 1:1 with the sil-api catalog, brief and profile routes.
+ * The ten `shopping_*` tools, 1:1 with the sil-api catalog, brief and profile routes.
  *
  * A projection on the way back would drop exactly the fields the agent's honesty reading
  * is computed from (`fit`, `unknown`, `variants`, `printed`) while looking healthy, so the
  * body crosses verbatim. A new `registerXTools` group has to be hand-wired into three guards
- * or it silently NARROWS them (CLAUDE.md), which is why all eleven live in one group.
+ * or it silently NARROWS them (CLAUDE.md), which is why all ten live in one group.
  */
 
 import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk/plugin-entry";
@@ -35,13 +35,11 @@ export const SHOPPING_TOOLS = [
     description:
       "What sil holds, and where it shelves it: read the registry in the buyer's own"
       + " words. `matches` are the domains that match, each with its path and a line on how"
-      + " the thing is bought — judge fit on `about`, then take that path verbatim, or"
-      + " descend under a broader one, never a sibling of a path that already stands. `tree`"
-      + " is every standing path grouped by family: hang a new leaf where a specialist shop"
-      + " would shelve it, and see that a setup of several things is several leaves."
-      + " `matches: []` is the ONLY answer that licenses shopping_domain_create, and a"
-      + " non-ok status is not an empty one. At most two reads per domain, then"
-      + " shopping_domain_get for the document and the keys of the path you take.",
+      + " the thing is bought — judge fit on `about`, then take the closest path verbatim:"
+      + " sil holds every node, and nothing is created. `tree` is every standing path"
+      + " grouped by family: a setup of several things is several leaves. A non-ok status"
+      + " is not an empty answer. At most two reads per domain, then shopping_domain_get"
+      + " for the document and the keys of the path you take.",
   },
   {
     name: "shopping_domain_get",
@@ -67,32 +65,6 @@ export const SHOPPING_TOOLS = [
       + " many-valued — `eq`/`in` meet any, `neq`/`nin` none. The root"
       + " `product` always stands and carries the universals every domain inherits; a path"
       + " that does not stand answers not_found: read the registry again in their words.",
-  },
-  {
-    name: "shopping_domain_create",
-    method: "POST",
-    path: "/catalog/domains",
-    label: "Write a domain sil does not hold",
-    // A colliding path means the vocabulary is already there, so search that same path.
-    recovery: { already_exists: "shopping_search" },
-    description:
-      "The FALLBACK, and the one permanent global write in sil: a curated domain already"
-      + " carries a document, and this writes one for a domain it does not hold. First: a"
-      + " shopping_domain_search read that came back `matches: []`, and research on how the"
-      + " domain is bought (never products). Hang the leaf where the `tree` shows its"
-      + " family: different keys are a different leaf, another value of the same keys is a"
-      + " value. `guide` is markdown every later buyer inherits: what the thing is bought"
-      + " on, what goes wrong and what that costs the buyer, and what buying it online takes"
-      + " — never \"go to a shop\". Each key's `description` does the same for one key. `name`"
-      + " is its one English name, `labels` the words shops print; a spec carries `step`,"
-      + " the increment its numbers move by, and `forms`, a printed form mapped to its"
-      + " value. Mark variant_spec on the key an option is picked on, product_spec on one"
-      + " telling products apart. Coin only keys a PRODUCT is bought by: seller terms are"
-      + " never yours to coin, and shopping_domain_get answers them as `seller_specs`. You"
-      + " inherit every ancestor's key and may not rename one: re-declare only to change its"
-      + " unit, values or mark for your subtree; stating nothing new it answers `inherited:"
-      + " true`, and a key naming a standing one binds and answers `bound_from`. A refusal"
-      + " names the standing thing and the fix.",
   },
   {
     name: "shopping_brief_create",
@@ -292,14 +264,14 @@ export const SHOPPING_TOOLS = [
   },
 ] as const satisfies readonly ShoppingTool[];
 
-/** The eleven names, as a literal union — so a table of one-per-tool anything is forced
- * to cover them all rather than quietly covering ten. */
+/** The ten names, as a literal union — so a table of one-per-tool anything is forced
+ * to cover them all rather than quietly covering nine. */
 export type ShoppingToolName = (typeof SHOPPING_TOOLS)[number]["name"];
 
 /**
- * Registers the eleven, reading each one's request artifact off disk as it goes.
+ * Registers the ten, reading each one's request artifact off disk as it goes.
  *
- * That read is the ONE exception to "register() opens nothing": eleven synchronous
+ * That read is the ONE exception to "register() opens nothing": ten synchronous
  * `readFileSync`s that return immediately and hold no resource open, exactly as
  * `ensureDataDir`'s `mkdirSync` does. It is deliberately eager — an unreadable artifact
  * is a broken build, and failing loud at load beats a tool whose `parameters` the host

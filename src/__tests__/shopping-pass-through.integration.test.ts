@@ -37,11 +37,6 @@ const REFRESH = "rt-live-token";
 const CALL: Record<ShoppingToolName, Record<string, unknown>> = {
   shopping_domain_search: { q: "ski boots" },
   shopping_domain_get: { path: "product.sports.winter.ski.boots" },
-  shopping_domain_create: {
-    path: "product.sports.winter.ski.boots",
-    guide: "how they are bought",
-    specs: [{ key: "mondo_size", display_name: "Mondopoint size", type: "number" }],
-  },
   shopping_brief_create: { title: "Ski boots", narrative: "Advanced skier, short wide foot." },
   shopping_brief_edit: { id: "b1", decision: "Ceiling raised 350 → 400 EUR." },
   shopping_brief_read: {},

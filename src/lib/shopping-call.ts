@@ -21,12 +21,11 @@ import { jsonResult } from "./tool-result.js";
 export const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
 
 /**
- * What the agent runs next, PER STATUS — the 404 a path read answers, the 409 the mint
- * answers. Only these two: a status earns a fixed next call only when its cause is
- * unambiguous, and `invalid_request` covers several causes on one route, so its next
- * move is its own message's to name. A status absent here carries no recovery.
+ * What the agent runs next on a 404. Only that: a status earns a fixed next call only when
+ * its cause is unambiguous, and `invalid_request` covers several causes on one route, so
+ * its next move is its own message's to name.
  */
-export type RefusalRecovery = Partial<Record<"not_found" | "already_exists", string>>;
+export type RefusalRecovery = Partial<Record<"not_found", string>>;
 
 /** A route, under the NAME of the tool the agent called: every log marker and every
  * recovery hint names that tool, never the route behind it. */
@@ -42,7 +41,6 @@ export type RefusalStatus =
   | "must_reregister"
   | "invalid_request"
   | "not_found"
-  | "already_exists"
   | "forbidden"
   | "retryable";
 
@@ -100,12 +98,8 @@ function mapOutcome(api: PluginAPI, call: ShoppingCall, outcome: ShoppingOutcome
       api.logger.info(`${call.name}_invalid_request`, {});
       return refused("invalid_request", refusal("invalid_request", outcome.message));
     case "not_found":
-    case "already_exists":
-      api.logger.info(`${call.name}_${outcome.kind}`, {});
-      return refused(
-        outcome.kind,
-        refusal(outcome.kind, outcome.message, call.recovery?.[outcome.kind]),
-      );
+      api.logger.info(`${call.name}_not_found`, {});
+      return refused("not_found", refusal("not_found", outcome.message, call.recovery?.not_found));
     case "forbidden":
       return refused("forbidden", forbiddenResult(api, call.name, outcome.reason));
     case "retryable":
@@ -137,7 +131,7 @@ function notRegistered(tool: string): ToolResult {
  * one: a next call that fits one of its causes is a hint that misleads on the rest.
  */
 function refusal(
-  status: "invalid_request" | "not_found" | "already_exists",
+  status: "invalid_request" | "not_found",
   message: string,
   recovery?: string,
 ): ToolResult {

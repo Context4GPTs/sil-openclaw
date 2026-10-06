@@ -71,10 +71,6 @@ export const unsatisfied = (candidates: string[], rule: (s: string) => boolean):
 // Sections — the scope a prose bar is asserted inside.
 // ===========================================================================
 
-/** The fallback document, by path: the mint discipline is the whole of what it says,
- * so the file IS the scope. */
-export const MINT = "references/mint.md";
-
 /**
  * SKILL.md's own headings, by the short name the bars call them. The HEADING is part
  * of the contract — the agent reads the file top-down and finds a rule under the
@@ -124,8 +120,6 @@ export const skillSection = (name: SkillSection): string =>
 
 export const skillSectionStatements = (name: SkillSection): string[] =>
   splitStatements(skillSection(name));
-
-export const mintStatements = (): string[] => splitStatements(read(MINT));
 
 /**
  * SKILL.md above its first `##` — the three things that carry the job. Scoped apart

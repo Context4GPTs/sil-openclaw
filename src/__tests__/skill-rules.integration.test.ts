@@ -20,11 +20,9 @@
  * than return an empty scope — an empty scope would make every `unsatisfied()` bar pass
  * vacuously, which is worse than a red.
  *
- * The registry half (read before mint, inheritance, the naming discipline) is held by
- * `skill-bundle-contract.integration.test.ts` against `references/mint.md`; a second copy
- * would be duplicate coverage, not safety. So is anything a TOOL DESCRIPTION is the one
- * carrier of — the `DISCIPLINE` table in `tools/tool-schema-contract.unit.test.ts` — and
- * each bar below names where its other half lives rather than repeating it.
+ * Anything a TOOL DESCRIPTION is the one carrier of is held by the `DISCIPLINE` table in
+ * `tools/tool-schema-contract.unit.test.ts`; a second copy would be duplicate coverage,
+ * not safety, so each bar below names where its other half lives rather than repeating it.
  *
  * THESE ASSERTIONS ARE THE SPEC. Do NOT weaken one to match the prose.
  */
@@ -32,10 +30,7 @@
 import { describe, it, expect } from "vitest";
 
 import {
-  MINT,
-  mintStatements,
   preambleStatements,
-  section,
   skillSection,
   skillSectionStatements,
   skillSrc,
@@ -43,13 +38,8 @@ import {
   unsatisfied,
 } from "./helpers/skill-bundle.js";
 
-/**
- * What sil SHIPS. The ruling's first consequence: the domain document is sil's, handed
- * over by `shopping_domain_get`, and minting is the fallback for a domain it does not
- * hold. An agent that reads the mint as the normal path writes a permanent global row
- * for a domain that already stands.
- */
-describe("sil ships the domain document, and the mint is the fallback", () => {
+/** What sil SHIPS: the domain document is sil's, handed over by `shopping_domain_get`. */
+describe("sil ships the domain document", () => {
   it("1 — SKILL.md's opening names the document as SIL's knowledge, read before the buyer is asked anything", () => {
     // Scoped to the preamble, above the first `##`: this is the frame the agent reads
     // the rest of the file under. Slid down into a tip, it is a claim the agent meets
@@ -76,59 +66,6 @@ describe("sil ships the domain document, and the mint is the fallback", () => {
     const before = units.filter((s) => /before you ask/i.test(s));
     expect(before.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(unsatisfied(before, (s) => /decides the buy/i.test(s))).toEqual([]);
-  });
-
-  it("2 — `references/mint.md` opens by saying a curated domain already carries the document, so the mint reads as the FALLBACK it is", () => {
-    // The file an agent opens only when a domain is missing has to disown itself in its
-    // first paragraph, or an agent that opened it for one cold domain carries the mint
-    // into the next warm one — and the registry write is the one thing nothing undoes.
-    const units = mintStatements();
-
-    // NOT /sil ships/: nothing in this repo ships a document any more — a domain's content
-    // lives only in the registry, authored by a mint (founder ruling 2026-09-21). What the
-    // file must still disown itself against is a domain that ALREADY carries one.
-    const carries = units.filter((s) => /curated/i.test(s));
-    expect(carries.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(
-      unsatisfied(carries, (s) => /document/i.test(s) && /markdown/i.test(s) && /guide/i.test(s)),
-    ).toEqual([]);
-
-    const normal = units.filter((s) => /normal path/i.test(s));
-    expect(normal.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(normal, (s) => /shopping_domain_get/.test(s))).toEqual([]);
-
-    expect(units.filter((s) => /fallback/i.test(s)).length).toBeGreaterThan(0);
-    // …and the always-loaded router says it too, for the agent that never opens the file.
-    expect(skillSection("tools")).toMatch(/fallback/i);
-  });
-
-  it("3 — the guide a mint writes is markdown that says what goes wrong, what to trust, and what buying it online takes", () => {
-    // The shape of the document sil itself ships, stated where an agent has to reproduce
-    // it. "What goes wrong" is the load-bearing one: it is what lets a later agent say
-    // why a question is worth answering, and the first thing a rushed mint drops.
-    const doc = section(MINT, "What the document has to say");
-    const units = splitStatements(doc);
-
-    expect(doc).toMatch(/markdown/i);
-    const missing = (
-      [
-        ["what it is bought on", /bought on/i],
-        ["what goes wrong", /goes wrong/i],
-        ["what to trust", /to trust/i],
-        ["what buying it online takes", /buying it online/i],
-      ] as const
-    ).filter(([, re]) => !re.test(doc));
-    expect(missing.map(([name]) => name)).toEqual([]);
-
-    // Not a label — what the mistake COSTS, in the buyer's own terms.
-    const wrong = units.filter((s) => /goes wrong/i.test(s));
-    expect(wrong.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(wrong, (s) => /costs the buyer/i.test(s))).toEqual([]);
-
-    // The one answer the document may never give, said in the document's own section.
-    const shop = units.filter((s) => /go to a shop/i.test(s));
-    expect(shop.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(shop, (s) => /\bnever\b/i.test(s) && /came here/i.test(s))).toEqual([]);
   });
 
   it("4 — the brief is the scratchpad AND the spec of the buy: the narrative says what a good buy looks like for THIS buyer", () => {

@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use on any shopping intent, and to manage what sil holds for the buyer: register or check their sil account, read sil''s domain document for the thing they are buying, open and keep the session''s brief and the buyer''s profile, search for what fits, open a product, price a pick at every seller, and read a seller''s terms. Drives sil_register, sil_whoami, sil_doctor, shopping_domain_search, shopping_domain_get, shopping_domain_create, shopping_brief_create, shopping_brief_edit, shopping_brief_read, shopping_profile_edit, shopping_search, shopping_product_get, shopping_offers, shopping_seller_get.'
+description: 'Use on any shopping intent, and to manage what sil holds for the buyer: register or check their sil account, read sil''s domain document for the thing they are buying, open and keep the session''s brief and the buyer''s profile, search for what fits, open a product, price a pick at every seller, and read a seller''s terms. Drives sil_register, sil_whoami, sil_doctor, shopping_domain_search, shopping_domain_get, shopping_brief_create, shopping_brief_edit, shopping_brief_read, shopping_profile_edit, shopping_search, shopping_product_get, shopping_offers, shopping_seller_get.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -55,7 +55,7 @@ An unregistered answer from any call routes to `sil_register`. Nothing is set up
 |---|---|
 | sign up / log in / who am I | `sil_register` · `sil_whoami` |
 | what sil knows about how this thing is bought | `shopping_domain_search` → `shopping_domain_get` |
-| a domain sil does not hold yet | `shopping_domain_create` — the fallback, and [`mint.md`](references/mint.md) is the guide to minting |
+| nothing fits exactly | the closest node `shopping_domain_search` returns — sil holds every node; nothing is created |
 | open this session's brief, write a want, log a decision | `shopping_brief_create` · `shopping_brief_edit` |
 | what is already on file | `shopping_brief_read` · `sil_whoami` |
 | a measurement, a lasting taste, their currency | `shopping_profile_edit` |
@@ -68,9 +68,6 @@ Every tool answers a `status`. On anything but `ok`, say what happened and follo
 tool's own `recovery` — never improvise around a refusal, and never loosen the brief to get
 past one. Each tool's parameters live in its own definition.
 
-**`references/mint.md` sits beside this file** — read it from the folder of the path your
-host listed for this skill, never a guessed path under the gateway home.
-
 ## Using sil well
 
 - **Read the domain document before the first search.** It names what the thing is bought
@@ -79,7 +76,7 @@ host listed for this skill, never a guessed path under the gateway home.
   out.
 - **A setup of several things is several domains, and a search runs in the domain of the
   thing it is for.** *"Everything for pour-over at home"* is a dripper, a grinder and a
-  kettle: find or mint each one, then search each in its own. A kettle searched under coffee
+  kettle: find each one, then search each in its own. A kettle searched under coffee
   makers runs on the wrong keys and comes back looking fine.
 - **Before a want you cannot write as a spec, re-read the document with
   `shopping_domain_get`.** It grows as sil reads pages, so a value the enum lacked or a key

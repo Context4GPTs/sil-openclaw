@@ -54,7 +54,7 @@ import {
 // unit core takes them as an argument so the test pins behaviour, not wiring).
 const SIL: SilAllowlistFacts = {
   id: "sil",
-  // The real fourteen-tool set — the eleven `shopping_*` tools and the three
+  // The real thirteen-tool set — the ten `shopping_*` tools and the three
   // account tools.
   //
   // THIS CARRIER IS THE SILENT ONE, and it has gone stale before. Nothing here goes RED
@@ -66,7 +66,6 @@ const SIL: SilAllowlistFacts = {
     "shopping_brief_create",
     "shopping_brief_edit",
     "shopping_brief_read",
-    "shopping_domain_create",
     "shopping_domain_get",
     "shopping_domain_search",
     "shopping_offers",
