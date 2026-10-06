@@ -48,8 +48,8 @@ export const SHOPPING_TOOLS = [
     recovery: { not_found: "shopping_domain_search" },
     description:
       "sil's own document on how this thing is bought well — read it before you ask the"
-      + " buyer anything, and again when a want fits no key. `guide` is markdown: what it is bought on, what goes wrong and what that"
-      + " costs the buyer, what to trust, and what buying it online takes. `name` is its one"
+      + " buyer anything, and again when a want fits no key. `guide` is markdown: what it is"
+      + " bought on, what goes wrong and what that costs the buyer, what to trust, and what buying it online takes. `name` is its one"
       + " English name and `labels` the market's own words for it — read them, never send"
       + " them. `specs` are the keys it is bought by and `seller_specs` the seller terms it"
       + " is bought with. Each key's `description` says how that"
