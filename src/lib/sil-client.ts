@@ -394,6 +394,8 @@ export async function callShopping(
   token: string,
   route: ShoppingRoute,
   args: Record<string, unknown>,
+  caller: Caller,
+  attempt: 1 | 2,
 ): Promise<ShoppingOutcome> {
   const path = routePath(route, args);
   if (typeof path !== "string") {
@@ -407,17 +409,50 @@ export async function callShopping(
   }
 
   const url = `${stripTrailingSlash(silApiUrl)}${path}`;
+  const headers = { authorization: `Bearer ${token}`, ...callerHeaders(caller, attempt) };
   let res: Response;
   try {
     const timeoutMs = requestTimeoutMs(route);
     res =
       route.method === "GET"
-        ? await getJson(url, { authorization: `Bearer ${token}` }, timeoutMs)
-        : await postJson(url, args, { authorization: `Bearer ${token}` }, timeoutMs);
+        ? await getJson(url, headers, timeoutMs)
+        : await postJson(url, args, headers, timeoutMs);
   } catch {
     return { kind: "retryable" };
   }
   return classifyShoppingResponse(res.status, await readJsonBody(res));
+}
+
+/**
+ * Who is making a shopping call — sil-api refuses one that does not say. A field the host
+ * did not hand over is absent and sends no header: sil's refusal then names it, where a
+ * guessed value would file a false trace.
+ */
+export interface Caller {
+  readonly sessionId?: string;
+  readonly toolCallId: string;
+  /** `<provider>/<modelId>`. */
+  readonly model?: string;
+  readonly openclawVersion?: string;
+  readonly pluginVersion: string;
+}
+
+/** sil-api's rule for every caller header. A value outside it is dropped, not sent: fetch
+ * throws on a non-Latin-1 header before sending, and the catch would read that as retryable. */
+const HEADER_VALUE = /^[\x21-\x7E]+$/;
+
+function callerHeaders(caller: Caller, attempt: 1 | 2): Record<string, string> {
+  const headers: [string, string | undefined][] = [
+    ["sil-session-id", caller.sessionId],
+    ["sil-tool-call-id", caller.toolCallId],
+    ["sil-attempt", String(attempt)],
+    ["sil-model", caller.model],
+    ["sil-openclaw-version", caller.openclawVersion],
+    ["sil-plugin-version", caller.pluginVersion],
+  ];
+  return Object.fromEntries(
+    headers.filter((h): h is [string, string] => h[1] !== undefined && HEADER_VALUE.test(h[1])),
+  );
 }
 
 /**
