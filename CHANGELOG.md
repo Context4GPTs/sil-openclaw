@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-06
+
 ### Added
 
 - **Every `shopping_*` call says who is calling**, as sil-api now requires: the
