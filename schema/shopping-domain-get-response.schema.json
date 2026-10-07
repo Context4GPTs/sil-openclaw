@@ -12,8 +12,9 @@
     "specs",
     "seller_specs",
     "reach",
-    "families",
-    "components"
+    "kinds",
+    "parts",
+    "made_for"
   ],
   "properties": {
     "status": {
@@ -324,7 +325,7 @@
             "type": "string",
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
-            "description": "Reads the node that brings these keys: the root, one above, or this one."
+            "description": "Reads the node that declares these keys: this one, or a kind it is."
           },
           "via": {
             "anyOf": [
@@ -334,20 +335,16 @@
               },
               {
                 "type": "string",
-                "const": "family"
+                "const": "kind"
               },
               {
                 "type": "string",
-                "const": "component"
+                "const": "part"
               }
             ],
-            "description": "Reads how: the node's own list, a family it takes, or a part it is made of."
+            "description": "Reads how: the node's own list, a kind it is, or what one of its parts' links says."
           },
-          "family": {
-            "type": "string",
-            "description": "Names the family, where `via` is one."
-          },
-          "component": {
+          "part": {
             "type": "string",
             "description": "Names the part, where `via` is one."
           },
@@ -363,48 +360,42 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads where each key comes from: the root, each node above, this node, a family, a part."
+      "description": "Reads where each key comes from: this node, a kind it is, or a link to a part."
     },
-    "families": {
+    "kinds": {
       "type": "array",
       "items": {
         "type": "object",
         "required": [
-          "key",
-          "name",
-          "keys"
+          "path",
+          "name"
         ],
         "properties": {
-          "key": {
+          "path": {
             "type": "string",
-            "description": "Names the family."
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Reads the kind on its own node."
           },
           "name": {
             "type": "string",
-            "description": "Calls the family this."
-          },
-          "keys": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64
-            },
-            "description": "Reads the keys the family brings."
+            "maxLength": 64,
+            "description": "Calls the kind this."
           }
         },
         "additionalProperties": false
       },
-      "description": "Reads the families this node takes, and the keys each brings."
+      "description": "Reads every kind this thing is, nearest first; it takes each one's keys."
     },
-    "components": {
+    "parts": {
       "type": "array",
       "items": {
         "type": "object",
         "required": [
           "name",
-          "presence",
           "how",
+          "optional",
+          "many",
           "keys"
         ],
         "properties": {
@@ -412,41 +403,47 @@
             "type": "string",
             "description": "Calls the part this."
           },
-          "presence": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "always"
-              },
-              {
-                "type": "string",
-                "const": "optional"
-              }
-            ],
-            "description": "Knows whether every one of these things has the part."
-          },
-          "how": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "built in"
-              },
-              {
-                "type": "string",
-                "const": "in the box"
-              },
-              {
-                "type": "string",
-                "const": "sold separately"
-              }
-            ],
-            "description": "Knows whether the part is built in, in the box, or bought apart."
-          },
-          "node": {
+          "role": {
             "type": "string",
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
-            "description": "Reads the part on its own node, where shops sell it alone."
+            "description": "Reads the node any thing that fills this part is."
+          },
+          "elsewhere": {
+            "type": "string",
+            "description": "Reads the part in plain words, where no node draws it yet."
+          },
+          "how": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "built in"
+                },
+                {
+                  "type": "string",
+                  "const": "in the box"
+                },
+                {
+                  "type": "string",
+                  "const": "sold separately"
+                },
+                {
+                  "type": "string",
+                  "const": "used with"
+                }
+              ]
+            },
+            "description": "Knows whether the part is built in, in the box, bought apart or used with it."
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Knows whether some of these things come without it."
+          },
+          "many": {
+            "type": "boolean",
+            "description": "Knows whether the thing has several of the part."
           },
           "keys": {
             "type": "array",
@@ -455,12 +452,48 @@
               "minLength": 1,
               "maxLength": 64
             },
-            "description": "Reads the keys the part is bought on, here."
+            "description": "Reads the keys the link says about the part, here."
           }
         },
         "additionalProperties": false
       },
-      "description": "Reads what the thing is made of, and the keys each part is bought on."
+      "description": "Reads what the thing has, and the keys each part is bought on."
+    },
+    "made_for": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+                "maxLength": 255,
+                "description": "Reads the node this part or consumable is made for."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "elsewhere"
+            ],
+            "properties": {
+              "elsewhere": {
+                "type": "string",
+                "description": "Reads what it is made for in plain words, where no node draws it yet."
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "Reads what this part or consumable is made for, where it is one."
     }
   },
   "additionalProperties": false

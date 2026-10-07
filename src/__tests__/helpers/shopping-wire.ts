@@ -118,7 +118,7 @@ export const SEARCH_400 = {
   error: "invalid_request",
   message:
     'domain "product.sports.winter.ski.boots" is not in the graph — the closest node is'
-    + ' "product.sporting_goods.outdoor_recreation.winter_sports_activities.skiing_snowboarding.ski_boots"',
+    + ' "product.sports.skiing_snowboarding.ski_boots"',
 } as const;
 
 export const SPEC_400 = {

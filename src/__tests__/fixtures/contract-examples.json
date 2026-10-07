@@ -298,22 +298,6 @@
       ],
       "reach": [
         {
-          "from": "product",
-          "via": "own",
-          "keys": [
-            "brand",
-            "condition",
-            "weight"
-          ]
-        },
-        {
-          "from": "product.sports",
-          "via": "own",
-          "keys": [
-            "gender"
-          ]
-        },
-        {
           "from": "product.sports.winter.ski.boots",
           "via": "own",
           "keys": [
@@ -325,10 +309,47 @@
             "discipline",
             "model_year"
           ]
+        },
+        {
+          "from": "kind.made_for_a_person",
+          "via": "kind",
+          "keys": [
+            "gender"
+          ]
+        },
+        {
+          "from": "product",
+          "via": "kind",
+          "keys": [
+            "brand",
+            "condition",
+            "weight"
+          ]
         }
       ],
-      "families": [],
-      "components": []
+      "kinds": [
+        {
+          "path": "kind.made_for_a_person",
+          "name": "Made for a person"
+        },
+        {
+          "path": "product",
+          "name": "Product"
+        }
+      ],
+      "parts": [
+        {
+          "name": "liner",
+          "role": "product.sports.winter.ski.boot_liners",
+          "how": [
+            "built in"
+          ],
+          "optional": false,
+          "many": false,
+          "keys": []
+        }
+      ],
+      "made_for": []
     }
   },
   "shopping_search": {
