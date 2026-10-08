@@ -176,9 +176,8 @@ describe("what a chat opens with", () => {
  */
 describe("how a spec is made", () => {
   it("8 — the place's specs are read BEFORE the first search, and sil never says what it left out", () => {
-    // Measured 2026-09-18: the guide says a ski boot is bought on stiffness, forefoot
-    // width and binding compatibility, and the agent searched four times and recommended
-    // a boot on two specs. A TIP, not a gate — the ruling retired the precondition — so
+    // Measured 2026-09-18: the agent searched four times and recommended a boot on two of
+    // the specs the place says it is bought on. A TIP, not a gate — the ruling retired the precondition — so
     // what is pinned is the reason it matters: the answer carries what fits and nothing
     // about what it left out, so no later turn can discover the miss.
     const units = skillSectionStatements("using");
@@ -226,9 +225,9 @@ describe("how a spec is made", () => {
     ).toEqual([]);
   });
 
-  it("9b — what the document says buying it online takes becomes a SELLER spec, not narrative", () => {
-    // Measured, the founder's live-web session 2026-09-21: the guide's "buy where the boot
-    // can go back" reached the brief's narrative ("returnable if the fit is wrong") and
+  it("9b — what buying it online takes becomes a SELLER spec, not narrative", () => {
+    // Measured, the founder's live-web session 2026-09-21: "buy where the boot can go
+    // back" reached the brief's narrative ("returnable if the fit is wrong") and
     // stopped there. Both `shopping_offers` calls went out with `seller_specs: []`, so
     // nothing filtered on returns and every seller came back equally good — the one thing
     // that makes a fit you cannot try on survivable, carried as a sentence that does no work.
