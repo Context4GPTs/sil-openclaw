@@ -138,6 +138,12 @@ export const DOMAIN_GET_404 = {
   message: 'domain "product.sports.winter.ski.boots.freeride" does not stand',
 } as const;
 
+/** A path in the graph whose area sil does not carry yet: refused before any spend. */
+export const DOMAIN_GET_NOT_CARRIED = {
+  error: "not_carried",
+  message: "not carried: pets — it is in the pipeline",
+} as const;
+
 /**
  * The auth plugin's shared bodies — the SAME four across every route, the registry read
  * included: it registers inside the auth plugin's guarded scope, so an unauthenticated

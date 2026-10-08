@@ -373,22 +373,16 @@ describe("each shopping tool carries its discipline clause", () => {
    * behavioural bug. Each entry is the one thing an agent that loses it gets wrong.
    */
   const DISCIPLINE: Record<(typeof SHOPPING_TOOLS)[number], RegExp[]> = {
-    // The closest standing node is taken — nothing is created — and the read is bounded.
-    shopping_domain_search: [/closest/i, /nothing is created/i, /\b(2|two)\b/],
-    // sil SHIPS this document (ruling, 2026-09-19), so the description has to say what
-    // the agent is being handed: markdown that names what goes wrong, what to trust and
-    // what buying it online takes, plus each key's own `description` — which is what
-    // makes a question about that key worth the buyer's turn. Then what the keys are
-    // for, and which of them identify a purchasable option.
+    // The top three places, a leaf preferred; an unavailable one is told, never searched.
+    shopping_domain_search: [/top three/i, /prefer a leaf/i, /available: false/, /matched/, /domain/],
+    // The place's specs: what each key decides, which mark picks an option, and `record`.
     shopping_domain_get: [
-      /markdown/i,
-      /goes wrong/i,
-      /to trust/i,
-      /buying it online/i,
       /moves the fit/i,
       /variant_spec/,
       /product_spec/,
       /operators?/i,
+      /record/,
+      /not carried/i,
     ],
     // One brief for the whole session, the id the rest of it is named by, the narrative
     // that IS the spec of the buy (ruling, 2026-09-19), and the quote every `reason` is —

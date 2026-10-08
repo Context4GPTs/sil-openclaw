@@ -6,7 +6,6 @@
   "required": [
     "status",
     "path",
-    "guide",
     "name",
     "labels",
     "specs",
@@ -25,10 +24,6 @@
     "path": {
       "type": "string",
       "description": "Sends it verbatim as `shopping_search.domain`."
-    },
-    "guide": {
-      "type": "string",
-      "description": "Reads the domain document — markdown on how this thing is bought well: what it is bought on, what goes wrong and what that costs the buyer, what to trust, and what buying it online takes in place of handling it. It is what sil knows about the domain, so reason from it rather than reciting it, and never send the buyer to a shop it already tells you how to do without."
     },
     "name": {
       "type": "string",
@@ -494,6 +489,19 @@
         ]
       },
       "description": "Reads what this part or consumable is made for, where it is one."
+    },
+    "record": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "full"
+        },
+        {
+          "type": "string",
+          "const": "specs"
+        }
+      ],
+      "description": "On a leaf: how its products are bought. `specs` — on their measures alone; `full` — on their measures and their record: purpose, story, pros and cons, for and not for."
     }
   },
   "additionalProperties": false

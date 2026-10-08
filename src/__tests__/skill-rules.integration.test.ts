@@ -38,15 +38,15 @@ import {
   unsatisfied,
 } from "./helpers/skill-bundle.js";
 
-/** What sil SHIPS: the domain document is sil's, handed over by `shopping_domain_get`. */
-describe("sil ships the domain document", () => {
-  it("1 — SKILL.md's opening names the document as SIL's knowledge, read before the buyer is asked anything", () => {
+/** What sil SHIPS: the place's specs are sil's, handed over by `shopping_domain_get`. */
+describe("sil ships the place's specs", () => {
+  it("1 — SKILL.md's opening names the place as SIL's knowledge, read before the buyer is asked anything", () => {
     // Scoped to the preamble, above the first `##`: this is the frame the agent reads
     // the rest of the file under. Slid down into a tip, it is a claim the agent meets
     // after it has already decided how to work.
     const units = preambleStatements();
 
-    const doc = units.filter((s) => /domain document/i.test(s));
+    const doc = units.filter((s) => /\bthe place\b/i.test(s));
     expect(doc.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
       unsatisfied(doc, (s) => /sil'?s own/i.test(s) && /bought well|how this thing is bought/i.test(s)),
@@ -57,7 +57,7 @@ describe("sil ships the domain document", () => {
     const handed = units.filter((s) => /shopping_domain_get/.test(s));
     expect(handed.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(handed, (s) => /markdown/i.test(s) && /guide/i.test(s) && /\bkeys\b/i.test(s)),
+      unsatisfied(handed, (s) => /\bkeys\b/i.test(s)),
     ).toEqual([]);
     expect(
       unsatisfied(handed, (s) => /`description`/.test(s) && /moves the fit/i.test(s)),
@@ -175,7 +175,7 @@ describe("what a chat opens with", () => {
  * agent stops reading it as a rule.
  */
 describe("how a spec is made", () => {
-  it("8 — the domain document is read BEFORE the first search, and sil never says what it left out", () => {
+  it("8 — the place's specs are read BEFORE the first search, and sil never says what it left out", () => {
     // Measured 2026-09-18: the guide says a ski boot is bought on stiffness, forefoot
     // width and binding compatibility, and the agent searched four times and recommended
     // a boot on two specs. A TIP, not a gate — the ruling retired the precondition — so
@@ -186,7 +186,7 @@ describe("how a spec is made", () => {
     const first = units.filter((s) => /first search/i.test(s));
     expect(first.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(first, (s) => /domain document|guide/i.test(s) && /\bread\b/i.test(s)),
+      unsatisfied(first, (s) => /\bspecs\b/i.test(s) && /\bread\b/i.test(s)),
     ).toEqual([]);
 
     const leftOut = units.filter((s) => /left out/i.test(s));
@@ -276,7 +276,7 @@ describe("how a spec is made", () => {
     const converting = units.filter((s) => /`description`/.test(s) && /turn|becomes|convert/i.test(s));
     expect(converting.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(converting, (s) => /\bdomain\b/i.test(s) && /differ|every domain|per domain/i.test(s)),
+      unsatisfied(converting, (s) => /\b(domain|place)\b/i.test(s) && /differ|every (domain|place)|per (domain|place)/i.test(s)),
     ).toEqual([]);
 
     const typed = units.filter((s) => /as typed/i.test(s));
@@ -345,8 +345,7 @@ describe("how a spec is made", () => {
 
     // Both literals, so the rule is copyable rather than a category of words to infer.
     const body = skillSection("using");
-    expect(body).toContain("ski boots 27.5 flex 110");
-    expect(body).toMatch(/motorcycle/i);
+    expect(body).toContain("hand coffee grinder 38 mm burr");
   });
 
   it("13 — a want changes in the brief or not at all: a bound is never loosened silently on the wire", () => {
@@ -514,7 +513,7 @@ describe("what sil verified, what a page claims, and what nobody read", () => {
 
 /** The traps — SKILL.md's `## Common traps`. Each is a live draw's own wrong turn. */
 describe("the traps a live draw took", () => {
-  it("21 — the buyer is never sent to a shop: the document says what buying it online takes instead", () => {
+  it("21 — the buyer is never sent to a shop: the place's specs say what buying it online takes instead", () => {
     // The one answer a buyer who came here cannot use, and the reason the domain document
     // carries a "what buying it online takes" section at all — a measurement taken at
     // home, a tolerance, a return window stand in for handling the thing.
@@ -526,7 +525,7 @@ describe("the traps a live draw took", () => {
       unsatisfied(
         shop,
         (s) =>
-          /domain document/i.test(s) && /online/i.test(s) && /in place of handling/i.test(s),
+          /place's specs/i.test(s) && /online/i.test(s) && /in place of handling/i.test(s),
       ),
     ).toEqual([]);
 

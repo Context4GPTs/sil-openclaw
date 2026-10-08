@@ -5,8 +5,7 @@
   "type": "object",
   "required": [
     "status",
-    "matches",
-    "tree"
+    "matches"
   ],
   "properties": {
     "status": {
@@ -20,7 +19,11 @@
         "type": "object",
         "required": [
           "path",
-          "about"
+          "name",
+          "role",
+          "matched",
+          "domain",
+          "available"
         ],
         "properties": {
           "path": {
@@ -29,63 +32,74 @@
             "maxLength": 255,
             "description": "Passes it to `shopping_domain_get` and `shopping_search` verbatim."
           },
-          "about": {
+          "name": {
             "type": "string",
-            "description": "Judges fit before reading the whole guide: adopts it, or descends under a broader one."
-          }
-        },
-        "additionalProperties": false
-      },
-      "maxItems": 20,
-      "description": "Reads the nodes that stand for this thing, best first."
-    },
-    "tree": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "family",
-          "domains",
-          "paths"
-        ],
-        "properties": {
-          "family": {
-            "type": "string",
-            "description": "Reads the family this thing would be shelved in, as a specialist shop would."
+            "maxLength": 64,
+            "description": "Calls the place this."
           },
-          "domains": {
-            "type": "integer",
-            "description": "Sees how much of the tree already sits under it."
-          },
-          "paths": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "path",
-                "name"
-              ],
-              "properties": {
-                "path": {
-                  "type": "string",
-                  "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-                  "maxLength": 255,
-                  "description": "Reads it with `shopping_domain_get`, or descends from it."
-                },
-                "name": {
-                  "type": "string",
-                  "maxLength": 64,
-                  "description": "Sees what this node stands for."
-                }
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "leaf"
               },
-              "additionalProperties": false
+              {
+                "type": "string",
+                "const": "kind"
+              },
+              {
+                "type": "string",
+                "const": "shelf"
+              },
+              {
+                "type": "string",
+                "const": "domain"
+              },
+              {
+                "type": "string",
+                "const": "top"
+              }
+            ],
+            "description": "Prefers a leaf: it is the thing itself; a kind, shelf or domain holds several."
+          },
+          "matched": {
+            "type": "string",
+            "description": "Reads which of sil's words for it the ask matched."
+          },
+          "domain": {
+            "type": "object",
+            "required": [
+              "path",
+              "name"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+                "maxLength": 255,
+                "description": "Reads the shopping area the place sits in."
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 64
+              }
             },
-            "description": "Adopts one of these, or descends from one."
+            "additionalProperties": false
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Shops it when true. False: sil does not carry this area yet — tell the buyer so, and never search for it here or elsewhere."
+          },
+          "note": {
+            "type": "string",
+            "const": "We understand this is what you are looking for; it is not available at this moment — it is in the pipeline.",
+            "description": "Present exactly when `available` is false."
           }
         },
         "additionalProperties": false
       },
-      "description": "Sees where a specialist shop would shelve the thing, and that a setup of several things is several nodes: the standing paths below the root, by family."
+      "maxItems": 3,
+      "description": "Reads the most relevant places for these words, leaves and kinds first. Empty: no place matched; rephrase with what the thing is called."
     }
   },
   "additionalProperties": false

@@ -10,6 +10,25 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-08
+
+### Changed
+
+- **Finding the place is three calls.** `shopping_domain_search` takes what the thing is
+  called and answers the top three places: `path`, `name`, `role`, which of sil's words
+  `matched`, the `domain` it sits in, and `available`. A place sil does not carry yet is
+  flagged `available: false` with a note that it is in the pipeline, never left out.
+  `shopping_domain_get` reads that place's specs and now says, on a leaf, how its products
+  are bought (`record`: `specs` or `full`). `shopping_search` is unchanged.
+- **A place sil does not carry is refused as `not carried`** by `shopping_domain_get` and
+  `shopping_search`, before any spend. The skill tells the buyer sil cannot sell it yet and
+  stops: no search, no other place, no web.
+- The skill's place-finding section is rewritten around the three calls.
+
+### Removed
+
+- `tree` and `about` from the search answer, and `guide` from the domain read.
+
 ## [0.5.2] - 2026-10-06
 
 ### Added

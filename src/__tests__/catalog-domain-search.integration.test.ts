@@ -81,6 +81,15 @@ describe("shopping_domain_search — what the answer means", () => {
     expect(await run()).toEqual({ status: "ok", matches: [] });
   });
 
+  it("an unavailable place arrives flagged with its note, never dropped", async () => {
+    seedTokens(ACCESS, REFRESH);
+    const unminted = contractResponse(TOOL);
+    installRouter((kind) => (kind === "domainSearch" ? ok(unminted) : ok({})));
+    const matches = (await run())["matches"] as Record<string, unknown>[];
+    const flagged = matches.find((m) => m["available"] === false);
+    expect(flagged?.["note"]).toMatch(/in the pipeline/);
+  });
+
   it("a 400 surfaces the route's own message, unrewritten", async () => {
     seedTokens(ACCESS, REFRESH);
     installRouter((kind) =>

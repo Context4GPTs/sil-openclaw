@@ -33,39 +33,41 @@ export const SHOPPING_TOOLS = [
     method: "GET",
     path: "/catalog/domains",
     query: ["q"],
-    label: "Read sil's registry for a domain",
+    label: "Find the place for a thing",
     description:
-      "What sil holds, and where it shelves it: read the registry in the buyer's own"
-      + " words. `matches` are the domains that match, each with its path and a line on how"
-      + " the thing is bought — judge fit on `about`, then take the closest path verbatim:"
-      + " sil holds every node, and nothing is created. `tree` is every standing path"
-      + " grouped by family: a setup of several things is several leaves. A non-ok status"
-      + " is not an empty answer. At most two reads per domain, then shopping_domain_get"
-      + " for the document and the keys of the path you take.",
+      "The first call for any buy: send `q`, what the thing is called in the buyer's own"
+      + " words, and get the top three places in sil's graph for it. Each match has its"
+      + " `path`, `name`, `role` (leaf, kind, shelf, domain or top — prefer a leaf, the"
+      + " thing itself), `matched` (which of sil's words your ask matched), and `domain`,"
+      + " the shopping area it sits in: choose from those and from what the ask already says."
+      + " `available: false` carries a `note` — sil does not carry that place yet: tell the"
+      + " buyer so, and neither read it nor search it. Take a path verbatim to"
+      + " shopping_domain_get. No match: ask again once with what the thing is called.",
   },
   {
     name: "shopping_domain_get",
     ...DOMAIN_GET_ROUTE,
-    label: "Read a domain's document and keys",
+    label: "Read a place's specs",
     recovery: { not_found: "shopping_domain_search" },
     description:
-      "sil's own document on how this thing is bought well — read it before you ask the"
-      + " buyer anything, and again when a want fits no key. `guide` is markdown: what it is"
-      + " bought on, what goes wrong and what that costs the buyer, what to trust, and what buying it online takes. `name` is its one"
+      "A place's specs, from the path shopping_domain_search answered. `name` is its one"
       + " English name and `labels` the market's own words for it — read them, never send"
       + " them. `specs` are the keys it is bought by and `seller_specs` the seller terms it"
-      + " is bought with. Each key's `description` says how that"
-      + " key moves the fit: what it decides, what goes wrong at either end, and how a"
-      + " buyer's own fact becomes its value. Each key states its type, operators, unit,"
-      + " any closed set, the `step` a number moves by, and `forms` — printed forms mapped"
-      + " to the value. Send that key and one of those operators, never a synonym you"
-      + " coined: `specs` go on the brief and to shopping_search, `seller_specs` on the"
-      + " brief's `seller` domain, where shopping_offers reads them. variant_spec marks the"
-      + " key an option is picked on (a size, a colour), answered under each product's"
-      + " variants; product_spec tells one product from the next; `several`, a key held"
-      + " many-valued — `eq`/`in` meet any, `neq`/`nin` none. The root"
-      + " `product` always stands and carries the universals every domain inherits; a path"
-      + " that does not stand answers not_found: read the registry again in their words.",
+      + " is bought with. Each key's `description` says how that key moves the fit: what it"
+      + " decides, what goes wrong at either end, and how a buyer's own fact becomes its"
+      + " value. Each key states its type, operators, unit, any closed set, the `step` a"
+      + " number moves by, and `forms` — printed forms mapped to the value. Send that key"
+      + " and one of those operators, never a synonym you coined: `specs` go on the brief"
+      + " and to shopping_search, `seller_specs` on the brief's `seller` domain, where"
+      + " shopping_offers reads them. variant_spec marks the key an option is picked on (a"
+      + " size, a colour), answered under each product's variants; product_spec tells one"
+      + " product from the next; `several`, a key held many-valued — `eq`/`in` meet any,"
+      + " `neq`/`nin` none. `reach` says where each key comes from, `kinds` every kind it is (it takes each"
+      + " one's keys), `parts` what it has, `made_for` what a part or consumable fits."
+      + " `record` on a leaf is how its products are bought: `specs` — on measures alone;"
+      + " `full` — on measures and their record (purpose, story, pros and cons, for and not"
+      + " for). A place sil does not carry yet answers invalid_request, `not carried`: say"
+      + " so to the buyer.",
   },
   {
     name: "shopping_brief_create",
@@ -86,7 +88,7 @@ export const SHOPPING_TOOLS = [
       + " domain path carries that domain's product specs, `seller` carries the seller"
       + " specs, and each spec is a key and an operator shopping_domain_get listed whose"
       + " `reason` quotes the buyer VERBATIM — their own words, or the measurement the"
-      + " guide converted — never a paraphrase and never a want they did not state. On"
+      + " key's `description` converted — never a paraphrase and never a want they did not state. On"
       + " anything worn, the `gender` sil_whoami holds is a product spec in the registry's"
       + " own spelling — male → `gender eq mens`, female → `gender eq womens` — asked once"
       + " where the profile answers none or `other`, and never inferred. Everything after"
@@ -160,7 +162,7 @@ export const SHOPPING_TOOLS = [
       + " sil converts nothing. sil_whoami reads all of it back, so a fact written here"
       + " is one you never ask for again. What belongs to THIS job — a budget, a size for"
       + " these boots — is the brief's, through shopping_brief_edit: a measurement is the"
-      + " buyer's, and the spec the domain's guide turns it into carries that"
+      + " buyer's, and the spec the domain's key turns it into carries that"
       + " measurement as its `reason`.",
   },
   {
