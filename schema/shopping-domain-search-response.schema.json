@@ -20,88 +20,77 @@
         "required": [
           "path",
           "name",
-          "role",
           "matched",
-          "domain",
-          "available"
+          "under"
         ],
         "properties": {
           "path": {
             "type": "string",
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
-            "description": "Passes it to `shopping_domain_get` and `shopping_search` verbatim."
+            "description": "Passes the leaf to `shopping_domain_get` and `shopping_search` verbatim."
           },
           "name": {
             "type": "string",
             "maxLength": 64,
-            "description": "Calls the place this."
-          },
-          "role": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "leaf"
-              },
-              {
-                "type": "string",
-                "const": "kind"
-              },
-              {
-                "type": "string",
-                "const": "shelf"
-              },
-              {
-                "type": "string",
-                "const": "domain"
-              },
-              {
-                "type": "string",
-                "const": "top"
-              }
-            ],
-            "description": "Prefers a leaf: it is the thing itself; a kind, shelf or domain holds several."
+            "description": "Calls the leaf this."
           },
           "matched": {
             "type": "string",
             "description": "Reads which of sil's words for it the ask matched."
           },
-          "domain": {
-            "type": "object",
-            "required": [
-              "path",
-              "name"
-            ],
-            "properties": {
-              "path": {
-                "type": "string",
-                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-                "maxLength": 255,
-                "description": "Reads the shopping area the place sits in."
+          "under": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "name",
+                "role"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+                  "maxLength": 255,
+                  "description": "Names the place the leaf sits under."
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "Calls the place this."
+                },
+                "role": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "top"
+                    },
+                    {
+                      "type": "string",
+                      "const": "domain"
+                    },
+                    {
+                      "type": "string",
+                      "const": "shelf"
+                    },
+                    {
+                      "type": "string",
+                      "const": "kind"
+                    }
+                  ],
+                  "description": "Reads what the place is: a top, a domain, a shelf or a kind."
+                }
               },
-              "name": {
-                "type": "string",
-                "maxLength": 64,
-                "description": "Calls the area this."
-              }
+              "additionalProperties": false
             },
-            "additionalProperties": false,
-            "description": "The shopping area the place sits in."
-          },
-          "available": {
-            "type": "boolean",
-            "description": "Shops it when true. False: sil does not carry this area yet — tell the buyer so, and never search for it here or elsewhere."
-          },
-          "note": {
-            "type": "string",
-            "const": "We understand this is what you are looking for; it is not available at this moment — it is in the pipeline.",
-            "description": "Present exactly when `available` is false."
+            "description": "Reads every place above the leaf, outermost first and its parent last, to judge whether this is the thing the buyer means."
           }
         },
         "additionalProperties": false
       },
       "maxItems": 3,
-      "description": "Reads the most relevant places for these words, leaves and kinds first. Empty: no place matched; rephrase with what the thing is called."
+      "description": "Reads the most relevant leaves for these words and judges which, if any, is the buyer’s thing. Empty: sil holds no such leaf; say so, or rephrase with what the thing is called."
     }
   },
   "additionalProperties": false

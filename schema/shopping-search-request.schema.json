@@ -20,7 +20,7 @@
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Sends the path the domain read returned."
+      "description": "Sends a leaf the domain search answered. A kind, shelf, domain or top answers `not_a_leaf`, naming leaves to pick."
     },
     "query": {
       "type": "string",

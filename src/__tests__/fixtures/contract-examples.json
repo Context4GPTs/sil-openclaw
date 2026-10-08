@@ -4,27 +4,26 @@
       "status": "ok",
       "matches": [
         {
-          "path": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
-          "name": "Alpine ski boots",
-          "role": "leaf",
-          "matched": "alpine ski boots",
-          "domain": {
-            "path": "product.sports.skiing_snowboarding",
-            "name": "Skiing & snowboarding"
-          },
-          "available": true
-        },
-        {
-          "path": "product.sports.football",
-          "name": "Football (soccer)",
-          "role": "domain",
-          "matched": "boots",
-          "domain": {
-            "path": "product.sports.football",
-            "name": "Football (soccer)"
-          },
-          "available": false,
-          "note": "We understand this is what you are looking for; it is not available at this moment — it is in the pipeline."
+          "path": "product.vehicles.car_cargo.boot_protection.car_boot_liners",
+          "name": "Boot liners",
+          "matched": "boot liners",
+          "under": [
+            {
+              "path": "product.vehicles",
+              "name": "Vehicles",
+              "role": "top"
+            },
+            {
+              "path": "product.vehicles.car_cargo",
+              "name": "Roof racks, cargo & towing",
+              "role": "domain"
+            },
+            {
+              "path": "product.vehicles.car_cargo.boot_protection",
+              "name": "Boot liners & protection",
+              "role": "shelf"
+            }
+          ]
         }
       ]
     }

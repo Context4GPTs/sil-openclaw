@@ -46,7 +46,7 @@ An unregistered answer from any call routes to `sil_register`.
 
 1. `shopping_domain_search { q }` — `q` is what the thing is called, in the buyer's words.
    Up to three leaves (buyable kinds of thing), best first, each with `matched` and
-   `under` — the places above it, domain down to parent.
+   `under` — the places above it, outermost first down to its parent.
 2. **Choose the leaf that fits the ask.** `under` tells *"boot liners"* under Vehicles › Car
    cargo from those under Skiing › Ski boot accessories. Ask nothing the ask already
    answers — but when the three share one kind (three ski boots under "Ski boots"), ask

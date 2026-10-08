@@ -28,7 +28,7 @@ import {
 } from "./helpers/shopping-harness.js";
 import { contractRequest, contractResponse } from "./helpers/shopping-wire.js";
 
-const DOMAIN = "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots";
+const DOMAIN = "product.vehicles.car_cargo.boot_protection.car_boot_liners";
 const ACCESS = "at-live-token";
 const REFRESH = "rt-live-token";
 
@@ -65,7 +65,7 @@ describe("ask 1 — the journey terminates at one seller's terms", () => {
     const router = scriptTheJourney();
 
     // GATHER — the read, in the buyer's own words, then the closest node's document.
-    const read = await call("shopping_domain_search", { q: "ski boots" }, "j1");
+    const read = await call("shopping_domain_search", { q: "boot liner for my Volvo XC40" }, "j1");
     const [closest] = read["matches"] as Record<string, unknown>[];
     expect(closest["path"]).toBe(DOMAIN);
     const doc = await call("shopping_domain_get", { path: closest["path"] }, "j2");

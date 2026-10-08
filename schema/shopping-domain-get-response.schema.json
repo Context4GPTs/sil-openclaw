@@ -490,6 +490,31 @@
       },
       "description": "Reads what this part or consumable is made for, where it is one."
     },
+    "leaves": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "name"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Sends the leaf to `shopping_domain_get` and `shopping_search`."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Calls the leaf this."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "On a kind: every leaf under it, to pick the one the buyer means. A kind’s own specs are served too, but a search runs on a leaf."
+    },
     "record": {
       "anyOf": [
         {
