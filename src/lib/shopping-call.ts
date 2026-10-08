@@ -11,6 +11,7 @@ import { clearTokens, readTokens } from "./credentials.js";
 import {
   callShopping,
   refreshAndRetryOnce,
+  type Caller,
   type ShoppingOutcome,
   type ShoppingRoute,
 } from "./sil-client.js";
@@ -62,15 +63,16 @@ export async function callRoute(
   api: PluginAPI,
   call: ShoppingCall,
   args: Record<string, unknown>,
+  caller: Caller,
 ): Promise<CallResult> {
   const stored = readTokens();
   if (stored === null) return refused("not_registered", notRegistered(call.name));
 
-  const first = await callShopping(getApiUrl(), stored.access_token, call, args);
+  const first = await callShopping(getApiUrl(), stored.access_token, call, args, caller, 1);
   const recovered = await refreshAndRetryOnce(
     first,
     (o): boolean => o.kind === "unauthorized",
-    (accessToken) => callShopping(getApiUrl(), accessToken, call, args),
+    (accessToken) => callShopping(getApiUrl(), accessToken, call, args, caller, 2),
   );
   switch (recovered.kind) {
     case "result":

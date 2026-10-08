@@ -11,11 +11,13 @@ import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk/plugin-entry
 
 import { requestSchema } from "../lib/artifacts.js";
 import { readConfig } from "../lib/credentials.js";
-import { wiringAdvisoryBlocks } from "../lib/host-wiring.js";
+import { readHostVersion, wiringAdvisoryBlocks } from "../lib/host-wiring.js";
 import { logSearchResults } from "../lib/search-results-log.js";
 import { putSearchResult, type SearchResultPage } from "../lib/search-results-store.js";
 import { DOMAIN_GET_ROUTE, callRoute, type ShoppingCall } from "../lib/shopping-call.js";
+import type { Caller } from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
+import { readInstalledVersion } from "../lib/version-advisory.js";
 
 interface ShoppingTool extends ShoppingCall {
   readonly label: string;
@@ -275,19 +277,44 @@ export type ShoppingToolName = (typeof SHOPPING_TOOLS)[number]["name"];
  * `ensureDataDir`'s `mkdirSync` does. It is deliberately eager — an unreadable artifact
  * is a broken build, and failing loud at load beats a tool whose `parameters` the host
  * has already published by the time anyone finds out.
+ *
+ * Each tool is a factory because the host hands the conversation and the model only to a
+ * factory, once per agent run; every call that run makes says who is calling.
  */
 export function registerCatalogTools(api: PluginAPI): void {
-  for (const tool of SHOPPING_TOOLS) api.registerTool(defineTool(api, tool));
+  const pluginVersion = readInstalledVersion();
+  const openclawVersion = readHostVersion(api) ?? undefined;
+  for (const tool of SHOPPING_TOOLS) {
+    const parameters = requestSchema(tool.name);
+    api.registerTool(
+      (ctx) => {
+        const { provider, modelId } = ctx.activeModel ?? {};
+        const run = {
+          pluginVersion,
+          ...(openclawVersion !== undefined ? { openclawVersion } : {}),
+          ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
+          ...(provider && modelId ? { model: `${provider}/${modelId}` } : {}),
+        };
+        return defineTool(api, tool, parameters, run);
+      },
+      { name: tool.name },
+    );
+  }
 }
 
-function defineTool(api: PluginAPI, tool: ShoppingTool): ToolDefinition {
+function defineTool(
+  api: PluginAPI,
+  tool: ShoppingTool,
+  parameters: ToolDefinition["parameters"],
+  run: Omit<Caller, "toolCallId">,
+): ToolDefinition {
   return {
     name: tool.name,
     label: tool.label,
     description: tool.description,
-    parameters: requestSchema(tool.name),
+    parameters,
     async execute(callId, params) {
-      const called = await callRoute(api, tool, params);
+      const called = await callRoute(api, tool, params, { ...run, toolCallId: callId });
       if (called.kind === "refused") {
         if (tool.name === SEARCH_TOOL) skipped(api, callId, `refused:${called.status}`);
         return called.result;

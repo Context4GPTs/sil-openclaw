@@ -62,6 +62,7 @@ export type RouteKind =
 export interface Recorded {
   url: string;
   method: string;
+  headers: Record<string, string>;
   bearer: string | null;
   body: unknown;
   hasBody: boolean;
@@ -130,7 +131,7 @@ export function installRouter(
         body = init.body;
       }
     }
-    const req: Recorded = { url, method, bearer, body, hasBody };
+    const req: Recorded = { url, method, headers, bearer, body, hasBody };
     router.all.push(req);
 
     const path = pathnameOf(url);
