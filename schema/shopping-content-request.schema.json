@@ -72,7 +72,7 @@
     },
     "max_tokens": {
       "type": "integer",
-      "minimum": 50,
+      "minimum": 200,
       "maximum": 2400,
       "description": "Caps what the passages cost, a token being four characters of a passage as sent; the last passage is cut to fit and marked `truncated`. Default 2000."
     }

@@ -139,7 +139,7 @@
         "additionalProperties": false
       },
       "maxItems": 20,
-      "description": "Reads sil's passages for the words, best first: every word, then some, nearest node first within each. Empty: sil holds no content on this line; say so, never the open web."
+      "description": "Reads sil's passages for the words, best first: every word, then some, nearest node first within each. Empty: nothing sil has written here answers; say so, never the open web."
     }
   },
   "additionalProperties": false
