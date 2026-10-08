@@ -373,8 +373,8 @@ describe("each shopping tool carries its discipline clause", () => {
    * behavioural bug. Each entry is the one thing an agent that loses it gets wrong.
    */
   const DISCIPLINE: Record<(typeof SHOPPING_TOOLS)[number], RegExp[]> = {
-    // The top three places, a leaf preferred; an unavailable one is told, never searched.
-    shopping_domain_search: [/top three/i, /prefer a leaf/i, /available: false/, /matched/, /domain/],
+    // Up to three leaves, told apart by `under`; an empty answer is told, never searched.
+    shopping_domain_search: [/up to three/i, /leaves/i, /under/, /matched/, /empty answer/i],
     // The place's specs: what each key decides, which mark picks an option, and `record`.
     shopping_domain_get: [
       /moves the fit/i,
@@ -382,6 +382,7 @@ describe("each shopping tool carries its discipline clause", () => {
       /product_spec/,
       /operators?/i,
       /record/,
+      /not_a_leaf/,
       /not carried/i,
     ],
     // One brief for the whole session, the id the rest of it is named by, the narrative

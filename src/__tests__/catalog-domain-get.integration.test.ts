@@ -20,7 +20,7 @@ import {
   seedTokens,
   useShoppingHarness,
 } from "./helpers/shopping-harness.js";
-import { DOMAIN_GET_404, DOMAIN_GET_NOT_CARRIED, contractResponse } from "./helpers/shopping-wire.js";
+import { DOMAIN_GET_404, DOMAIN_GET_NOT_A_LEAF, DOMAIN_GET_NOT_CARRIED, contractResponse } from "./helpers/shopping-wire.js";
 
 const TOOL = "shopping_domain_get";
 const ACCESS = "at-live-token";
@@ -114,6 +114,17 @@ describe("shopping_domain_get — what the answer means", () => {
     expect(await run()).toEqual({
       status: "invalid_request",
       message: DOMAIN_GET_NOT_CARRIED.message,
+    });
+  });
+
+  it("a shelf is relayed as the refusal naming its leaves, with no recovery to a search", async () => {
+    seedTokens(ACCESS, REFRESH);
+    installRouter((kind) =>
+      kind === "domainGet" ? { status: 400, body: DOMAIN_GET_NOT_A_LEAF } : ok({}),
+    );
+    expect(await run()).toEqual({
+      status: "invalid_request",
+      message: DOMAIN_GET_NOT_A_LEAF.message,
     });
   });
 });

@@ -138,6 +138,12 @@ export const DOMAIN_GET_404 = {
   message: 'domain "product.sports.winter.ski.boots.freeride" does not stand',
 } as const;
 
+/** A shelf is no buyable thing: the refusal names leaves to pick from instead. */
+export const DOMAIN_GET_NOT_A_LEAF = {
+  error: "not_a_leaf",
+  message: "not a leaf: choose one of product.pets.dogs.harnesses, product.pets.dogs.leashes",
+} as const;
+
 /** A path in the graph whose area sil does not carry yet: refused before any spend. */
 export const DOMAIN_GET_NOT_CARRIED = {
   error: "not_carried",
