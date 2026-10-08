@@ -135,7 +135,7 @@ agent  [shopping_domain_search "backpacking tent" → shopping_domain_get]
 
 ## Tools
 
-Thirteen tools. The ten the shopping loop calls are named `shopping_*` — for what
+Fourteen tools. The eleven the shopping loop calls are named `shopping_*` — for what
 they do for you — and the three account tools keep the `sil_` name. Your agent calls them
 for you; you just say what you want.
 
@@ -161,7 +161,7 @@ for you; you just say what you want.
 | Tool | What it does |
 |---|---|
 | `shopping_domain_search` | Say what the thing is called, in your own words, and get back up to three leaves (buyable kinds of thing), best first: each with its name, which of sil's words matched, and `under` — the places above it. Empty when nothing fits, or when the best fit is an area sil does not carry yet. |
-| `shopping_content` | Grep sil's own guides, tutorials, FAQs and glossaries on the line through a node — the node, its kinds, beneath it and above it — by words, never by meaning. Answers whole passages within a token budget, every-word matches first, each with the words it matched; filled passages carry none. |
+| `shopping_content` | Grep sil's own documents on the line through a node — the node, its kinds, beneath it and above it — by words, never by meaning. Answers whole passages within a token budget, every-word matches first, each with the words it matched; filled passages carry none. |
 | `shopping_domain_get` | Read a leaf's specs: every key it is bought by with the operators, unit and allowed values each takes, plus its kinds, parts and how its products are bought (`record`). On a kind it also lists its `leaves`. A shelf or domain is refused as `not_a_leaf`; an area sil does not carry yet as `not_carried`. |
 | `shopping_search` | Search one settled category, under the brief this conversation is working from. Send the brief's id, the domain, your own shopping words, how many products you want, the brief's own values for that category as `specs`, and `ship_to` — the label of one of your saved addresses, which localizes the search (your default one when it is left off) and rules no seller out. Products come back best-first with `fit` (what sil verified), their variants, a price range, and `webpage_info` where sil has not read the page yet. |
 | `shopping_product_get` | Open the whole of what sil holds on 1–10 shortlisted variants: the description, the images, every key sil holds, and where each reading came from and when. |

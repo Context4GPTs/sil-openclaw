@@ -13,7 +13,7 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 ### Added
 
 - **`shopping_content` greps what sil has written about a thing.** Send a node and the
-  words to find; it reads every guide, tutorial, FAQ and glossary on the line through that
+  words to find; it reads every document sil holds on the line through that
   node — the node, every kind it is, what sits beneath it and every place above it — and
   answers whole passages within a token budget, every word first, each with the words it
   matched. No model in the path. The skill reads a leaf's guides before the first question

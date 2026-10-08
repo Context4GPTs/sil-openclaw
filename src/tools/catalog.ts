@@ -76,13 +76,13 @@ export const SHOPPING_TOOLS = [
     label: "Read what sil has written about it",
     recovery: { not_found: "shopping_domain_search" },
     description:
-      "sil's own guides, tutorials, FAQs and glossaries, grepped by words. Send `path` — "
+      "sil's own documents — guides, tutorials, FAQs, glossaries — grepped by words. Send `path` — "
       + "the leaf you chose, or any place above it — and `q`, the words to find: it reads "
       + "every document on the line through that node (the node, every kind it is, what sits "
       + "beneath it and every place above it) and answers whole passages, every word first, "
       + "then some, nearest node first. Matching is by words, stemmed, never by meaning: use "
       + "the buyer's own words, or shop words, and rephrase once if nothing matches. "
-      + "`kinds` narrows to guide, tutorial, faq or glossary; `min_passages`, `max_passages` "
+      + "`kinds` narrows by document kind; `min_passages`, `max_passages` "
       + "and `max_tokens` bound the answer, the last passage cut and marked `truncated`. "
       + "A passage with an empty `matched` holds none of your words — it only fills the "
       + "minimum. Call it once the leaf is chosen, before your first question to the buyer, "

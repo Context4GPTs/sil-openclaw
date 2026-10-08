@@ -72,7 +72,7 @@ naming sil's document by its `title`. A passage with an empty `matched` holds no
 words: rephrase once in shop words. Nothing matches: say sil has nothing written on it, and
 answer only what the specs say — never the open web.
 
-**No leaf fits, the answer is empty, or a call answers `not carried`:** tell the buyer in
+**No leaf fits, `shopping_domain_search` answers empty, or a call answers `not carried`:** tell the buyer in
 your own words that sil cannot sell that at the moment, it is in the pipeline. List nothing,
 search nothing, never shop around.
 
