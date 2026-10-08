@@ -28,7 +28,7 @@ import {
 } from "./helpers/shopping-harness.js";
 import { contractRequest, contractResponse } from "./helpers/shopping-wire.js";
 
-const DOMAIN = "product.sports.winter.ski.boots";
+const DOMAIN = "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots";
 const ACCESS = "at-live-token";
 const REFRESH = "rt-live-token";
 

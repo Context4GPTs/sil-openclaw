@@ -81,10 +81,12 @@
               },
               "name": {
                 "type": "string",
-                "maxLength": 64
+                "maxLength": 64,
+                "description": "Calls the area this."
               }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "The shopping area the place sits in."
           },
           "available": {
             "type": "boolean",

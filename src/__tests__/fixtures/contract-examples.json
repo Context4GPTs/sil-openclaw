@@ -4,24 +4,24 @@
       "status": "ok",
       "matches": [
         {
-          "path": "product.sports.winter.ski.boots",
-          "name": "ski boots",
+          "path": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
+          "name": "Alpine ski boots",
           "role": "leaf",
-          "matched": "ski boots",
+          "matched": "alpine ski boots",
           "domain": {
-            "path": "product.sports.winter.ski",
-            "name": "ski"
+            "path": "product.sports.skiing_snowboarding",
+            "name": "Skiing & snowboarding"
           },
           "available": true
         },
         {
-          "path": "product.pets.dogs.canicross_harnesses",
-          "name": "canicross harnesses",
-          "role": "leaf",
-          "matched": "canicross harness",
+          "path": "product.sports.football",
+          "name": "Football (soccer)",
+          "role": "domain",
+          "matched": "boots",
           "domain": {
-            "path": "product.pets.dogs",
-            "name": "dogs"
+            "path": "product.sports.football",
+            "name": "Football (soccer)"
           },
           "available": false,
           "note": "We understand this is what you are looking for; it is not available at this moment — it is in the pipeline."
@@ -32,11 +32,11 @@
   "shopping_domain_get": {
     "response": {
       "status": "ok",
-      "path": "product.sports.winter.ski.boots",
-      "name": "ski boots",
+      "path": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
+      "name": "Alpine ski boots",
       "labels": [
-        "μπότες_σκι",
-        "μπότες_ski"
+        "μπότες_αλπικού_σκι",
+        "alpine_ski_boots"
       ],
       "specs": [
         {
@@ -300,7 +300,7 @@
       ],
       "reach": [
         {
-          "from": "product.sports.winter.ski.boots",
+          "from": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
           "via": "own",
           "keys": [
             "mondo_size",
@@ -352,7 +352,7 @@
         }
       ],
       "made_for": [],
-      "record": "specs"
+      "record": "full"
     }
   },
   "shopping_search": {
