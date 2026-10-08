@@ -305,7 +305,7 @@ describe("the retired tool NAMES cannot come back", () => {
       "sil_register",
       "sil_whoami",
     ]);
-    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(10);
+    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(11);
   });
 });
 
@@ -376,6 +376,14 @@ describe("each shopping tool carries its discipline clause", () => {
     // Up to three leaves, told apart by `under`; an empty answer is told, never searched.
     shopping_domain_search: [/up to three/i, /leaves/i, /under/, /matched/, /empty answer/i],
     // The place's specs: what each key decides, which mark picks an option, and `record`.
+    // Words, never meaning; whole passages, filled ones unmatched; said plainly when empty.
+    shopping_content: [
+      /line through/i,
+      /never by meaning/i,
+      /`matched`/,
+      /before your first question/i,
+      /never .*open web/i,
+    ],
     shopping_domain_get: [
       /moves the fit/i,
       /variant_spec/,

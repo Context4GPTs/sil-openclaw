@@ -140,6 +140,7 @@ describe("plugin entry — registration contract", () => {
       "shopping_brief_create",
       "shopping_brief_edit",
       "shopping_brief_read",
+      "shopping_content",
       "shopping_domain_get",
       "shopping_domain_search",
       "shopping_offers",

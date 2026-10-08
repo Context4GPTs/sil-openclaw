@@ -57,6 +57,11 @@ const BEARER_TOOLS = [
     success: (): unknown => contractResponse("shopping_domain_get"),
   },
   {
+    tool: "shopping_content",
+    params: { path: "product.sports.winter.ski.boots", q: "measure foot" },
+    success: (): unknown => contractResponse("shopping_content"),
+  },
+  {
     tool: "shopping_brief_create",
     params: { title: "Ski boots", narrative: "Advanced skier, short wide foot." },
     success: (): unknown => contractResponse("shopping_brief_create"),

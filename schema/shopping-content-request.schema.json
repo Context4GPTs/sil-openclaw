@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-content-request.schema.json",
+  "title": "sil shopping_content — request",
+  "type": "object",
+  "required": [
+    "path",
+    "q"
+  ],
+  "properties": {
+    "path": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+      "maxLength": 255,
+      "description": "Sends the node whose line is read: the leaf chosen, or any place above it. The line is the node, every kind it is, what sits beneath it and every place above it."
+    },
+    "q": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Sends the words to find, as the buyer or a shop says them: a passage holding every word comes first, then one holding some."
+    },
+    "kinds": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "guide"
+          },
+          {
+            "type": "string",
+            "const": "tutorial"
+          },
+          {
+            "type": "string",
+            "const": "faq"
+          },
+          {
+            "type": "string",
+            "const": "glossary"
+          },
+          {
+            "type": "string",
+            "const": "review"
+          },
+          {
+            "type": "string",
+            "const": "comparison"
+          },
+          {
+            "type": "string",
+            "const": "news"
+          }
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Narrows the read to these kinds of document; absent reads every kind."
+    },
+    "min_passages": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20,
+      "description": "Fills up to this many from the nearest documents when too few match, marked by an empty `matched`. Default 1."
+    },
+    "max_passages": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "Caps the passages answered. Default 8."
+    },
+    "max_tokens": {
+      "type": "integer",
+      "minimum": 50,
+      "maximum": 2400,
+      "description": "Caps what the passages cost, a token being four characters of a passage as sent; the last passage is cut to fit and marked `truncated`. Default 2000."
+    }
+  },
+  "additionalProperties": false
+}

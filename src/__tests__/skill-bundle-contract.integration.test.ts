@@ -64,6 +64,7 @@ const CORE_TOOLS = [
   "sil_whoami",
   "shopping_domain_search",
   "shopping_domain_get",
+  "shopping_content",
   "shopping_brief_create",
   "shopping_brief_edit",
   "shopping_brief_read",

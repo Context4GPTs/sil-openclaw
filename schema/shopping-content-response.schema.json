@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-content-response.schema.json",
+  "title": "sil shopping_content — response",
+  "type": "object",
+  "required": [
+    "status",
+    "tokens",
+    "passages"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Reads what the passages cost, in tokens."
+    },
+    "passages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "from",
+          "role",
+          "written",
+          "matched",
+          "text"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Names the document, to cite it as sil's."
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "guide"
+              },
+              {
+                "type": "string",
+                "const": "tutorial"
+              },
+              {
+                "type": "string",
+                "const": "faq"
+              },
+              {
+                "type": "string",
+                "const": "glossary"
+              },
+              {
+                "type": "string",
+                "const": "review"
+              },
+              {
+                "type": "string",
+                "const": "comparison"
+              },
+              {
+                "type": "string",
+                "const": "news"
+              }
+            ],
+            "description": "Reads what the document is: a guide, a tutorial, an FAQ, a glossary …"
+          },
+          "title": {
+            "type": "string",
+            "description": "Calls the document this when citing it as sil's."
+          },
+          "from": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Reads the node the document is written for."
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "root"
+              },
+              {
+                "type": "string",
+                "const": "top"
+              },
+              {
+                "type": "string",
+                "const": "domain"
+              },
+              {
+                "type": "string",
+                "const": "shelf"
+              },
+              {
+                "type": "string",
+                "const": "kind"
+              },
+              {
+                "type": "string",
+                "const": "leaf"
+              }
+            ],
+            "description": "Reads what that node is: the root, a top, a domain, a shelf, a kind or a leaf."
+          },
+          "written": {
+            "type": "string",
+            "format": "date",
+            "description": "Dates the document."
+          },
+          "heading": {
+            "type": "string",
+            "description": "Reads the heading the passage sits under; absent, it has none."
+          },
+          "matched": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Reads which of the asked words the passage holds. Empty: none — it fills the minimum from the nearest documents and answers no word of the ask."
+          },
+          "text": {
+            "type": "string",
+            "description": "Reads the passage whole, or cut where `truncated`."
+          },
+          "truncated": {
+            "type": "boolean",
+            "const": true,
+            "description": "Reads that the budget cut the passage short here."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 20,
+      "description": "Reads sil's passages for the words, best first: every word, then some, nearest node first within each. Empty: sil holds no content on this line; say so, never the open web."
+    }
+  },
+  "additionalProperties": false
+}

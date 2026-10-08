@@ -1,10 +1,10 @@
 /**
- * The ten `shopping_*` tools, 1:1 with the sil-api catalog, brief and profile routes.
+ * The eleven `shopping_*` tools, 1:1 with the sil-api catalog, brief and profile routes.
  *
  * A projection on the way back would drop exactly the fields the agent's honesty reading
  * is computed from (`fit`, `unknown`, `variants`, `printed`) while looking healthy, so the
  * body crosses verbatim. A new `registerXTools` group has to be hand-wired into three guards
- * or it silently NARROWS them (CLAUDE.md), which is why all ten live in one group.
+ * or it silently NARROWS them (CLAUDE.md), which is why all eleven live in one group.
  */
 
 import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk/plugin-entry";
@@ -68,6 +68,27 @@ export const SHOPPING_TOOLS = [
       + " alone; `full` — on measures and their record (purpose, story, pros and cons, for "
       + "and not for). On a kind, `leaves` lists what to choose from. A shelf or domain is "
       + "refused `not_a_leaf`, naming leaves; one sil does not carry yet, `not carried`.",
+  },
+  {
+    name: "shopping_content",
+    method: "POST",
+    path: "/catalog/content",
+    label: "Read what sil has written about it",
+    recovery: { not_found: "shopping_domain_search" },
+    description:
+      "sil's own guides, tutorials, FAQs and glossaries, grepped by words. Send `path` — "
+      + "the leaf you chose, or any place above it — and `q`, the words to find: it reads "
+      + "every document on the line through that node (the node, every kind it is, what sits "
+      + "beneath it and every place above it) and answers whole passages, every word first, "
+      + "then some, nearest node first. Matching is by words, stemmed, never by meaning: use "
+      + "the buyer's own words, or shop words, and rephrase once if nothing matches. "
+      + "`kinds` narrows to guide, tutorial, faq or glossary; `min_passages`, `max_passages` "
+      + "and `max_tokens` bound the answer, the last passage cut and marked `truncated`. "
+      + "A passage with an empty `matched` holds none of your words — it only fills the "
+      + "minimum. Call it once the leaf is chosen, before your first question to the buyer, "
+      + "and again whenever they ask how or why. Cite a passage as sil's, by its `title`. "
+      + "An empty `passages` means sil has written nothing on it: say so plainly, and never "
+      + "fill the gap from the open web.",
   },
   {
     name: "shopping_brief_create",
@@ -267,14 +288,14 @@ export const SHOPPING_TOOLS = [
   },
 ] as const satisfies readonly ShoppingTool[];
 
-/** The ten names, as a literal union — so a table of one-per-tool anything is forced
- * to cover them all rather than quietly covering nine. */
+/** The eleven names, as a literal union — so a table of one-per-tool anything is forced
+ * to cover them all rather than quietly covering ten. */
 export type ShoppingToolName = (typeof SHOPPING_TOOLS)[number]["name"];
 
 /**
- * Registers the ten, reading each one's request artifact off disk as it goes.
+ * Registers the eleven, reading each one's request artifact off disk as it goes.
  *
- * That read is the ONE exception to "register() opens nothing": ten synchronous
+ * That read is the ONE exception to "register() opens nothing": eleven synchronous
  * `readFileSync`s that return immediately and hold no resource open, exactly as
  * `ensureDataDir`'s `mkdirSync` does. It is deliberately eager — an unreadable artifact
  * is a broken build, and failing loud at load beats a tool whose `parameters` the host

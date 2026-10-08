@@ -28,6 +28,7 @@ const OUT = join(
 const SECTIONS = [
   ["3.1", ["shopping_domain_search"]],
   ["3.2", ["shopping_domain_get"]],
+  ["3.3", ["shopping_content"]],
   ["3.4", ["shopping_search"]],
   ["3.5", ["shopping_product_get"]],
   ["3.6", ["shopping_offers"]],
