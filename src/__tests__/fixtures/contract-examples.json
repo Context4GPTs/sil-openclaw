@@ -357,20 +357,20 @@
   "shopping_content": {
     "response": {
       "status": "ok",
-      "tokens": 371,
+      "tokens": 242,
       "passages": [
         {
-          "id": "measure-feet-for-ski-boots",
+          "id": "measure-your-feet-for-ski-boots",
           "kind": "tutorial",
           "title": "Measure your feet for ski boots",
-          "from": "product.sports.skiing_snowboarding",
-          "role": "domain",
+          "from": "product.sports.skiing_snowboarding.ski_boots",
+          "role": "kind",
           "written": "2026-10-09",
           "matched": [
             "measure",
             "foot"
           ],
-          "text": "Stand on a sheet of paper, heel against a wall, and mark the tip of the longest toe; measure both feet and work from the longer one, in centimetres."
+          "text": "Measure both feet standing, in the thin socks you ski in. Stand on a sheet of paper with the heel against a wall and mark the tip of the longest toe; the distance from the wall is the foot length. Work from the longer foot, in centimetres. Then measure the width across the widest part of the forefoot, in millimetres. A ski boot's size, Mondopoint, is the foot length in centimetres: read it against the maker's own chart, which also gives the shell's sole length and its last width, the inside width at the forefoot for a reference size. Charts differ by maker, so read each one. A shell can be heated and widened by a boot fitter; it can never be made shorter or narrower, so too long is the mistake that cannot be fixed afterwards."
         }
       ]
     },
@@ -378,8 +378,7 @@
       "path": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
       "q": "measure foot",
       "kinds": [
-        "tutorial",
-        "guide"
+        "tutorial"
       ]
     }
   },
