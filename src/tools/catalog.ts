@@ -35,14 +35,15 @@ export const SHOPPING_TOOLS = [
     query: ["q"],
     label: "Find the place for a thing",
     description:
-      "The first call for any buy: send `q`, what the thing is called in the buyer's own"
-      + " words, and get up to three LEAVES — buyable kinds of thing — best first. Each has"
-      + " its `path`, `name`, `matched` (which of sil's words your ask matched) and `under`,"
-      + " the places above it, outermost first down to its parent, each with a `role`: `under`"
-      + " tells same-named leaves apart. Choose from what the ask already says; when the three"
-      + " share one kind, ask the buyer which. Take the path verbatim to shopping_domain_get."
-      + " An empty answer, or no leaf that fits, means sil does not carry it yet: tell the"
-      + " buyer so, and do not search.",
+      "The first call for any buy: send `q`, what the thing is called in the buyer's own "
+      + "words, and get up to three LEAVES — buyable kinds of thing — best first. Each has "
+      + "its `path`, `name`, `matched` (which of sil's words your ask matched) and `under`, "
+      + "the places above it, outermost first down to its parent, each with a `role`: `under`"
+      + " tells same-named leaves apart. Choose from what the ask already says; when the "
+      + "three share one kind, ask the buyer which. Take the path verbatim to "
+      + "shopping_domain_get. An empty answer, or no leaf that fits, means sil does not carry"
+      + " it yet: tell the buyer so — it is in the pipeline — and do not search; never shop "
+      + "around.",
   },
   {
     name: "shopping_domain_get",
@@ -50,22 +51,23 @@ export const SHOPPING_TOOLS = [
     label: "Read a place's specs",
     recovery: { not_found: "shopping_domain_search" },
     description:
-      "A leaf's specs, from a path shopping_domain_search answered. `name` is its one"
-      + " English name and `labels` the market's own words for it — never send them. `specs` are the keys it is bought by and `seller_specs` the seller terms it"
-      + " is bought with. Each key's `description` says how it moves the fit: what it decides,"
-      + " what goes wrong at either end, and how a buyer's fact becomes its value. Each key states its type, operators, unit, any closed set, the `step` a"
-      + " number moves by, and `forms` — printed forms mapped to the value. Send that key"
-      + " and one of those operators, never a synonym you coined: `specs` go on the brief"
-      + " and to shopping_search, `seller_specs` on the brief's `seller` domain, where"
-      + " shopping_offers reads them. variant_spec marks the key an option is picked on (a"
-      + " size, a colour), answered under each product's variants; product_spec tells one"
-      + " product from the next; `several`, a key held many-valued — `eq`/`in` meet any,"
-      + " `neq`/`nin` none. `reach` says where each key comes from, `kinds` every kind it is, `parts` what it"
-      + " has, `made_for` what a part or consumable fits."
-      + " `record` is how a leaf's products are bought: `specs` — on measures alone; `full`"
-      + " — on measures and their record (purpose, story, pros and cons, for and not for)."
-      + " On a kind, `leaves` lists what to choose from. A shelf or domain is refused"
-      + " `not_a_leaf`, naming leaves; one sil does not carry yet, `not carried`.",
+      "A leaf's specs, from a path shopping_domain_search answered. `name` is its one "
+      + "English name and `labels` the market's own words for it — never send them. `specs` "
+      + "are the keys it is bought by and `seller_specs` the seller terms it is bought with. "
+      + "Each key's `description` says how it moves the fit: what it decides, what goes wrong"
+      + " at either end, and how a buyer's fact becomes its value. Each key states its type, "
+      + "operators, unit, any closed set, the `step` a number moves by, and `forms` — printed"
+      + " forms mapped to the value. Send that key and one of those operators, never a "
+      + "synonym you coined: `specs` go on the brief and to shopping_search, `seller_specs` "
+      + "on the brief's `seller` domain, where shopping_offers reads them. variant_spec marks"
+      + " the key an option is picked on (a size, a colour), answered under each product's "
+      + "variants; product_spec tells one product from the next; `several`, a key held many-"
+      + "valued — `eq`/`in` meet any, `neq`/`nin` none. `reach` says where each key comes "
+      + "from, `kinds` every kind it is, `parts` what it has, `made_for` what a part or "
+      + "consumable fits. `record` is how a leaf's products are bought: `specs` — on measures"
+      + " alone; `full` — on measures and their record (purpose, story, pros and cons, for "
+      + "and not for). On a kind, `leaves` lists what to choose from. A shelf or domain is "
+      + "refused `not_a_leaf`, naming leaves; one sil does not carry yet, `not carried`.",
   },
   {
     name: "shopping_brief_create",
