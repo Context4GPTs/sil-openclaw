@@ -11,6 +11,10 @@ metadata:
 sil is a catalog you shop on the buyer's behalf. You drive its tools in whatever order the
 conversation needs; only finding the place has a fixed order.
 
+**Speak English to sil, and the buyer's language to the buyer.** Everything you send sil — a
+`q`, a value, a narrative, a quoted reason — is English, translated from what they said; what sil
+answers you put back into their language.
+
 Three things carry the job, none on this agent's disk:
 
 - **The place** — where sil shelves the thing, and sil's own knowledge of how it is bought
@@ -44,7 +48,7 @@ An unregistered answer from any call routes to `sil_register`.
 
 ## Find the place
 
-1. `shopping_domain_search { q }` — `q` is what the thing is called, in the buyer's words.
+1. `shopping_domain_search { q }` — `q` is what the thing is called, in English.
    Up to three leaves (buyable kinds of thing), best first, each with `matched` and
    `under` — the places above it, outermost first down to its parent.
 2. **Choose the leaf that fits the ask.** `under` tells *"boot liners"* under Vehicles › Car
@@ -67,7 +71,7 @@ An unregistered answer from any call routes to `sil_register`.
    refused `not_a_leaf`, naming leaves.
 
 **When the buyer asks how or why** — how to measure a foot, what a grand cru is — grep the
-leaf with their own words, then work it like grep: narrow with a `"quoted phrase"` (*"premier
+leaf with their question in English, then work it like grep: narrow with a `"quoted phrase"` (*"premier
 cru"*), read a promising document on with `document` and `from`, grep again in other words
 when `total` says there is more. "what sil holds" answers a domain's whole library with each
 document's `id`. Answer from the passages: a passage with `author` is quoted and named with its

@@ -4,7 +4,13 @@ All notable changes to the `sil-openclaw` plugin (npm `sil-openclaw`, ClawHub `@
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Keep `## [Unreleased]
+Keep `## [Unreleased]` current as you work. `pnpm version <bump>` promotes it to a
+dated release section, and `pnpm release` attaches that section to the ClawHub
+release (`clawhub package publish --changelog`). See [README](./README.md#releasing).
+
+## [Unreleased]
+
+## [0.6.0] - 2026-10-08
 
 ### Added
 
@@ -14,22 +20,22 @@ Keep `## [Unreleased]
   every place above it) and answers whole passages within a token budget, every term first. A
   quoted phrase is one term, `total` says how many passages hold a term, and `document` with
   `from` reads any document on by part. No model in the path. The skill greps a leaf's library
-  before the first question to the buyer, and again in the buyer's own words when they ask how or
-  why; it says so plainly when sil holds nothing.
-
-## [0.6.0] - 2026-10-08
+  before the first question to the buyer, and again when the buyer asks how or why; it says so
+  plainly when sil holds nothing.
 
 ### Changed
 
 - **Finding the place is three calls.** `shopping_domain_search` takes what the thing is
-  called and answers the top three places: `path`, `name`, `role`, which of sil's words
-  `matched`, the `domain` it sits in, and `available`. A place sil does not carry yet is
-  flagged `available: false` with a note that it is in the pipeline, never left out.
-  `shopping_domain_get` reads that place's specs and now says, on a leaf, how its products
-  are bought (`record`: `specs` or `full`). `shopping_search` is unchanged.
-- **A place sil does not carry is refused as `not carried`** by `shopping_domain_get` and
-  `shopping_search`, before any spend. The skill tells the buyer sil cannot sell it yet and
-  stops: no search, no other place, no web.
+  called and answers up to three leaves, best first: `path`, `name`, which of sil's words
+  `matched`, and `under`, every place above the leaf. `shopping_domain_get` reads that leaf's
+  specs and says how its products are bought (`record`: `specs` or `full`).
+  `shopping_search` is unchanged.
+- **A place sil does not carry yet answers nothing.** The domain search returns no leaf for it,
+  and `shopping_domain_get` and `shopping_search` refuse it as `not carried`, before any spend.
+  The skill tells the buyer sil cannot sell it yet, it is in the pipeline, and stops: no
+  search, no other place, no web.
+- **English to sil.** Every `q`, value, narrative and quoted reason the agent sends is English;
+  the skill translates the buyer's words on the way in and answers in their language.
 - The skill's place-finding section is rewritten around the three calls.
 
 ### Removed

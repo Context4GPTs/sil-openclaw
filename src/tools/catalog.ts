@@ -35,8 +35,8 @@ export const SHOPPING_TOOLS = [
     query: ["q"],
     label: "Find the place for a thing",
     description:
-      "The first call for any buy: send `q`, what the thing is called in the buyer's own "
-      + "words, and get up to three LEAVES — buyable kinds of thing — best first. Each has "
+      "The first call for any buy: send `q`, what the thing is called, in English — "
+      + "translate the buyer first — and get up to three LEAVES — buyable kinds of thing — best first. Each has "
       + "its `path`, `name`, `matched` (which of sil's words your ask matched) and `under`, "
       + "the places above it, outermost first down to its parent, each with a `role`: `under`"
       + " tells same-named leaves apart. Choose from what the ask already says; when the "
@@ -110,7 +110,7 @@ export const SHOPPING_TOOLS = [
       + " optional first `domain` with `specs` writes what they have already said: a"
       + " domain path carries that domain's product specs, `seller` carries the seller"
       + " specs, and each spec is a key and an operator shopping_domain_get listed whose"
-      + " `reason` quotes the buyer VERBATIM — their own words, or the measurement the"
+      + " `reason` quotes the buyer VERBATIM, in English — their own words, or the measurement the"
       + " key's `description` converted — never a paraphrase and never a want they did not state. On"
       + " anything worn, the `gender` sil_whoami holds is a product spec in the registry's"
       + " own spelling — male → `gender eq mens`, female → `gender eq womens` — asked once"
