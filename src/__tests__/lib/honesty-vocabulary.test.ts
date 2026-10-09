@@ -166,7 +166,7 @@ describe("overTriggerOffenders — a tool states when IT applies (R6.2.5)", () =
     expect(overTriggerOffenders(prose)).not.toEqual([]);
   });
 
-  it("spares the mint's research path — 'reading up on the web' is not 'search the web'", () => {
+  it("spares the research path — 'reading up on the web' is not 'search the web'", () => {
     expect(
       overTriggerOffenders("read up on the web on how the category is bought (never on products)"),
     ).toEqual([]);
@@ -218,8 +218,7 @@ describe("retiredV0Offenders — the retired request surface's dead strings", ()
   it("spares the innocent English words the pre-v0 PARAMETERS were named after", () => {
     // `category` / `cursor` are guarded STRUCTURALLY: each tool's parameters ARE its
     // committed artifact, so a resurrected one cannot register at all. A bare-word
-    // forbid would fail the mint description, which must say "research how the category
-    // is bought".
+    // forbid would fail an innocent "research how the category is bought".
     expect(retiredV0Offenders("research how the category is bought")).toEqual([]);
   });
 

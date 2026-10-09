@@ -5,8 +5,7 @@
   "type": "object",
   "required": [
     "status",
-    "matches",
-    "tree"
+    "matches"
   ],
   "properties": {
     "status": {
@@ -20,72 +19,78 @@
         "type": "object",
         "required": [
           "path",
-          "about"
+          "name",
+          "matched",
+          "under"
         ],
         "properties": {
           "path": {
             "type": "string",
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
-            "description": "Passes it to `shopping_domain_get` and `shopping_search` verbatim."
+            "description": "Passes the leaf to `shopping_domain_get` and `shopping_search` verbatim."
           },
-          "about": {
+          "name": {
             "type": "string",
-            "description": "Judges fit before reading the whole guide: adopts it, or descends under a broader one."
-          }
-        },
-        "additionalProperties": false
-      },
-      "maxItems": 20,
-      "description": "Reads what already stands for this domain; an empty list is the one thing that licenses a mint."
-    },
-    "tree": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "family",
-          "domains",
-          "paths"
-        ],
-        "properties": {
-          "family": {
+            "maxLength": 64,
+            "description": "Calls the leaf this."
+          },
+          "matched": {
             "type": "string",
-            "description": "Reads the family this thing would be shelved in, as a specialist shop would."
+            "description": "Reads which of sil's words for it the ask matched."
           },
-          "domains": {
-            "type": "integer",
-            "description": "Sees how much of the tree already sits under it."
-          },
-          "paths": {
+          "under": {
             "type": "array",
             "items": {
               "type": "object",
               "required": [
                 "path",
-                "name"
+                "name",
+                "role"
               ],
               "properties": {
                 "path": {
                   "type": "string",
                   "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
                   "maxLength": 255,
-                  "description": "Reads it with `shopping_domain_get`, or descends from it."
+                  "description": "Names the place the leaf sits under."
                 },
                 "name": {
                   "type": "string",
                   "maxLength": 64,
-                  "description": "Sees what this leaf already stands for before coining a second one."
+                  "description": "Calls the place this."
+                },
+                "role": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "top"
+                    },
+                    {
+                      "type": "string",
+                      "const": "domain"
+                    },
+                    {
+                      "type": "string",
+                      "const": "shelf"
+                    },
+                    {
+                      "type": "string",
+                      "const": "kind"
+                    }
+                  ],
+                  "description": "Reads what the place is: a top, a domain, a shelf or a kind."
                 }
               },
               "additionalProperties": false
             },
-            "description": "Adopts one of these, or coins a sibling leaf beside them."
+            "description": "Reads every place above the leaf, outermost first and its parent last, to judge whether this is the thing the buyer means."
           }
         },
         "additionalProperties": false
       },
-      "description": "Places a new leaf where a specialist shop would shelve it, and sees that a setup of several things is several leaves: every standing path below the root, by family."
+      "maxItems": 3,
+      "description": "Reads the most relevant leaves for these words and judges which, if any, is the buyer’s thing. Empty: sil holds no such leaf; say so, or rephrase with what the thing is called."
     }
   },
   "additionalProperties": false

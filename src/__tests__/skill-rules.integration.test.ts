@@ -20,11 +20,9 @@
  * than return an empty scope — an empty scope would make every `unsatisfied()` bar pass
  * vacuously, which is worse than a red.
  *
- * The registry half (read before mint, inheritance, the naming discipline) is held by
- * `skill-bundle-contract.integration.test.ts` against `references/mint.md`; a second copy
- * would be duplicate coverage, not safety. So is anything a TOOL DESCRIPTION is the one
- * carrier of — the `DISCIPLINE` table in `tools/tool-schema-contract.unit.test.ts` — and
- * each bar below names where its other half lives rather than repeating it.
+ * Anything a TOOL DESCRIPTION is the one carrier of is held by the `DISCIPLINE` table in
+ * `tools/tool-schema-contract.unit.test.ts`; a second copy would be duplicate coverage,
+ * not safety, so each bar below names where its other half lives rather than repeating it.
  *
  * THESE ASSERTIONS ARE THE SPEC. Do NOT weaken one to match the prose.
  */
@@ -32,10 +30,7 @@
 import { describe, it, expect } from "vitest";
 
 import {
-  MINT,
-  mintStatements,
   preambleStatements,
-  section,
   skillSection,
   skillSectionStatements,
   skillSrc,
@@ -43,20 +38,15 @@ import {
   unsatisfied,
 } from "./helpers/skill-bundle.js";
 
-/**
- * What sil SHIPS. The ruling's first consequence: the domain document is sil's, handed
- * over by `shopping_domain_get`, and minting is the fallback for a domain it does not
- * hold. An agent that reads the mint as the normal path writes a permanent global row
- * for a domain that already stands.
- */
-describe("sil ships the domain document, and the mint is the fallback", () => {
-  it("1 — SKILL.md's opening names the document as SIL's knowledge, read before the buyer is asked anything", () => {
+/** What sil SHIPS: the place's specs are sil's, handed over by `shopping_domain_get`. */
+describe("sil ships the place's specs", () => {
+  it("1 — SKILL.md's opening names the place as SIL's knowledge, read before the buyer is asked anything", () => {
     // Scoped to the preamble, above the first `##`: this is the frame the agent reads
     // the rest of the file under. Slid down into a tip, it is a claim the agent meets
     // after it has already decided how to work.
     const units = preambleStatements();
 
-    const doc = units.filter((s) => /domain document/i.test(s));
+    const doc = units.filter((s) => /\bthe place\b/i.test(s));
     expect(doc.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
       unsatisfied(doc, (s) => /sil'?s own/i.test(s) && /bought well|how this thing is bought/i.test(s)),
@@ -67,7 +57,7 @@ describe("sil ships the domain document, and the mint is the fallback", () => {
     const handed = units.filter((s) => /shopping_domain_get/.test(s));
     expect(handed.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(handed, (s) => /markdown/i.test(s) && /guide/i.test(s) && /\bkeys\b/i.test(s)),
+      unsatisfied(handed, (s) => /\bkeys\b/i.test(s)),
     ).toEqual([]);
     expect(
       unsatisfied(handed, (s) => /`description`/.test(s) && /moves the fit/i.test(s)),
@@ -76,59 +66,6 @@ describe("sil ships the domain document, and the mint is the fallback", () => {
     const before = units.filter((s) => /before you ask/i.test(s));
     expect(before.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(unsatisfied(before, (s) => /decides the buy/i.test(s))).toEqual([]);
-  });
-
-  it("2 — `references/mint.md` opens by saying a curated domain already carries the document, so the mint reads as the FALLBACK it is", () => {
-    // The file an agent opens only when a domain is missing has to disown itself in its
-    // first paragraph, or an agent that opened it for one cold domain carries the mint
-    // into the next warm one — and the registry write is the one thing nothing undoes.
-    const units = mintStatements();
-
-    // NOT /sil ships/: nothing in this repo ships a document any more — a domain's content
-    // lives only in the registry, authored by a mint (founder ruling 2026-09-21). What the
-    // file must still disown itself against is a domain that ALREADY carries one.
-    const carries = units.filter((s) => /curated/i.test(s));
-    expect(carries.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(
-      unsatisfied(carries, (s) => /document/i.test(s) && /markdown/i.test(s) && /guide/i.test(s)),
-    ).toEqual([]);
-
-    const normal = units.filter((s) => /normal path/i.test(s));
-    expect(normal.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(normal, (s) => /shopping_domain_get/.test(s))).toEqual([]);
-
-    expect(units.filter((s) => /fallback/i.test(s)).length).toBeGreaterThan(0);
-    // …and the always-loaded router says it too, for the agent that never opens the file.
-    expect(skillSection("tools")).toMatch(/fallback/i);
-  });
-
-  it("3 — the guide a mint writes is markdown that says what goes wrong, what to trust, and what buying it online takes", () => {
-    // The shape of the document sil itself ships, stated where an agent has to reproduce
-    // it. "What goes wrong" is the load-bearing one: it is what lets a later agent say
-    // why a question is worth answering, and the first thing a rushed mint drops.
-    const doc = section(MINT, "What the document has to say");
-    const units = splitStatements(doc);
-
-    expect(doc).toMatch(/markdown/i);
-    const missing = (
-      [
-        ["what it is bought on", /bought on/i],
-        ["what goes wrong", /goes wrong/i],
-        ["what to trust", /to trust/i],
-        ["what buying it online takes", /buying it online/i],
-      ] as const
-    ).filter(([, re]) => !re.test(doc));
-    expect(missing.map(([name]) => name)).toEqual([]);
-
-    // Not a label — what the mistake COSTS, in the buyer's own terms.
-    const wrong = units.filter((s) => /goes wrong/i.test(s));
-    expect(wrong.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(wrong, (s) => /costs the buyer/i.test(s))).toEqual([]);
-
-    // The one answer the document may never give, said in the document's own section.
-    const shop = units.filter((s) => /go to a shop/i.test(s));
-    expect(shop.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(unsatisfied(shop, (s) => /\bnever\b/i.test(s) && /came here/i.test(s))).toEqual([]);
   });
 
   it("4 — the brief is the scratchpad AND the spec of the buy: the narrative says what a good buy looks like for THIS buyer", () => {
@@ -238,10 +175,9 @@ describe("what a chat opens with", () => {
  * agent stops reading it as a rule.
  */
 describe("how a spec is made", () => {
-  it("8 — the domain document is read BEFORE the first search, and sil never says what it left out", () => {
-    // Measured 2026-09-18: the guide says a ski boot is bought on stiffness, forefoot
-    // width and binding compatibility, and the agent searched four times and recommended
-    // a boot on two specs. A TIP, not a gate — the ruling retired the precondition — so
+  it("8 — the place's specs are read BEFORE the first search, and sil never says what it left out", () => {
+    // Measured 2026-09-18: the agent searched four times and recommended a boot on two of
+    // the specs the place says it is bought on. A TIP, not a gate — the ruling retired the precondition — so
     // what is pinned is the reason it matters: the answer carries what fits and nothing
     // about what it left out, so no later turn can discover the miss.
     const units = skillSectionStatements("using");
@@ -249,7 +185,7 @@ describe("how a spec is made", () => {
     const first = units.filter((s) => /first search/i.test(s));
     expect(first.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(first, (s) => /domain document|guide/i.test(s) && /\bread\b/i.test(s)),
+      unsatisfied(first, (s) => /\bspecs\b/i.test(s) && /\bread\b/i.test(s)),
     ).toEqual([]);
 
     const leftOut = units.filter((s) => /left out/i.test(s));
@@ -289,9 +225,9 @@ describe("how a spec is made", () => {
     ).toEqual([]);
   });
 
-  it("9b — what the document says buying it online takes becomes a SELLER spec, not narrative", () => {
-    // Measured, the founder's live-web session 2026-09-21: the guide's "buy where the boot
-    // can go back" reached the brief's narrative ("returnable if the fit is wrong") and
+  it("9b — what buying it online takes becomes a SELLER spec, not narrative", () => {
+    // Measured, the founder's live-web session 2026-09-21: "buy where the boot can go
+    // back" reached the brief's narrative ("returnable if the fit is wrong") and
     // stopped there. Both `shopping_offers` calls went out with `seller_specs: []`, so
     // nothing filtered on returns and every seller came back equally good — the one thing
     // that makes a fit you cannot try on survivable, carried as a sentence that does no work.
@@ -339,7 +275,7 @@ describe("how a spec is made", () => {
     const converting = units.filter((s) => /`description`/.test(s) && /turn|becomes|convert/i.test(s));
     expect(converting.length).toBeGreaterThan(0); // guard-of-the-guard
     expect(
-      unsatisfied(converting, (s) => /\bdomain\b/i.test(s) && /differ|every domain|per domain/i.test(s)),
+      unsatisfied(converting, (s) => /\b(domain|place)\b/i.test(s) && /differ|every (domain|place)|per (domain|place)/i.test(s)),
     ).toEqual([]);
 
     const typed = units.filter((s) => /as typed/i.test(s));
@@ -408,8 +344,7 @@ describe("how a spec is made", () => {
 
     // Both literals, so the rule is copyable rather than a category of words to infer.
     const body = skillSection("using");
-    expect(body).toContain("ski boots 27.5 flex 110");
-    expect(body).toMatch(/motorcycle/i);
+    expect(body).toContain("hand coffee grinder 38 mm burr");
   });
 
   it("13 — a want changes in the brief or not at all: a bound is never loosened silently on the wire", () => {
@@ -577,7 +512,7 @@ describe("what sil verified, what a page claims, and what nobody read", () => {
 
 /** The traps — SKILL.md's `## Common traps`. Each is a live draw's own wrong turn. */
 describe("the traps a live draw took", () => {
-  it("21 — the buyer is never sent to a shop: the document says what buying it online takes instead", () => {
+  it("21 — the buyer is never sent to a shop: the place's specs say what buying it online takes instead", () => {
     // The one answer a buyer who came here cannot use, and the reason the domain document
     // carries a "what buying it online takes" section at all — a measurement taken at
     // home, a tolerance, a return window stand in for handling the thing.
@@ -589,7 +524,7 @@ describe("the traps a live draw took", () => {
       unsatisfied(
         shop,
         (s) =>
-          /domain document/i.test(s) && /online/i.test(s) && /in place of handling/i.test(s),
+          /place's specs/i.test(s) && /online/i.test(s) && /in place of handling/i.test(s),
       ),
     ).toEqual([]);
 

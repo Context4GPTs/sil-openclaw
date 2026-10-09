@@ -6,11 +6,14 @@
   "required": [
     "status",
     "path",
-    "guide",
     "name",
     "labels",
     "specs",
-    "seller_specs"
+    "seller_specs",
+    "reach",
+    "kinds",
+    "parts",
+    "made_for"
   ],
   "properties": {
     "status": {
@@ -21,10 +24,6 @@
     "path": {
       "type": "string",
       "description": "Sends it verbatim as `shopping_search.domain`."
-    },
-    "guide": {
-      "type": "string",
-      "description": "Reads the domain document — markdown on how this thing is bought well: what it is bought on, what goes wrong and what that costs the buyer, what to trust, and what buying it online takes in place of handling it. It is what sil knows about the domain, so reason from it rather than reciting it, and never send the buyer to a shop it already tells you how to do without."
     },
     "name": {
       "type": "string",
@@ -38,7 +37,7 @@
         "maxLength": 64
       },
       "maxItems": 20,
-      "description": "Reads every other word for the thing — the market's own, in any language, folded to the form sil maps under. sil asks each index in them; the agent never sends them."
+      "description": "Reads every other word for the thing — the market's own English, folded to the form sil maps under. sil asks each index in them; the agent never sends them."
     },
     "specs": {
       "type": "array",
@@ -170,6 +169,11 @@
             "type": "boolean",
             "const": true,
             "description": "Writes it into the brief when the buyer names it; never treats two products that differ on it as one."
+          },
+          "several": {
+            "type": "boolean",
+            "const": true,
+            "description": "Reads a list for it under `fit`: a product holds several of these at once. `eq`/`in` match a product holding any value asked; `neq`/`nin` one holding none of them."
           }
         },
         "additionalProperties": false
@@ -301,6 +305,228 @@
         "additionalProperties": false
       },
       "description": "Builds seller rows with keys the registry holds — the base every domain shares and this domain's own branch — and sends them to `shopping_offers`."
+    },
+    "reach": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "from",
+          "via",
+          "keys"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Reads the node that declares these keys: this one, or a kind it is."
+          },
+          "via": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "own"
+              },
+              {
+                "type": "string",
+                "const": "kind"
+              },
+              {
+                "type": "string",
+                "const": "part"
+              }
+            ],
+            "description": "Reads how: the node's own list, a kind it is, or what one of its parts' links says."
+          },
+          "part": {
+            "type": "string",
+            "description": "Names the part, where `via` is one."
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "description": "Reads the keys, in the order the node lists them."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Reads where each key comes from: this node, a kind it is, or a link to a part."
+    },
+    "kinds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "name"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Reads the kind on its own node."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Calls the kind this."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Reads every kind this thing is, nearest first; it takes each one's keys."
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "how",
+          "optional",
+          "many",
+          "keys"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Calls the part this."
+          },
+          "role": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Reads the node any thing that fills this part is."
+          },
+          "elsewhere": {
+            "type": "string",
+            "description": "Reads the part in plain words, where no node draws it yet."
+          },
+          "how": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "built in"
+                },
+                {
+                  "type": "string",
+                  "const": "in the box"
+                },
+                {
+                  "type": "string",
+                  "const": "sold separately"
+                },
+                {
+                  "type": "string",
+                  "const": "used with"
+                }
+              ]
+            },
+            "description": "Knows whether the part is built in, in the box, bought apart or used with it."
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Knows whether some of these things come without it."
+          },
+          "many": {
+            "type": "boolean",
+            "description": "Knows whether the thing has several of the part."
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "description": "Reads the keys the link says about the part, here."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Reads what the thing has, and the keys each part is bought on."
+    },
+    "made_for": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+                "maxLength": 255,
+                "description": "Reads the node this part or consumable is made for."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "elsewhere"
+            ],
+            "properties": {
+              "elsewhere": {
+                "type": "string",
+                "description": "Reads what it is made for in plain words, where no node draws it yet."
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "Reads what this part or consumable is made for, where it is one."
+    },
+    "leaves": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "name"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Sends the leaf to `shopping_domain_get` and `shopping_search`."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Calls the leaf this."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "On a kind: every leaf under it, to pick the one the buyer means. A kind’s own specs are served too, but a search runs on a leaf."
+    },
+    "record": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "full"
+        },
+        {
+          "type": "string",
+          "const": "specs"
+        }
+      ],
+      "description": "On a leaf: how its products are bought. `specs` — on their measures alone; `full` — on their measures and their record: purpose, story, pros and cons, for and not for."
     }
   },
   "additionalProperties": false
