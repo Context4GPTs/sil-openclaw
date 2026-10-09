@@ -23,7 +23,7 @@
     "total": {
       "type": "integer",
       "minimum": 0,
-      "description": "Reads how many passages on the line hold a term, before the cut: more than came back means a narrower grep, a `kinds` filter or a larger `max_passages` reaches them."
+      "description": "Reads how many passages hold a term before the cut — on the line, or in the document read: more than came back means a narrower grep, `kinds` or more `max_passages`."
     },
     "passages": {
       "type": "array",

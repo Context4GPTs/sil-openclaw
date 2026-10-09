@@ -4,24 +4,18 @@ All notable changes to the `sil-openclaw` plugin (npm `sil-openclaw`, ClawHub `@
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Keep `## [Unreleased]` current as you work. `pnpm version <bump>` promotes it to a
-dated release section, and `pnpm release` attaches that section to the ClawHub
-release (`clawhub package publish --changelog`). See [README](./README.md#releasing).
-
-## [Unreleased]
+Keep `## [Unreleased]
 
 ### Added
 
-- **`shopping_content` greps sil's library about a thing**: sil's guides and the sources it
-  read, quoted verbatim with their author and link. Quoted phrases are one term, `total` says
-  how many passages hold a term, and `document` with `from` reads a document on by part.
-  Previously: Send a node and the
-  words to find; it reads every document sil holds on the line through that
-  node — the node, every kind it is, what sits beneath it and every place above it — and
-  answers whole passages within a token budget, every word first, each with the words it
-  matched. No model in the path. The skill reads a leaf's guides before the first question
-  to the buyer, greps again in the buyer's own words when they ask how or why, and says so
-  plainly when sil has written nothing.
+- **`shopping_content` greps sil's library about a thing**: sil's own guides and the sources it
+  read, quoted verbatim with their author and link. Send a node and the terms: it reads every
+  document on the line through that node (the node, every kind it is, what sits beneath it and
+  every place above it) and answers whole passages within a token budget, every term first. A
+  quoted phrase is one term, `total` says how many passages hold a term, and `document` with
+  `from` reads any document on by part. No model in the path. The skill greps a leaf's library
+  before the first question to the buyer, and again in the buyer's own words when they ask how or
+  why; it says so plainly when sil holds nothing.
 
 ## [0.6.0] - 2026-10-08
 

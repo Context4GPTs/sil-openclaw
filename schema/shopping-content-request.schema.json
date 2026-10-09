@@ -24,7 +24,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Reads one document's passages in order instead of grepping: the `id` a passage carried, from part `from` on."
+      "description": "Reads one document's passages in order instead of grepping: any `id` a passage or a domain's map carried, from part `from` on; past its last part, none."
     },
     "from": {
       "type": "integer",
