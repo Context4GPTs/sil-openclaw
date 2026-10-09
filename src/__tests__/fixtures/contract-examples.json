@@ -357,7 +357,8 @@
   "shopping_content": {
     "response": {
       "status": "ok",
-      "tokens": 242,
+      "tokens": 246,
+      "total": 1,
       "passages": [
         {
           "id": "measure-your-feet-for-ski-boots",
@@ -366,6 +367,8 @@
           "from": "product.sports.skiing_snowboarding.ski_boots",
           "role": "kind",
           "written": "2026-10-09",
+          "part": 1,
+          "of": 1,
           "matched": [
             "measure",
             "foot"

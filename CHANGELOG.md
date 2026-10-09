@@ -12,7 +12,10 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Added
 
-- **`shopping_content` greps what sil has written about a thing.** Send a node and the
+- **`shopping_content` greps sil's library about a thing**: sil's guides and the sources it
+  read, quoted verbatim with their author and link. Quoted phrases are one term, `total` says
+  how many passages hold a term, and `document` with `from` reads a document on by part.
+  Previously: Send a node and the
   words to find; it reads every document sil holds on the line through that
   node — the node, every kind it is, what sits beneath it and every place above it — and
   answers whole passages within a token budget, every word first, each with the words it

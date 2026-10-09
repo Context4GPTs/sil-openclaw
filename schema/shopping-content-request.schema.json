@@ -18,7 +18,18 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "Sends the words to find, as the buyer or a shop says them: a passage holding every word comes first, then one holding some."
+      "description": "Sends the terms to grep, as the buyer or a shop says them; a \"quoted phrase\" is one term. A passage holding every term comes first, then one holding some."
+    },
+    "document": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Reads one document's passages in order instead of grepping: the `id` a passage carried, from part `from` on."
+    },
+    "from": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Starts the read of `document` at this part. Default 1."
     },
     "kinds": {
       "type": "array",

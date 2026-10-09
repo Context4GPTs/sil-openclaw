@@ -73,22 +73,24 @@ export const SHOPPING_TOOLS = [
     name: "shopping_content",
     method: "POST",
     path: "/catalog/content",
-    label: "Read what sil has written about it",
+    label: "Grep what sil holds about it",
     recovery: { not_found: "shopping_domain_search" },
     description:
-      "sil's own documents — guides, tutorials, FAQs, glossaries — grepped by words. Send `path` — "
-      + "the leaf you chose, or any place above it — and `q`, the words to find: it reads "
-      + "every document on the line through that node (the node, every kind it is, what sits "
-      + "beneath it and every place above it) and answers whole passages, every word first, "
-      + "then some, nearest node first. Matching is by words, stemmed, never by meaning: use "
-      + "the buyer's own words, or shop words, and rephrase once if nothing matches. "
-      + "`kinds` narrows by document kind; `min_passages`, `max_passages` "
-      + "and `max_tokens` bound the answer, the last passage cut and marked `truncated`. "
-      + "A passage with an empty `matched` holds none of your words — it only fills the "
-      + "minimum. Call it once the leaf is chosen, before your first question to the buyer, "
-      + "and again whenever they ask how or why. Cite a passage as sil's, by its `title`. "
-      + "An empty `passages` means sil has written nothing on it: say so plainly, and never "
-      + "fill the gap from the open web.",
+      "Grep sil's library for a thing: its own guides and the sources it read, quoted "
+      + "verbatim — label law, producers' technical sheets, writers on the trade. Send `path` (the "
+      + "leaf you chose, or any place above it) and `q`, the terms: each word matched stemmed, "
+      + "a \"quoted phrase\" as one term, never by meaning. It reads every document on the "
+      + "line through that node, up to the root, and answers whole passages: every term "
+      + "first, then more terms, then the densest. `total` says how many passages hold a "
+      + "term; more than came back means grep narrower, add a phrase, or set `kinds`. Each "
+      + "passage carries `part` and `of`: send `document` (its `id`) with `from` to read that "
+      + "document on. `max_passages` and `max_tokens` bound the answer, the last passage cut "
+      + "and marked `truncated`; an empty `matched` only fills the minimum. Search like an "
+      + "agent: grep, read on, grep again in other words. Once the leaf is chosen, grep it "
+      + "before your first question to the buyer, and again whenever they ask how or why. "
+      + "A passage with `author` is that author's words — quote and name them, with `url`; "
+      + "without it, the words are sil's. Empty `passages`: say sil holds nothing on it, "
+      + "and never fill the gap from the open web.",
   },
   {
     name: "shopping_brief_create",
