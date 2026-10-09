@@ -4,22 +4,24 @@
       "status": "ok",
       "matches": [
         {
-          "path": "product.sports.winter.ski.boots",
-          "about": "Ski boots are bought primarily by exact Mondopoint length, forefoot last width/volume, flex, and use case."
-        }
-      ],
-      "tree": [
-        {
-          "family": "product.sports",
-          "domains": 2,
-          "paths": [
+          "path": "product.vehicles.car_cargo.boot_protection.car_boot_liners",
+          "name": "Boot liners",
+          "matched": "boot liners",
+          "under": [
             {
-              "path": "product.sports.winter.ski.boots",
-              "name": "ski boots"
+              "path": "product.vehicles",
+              "name": "Vehicles",
+              "role": "top"
             },
             {
-              "path": "product.sports.running.trail_shoes",
-              "name": "trail running shoes"
+              "path": "product.vehicles.car_cargo",
+              "name": "Roof racks, cargo & towing",
+              "role": "domain"
+            },
+            {
+              "path": "product.vehicles.car_cargo.boot_protection",
+              "name": "Boot liners & protection",
+              "role": "shelf"
             }
           ]
         }
@@ -29,13 +31,12 @@
   "shopping_domain_get": {
     "response": {
       "status": "ok",
-      "path": "product.sports.winter.ski.boots",
-      "name": "ski boots",
+      "path": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
+      "name": "Alpine ski boots",
       "labels": [
-        "μπότες_σκι",
-        "μπότες_ski"
+        "μπότες_αλπικού_σκι",
+        "alpine_ski_boots"
       ],
-      "guide": "Alpine ski boots are bought on four things: the size, the width across the forefoot, the sole the binding accepts, and how stiff the boot is for the skier's level. …\n\n## What goes wrong\n\n- **Too long.** … The heel lifts, every turn starts late, and the shin bangs the tongue all day. …\n\n## What to trust\n\nThe maker's own size chart and last width, published per model. A shop's \"wide fit\" tag is marketing and measures nothing. …\n\n## Buying it online\n\nNo shop visit is needed to buy well. Measure both feet standing on paper, heel against a wall … Buy where the boot can go back …",
       "specs": [
         {
           "key": "mondo_size",
@@ -295,102 +296,92 @@
             "eq"
           ]
         }
-      ]
+      ],
+      "reach": [
+        {
+          "from": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
+          "via": "own",
+          "keys": [
+            "mondo_size",
+            "last_width",
+            "sole_norm",
+            "skill_level",
+            "flex_index",
+            "discipline",
+            "model_year"
+          ]
+        },
+        {
+          "from": "kind.made_for_a_person",
+          "via": "kind",
+          "keys": [
+            "gender"
+          ]
+        },
+        {
+          "from": "product",
+          "via": "kind",
+          "keys": [
+            "brand",
+            "condition",
+            "weight"
+          ]
+        }
+      ],
+      "kinds": [
+        {
+          "path": "kind.made_for_a_person",
+          "name": "Made for a person"
+        },
+        {
+          "path": "product",
+          "name": "Product"
+        }
+      ],
+      "parts": [
+        {
+          "name": "liner",
+          "role": "product.sports.winter.ski.boot_liners",
+          "how": [
+            "built in"
+          ],
+          "optional": false,
+          "many": false,
+          "keys": []
+        }
+      ],
+      "made_for": [],
+      "record": "full"
     }
   },
-  "shopping_domain_create": {
+  "shopping_content": {
     "response": {
       "status": "ok",
-      "path": "product.sports.winter.ski.boots",
-      "specs": [
+      "tokens": 246,
+      "total": 1,
+      "passages": [
         {
-          "key": "mondo_size",
-          "variant_spec": true
-        },
-        {
-          "key": "model_year",
-          "product_spec": true
-        },
-        {
-          "key": "flex_index"
-        },
-        {
-          "key": "last_width"
-        },
-        {
-          "key": "discipline"
-        },
-        {
-          "key": "weight",
-          "inherited": true
+          "id": "measure-your-feet-for-ski-boots",
+          "kind": "tutorial",
+          "title": "Measure your feet for ski boots",
+          "from": "product.sports.skiing_snowboarding.ski_boots",
+          "role": "kind",
+          "written": "2026-10-09",
+          "part": 1,
+          "of": 1,
+          "matched": [
+            "measure",
+            "foot"
+          ],
+          "text": "Measure both feet standing, in the thin socks you ski in. Stand on a sheet of paper with the heel against a wall and mark the tip of the longest toe; the distance from the wall is the foot length. Work from the longer foot, in centimetres. Then measure the width across the widest part of the forefoot, in millimetres. A ski boot's size, Mondopoint, is the foot length in centimetres: read it against the maker's own chart, which also gives the shell's sole length and its last width, the inside width at the forefoot for a reference size. Charts differ by maker, so read each one. A shell can be heated and widened by a boot fitter; it can never be made shorter or narrower, so too long is the mistake that cannot be fixed afterwards."
         }
       ]
     },
     "request": {
-      "path": "product.sports.winter.ski.boots",
-      "name": "ski boots",
-      "labels": [
-        "μπότες σκι"
-      ],
-      "guide": "Ski boots are bought primarily by exact Mondopoint length, forefoot last width/volume, flex, and use case. …",
-      "specs": [
-        {
-          "key": "mondo_size",
-          "display_name": "Mondopoint size",
-          "type": "number",
-          "unit": "cm",
-          "step": 0.5,
-          "variant_spec": true,
-          "description": "Boot size as foot length in centimetres; the size selector axis.",
-          "labels": [
-            "Size",
-            "Μέγεθος"
-          ],
-          "forms": {
-            "27/27.5": "27.5"
-          }
-        },
-        {
-          "key": "model_year",
-          "display_name": "Model year",
-          "type": "number",
-          "product_spec": true,
-          "description": "The year the maker sells it as; retailers print it as the season."
-        },
-        {
-          "key": "flex_index",
-          "display_name": "Flex index",
-          "type": "number",
-          "unit": "flex",
-          "description": "Manufacturer flex rating; compare mainly within a brand."
-        },
-        {
-          "key": "last_width",
-          "display_name": "Last width",
-          "type": "number",
-          "unit": "mm",
-          "description": "Approximate forefoot width at the reference shell size."
-        },
-        {
-          "key": "discipline",
-          "display_name": "Discipline",
-          "type": "enum",
-          "description": "Primary skiing use.",
-          "allowed_values": [
-            "alpine",
-            "all-mountain",
-            "freeride",
-            "touring",
-            "freeride-touring"
-          ]
-        },
-        {
-          "key": "weight",
-          "display_name": "Weight",
-          "type": "number",
-          "unit": "kg",
-          "description": "Mass of the boot as sold."
-        }
+      "path": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
+      "q": "measure foot",
+      "kinds": [
+        "tutorial"
       ]
     }
   },

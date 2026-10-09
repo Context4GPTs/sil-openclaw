@@ -26,7 +26,7 @@ const SCHEMA_DIR = join(HERE, "..", "..", "..", "schema");
 const EXAMPLES = join(HERE, "..", "fixtures", "contract-examples.json");
 
 /**
- * The eleven names, in the contract's own order — DERIVED from the production route
+ * The ten names, in the contract's own order — DERIVED from the production route
  * table, never restated. A second list here is a list that quietly covers six. Every one
  * of them is a committed artifact, so this is also the artifact set.
  */
@@ -66,7 +66,7 @@ export function contractResponse(tool: ShoppingToolName): Record<string, unknown
   return clone(example(tool).response);
 }
 
-/** §3.4's warm answer, or §3.3's mint request — the second worked body of a section. */
+/** §3.4's warm answer — the second worked body of a section. */
 export function contractAlternate(tool: ShoppingToolName): Record<string, unknown> {
   const alternate = example(tool).alternate;
   if (alternate === undefined) throw new Error(`§ for ${tool} carries one example only`);
@@ -116,7 +116,9 @@ export function artifactErrors(
 
 export const SEARCH_400 = {
   error: "invalid_request",
-  message: 'domain "product.sports.winter.ski.boots" is not in the registry — mint it first',
+  message:
+    'domain "product.sports.winter.ski.boots" is not in the graph — the closest node is'
+    + ' "product.sports.skiing_snowboarding.ski_boots"',
 } as const;
 
 export const SPEC_400 = {
@@ -136,19 +138,16 @@ export const DOMAIN_GET_404 = {
   message: 'domain "product.sports.winter.ski.boots.freeride" does not stand',
 } as const;
 
-export const MINT_409 = {
-  error: "domain_exists",
-  message: 'domain "product.sports.winter.ski.boots" already exists',
+/** A shelf is no buyable thing: the refusal names leaves to pick from instead. */
+export const DOMAIN_GET_NOT_A_LEAF = {
+  error: "not_a_leaf",
+  message: "not a leaf: choose one of product.pets.dogs.harnesses, product.pets.dogs.leashes",
 } as const;
 
-/** The mint's other refusal: a leaf hung on the root, which the registry will not coin. */
-export const MINT_400 = {
-  error: "invalid_request",
-  message:
-    '"product.ski_boots" hangs directly under the root. A category path names how the'
-    + " thing is shelved, family by family — product.sports.winter.ski.boots — so read"
-    + " the registry again in the buyer's words and coin the whole path under an ancestor"
-    + " that stands.",
+/** A path in the graph whose area sil does not carry yet: refused before any spend. */
+export const DOMAIN_GET_NOT_CARRIED = {
+  error: "not_carried",
+  message: "not carried: pets — it is in the pipeline",
 } as const;
 
 /**

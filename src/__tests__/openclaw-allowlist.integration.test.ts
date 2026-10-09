@@ -69,7 +69,7 @@ const SIL_TOOLS = [
   "shopping_brief_create",
   "shopping_brief_edit",
   "shopping_brief_read",
-  "shopping_domain_create",
+  "shopping_content",
   "shopping_domain_get",
   "shopping_domain_search",
   "shopping_offers",

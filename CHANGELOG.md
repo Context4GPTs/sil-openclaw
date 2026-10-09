@@ -10,6 +10,38 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-08
+
+### Added
+
+- **`shopping_content` greps sil's library about a thing**: sil's own guides and the sources it
+  read, quoted verbatim with their author and link. Send a node and the terms: it reads every
+  document on the line through that node (the node, every kind it is, what sits beneath it and
+  every place above it) and answers whole passages within a token budget, every term first. A
+  quoted phrase is one term, `total` says how many passages hold a term, and `document` with
+  `from` reads any document on by part. No model in the path. The skill greps a leaf's library
+  before the first question to the buyer, and again when the buyer asks how or why; it says so
+  plainly when sil holds nothing.
+
+### Changed
+
+- **Finding the place is three calls.** `shopping_domain_search` takes what the thing is
+  called and answers up to three leaves, best first: `path`, `name`, which of sil's words
+  `matched`, and `under`, every place above the leaf. `shopping_domain_get` reads that leaf's
+  specs and says how its products are bought (`record`: `specs` or `full`).
+  `shopping_search` is unchanged.
+- **A place sil does not carry yet answers nothing.** The domain search returns no leaf for it,
+  and `shopping_domain_get` and `shopping_search` refuse it as `not carried`, before any spend.
+  The skill tells the buyer sil cannot sell it yet, it is in the pipeline, and stops: no
+  search, no other place, no web.
+- **English to sil.** Every `q`, value, narrative and quoted reason the agent sends is English;
+  the skill translates the buyer's words on the way in and answers in their language.
+- The skill's place-finding section is rewritten around the three calls.
+
+### Removed
+
+- `tree` and `about` from the search answer, and `guide` from the domain read.
+
 ## [0.5.2] - 2026-10-06
 
 ### Added

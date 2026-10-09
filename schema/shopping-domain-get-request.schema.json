@@ -11,7 +11,7 @@
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Sends one standing path. A path that does not stand answers `not_found`; the root `product` always stands."
+      "description": "Sends a leaf `shopping_domain_search` answered, or a kind to list its leaves. One that does not stand answers `not_found`; a shelf, domain or top answers `not_a_leaf` naming leaves under it; an area sil does not carry yet answers `not_carried`."
     }
   },
   "additionalProperties": false

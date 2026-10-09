@@ -1,24 +1,16 @@
 /**
- * INTEGRATION — ask 1 of the contract's journey over ONE scripted `fetch`: a cold
- * category read, minted, searched, opened, priced and checked for shipping.
+ * INTEGRATION — ask 1 of the contract's journey over ONE scripted `fetch`: a category
+ * found, read, searched, opened, priced and checked for shipping.
  *
- *   shopping_domain_search (matches: []) → shopping_domain_create
- *     → shopping_brief_create → shopping_search → shopping_product_get
- *     → shopping_offers → shopping_seller_get
- *
- * THE READ IS PART OF THE CHAIN. Without it the cold start is an empty shelf straight
- * into a permanent, un-undoable global write, with only the agent's judgement in
- * between; the read is what turns that into a step the wire can witness.
+ *   shopping_domain_search → shopping_domain_get → shopping_brief_create
+ *     → shopping_search → shopping_product_get → shopping_offers → shopping_seller_get
  *
  * SCOPE, deliberately. This is the TOOL CHAIN, not the agent. What the agent SAYS — the
- * mint announcement, the naming of a gap, the untestable currency bound — belongs to the
- * skill and to sil-stage. What IS testable, and what this file exists to prove:
+ * naming of a gap, the untestable currency bound — belongs to the skill and to sil-stage.
+ * What IS testable, and what this file exists to prove:
  *   - the tools compose into a terminating journey with no extra call and no tool
  *     standing in for another;
- *   - each hop calls exactly its own route, once — and the registry search and the mint,
- *     which share a PATH, are told apart by their VERB;
- *   - the mint body on the wire is the contract's, `type` and the two marks included and
- *     the retired registry vocabulary nowhere in it;
+ *   - each hop calls exactly its own route, once;
  *   - every product, price, seller and URL the agent can act on came out of a tool
  *     result, never out of anything the plugin invented.
  */
@@ -36,22 +28,20 @@ import {
 } from "./helpers/shopping-harness.js";
 import { contractRequest, contractResponse } from "./helpers/shopping-wire.js";
 
-const DOMAIN = "product.sports.winter.ski.boots";
+const DOMAIN = "product.vehicles.car_cargo.boot_protection.car_boot_liners";
 const ACCESS = "at-live-token";
 const REFRESH = "rt-live-token";
 
 const harness = useShoppingHarness("journey");
 
 /**
- * The scripted wire, in journey order. The registry search answers with the MINT
- * SIGNAL — the registry genuinely holds nothing for this ask — and every other route
- * answers with the contract's own example. Nothing else is scripted, so a tool reaching
- * a route it should not reach lands in `other` and fails loudly.
+ * The scripted wire, in journey order: every route answers with the contract's own
+ * example. Nothing else is scripted, so a tool reaching a route it should not reach
+ * lands in `other` and fails loudly.
  */
 function scriptTheJourney(): Router {
   return installRouter((kind) => {
-    if (kind === "domainSearch") return ok({ status: "ok", matches: [] });
-    if (kind === "domains") return ok(contractResponse("shopping_domain_create"));
+    if (kind === "domainSearch") return ok(contractResponse("shopping_domain_search"));
     if (kind === "domainGet") return ok(contractResponse("shopping_domain_get"));
     if (kind === "briefCreate") return ok(contractResponse("shopping_brief_create"));
     if (kind === "search") return ok(contractResponse("shopping_search"));
@@ -69,25 +59,17 @@ const call = async (
 ): Promise<Record<string, unknown>> =>
   payloadOf(await getTool(harness.api, tool).execute(callId, params));
 
-describe("ask 1 — the cold-start journey terminates at one seller's terms", () => {
+describe("ask 1 — the journey terminates at one seller's terms", () => {
   it("runs GATHER → PRICE, each tool once, ending on a seller that came out of an offer", async () => {
     seedTokens(ACCESS, REFRESH);
     const router = scriptTheJourney();
 
-    // GATHER — the read, in the buyer's own words. `matches: []` is a real answer and
-    // the one thing that licenses the write below; anything else — a match to adopt, a
-    // failed read — ends the cold start here.
-    const read = await call("shopping_domain_search", { q: "ski boots" }, "j1");
-    expect(read["status"]).toBe("ok");
-    expect(read["matches"]).toEqual([]);
-    // The write is still un-entered at this point in the journey.
-    expect(router.domains).toEqual([]);
-
-    // GATHER's mint, at the path the agent meant, now that the read named nothing to
-    // adopt. (The research that produces `guide` is web work, outside the tool surface.)
-    const minted = await call("shopping_domain_create", contractRequest("shopping_domain_create"), "j2");
-    expect(minted["status"]).toBe("ok");
-    expect(minted["path"]).toBe(DOMAIN);
+    // GATHER — the read, in the buyer's own words, then the closest node's document.
+    const read = await call("shopping_domain_search", { q: "boot liner for my Volvo XC40" }, "j1");
+    const [closest] = read["matches"] as Record<string, unknown>[];
+    expect(closest["path"]).toBe(DOMAIN);
+    const doc = await call("shopping_domain_get", { path: closest["path"] }, "j2");
+    expect(doc["status"]).toBe("ok");
 
     // GATHER's brief — ONE per session, opened before the first search, because both
     // priced steps name it. The id it answers is what the rest of the chain carries.
@@ -145,7 +127,7 @@ describe("ask 1 — the cold-start journey terminates at one seller's terms", ()
 
     // Each route hit exactly once, and nothing reached an unrouted path.
     expect(router.domainSearch).toHaveLength(1);
-    expect(router.domains).toHaveLength(1);
+    expect(router.domainGet).toHaveLength(1);
     expect(router.search).toHaveLength(1);
     expect(router.product).toHaveLength(1);
     expect(router.offers).toHaveLength(1);
@@ -153,31 +135,6 @@ describe("ask 1 — the cold-start journey terminates at one seller's terms", ()
     expect(router.refresh).toEqual([]);
     expect(router.other).toEqual([]);
     expect(router.all).toHaveLength(7);
-    // The two `/catalog/domains` calls are ONE read and ONE write, told apart by the
-    // verb — never two of either.
-    expect(router.domainSearch[0].method).toBe("GET");
-    expect(router.domains[0].method).toBe("POST");
-  });
-
-  it("the mint body on the wire carries `type` and the marks — and none of the retired keys", async () => {
-    // The registry write is where a stale vocabulary would come back, permanently and
-    // for every shopper: `data_type`, `level` and `axis` are the shapes the contract
-    // replaced, and the plugin forwards what it was handed, so this is the wire's own
-    // witness that the agent contract's mint is what left the machine.
-    seedTokens(ACCESS, REFRESH);
-    const router = scriptTheJourney();
-    await call("shopping_domain_create", contractRequest("shopping_domain_create"), "t1");
-    const body = router.domains[0].body as { specs: Record<string, unknown>[] };
-    expect(body).toEqual(contractRequest("shopping_domain_create"));
-    // One vocabulary leaves here: a category's seller terms are never coined from a
-    // session, so nothing about the seller may ride along on the write.
-    expect(body).not.toHaveProperty("seller_specs");
-    for (const spec of body.specs) {
-      expect(typeof spec["type"]).toBe("string");
-      expect(Object.keys(spec)).not.toContain("data_type");
-      expect(Object.keys(spec)).not.toContain("level");
-      expect(Object.keys(spec)).not.toContain("axis");
-    }
   });
 
   it("every id, price, seller and URL the agent can act on came out of a tool result", async () => {
@@ -223,13 +180,11 @@ describe("ask 1 — the cold-start journey terminates at one seller's terms", ()
 });
 
 describe("no tool stands in for another, across the whole journey", () => {
-  it("`shopping_search` never mints, and never opens a dossier of its own", async () => {
-    // A search that auto-minted would hide a permanent global write inside a read; one
-    // that pre-fetched the dossier would spend the agent's budget without being asked.
+  it("`shopping_search` never opens a dossier of its own", async () => {
+    // One that pre-fetched the dossier would spend the agent's budget without being asked.
     seedTokens(ACCESS, REFRESH);
     const router = scriptTheJourney();
     await call("shopping_search", { brief: "b1", domain: DOMAIN, query: "boots", n: 3 }, "m1");
-    expect(router.domains).toEqual([]);
     expect(router.product).toEqual([]);
     expect(router.all).toHaveLength(1);
   });
@@ -250,36 +205,11 @@ describe("no tool stands in for another, across the whole journey", () => {
     expect(router.all).toHaveLength(1);
   });
 
-  it("`shopping_domain_create` performs NO read of its own — the read is the agent's step", async () => {
-    // Read-before-mint is a DISCIPLINE the agent follows across two calls, never a
-    // pre-check the mint runs for itself. A mint that silently read first would make the
-    // discipline unobservable — the agent could skip it and the chain would look
-    // identical — and it would hide a second round trip inside the one call with no undo.
-    seedTokens(ACCESS, REFRESH);
-    const router = scriptTheJourney();
-    await call("shopping_domain_create", { path: DOMAIN, guide: "g", specs: [] }, "m4");
-    expect(router.domainSearch).toEqual([]);
-    expect(router.domainGet).toEqual([]);
-    expect(router.all).toHaveLength(1);
-  });
-
-  it("`shopping_domain_search` never mints — the read and the write share a path, not a verb", async () => {
-    // The more dangerous direction: a read that reached the POST would coin a category
-    // as a side effect of looking one up, with no undo and nothing able to detect it.
-    seedTokens(ACCESS, REFRESH);
-    const router = scriptTheJourney();
-    await call("shopping_domain_search", { q: "ski boots" }, "m5");
-    expect(router.domains).toEqual([]);
-    expect(router.domainSearch).toHaveLength(1);
-    expect(router.all).toHaveLength(1);
-  });
-
   it("`shopping_domain_get` reads the guide alone — it never searches the registry", async () => {
     seedTokens(ACCESS, REFRESH);
     const router = scriptTheJourney();
     await call("shopping_domain_get", { path: DOMAIN }, "m6");
     expect(router.domainSearch).toEqual([]);
-    expect(router.domains).toEqual([]);
     expect(router.all).toHaveLength(1);
   });
 });

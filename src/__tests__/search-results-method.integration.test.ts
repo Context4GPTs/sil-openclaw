@@ -963,16 +963,6 @@ describe("every sil_search_results_* marker carries its callId and cause in the 
       },
     ],
     [
-      "already_exists",
-      (): void => {
-        installRouter((kind) =>
-          kind === "search"
-            ? { status: 409, body: { error: "domain_exists", message: "already" } }
-            : { status: 500, body: {} },
-        );
-      },
-    ],
-    [
       "forbidden",
       (): void => {
         installRouter((kind) =>
@@ -984,7 +974,7 @@ describe("every sil_search_results_* marker carries its callId and cause in the 
     ],
     ["retryable", (): void => void installRouter(() => ({ status: 500, body: {} }))],
   ])("the skip names the refusal by the envelope's OWN status — %s", async (expected, wire) => {
-    // All seven arms of `RefusalStatus`, because a mis-mapped one names a status the
+    // All six arms of `RefusalStatus`, because a mis-mapped one names a status the
     // agent never saw and an operator then debugs a refusal that did not happen. Two
     // mis-mappings (forbidden→retryable, not_registered→forbidden) left the tier green
     // while only `invalid_request` was driven. The expected reason is READ BACK from the
@@ -1113,7 +1103,7 @@ describe("registration shape (C5) and log privacy", () => {
       "shopping_brief_create",
       "shopping_brief_edit",
       "shopping_brief_read",
-      "shopping_domain_create",
+      "shopping_content",
       "shopping_domain_get",
       "shopping_domain_search",
       "shopping_offers",

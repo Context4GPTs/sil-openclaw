@@ -95,19 +95,19 @@ agent  done — here's your checkout link, ready to pay:
 
 ## Turn your OpenClaw into your personal shopping expert
 
-So far your *general* agent did the shopping. Go one step further, with **nothing to set up**: install the plugin and the agent you already have shops **any** niche like a specialist, learning how to buy well in each one the first time you shop it and getting sharper every session.
+So far your *general* agent did the shopping. Go one step further, with **nothing to set up**: install the plugin and the agent you already have shops **any** niche like a specialist, getting sharper about *you* every session.
 
-**Spec-Driven Shopping (SDS).** There is no setup step and no interview — just say what you want. The first time you ask for something in a new niche the plugin **classifies** what you're buying, **researches that niche deeply on the spot** (the full how-to-buy-well: fit, gearing, geometry, the trade-offs — announced, so you can correct it), and derives the **dimensions** every request in that niche is decomposed along, minting a reusable **domain**. Ask for that niche again and it reuses what it learned; ask for a new one and it learns that too, keeping *you* the same across all of them. On **every query** it reads sil's shared registry for how that category is bought, decomposes what you asked, and **learns your facts and taste as it goes** (your measurements, your budget, a brand you won't touch) — captured once, never re-asked. It recommends with a "why" that cites *what you asked*, *a fact it remembered*, and *a niche mechanic you'd never have named*.
+**Spec-Driven Shopping (SDS).** There is no setup step and no interview — just say what you want. The plugin finds the node in sil's **domain graph** for what you're buying and reads the **specs** it is bought along (fit, gearing, geometry, the trade-offs) — what every request there is decomposed into. It decomposes what you asked, **learns your facts and taste as it goes** (your measurements, your budget, a brand you won't touch) — captured once, never re-asked — and recommends with a "why" that cites *what you asked*, *a fact it remembered*, and *a niche mechanic you'd never have named*.
 
-**It learns a niche the first time you shop it, and keeps *you* across all of them:**
+**Every niche reads sil's own node, and keeps *you* across all of them:**
 
 ```text
 you    find me a road bike, ~€1500
 
-agent  New niche for us — road cycling. Let me learn how to buy one
-       well (fit from height AND inseam, endurance-vs-race geometry,
-       gearing, the comfort/speed trade-offs) — and two numbers I'll
-       keep so I never re-ask: your height and inseam.
+agent  [shopping_domain_search "road bike" → shopping_domain_get]
+       Road bikes are bought on fit from height AND inseam, endurance
+       vs race geometry, and gearing. Two numbers I'll keep so I never
+       re-ask: your height and inseam.
 
 you    178cm, 81cm inseam. Secondhand is fine
 
@@ -122,14 +122,14 @@ agent  searched sil — endurance, 54cm for your fit, ~€1500:
 
 you    later — find me a backpacking tent for two, under €250
 
-agent  Different niche — camping. Learning how to buy a backpacking
-       tent (season rating, packed weight, floor area)… and your
-       returns rule carries straight over, no need to re-ask.
+agent  [shopping_domain_search "backpacking tent" → shopping_domain_get]
+       Tents are bought on season rating, packed weight and floor
+       area… and your returns rule carries straight over.
 ```
 
-> **You teach it once; it stays sharp.** How a category is bought comes from sil's shared registry — read before the web, so it is current without you teaching it twice — and your own facts, taste and shopping jobs belong to your sil account rather than to one agent. Nothing to re-answer, and sharper every session.
+> **You teach it once; it stays sharp.** How a thing is bought comes from sil's domain graph, the same for every agent, and your own facts, taste and shopping jobs belong to your sil account rather than to one agent. Nothing to re-answer, and sharper every session.
 
-**What it keeps on your machine: nothing of yours.** The plugin stores your sil credentials and its own configuration under `$SIL_DATA_DIR` (owner-only `0600`) and nothing else — no notes about you, no shopping jobs, no measurements. A shopping call reads that credential, rewrites it when sil refreshes it, and deletes it when the session is past refreshing. What your agent learns about you lives in your sil account, is **never pooled across users**, and is never used for training or aggregation. Research reads public sources to learn how a *category* is bought; it does not upload anything about you. If an earlier version left a `shopper/` folder under that directory, nothing reads it any more and you can delete it.
+**What it keeps on your machine: nothing of yours.** The plugin stores your sil credentials and its own configuration under `$SIL_DATA_DIR` (owner-only `0600`) and nothing else — no notes about you, no shopping jobs, no measurements. A shopping call reads that credential, rewrites it when sil refreshes it, and deletes it when the session is past refreshing. What your agent learns about you lives in your sil account, is **never pooled across users**, and is never used for training or aggregation. If an earlier version left a `shopper/` folder under that directory, nothing reads it any more and you can delete it.
 
 ---
 
@@ -160,9 +160,9 @@ for you; you just say what you want.
 
 | Tool | What it does |
 |---|---|
-| `shopping_domain_search` | Read sil's shared registry in your own words and get back the categories that match, each with a line on how the thing is bought. An empty list is the one answer that licenses a mint. |
-| `shopping_domain_get` | Read one standing category: its buying guide, and every key it is bought by with the operators, unit and allowed values each takes. |
-| `shopping_domain_create` | Coin a NEW category — its path, a guide written from research, and its first keys. The one permanent, global write in sil; an existing path is refused and nothing is written. |
+| `shopping_domain_search` | Say what the thing is called, in your own words, and get back up to three leaves (buyable kinds of thing), best first: each with its name, which of sil's words matched, and `under` — the places above it. Empty when nothing fits, or when the best fit is an area sil does not carry yet. |
+| `shopping_content` | Grep sil's own documents on the line through a node — the node, its kinds, beneath it and above it — by words, never by meaning. Answers whole passages within a token budget, every-word matches first, each with the words it matched; filled passages carry none. |
+| `shopping_domain_get` | Read a leaf's specs: every key it is bought by with the operators, unit and allowed values each takes, plus its kinds, parts and how its products are bought (`record`). On a kind it also lists its `leaves`. A shelf or domain is refused as `not_a_leaf`; an area sil does not carry yet as `not_carried`. |
 | `shopping_search` | Search one settled category, under the brief this conversation is working from. Send the brief's id, the domain, your own shopping words, how many products you want, the brief's own values for that category as `specs`, and `ship_to` — the label of one of your saved addresses, which localizes the search (your default one when it is left off) and rules no seller out. Products come back best-first with `fit` (what sil verified), their variants, a price range, and `webpage_info` where sil has not read the page yet. |
 | `shopping_product_get` | Open the whole of what sil holds on 1–10 shortlisted variants: the description, the images, every key sil holds, and where each reading came from and when. |
 | `shopping_offers` | Price 1–10 picked variants live, on your own terms: send the brief's id and the variant ids, and sil reads the rest — the brief's `seller` terms and price ceiling, your default address and your currency. It looks on the web for shops it does not hold yet, and each offer comes back with the price exactly as the page prints it, its currency, availability, the listing URL, the moment sil read it, and `seller_fit` — whether that seller ships to your address (`serviceable`, `not_serviceable` or `unknown`) and what it holds for each term on the brief. Shops in your currency and market come first. |
@@ -179,7 +179,7 @@ is the API's own 200 body handed over untouched.
 The plugin ships one bundled skill — **`sil-shopping`** 🛒 — that your agent loads automatically the first time you express a shopping intent. You don't invoke it; it's the playbook that makes the tools work well together:
 
 - **Routes intent to the right tool.** *"find me a keyboard"* → `shopping_search`, *"what does it cost?"* → `shopping_offers`, *"will it reach me?"* → `shopping_seller_get`, *"what was I shopping for?"* → `shopping_brief_read`, *"who am I?"* → `sil_whoami`, *"sign me up"* → `sil_register`.
-- **Many niches, minted on the fly, with no preparation.** A shopping intent runs the loop on whatever agent holds the plugin: it classifies what you're buying, reuses a niche it has already learned or **researches a new one on the spot** (announced, so you can correct it), and derives how to decompose every request — learning your facts and taste as it goes.
+- **Many niches, with no preparation.** A shopping intent runs the loop on whatever agent holds the plugin: it finds the place sil shelves what you're buying (`shopping_domain_search`), reads the specs it is bought along (`shopping_domain_get`), and decomposes every request along them — learning your facts and taste as it goes.
 - **Recovers the right way.** Every tool reports a status; the skill follows that tool's own recovery hint — re-register, fix the query, or retry — instead of guessing a fix that won't work.
 - **Keeps prices honest.** A price is dated only where sil dated it, so the skill re-reads an item's offers right before you buy and quotes the moment they were read.
 - **Says what sil verified, and says the rest as what it is.** A key sil holds no value for is named as a gap, not passed off as a miss; a page sil has not read yet is quoted as the seller's own words; a seller sil knows nothing about keeps its place.

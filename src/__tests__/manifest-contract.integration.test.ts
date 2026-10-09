@@ -131,7 +131,7 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
       "shopping_brief_create",
       "shopping_brief_edit",
       "shopping_brief_read",
-      "shopping_domain_create",
+      "shopping_content",
       "shopping_domain_get",
       "shopping_domain_search",
       "shopping_offers",
@@ -181,6 +181,7 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
       "shopping_doc_write",
       "shopping_doc_remove",
       "shopping_brief_compile", // compiled the Brief off that same store
+      "shopping_domain_create", // only the load writes the graph
     ];
     const code = codeRegisteredNames();
     const manifest = manifestToolNames();
@@ -191,7 +192,7 @@ describe("manifest ↔ code drift guard (set-equality, BOTH directions)", () => 
   it.each([
     "shopping_domain_search",
     "shopping_domain_get",
-    "shopping_domain_create",
+    "shopping_content",
     "shopping_brief_create",
     "shopping_brief_edit",
     "shopping_brief_read",

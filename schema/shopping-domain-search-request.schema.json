@@ -11,7 +11,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "Sends the item in the buyer's own words."
+      "description": "Sends what the thing is called, in English — translate the buyer first."
     }
   },
   "additionalProperties": false

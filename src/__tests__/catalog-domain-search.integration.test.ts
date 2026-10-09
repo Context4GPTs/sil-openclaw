@@ -1,11 +1,6 @@
 /**
- * INTEGRATION — `shopping_domain_search` on the wire: the registry read that precedes
- * every mint, driven end to end over a scripted `fetch`.
- *
- * The VERB is the whole safety property here. This read and the one permanent global
- * write share a path and are told apart by nothing else, so a call that reached the mint
- * bucket would be the undoable write performed by a discovery call. The router splits on
- * method for exactly that reason, and every assertion below reads both buckets.
+ * INTEGRATION — `shopping_domain_search` on the wire: the registry read, driven end to end
+ * over a scripted `fetch`.
  */
 
 import { describe, it, expect } from "vitest";
@@ -47,8 +42,6 @@ describe("shopping_domain_search — one route, one bodyless read", () => {
     expect(req.url.split("?")[0]).toBe(`${getApiUrl()}/catalog/domains`);
     expect(queryOf(req).get("q")).toBe("ski boots");
     expect(bearerToken(req)).toBe(ACCESS);
-    // The mint shares this path. It must never have been touched.
-    expect(router.domains).toEqual([]);
     expect(router.other).toEqual([]);
     expect(router.all).toHaveLength(1);
   });
@@ -78,10 +71,9 @@ describe("shopping_domain_search — what the answer means", () => {
     expect(await run()).toEqual(contractResponse(TOOL));
   });
 
-  it("`matches: []` is a SUCCESS — the one answer that licenses the mint", async () => {
-    // Mapping the empty read to a failure would recreate the empty-shelf-straight-to-
-    // the-mint behaviour the read exists to delete: the agent could no longer tell
-    // "nothing stands here" from "the read did not happen".
+  it("`matches: []` is a SUCCESS, not a failed read", async () => {
+    // Mapped to a failure, the agent could no longer tell "nothing matched these words"
+    // from "the read did not happen".
     seedTokens(ACCESS, REFRESH);
     installRouter((kind) =>
       kind === "domainSearch" ? ok({ status: "ok", matches: [] }) : ok({}),

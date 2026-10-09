@@ -373,41 +373,25 @@ describe("each shopping tool carries its discipline clause", () => {
    * behavioural bug. Each entry is the one thing an agent that loses it gets wrong.
    */
   const DISCIPLINE: Record<(typeof SHOPPING_TOOLS)[number], RegExp[]> = {
-    // The read that licenses the mint, and the bound on how often it is taken.
-    shopping_domain_search: [/matches: \[\]/, /licens/i, /\b(2|two)\b/],
-    // sil SHIPS this document (ruling, 2026-09-19), so the description has to say what
-    // the agent is being handed: markdown that names what goes wrong, what to trust and
-    // what buying it online takes, plus each key's own `description` — which is what
-    // makes a question about that key worth the buyer's turn. Then what the keys are
-    // for, and which of them identify a purchasable option.
+    // Up to three leaves, told apart by `under`; an empty answer is told, never searched.
+    shopping_domain_search: [/up to three/i, /leaves/i, /under/, /matched/, /empty answer/i],
+    // The place's specs: what each key decides, which mark picks an option, and `record`.
+    // Words, never meaning; whole passages, filled ones unmatched; said plainly when empty.
+    shopping_content: [
+      /line through/i,
+      /never by meaning/i,
+      /`matched`/,
+      /before your first question/i,
+      /never .*open web/i,
+    ],
     shopping_domain_get: [
-      /markdown/i,
-      /goes wrong/i,
-      /to trust/i,
-      /buying it online/i,
       /moves the fit/i,
       /variant_spec/,
       /product_spec/,
       /operators?/i,
-    ],
-    // The FALLBACK, not a peer of the read: sil ships a document for the domains it
-    // holds. Then the permanent write, the two things that must hold first, the
-    // guide it has to produce, the vocabulary it may not coin, and the inheritance rule
-    // in three parts — no rename, a re-declaration that binds the subtree, and the mark
-    // that lets the agent use a key it did not mint.
-    shopping_domain_create: [
-      /\bFALLBACK\b/,
-      /curated/i,
-      /markdown/i,
-      /goes wrong/i,
-      /go to a shop/i,
-      /research|read(ing)? up/i,
-      /undo|permanent/i,
-      /never .{0,20}to coin/i,
-      /rename/i,
-      /subtree/i,
-      /inherited/,
-      /shopping_domain_get/,
+      /record/,
+      /not_a_leaf/,
+      /not carried/i,
     ],
     // One brief for the whole session, the id the rest of it is named by, the narrative
     // that IS the spec of the buy (ruling, 2026-09-19), and the quote every `reason` is —
@@ -509,25 +493,13 @@ describe("each shopping tool carries its discipline clause", () => {
     expect(missing).toEqual([]);
   });
 
-  /**
-   * `seller_specs` is still sayable in the mint's description — as the field
-   * shopping_domain_get answers, never as one this call takes — so an occurrence is
-   * cleared by its ATTRIBUTION rather than by its wording.
-   */
-  const ATTRIBUTED_SELLER_SPECS = /shopping_domain_get[^.]{0,60}seller_specs/g;
-
   it("no description names a field the signed wire took off its request", () => {
     // The map above only proves a clause is PRESENT: a description can carry every token
     // and still tell the agent to send a field the route no longer takes, which is what
-    // all three were before the signed wire. An agent sends what it reads.
+    // both were before the signed wire. An agent sends what it reads.
     const api = allRegisteredTools();
-    const mint = getTool(api, "shopping_domain_create").description ?? "";
-    expect(mint.replace(ATTRIBUTED_SELLER_SPECS, "")).not.toMatch(/seller_specs/);
     expect(getTool(api, "shopping_seller_get").description ?? "").not.toMatch(/ship_to/);
     expect(getTool(api, "shopping_offers").description ?? "").not.toMatch(/seller_specs|ship_to/);
-    // Guard-of-the-guard: the strip clears a real occurrence, so the bar is not passing
-    // over prose that simply dropped the pointer to where seller terms come from.
-    expect(mint).toMatch(/seller_specs/);
   });
 });
 

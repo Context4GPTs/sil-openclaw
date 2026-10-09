@@ -1,6 +1,6 @@
 {
   "name": "sil-openclaw",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Turn your OpenClaw into an expert shopping agent.",
   "license": "Apache-2.0",
   "repository": {

@@ -1,6 +1,6 @@
 /**
  * Typed HTTP wrappers for every endpoint the plugin calls — the two sil-web auth
- * endpoints, the sil-api identity read and the eleven shopping routes — each returning
+ * endpoints, the sil-api identity read and the ten shopping routes — each returning
  * a DISCRIMINATED UNION over the documented outcomes so the status taxonomy lives in
  * exactly one place and the caller switches on `kind` rather than re-deriving meaning
  * from `res.status` at every site.
@@ -184,7 +184,7 @@ export const requestTimeoutMs = (route: ShoppingRoute): number =>
   route.path === SEARCH_PATH ? SEARCH_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
 
 /**
- * The outcome of any shopping call — ONE union for all eleven, because they share one
+ * The outcome of any shopping call — ONE union for all ten, because they share one
  * origin, one Bearer, one auth plugin and the contract's one error vocabulary (§4).
  *
  * `ok` carries the API's own 200 body, unread and unreshaped. `unauthorized` is the
@@ -196,11 +196,10 @@ export type ShoppingOutcome =
   | { kind: "forbidden"; reason: string }
   | { kind: "invalid_request"; message: string }
   | { kind: "not_found"; message: string }
-  | { kind: "already_exists"; message: string }
   | { kind: "retryable"; source?: string; detail?: string };
 
 /**
- * Classify a shopping response. One classifier for all eleven routes — the contract
+ * Classify a shopping response. One classifier for all ten routes — the contract
  * gives them one error vocabulary, so a second one could only drift.
  *
  * The 200 gate is the whole of what the plugin owns: a plain object stating
@@ -214,7 +213,6 @@ function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcom
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
   if (status === 404) return { kind: "not_found", message: extractApiError(body).message };
-  if (status === 409) return { kind: "already_exists", message: extractApiError(body).message };
   if (status !== 200) return retryableFromBody(body);
 
   const envelope = asRecord(body);

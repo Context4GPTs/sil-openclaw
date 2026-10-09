@@ -1,11 +1,11 @@
 /**
- * INTEGRATION — `shopping_domain_get` on the wire: the category's guide and keys, read
+ * INTEGRATION — `shopping_domain_get` on the wire: the place's specs, read
  * by path.
  *
  * The path is a PATH SEGMENT, and that is the whole risk in this file. Concatenating it
- * would let a stray `/` re-route the call — to the registry search, to the mint's own
- * path, or off the route table entirely — so the segment is URL-encoded and the router
- * is asked which bucket the request actually landed in.
+ * would let a stray `/` re-route the call — to the registry search, or off the route
+ * table entirely — so the segment is URL-encoded and the router is asked which bucket
+ * the request actually landed in.
  */
 
 import { describe, it, expect } from "vitest";
@@ -20,7 +20,7 @@ import {
   seedTokens,
   useShoppingHarness,
 } from "./helpers/shopping-harness.js";
-import { DOMAIN_GET_404, contractResponse } from "./helpers/shopping-wire.js";
+import { DOMAIN_GET_404, DOMAIN_GET_NOT_A_LEAF, DOMAIN_GET_NOT_CARRIED, contractResponse } from "./helpers/shopping-wire.js";
 
 const TOOL = "shopping_domain_get";
 const ACCESS = "at-live-token";
@@ -46,7 +46,6 @@ describe("shopping_domain_get — the path is a segment, not a query", () => {
     expect(req.url).toBe(`${getApiUrl()}/catalog/domains/${PATH}`);
     expect(bearerToken(req)).toBe(ACCESS);
     expect(router.domainSearch).toEqual([]);
-    expect(router.domains).toEqual([]);
     expect(router.other).toEqual([]);
   });
 
@@ -87,7 +86,7 @@ describe("shopping_domain_get — the path is a segment, not a query", () => {
 });
 
 describe("shopping_domain_get — what the answer means", () => {
-  it("the contract's own 200 arrives verbatim, guide and every key's operators intact", async () => {
+  it("the contract's own 200 arrives verbatim, every key's operators intact", async () => {
     seedTokens(ACCESS, REFRESH);
     installRouter((kind) => (kind === "domainGet" ? ok(contractResponse(TOOL)) : ok({})));
     expect(await run()).toEqual(contractResponse(TOOL));
@@ -102,6 +101,30 @@ describe("shopping_domain_get — what the answer means", () => {
       status: "not_found",
       message: DOMAIN_GET_404.message,
       recovery: "shopping_domain_search",
+    });
+  });
+
+  it("a place sil does not carry is relayed with its own message, and no recovery to a search", async () => {
+    // The search would answer the same place again, flagged: a recovery hint here would
+    // send the agent in a circle.
+    seedTokens(ACCESS, REFRESH);
+    installRouter((kind) =>
+      kind === "domainGet" ? { status: 400, body: DOMAIN_GET_NOT_CARRIED } : ok({}),
+    );
+    expect(await run()).toEqual({
+      status: "invalid_request",
+      message: DOMAIN_GET_NOT_CARRIED.message,
+    });
+  });
+
+  it("a shelf is relayed as the refusal naming its leaves, with no recovery to a search", async () => {
+    seedTokens(ACCESS, REFRESH);
+    installRouter((kind) =>
+      kind === "domainGet" ? { status: 400, body: DOMAIN_GET_NOT_A_LEAF } : ok({}),
+    );
+    expect(await run()).toEqual({
+      status: "invalid_request",
+      message: DOMAIN_GET_NOT_A_LEAF.message,
     });
   });
 });
