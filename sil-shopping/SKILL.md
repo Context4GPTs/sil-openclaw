@@ -38,7 +38,7 @@ or search the kind.
 `shopping_domain_get { path }` answers every spec of the place on one line: its key, type,
 values and operators, and `ordered` where the values run in order. A wide place answers in
 pages: when it carries `next`, read on with `after: next` until it does not. Then read the
-specs that decide this buy whole with `keys` (up to six). Their descriptions say what each
+specs that decide this buy whole with `keys` (up to six); never `keys` and `after` together. Their descriptions say what each
 decides, what goes wrong at either end, and how a buyer's fact becomes a value.
 
 `shopping_content { path, q }` greps what sil holds: guides, the brand's word, dated reviews

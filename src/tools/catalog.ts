@@ -1,10 +1,7 @@
 /**
  * The twelve `shopping_*` tools, 1:1 with the sil-api user, brief and catalog routes.
- *
- * A projection on the way back would drop exactly the fields the agent's honesty reading
- * is computed from (`fit`, `unknown`, `variants`, `printed`) while looking healthy, so the
- * body crosses verbatim. A new `registerXTools` group has to be hand-wired into three guards
- * or it silently NARROWS them (CLAUDE.md), which is why all twelve live in one group.
+ * Bodies cross verbatim: a projection would drop the fields the honesty reading is
+ * computed from (`fit`, `unknown`, `variants`) while looking healthy.
  */
 
 import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk/plugin-entry";
@@ -124,8 +121,8 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/product",
     label: "Read the whole dossier on a shortlisted variant",
     description:
-      "One product whole: send 1–10 variant ids from a search and get everything sil holds"
-      + " for each, with the source and date of every reading.",
+      "One product whole: send 1–3 variant ids from a search (`page: true` for one id's"
+      + " whole page) and get everything sil holds for each, with the source and date of every reading.",
   },
   {
     name: "shopping_offers",
@@ -148,21 +145,13 @@ export const SHOPPING_TOOLS = [
   },
 ] as const satisfies readonly ShoppingTool[];
 
-/** The twelve names, as a literal union — so a table of one-per-tool anything is forced
- * to cover them all rather than quietly covering ten. */
+/** The twelve names, as a literal union, so a one-per-tool table must cover them all. */
 export type ShoppingToolName = (typeof SHOPPING_TOOLS)[number]["name"];
 
 /**
- * Registers the twelve, reading each one's request artifact off disk as it goes.
- *
- * That read is the ONE exception to "register() opens nothing": twelve synchronous
- * `readFileSync`s that return immediately and hold no resource open, exactly as
- * `ensureDataDir`'s `mkdirSync` does. It is deliberately eager — an unreadable artifact
- * is a broken build, and failing loud at load beats a tool whose `parameters` the host
- * has already published by the time anyone finds out.
- *
- * Each tool is a factory because the host hands the conversation and the model only to a
- * factory, once per agent run; every call that run makes says who is calling.
+ * Registers the twelve, reading each request artifact off disk eagerly: an unreadable
+ * artifact is a broken build and should fail at load. Each tool is a factory because the
+ * host hands the conversation and model only to a factory, once per agent run.
  */
 export function registerCatalogTools(api: PluginAPI): void {
   const pluginVersion = readInstalledVersion();
@@ -203,18 +192,15 @@ function defineTool(
         return called.result;
       }
       if (tool.name === SEARCH_TOOL) bufferPage(api, callId, called.body);
-      // VERBATIM, and the advisory rides its own block: the body's keys are the API's
-      // contract, so nothing of ours may sit beside them.
+      // The advisory rides its own block: nothing of ours may sit beside the body's keys.
       return jsonResult(called.body, ...wiringAdvisoryBlocks(api));
     },
   };
 }
 
 /**
- * Buffer an `ok` search page for a paired client to pull by this exact `callId`
- * (`sil.search_results`). A PURE SIDE EFFECT: the result returned to the agent is
- * byte-identical to what every channel got before this existed. Only a body that
- * actually carries its `products` list is stored — the pull surface counts it.
+ * Buffer an `ok` search page for a paired client to pull by `callId`
+ * (`sil.search_results`). A pure side effect: the agent's result is unchanged.
  */
 function bufferPage(api: PluginAPI, callId: string, body: Record<string, unknown>): void {
   const principal = readConfig()?.user?.id;
@@ -229,9 +215,8 @@ function bufferPage(api: PluginAPI, callId: string, body: Record<string, unknown
   putSearchResult(callId, body as SearchResultPage, principal);
 }
 
-/** Why this `callId` will resolve nothing, logged where the decision is made. The pull
- * says only `not_found` — deliberately — so this line is the whole of an operator's
- * account of a search a client could not render. */
+/** Why this `callId` will resolve nothing: the pull answers only `not_found`, so this
+ * log line is the operator's whole account. */
 function skipped(api: PluginAPI, callId: string, reason: string): void {
   logSearchResults(api, "info", "skipped", { callId, reason });
 }

@@ -248,7 +248,7 @@ function identityResult(
 }
 
 /** Not registered: a distinct, actionable outcome naming the recovery tool. No
- * identity fields (name/addresses) so the agent can't mistake it for a read. */
+ * identity fields (name/address) so the agent can't mistake it for a read. */
 function notRegistered() {
   return jsonResult({
     status: "not_registered",

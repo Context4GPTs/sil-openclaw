@@ -29,7 +29,7 @@
  *     `contracts.tools` string array;
  *   - the real tool groups register exactly the tools named there (and
  *     the manifest names exactly the tools they register) — the set on
- *     both sides equals the FIFTEEN tools: the eleven `shopping_*` tools
+ *     both sides equals the FIFTEEN tools: the twelve `shopping_*` tools
  *     1:1 with the sil-api routes, and the three account tools that keep the
  *     `sil_` name. A GROUP swap is not picked up for free — `codeRegisteredNames()`
  *     below has to be rewired or it silently narrows instead of going red.

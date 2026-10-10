@@ -10,6 +10,15 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Changed
+
+- **Fifteen tools on sil's signed contract.** `shopping_brief_create`, `shopping_brief_edit` and
+  `shopping_profile_edit` are gone; `shopping_brief_write`, `shopping_user_read`,
+  `shopping_user_remember` and `shopping_user_forget` replace them. `sil_whoami` answers the
+  lean shape (name, country, currency, gender, language, one default address). Replies are
+  compact JSON. `shopping_domain_get` pages with `keys` and `after`; `shopping_product_get`
+  takes at most three ids and an optional `page`. The skill is rewritten to match.
+
 ## [0.6.0] - 2026-10-08
 
 ### Added

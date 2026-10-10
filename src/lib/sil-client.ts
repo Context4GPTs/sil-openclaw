@@ -332,7 +332,7 @@ export async function refreshSession(
 
 /**
  * Read the authenticated user's identity from sil-api (the SECOND origin, not
- * sil-web): a BODYLESS `GET /identity` answering `{ id, name, country?, addresses }`.
+ * sil-web): a BODYLESS `GET /identity` answering `{ status, name, country?, currency?, gender?, language?, address? }`.
  * Bodyless is the point — the principal is the token subject and nothing else, so
  * no `agent_id` is sendable and the `principal_mismatch` 403 cannot arise.
  *

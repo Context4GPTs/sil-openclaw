@@ -6,8 +6,7 @@
  * ONLY thing mocked is `fetch` — the host/network boundary. There is no live
  * sil-api or Postgres in this repo; the true cross-service guarantee (real PII
  * over the wire from a live sil-api) is sil-stage's e2e (goal SC9), deferred
- * AND additionally blocked on the sil-services follow-on that makes sil-api's
- * /identity return real `{name, addresses}` (Signals). Here we prove the whole
+ * Here we prove the whole
  * PLUGIN-SIDE contract — the refresh choreography + error taxonomy + privacy —
  * against a mocked boundary, exactly as the register card proved its claim flow.
  *
@@ -19,7 +18,7 @@
  *
  * Wire shapes:
  *   - identity (sil-api):  POST <sil-api>/identity, Authorization: Bearer <at>
- *       200 envelope { ..., result: { name, addresses } } → ok
+ *       200 envelope { ..., result: { name, address? } } → ok
  *       401                                               → refresh-and-retry
  *       5xx / network throw                               → retryable
  *   - refresh (sil-web):   POST <sil-web>/api/v1/auth/refresh { refresh_token }
@@ -29,8 +28,8 @@
  *    is the agreed real-read contract the sil-services follow-on will satisfy.)
  *
  * THE anti-false-green (PO "latent-endpoint confusion"): the happy-path mock
- * returns the agreed REAL `{name, addresses}` and the test asserts the tool
- * surfaces the authenticated user's name + addresses — NOT the current sil-api
+ * returns the agreed REAL `{name, address}` and the test asserts the tool
+ * surfaces the authenticated user's name + address — NOT the current sil-api
  * stub shape `{kind, verified, subject, attributes, note}`. The suite is unable
  * to go green while the product promise (return real identity) is unmet.
  *
@@ -280,13 +279,13 @@ describe("sil_whoami — happy path (valid access token)", () => {
     expect(blob).toContain("Ada Lovelace");
     expect(blob).toContain("London");
     // And NOT the current sil-api stub payload shape — if the tool were wired to
-    // the stub it would pass with these markers and no name/addresses.
+    // the stub it would pass with these markers and no name/address.
     expect(blob).not.toContain("\"kind\"");
     expect(blob).not.toContain("\"verified\"");
     expect(blob).not.toContain("\"note\"");
 
     // The whole envelope, structurally: `{ status: "ok", identity: { name,
-    // country, addresses } }` — the shape an agent reads to know where the buyer is.
+    // country, address } }` — the shape an agent reads to know where the buyer is.
     // What `identity` carries INSIDE it is `tools/whoami.test.ts`'s, through the same
     // `execute()`; re-asserting it here would be two tests of one classifier.
     expect(payload["status"]).toBe("ok");
@@ -516,7 +515,7 @@ describe("sil_whoami — refresh also fails (dead refresh token)", () => {
     expect(blob).toMatch(/re-?register|sil_register|must.*register|session.*expired/);
     // Not presented as success.
     expect(payload["name"]).toBeUndefined();
-    expect(payload["addresses"]).toBeUndefined();
+    expect(payload["address"]).toBeUndefined();
 
     // The NO-STORM bound: with a dead refresh token, the tool does NOT retry the
     // identity read after the failed refresh — exactly ONE identity fetch and
@@ -583,7 +582,7 @@ describe("sil_whoami — 403 forbidden is terminal (NEVER refreshed)", () => {
     // Surfaces a terminal, actionable outcome — not a success, not a transient
     // "try again" (a 403 won't fix itself on retry), not a silent empty.
     expect(payload["name"]).toBeUndefined();
-    expect(payload["addresses"]).toBeUndefined();
+    expect(payload["address"]).toBeUndefined();
     const blob = JSON.stringify(payload).toLowerCase();
     // Carries the actionable provisioning/onboarding hint distinct from the
     // 401/5xx outcomes (a 403 is "you aren't set up", not "auth expired" or

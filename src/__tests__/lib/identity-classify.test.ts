@@ -26,7 +26,7 @@
  *      The CURRENT sil-api `/identity` STUB returns
  *      `{ kind, verified, subject, attributes, note }` — NO name. That
  *      stub 200 MUST NOT classify as `ok`: if it did, the suite could go green
- *      while the product promise (return the user's real name + addresses) is
+ *      while the product promise (return the user's real name) is
  *      unmet. A partial/garbage 200 falls to `retryable` (a malformed success is
  *      a server fault, not a terminal auth state), never to a false `ok`.
  *
@@ -64,7 +64,7 @@ const ENVELOPED_IDENTITY = {
   result: REAL_IDENTITY,
 };
 
-/** The CURRENT sil-api /identity STUB payload — NO name, NO addresses. The
+/** The CURRENT sil-api /identity STUB payload — NO name. The
  * tool must never read this as a real identity. */
 const STUB_BODY = {
   kind: "identity",
@@ -200,7 +200,7 @@ describe("classifyIdentityResponse — retryable (transient) failures", () => {
 describe("classifyIdentityResponse — the anti-false-green body gate on 200", () => {
   it("200 with the CURRENT sil-api STUB body ({kind,verified,subject,...}) is NOT ok", () => {
     // The load-bearing false-green guard (PO "latent-endpoint confusion"): the
-    // live sil-api /identity stub returns no name + no addresses. If a tool wired
+    // live sil-api /identity stub returns no name. If a tool wired
     // against the stub could read it as `ok`, the suite would pass while the
     // product promise (real identity) is unmet. The stub body must NOT be `ok`.
     const out = classifyIdentityResponse(200, STUB_BODY);
@@ -209,7 +209,7 @@ describe("classifyIdentityResponse — the anti-false-green body gate on 200", (
 
   it("200 wrapping the STUB body in an envelope `result` is still NOT ok", () => {
     // Defends the same gate after the unwrap step — a wrapped stub is still a
-    // stub (no name/addresses), and must not slip through as `ok`.
+    // stub (no name), and must not slip through as `ok`.
     const out = classifyIdentityResponse(200, {
       protocol: "ucp",
       domain: "identity",
@@ -220,11 +220,9 @@ describe("classifyIdentityResponse — the anti-false-green body gate on 200", (
 
   it("200 with an address but NO name is NOT ok (the name gate is non-negotiable)", () => {
     // The `name` requirement is the load-bearing anti-false-green guard and
-    // survives the relax unchanged — a body with addresses but no name (and the
-    // empty-array case below) must still be `retryable`, never `ok`.
-    expect(classifyIdentityResponse(200, { addresses: [{ line1: "x" }] }).kind).not.toBe("ok");
-    expect(classifyIdentityResponse(200, { addresses: [] }).kind).not.toBe("ok");
-    expect(classifyIdentityResponse(200, { name: "", addresses: [] }).kind).not.toBe("ok");
+    // is non-negotiable — a body with an address but no name must still be `retryable`.
+    expect(classifyIdentityResponse(200, { address: { locality: "x", country: "GB" } }).kind).not.toBe("ok");
+    expect(classifyIdentityResponse(200, { name: "" }).kind).not.toBe("ok");
   });
 
   it("200 with an empty / null / non-object body is NOT ok (defensive)", () => {

@@ -9,7 +9,7 @@
  *     "run sil_register" outcome with ZERO network calls, never an
  *     empty/null/ambiguous identity, never a crash, never a hang;
  *   - the success result carries ONLY the identity payload (name, country,
- *     addresses, measurements and preferences) — no access token, no refresh
+ *     address) — no access token, no refresh
  *     token, no Authorization header;
  *   - the tokens/JWT/PII leak-canary: across success AND not-registered paths,
  *     no token value AND no PII string (name/address) appears in any logger
@@ -28,7 +28,7 @@
  *   - src/tools/identity.ts#registerIdentityTools(api) also registers a
  *     `sil_whoami` tool (Type.Object({}) — no inputs);
  *   - execute() returns a jsonResult; on success the payload carries the
- *     buyer's identity (name, country, addresses, measurements, preferences)
+ *     buyer's identity (name, country, address)
  *     and NOTHING credential;
  *   - with no tokens.json, execute() returns a terminal "not registered"
  *     payload naming `sil_register` as the recovery action and makes no fetch.
@@ -176,7 +176,7 @@ describe("sil_whoami — not registered (no tokens.json) short-circuit", () => {
     expect(Object.keys(payload).length).toBeGreaterThan(0);
     // It must NOT masquerade as a real identity read.
     expect(payload["name"]).toBeUndefined();
-    expect(payload["addresses"]).toBeUndefined();
+    expect(payload["address"]).toBeUndefined();
     // It must carry a status/error marker the agent can branch on.
     const blob = JSON.stringify(payload).toLowerCase();
     expect(blob).toMatch(/status|error|not.?registered/);

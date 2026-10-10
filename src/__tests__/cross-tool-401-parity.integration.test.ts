@@ -2,7 +2,7 @@
  * INTEGRATION — the refusal envelope is UNIFORM across every sil-api-calling tool, and
  * it is one shared path, never a per-tool handler.
  *
- * Eleven tools reach sil-api with a Bearer: the ten `shopping_*` tools and
+ * Thirteen tools reach sil-api with a Bearer: the twelve `shopping_*` tools and
  * `sil_whoami`. Each drives `refreshAndRetryOnce` — at most one refresh, at most one
  * retry, no loop. The failure this file forecloses is DRIFT: a tool that refreshes twice,
  * retries a dead token, clears credentials on a transient blip, or (worst) succeeds where
@@ -13,7 +13,7 @@
  * produce the same STATUS, the same credential side effect and the same call counts.
  * Parity is asserted across the set, not tool by tool, so a divergence names itself. It
  * is also why the per-tool files do not each re-assert the shared arms: one code path,
- * one bar, driven eleven ways.
+ * one bar, driven thirteen ways.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
