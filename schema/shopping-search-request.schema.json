@@ -4,35 +4,15 @@
   "title": "sil shopping_search — request",
   "type": "object",
   "required": [
-    "brief",
     "domain",
-    "query",
     "n"
   ],
   "properties": {
-    "brief": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 256,
-      "description": "Names the session's brief, so sil records this call against the want behind it. A brief that is not the buyer's answers `not_found`."
-    },
     "domain": {
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Sends a leaf the domain search answered. A kind, shelf, domain or top answers `not_a_leaf`, naming leaves to pick."
-    },
-    "query": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 512,
-      "description": "Sends the shopping words: the thing as a shop lists it and the numbers that pick the product, never a sentence."
-    },
-    "n": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 10,
-      "description": "Asks for this many variants — one size or one colour each, grouped under their products."
+      "description": "Sends a leaf, or the kind above its leaves when the question is which kind; a shelf, domain or top answers `not_a_leaf`."
     },
     "specs": {
       "type": "array",
@@ -93,13 +73,25 @@
         "additionalProperties": false
       },
       "maxItems": 32,
-      "description": "Sends the product specs this search asks, written by the agent from the brief's; a key the domain does not hold is recorded, never refused."
+      "description": "Sends every settled want as a spec with the operator it needs; on a kind, `leaf` in or nin its leaves. A key the place does not hold is recorded, never refused."
     },
-    "ship_to": {
+    "query": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 64,
-      "description": "Leave this out: sil then localizes the search to the buyer's default address. Send it only when the buyer named another address, as the exact `label` `sil_whoami` lists — never a word like \"default\", never a country. It excludes no seller anywhere else — where the seller is, is the seller spec `country`, on the brief, for the offers to read."
+      "maxLength": 512,
+      "description": "Sends words only for what no spec holds, never a sentence."
+    },
+    "n": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Asks for this many variants."
+    },
+    "brief": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Ties the call to a brief in sil’s record; never required."
     }
   },
   "additionalProperties": false

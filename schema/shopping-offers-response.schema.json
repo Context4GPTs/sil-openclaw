@@ -13,18 +13,13 @@
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
     },
-    "ship_to": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64,
-      "description": "Says which address every `seller_fit.ships` below is about; absent when the default address carries no label."
-    },
     "offers": {
       "type": "array",
       "items": {
         "type": "object",
         "required": [
           "variant_id",
+          "title",
           "seller_id",
           "seller_name",
           "price",
@@ -39,7 +34,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 256,
-            "description": "Matches the offer to the pick."
+            "description": "Matches the offer to the pick; passes it to the dossier."
+          },
+          "title": {
+            "type": "string",
+            "description": "Names what the listing sells."
           },
           "seller_id": {
             "type": "string",
@@ -49,7 +48,7 @@
           },
           "seller_name": {
             "type": "string",
-            "description": "Names the shop to the buyer."
+            "description": "Names the shop."
           },
           "price": {
             "type": "string",
@@ -95,7 +94,7 @@
           "observed_at": {
             "type": "string",
             "format": "date-time",
-            "description": "Dates the price to the buyer — this offer was read live, at this moment."
+            "description": "Dates the price: when sil last read it."
           },
           "url": {
             "type": "string",
@@ -165,7 +164,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Lists where the pick can be bought — one variant at one seller per entry."
+      "description": "Lists where it can be bought, best for the buyer first."
     }
   },
   "additionalProperties": false

@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-user-read-response.schema.json",
+  "title": "sil shopping_user_read — response",
+  "type": "object",
+  "required": [
+    "status",
+    "rows"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "kind",
+              "what",
+              "value",
+              "gives_back",
+              "source",
+              "kept_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Names the row to replace it, and to forget it."
+              },
+              "kind": {
+                "type": "string",
+                "const": "measurement",
+                "description": "Reads what kind of row it is."
+              },
+              "what": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names what was measured, in plain words: \"foot length\", \"chest\"."
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "A size as it is printed."
+                  }
+                ],
+                "description": "Reads a number to turn into a spec value, or a size as printed."
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16,
+                "description": "Reads the unit, or the size system: cm, mm, EU, UK."
+              },
+              "brand": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Reads whose sizing a printed size is in."
+              },
+              "place": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names where the row applies: a place sil holds, or a wider one in a word or two, never a sentence."
+              },
+              "gives_back": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Says what the row gives the buyer back next time; said when it is kept."
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "told"
+                  },
+                  {
+                    "type": "string",
+                    "const": "agent"
+                  }
+                ],
+                "description": "`told`: the buyer said it. `agent`: the agent read it off the conversation."
+              },
+              "kept_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Says when it was kept."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "kind",
+              "text",
+              "gives_back",
+              "source",
+              "kept_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Names the row to replace it, and to forget it."
+              },
+              "kind": {
+                "type": "string",
+                "const": "memory",
+                "description": "Reads what kind of row it is."
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500,
+                "description": "Reads what the buyer told, in a sentence; starts from it, never asks it again."
+              },
+              "place": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names where the row applies: a place sil holds, or a wider one in a word or two, never a sentence."
+              },
+              "gives_back": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Says what the row gives the buyer back next time; said when it is kept."
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "told"
+                  },
+                  {
+                    "type": "string",
+                    "const": "agent"
+                  }
+                ],
+                "description": "`told`: the buyer said it. `agent`: the agent read it off the conversation."
+              },
+              "kept_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Says when it was kept."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "kind",
+              "subject",
+              "op",
+              "value",
+              "gives_back",
+              "source",
+              "kept_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Names the row to replace it, and to forget it."
+              },
+              "kind": {
+                "type": "string",
+                "const": "preference",
+                "description": "Reads what kind of row it is."
+              },
+              "subject": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names what the preference is about: noise, price, a maker."
+              },
+              "op": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "eq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "neq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "gte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "lte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "likes"
+                  },
+                  {
+                    "type": "string",
+                    "const": "dislikes"
+                  }
+                ],
+                "description": "Reads how the value bounds it: a spec operator, or likes and dislikes."
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "description": "The value in words."
+                  }
+                ],
+                "description": "Reads the value the preference holds to."
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16,
+                "description": "Reads the unit or currency of a number."
+              },
+              "place": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names where the row applies: a place sil holds, or a wider one in a word or two, never a sentence."
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Quotes why, in the buyer’s words."
+              },
+              "gives_back": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Says what the row gives the buyer back next time; said when it is kept."
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "told"
+                  },
+                  {
+                    "type": "string",
+                    "const": "agent"
+                  }
+                ],
+                "description": "`told`: the buyer said it. `agent`: the agent read it off the conversation."
+              },
+              "kept_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Says when it was kept."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "kind",
+              "product",
+              "when",
+              "gives_back",
+              "source",
+              "kept_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Names the row to replace it, and to forget it."
+              },
+              "kind": {
+                "type": "string",
+                "const": "purchase",
+                "description": "Reads what kind of row it is."
+              },
+              "product": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "description": "Names what they bought, maker and model."
+              },
+              "place": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names where the row applies: a place sil holds, or a wider one in a word or two, never a sentence."
+              },
+              "store": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "description": "Names where they bought it."
+              },
+              "when": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$",
+                "description": "Dates it, to the month or the day."
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Reads what else they said about it: its size, its fit."
+              },
+              "gives_back": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Says what the row gives the buyer back next time; said when it is kept."
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "told"
+                  },
+                  {
+                    "type": "string",
+                    "const": "agent"
+                  }
+                ],
+                "description": "`told`: the buyer said it. `agent`: the agent read it off the conversation."
+              },
+              "kept_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Says when it was kept."
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "maxItems": 200,
+      "description": "Reads everything sil keeps about the buyer, whole: never asks what a row answers, and says the row when it uses it."
+    }
+  },
+  "additionalProperties": false
+}

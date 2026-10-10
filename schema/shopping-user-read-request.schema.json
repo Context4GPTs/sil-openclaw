@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-user-read-request.schema.json",
+  "title": "sil shopping_user_read — request",
+  "type": "object",
+  "properties": {
+    "kinds": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "measurement"
+          },
+          {
+            "type": "string",
+            "const": "memory"
+          },
+          {
+            "type": "string",
+            "const": "preference"
+          },
+          {
+            "type": "string",
+            "const": "purchase"
+          }
+        ],
+        "description": "A kind of row."
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Reads only these kinds; absent, every row."
+    }
+  },
+  "additionalProperties": false
+}

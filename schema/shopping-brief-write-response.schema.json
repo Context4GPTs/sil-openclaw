@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.sil.com/shopping-brief-create-response.schema.json",
-  "title": "sil shopping_brief_create — response",
+  "$id": "https://schemas.sil.com/shopping-brief-write-response.schema.json",
+  "title": "sil shopping_brief_write — response",
   "type": "object",
   "required": [
     "status",
@@ -17,7 +17,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Holds it for the session and names it on every search and offers call."
+      "description": "Names the brief; a later search or offers call may name it so sil ties them."
     }
   },
   "additionalProperties": false

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-user-forget-request.schema.json",
+  "title": "sil shopping_user_forget — request",
+  "anyOf": [
+    {
+      "type": "object",
+      "required": [
+        "ids"
+      ],
+      "properties": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Names the row to replace it, and to forget it."
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "description": "Forgets these rows, named off the read, on the buyer’s word."
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "all"
+      ],
+      "properties": {
+        "all": {
+          "type": "boolean",
+          "const": true,
+          "description": "Forgets everything the read lists and the buyer’s calls in sil’s record."
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "type": "object"
+}

@@ -133,21 +133,12 @@ function registerWhoami(api: PluginAPI): void {
     name: "sil_whoami",
     label: "Who am I on sil",
     description:
-      "The buyer's name, country, `gender`, `currency` and the addresses on file, and"
-      + " the `measurements` and `preferences` sil already holds for them — read live from"
-      + " sil with the credentials sil_register stored, a stale session token refreshed"
-      + " once and the read retried. `gender` is `male`, `female` or `other`, and is"
-      + " absent where the buyer never stated one; on anything worn it is the product"
-      + " spec `gender` in the registry's own spelling (male → `mens`, female →"
-      + " `womens`), asked once where this answers none and never inferred. `currency` is"
-      + " the ISO 4217 code they price in, absent where nothing on file says it: a money"
-      + " row that means theirs leaves `currency` off — with none on file, it names its"
-      + " own — and sil converts nothing. Call it at the start of a chat: it"
-      + " says where the buyer is, what they price in, how they measure and what they"
-      + " lastingly prefer, and you never ask them for anything it answers."
-      + " shopping_profile_edit is what writes those last three back. If they are not"
-      + " registered, or the session is past refreshing, the result names the recovery"
-      + " (sil_register).",
+      "Who is signed in, where they are and what they price in: `name`, `country`,"
+      + " `currency`, `gender`, `language` and the default `address`, each absent where sil"
+      + " holds none. Fast: call it freely, and never ask the buyer for what it answers."
+      + " `gender` on anything worn is the product spec `gender` (male → `mens`, female →"
+      + " `womens`), asked once where it answers none. If they are not registered, or the"
+      + " session is past refreshing, the result names the recovery (sil_register).",
     parameters: Type.Object({}),
     async execute() {
       // 1 — no tokens on disk is the SAME state for a never-registered buyer and
@@ -242,7 +233,7 @@ function identityOutcomeToResult(
 }
 
 /** Success: `identity` carries the buyer's name, country, gender and currency (each when
- * the read has one), addresses, measurements and preferences — no token, no Bearer header. */
+ * the read has one), language and the default address — no token, no Bearer header. */
 function identityResult(
   api: PluginAPI,
   identity: Identity,

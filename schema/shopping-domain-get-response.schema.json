@@ -28,7 +28,7 @@
     "name": {
       "type": "string",
       "maxLength": 64,
-      "description": "Calls the thing this in English — there is one, and this is it."
+      "description": "Calls the thing this in English."
     },
     "labels": {
       "type": "array",
@@ -37,7 +37,7 @@
         "maxLength": 64
       },
       "maxItems": 20,
-      "description": "Reads every other word for the thing — the market's own English, folded to the form sil maps under. sil asks each index in them; the agent never sends them."
+      "description": "Reads every other word for the thing; never sends them."
     },
     "specs": {
       "type": "array",
@@ -163,22 +163,27 @@
           "variant_spec": {
             "type": "boolean",
             "const": true,
-            "description": "Settles these before searching when the buyer has not said them; expects their values under `variants[]`."
+            "description": "Expects its values under `variants[]`."
           },
           "product_spec": {
             "type": "boolean",
             "const": true,
-            "description": "Writes it into the brief when the buyer names it; never treats two products that differ on it as one."
+            "description": "Never treats two products that differ on it as one."
           },
           "several": {
             "type": "boolean",
             "const": true,
-            "description": "Reads a list for it under `fit`: a product holds several of these at once. `eq`/`in` match a product holding any value asked; `neq`/`nin` one holding none of them."
+            "description": "Reads a list for it: a product holds several at once."
+          },
+          "ordered": {
+            "type": "boolean",
+            "const": true,
+            "description": "`allowed_values` run in order, least first: `gte`/`lte` take one and reach every one past it — \"filter or coarser\" is `gte filter`, never `eq filter`."
           }
         },
         "additionalProperties": false
       },
-      "description": "Builds predicates with keys the registry holds."
+      "description": "Builds spec rows with keys sil holds."
     },
     "seller_specs": {
       "type": "array",
@@ -304,7 +309,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Builds seller rows with keys the registry holds — the base every domain shares and this domain's own branch — and sends them to `shopping_offers`."
+      "description": "Builds seller rows for `shopping_offers`."
     },
     "reach": {
       "type": "array",
@@ -320,7 +325,7 @@
             "type": "string",
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
-            "description": "Reads the node that declares these keys: this one, or a kind it is."
+            "description": "Reads the node that declares these keys."
           },
           "via": {
             "anyOf": [
@@ -335,9 +340,13 @@
               {
                 "type": "string",
                 "const": "part"
+              },
+              {
+                "type": "string",
+                "const": "leaf"
               }
             ],
-            "description": "Reads how: the node's own list, a kind it is, or what one of its parts' links says."
+            "description": "Reads how: its own, a kind it is, a part’s link, or a leaf under a kind."
           },
           "part": {
             "type": "string",
@@ -348,14 +357,15 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 64,
+              "description": "A key."
             },
-            "description": "Reads the keys, in the order the node lists them."
+            "description": "Reads the keys, in the node’s order."
           }
         },
         "additionalProperties": false
       },
-      "description": "Reads where each key comes from: this node, a kind it is, or a link to a part."
+      "description": "Reads where each key comes from."
     },
     "kinds": {
       "type": "array",
@@ -380,7 +390,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads every kind this thing is, nearest first; it takes each one's keys."
+      "description": "Reads every kind this thing is, nearest first."
     },
     "parts": {
       "type": "array",
@@ -452,7 +462,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads what the thing has, and the keys each part is bought on."
+      "description": "Reads what the thing has."
     },
     "made_for": {
       "type": "array",
@@ -488,7 +498,7 @@
           }
         ]
       },
-      "description": "Reads what this part or consumable is made for, where it is one."
+      "description": "Reads what a part is made for."
     },
     "leaves": {
       "type": "array",
@@ -503,7 +513,7 @@
             "type": "string",
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
-            "description": "Sends the leaf to `shopping_domain_get` and `shopping_search`."
+            "description": "Sends the leaf to `shopping_domain_get` or `shopping_search`."
           },
           "name": {
             "type": "string",
@@ -513,7 +523,7 @@
         },
         "additionalProperties": false
       },
-      "description": "On a kind: every leaf under it, to pick the one the buyer means. A kind’s own specs are served too, but a search runs on a leaf."
+      "description": "On a kind: every leaf under it. A search on the kind answers across them, `leaf` a key it takes."
     },
     "record": {
       "anyOf": [
@@ -526,7 +536,7 @@
           "const": "specs"
         }
       ],
-      "description": "On a leaf: how its products are bought. `specs` — on their measures alone; `full` — on their measures and their record: purpose, story, pros and cons, for and not for."
+      "description": "On a leaf: bought on its measures alone, or on its measures and its record."
     }
   },
   "additionalProperties": false

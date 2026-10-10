@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/sil-whoami-response.schema.json",
+  "title": "sil sil_whoami — response",
+  "type": "object",
+  "required": [
+    "status",
+    "name"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Greets the buyer by it."
+    },
+    "country": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "minLength": 2,
+      "maxLength": 2,
+      "description": "Localizes every answer to where the buyer is."
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "minLength": 3,
+      "maxLength": 3,
+      "description": "Reads what the buyer prices in; a money row naming none means it."
+    },
+    "gender": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "male"
+        },
+        {
+          "type": "string",
+          "const": "female"
+        },
+        {
+          "type": "string",
+          "const": "other"
+        }
+      ],
+      "description": "Sends it as the product spec `gender` on anything worn."
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^[a-z]{2}$",
+      "description": "Speaks to the buyer in it; sil is always spoken to in English."
+    },
+    "address": {
+      "type": "object",
+      "required": [
+        "locality",
+        "country"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Calls the address this to the buyer."
+        },
+        "locality": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Says where things ship to, by town."
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "minLength": 2,
+          "maxLength": 2,
+          "description": "Says which country things ship to."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Knows where things ship to; never asks the buyer for it."
+    }
+  },
+  "additionalProperties": false
+}

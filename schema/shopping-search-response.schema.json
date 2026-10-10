@@ -5,7 +5,8 @@
   "type": "object",
   "required": [
     "status",
-    "products"
+    "products",
+    "receipt"
   ],
   "properties": {
     "status": {
@@ -29,7 +30,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 256,
-            "description": "Writes it into the Brief as the pick, so the next session names the same product."
+            "description": "Names the product."
           },
           "title": {
             "type": "string",
@@ -37,11 +38,17 @@
           },
           "brand": {
             "type": "string",
-            "description": "Names the maker to the buyer."
+            "description": "Names the maker."
           },
           "image": {
             "type": "string",
-            "description": "Shows it on the card."
+            "description": "Shows it."
+          },
+          "leaf": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "On a search over a kind: which leaf it is."
           },
           "fit": {
             "type": "object",
@@ -66,7 +73,7 @@
                 ]
               }
             },
-            "description": "Answers each requested key with the value sil holds, or `\"unknown\"` where it holds none — what to dig into or to say as unverified, never a miss."
+            "description": "Answers each asked key with the value sil holds, or `\"unknown\"`: what to say as unverified."
           },
           "price": {
             "type": "array",
@@ -98,7 +105,7 @@
               },
               "additionalProperties": false
             },
-            "description": "Quotes the range over the variants that came back; a currency other than the ask's is a bound sil could not test."
+            "description": "Quotes the range over the variants returned."
           },
           "variants": {
             "type": "array",
@@ -163,11 +170,11 @@
               },
               "description": "A variant that answers the ask, and every option value that identifies it. One carrying none is a listing sil has not read sizes from."
             },
-            "description": "Passes an `id` on to the dossier and the offers; names the option to the buyer."
+            "description": "Passes an `id` to the dossier and offers."
           },
           "host": {
             "type": "string",
-            "description": "Names the shop whose page sil read in this request."
+            "description": "Names the shop whose page was read in this call."
           },
           "printed": {
             "type": "object",
@@ -176,12 +183,80 @@
                 "type": "string"
               }
             },
-            "description": "Reads the page's own labelled pairs that no key catches — a provisional read of what sil could not verify. Absent on a product sil already holds."
+            "description": "Reads labelled pairs no key catches."
           }
         },
         "additionalProperties": false
       },
-      "description": "Shows the shortlist in this order, and never re-ranks it."
+      "description": "Shows the shortlist in this order."
+    },
+    "receipt": {
+      "type": "object",
+      "required": [
+        "shops",
+        "products",
+        "fit",
+        "could_not_tell",
+        "set_aside"
+      ],
+      "properties": {
+        "shops": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Says how many shops sil looked across."
+        },
+        "products": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Says how many products sil weighed; every line below adds up to it."
+        },
+        "fit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Says how many meet every asked spec on values sil read."
+        },
+        "could_not_tell": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Says how many sil could not tell: nothing failed, a value was unread. Never a failure."
+        },
+        "set_aside": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "count",
+              "key"
+            ],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Says how many were set aside on this key, each product once, on its first failing spec."
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names the asked spec they failed."
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 3,
+                "description": "On a choice: the values they held, most common first."
+              }
+            },
+            "additionalProperties": false
+          },
+          "maxItems": 8,
+          "description": "Says why the rest were set aside, in the buyer’s words."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Shows the buyer what sil checked, in a shop assistant’s words; relayed, never recounted."
     }
   },
   "additionalProperties": false

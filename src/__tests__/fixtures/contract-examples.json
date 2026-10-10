@@ -1,27 +1,236 @@
 {
+  "sil_whoami": {
+    "response": {
+      "status": "ok",
+      "name": "Dimitra",
+      "country": "GR",
+      "currency": "EUR",
+      "gender": "female",
+      "language": "el",
+      "address": {
+        "label": "Home",
+        "locality": "Athens",
+        "country": "GR"
+      }
+    }
+  },
+  "shopping_user_read": {
+    "response": {
+      "status": "ok",
+      "rows": [
+        {
+          "id": "r1",
+          "kind": "purchase",
+          "product": "Hario V60 02 dripper",
+          "place": "coffee drippers",
+          "store": "Green Plantation",
+          "when": "2026-09",
+          "note": "with paper filters",
+          "source": "told",
+          "gives_back": "what she brews with is never asked",
+          "kept_at": "2026-09-14T09:12:00Z"
+        },
+        {
+          "id": "r2",
+          "kind": "purchase",
+          "product": "Fellow Stagg gooseneck kettle",
+          "place": "kettles",
+          "store": "Green Plantation",
+          "when": "2026-09",
+          "source": "told",
+          "gives_back": "kettles are not offered again",
+          "kept_at": "2026-09-14T09:12:00Z"
+        },
+        {
+          "id": "r3",
+          "kind": "measurement",
+          "what": "shoe size",
+          "value": 38,
+          "unit": "EU",
+          "place": "trainers",
+          "gives_back": "trainers are searched in her size without asking",
+          "source": "told",
+          "kept_at": "2026-08-02T18:40:00Z"
+        }
+      ]
+    }
+  },
+  "shopping_user_remember": {
+    "response": {
+      "status": "ok",
+      "kept": [
+        {
+          "id": "r4",
+          "kind": "memory",
+          "gives_back": "next time she shops for coffee gear or beans, the agent starts from how she brews and asks nothing about it"
+        },
+        {
+          "id": "r5",
+          "kind": "preference",
+          "gives_back": "loud machines are left out without her saying so again"
+        },
+        {
+          "id": "r6",
+          "kind": "preference",
+          "gives_back": "picks start from the cheapest thing that does the job, without asking her budget again"
+        }
+      ]
+    },
+    "request": {
+      "rows": [
+        {
+          "kind": "memory",
+          "text": "Makes one or two cups of V60 at 7am on weekdays, while her partner is still asleep. Her counter is about a chopping board wide. Might try espresso one day.",
+          "place": "coffee",
+          "source": "told",
+          "gives_back": "next time she shops for coffee gear or beans, the agent starts from how she brews and asks nothing about it"
+        },
+        {
+          "kind": "preference",
+          "subject": "noise",
+          "op": "eq",
+          "value": "quiet",
+          "place": "coffee",
+          "reason": "partner asleep at 7am",
+          "source": "told",
+          "gives_back": "loud machines are left out without her saying so again"
+        },
+        {
+          "kind": "preference",
+          "subject": "price",
+          "op": "lte",
+          "value": 110,
+          "unit": "EUR",
+          "place": "coffee gear",
+          "reason": "would rather spend less than get something fancy",
+          "source": "told",
+          "gives_back": "picks start from the cheapest thing that does the job, without asking her budget again"
+        }
+      ]
+    }
+  },
+  "shopping_user_forget": {
+    "response": {
+      "status": "ok",
+      "removed": {
+        "measurement": 1,
+        "memory": 1,
+        "preference": 2,
+        "purchase": 2,
+        "record": 41,
+        "brief": 0
+      },
+      "cannot_reach": [
+        "this chat, which your assistant's app keeps",
+        "your order at Green Plantation, which the shop keeps"
+      ]
+    },
+    "request": {
+      "all": true
+    }
+  },
+  "shopping_brief_write": {
+    "response": {
+      "status": "ok",
+      "id": "b1"
+    },
+    "request": {
+      "title": "Ski boots",
+      "narrative": "First own boots after two winters of rentals that numbed his toes. A wide forefoot decides before brand; soft, for blues and easy reds; under 250 euros.",
+      "domain": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
+      "specs": [
+        {
+          "key": "last_width",
+          "op": "gte",
+          "value": 102,
+          "reason": "104 mm wide"
+        },
+        {
+          "key": "price",
+          "op": "lte",
+          "value": "250",
+          "currency": "EUR",
+          "reason": "Around €250"
+        }
+      ]
+    }
+  },
+  "shopping_brief_read": {
+    "response": {
+      "status": "ok",
+      "briefs": [
+        {
+          "id": "b1",
+          "title": "Ski boots",
+          "status": "active",
+          "domains": [
+            "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots"
+          ],
+          "updated_at": "2026-10-06T21:04:00Z"
+        }
+      ]
+    }
+  },
   "shopping_domain_search": {
     "response": {
       "status": "ok",
       "matches": [
         {
-          "path": "product.vehicles.car_cargo.boot_protection.car_boot_liners",
-          "name": "Boot liners",
-          "matched": "boot liners",
+          "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
+          "name": "Hand coffee grinders",
+          "matched": "coffee grinder",
           "under": [
             {
-              "path": "product.vehicles",
-              "name": "Vehicles",
+              "path": "product.food_kitchen",
+              "name": "Food & kitchen",
               "role": "top"
             },
             {
-              "path": "product.vehicles.car_cargo",
-              "name": "Roof racks, cargo & towing",
+              "path": "product.food_kitchen.coffee_and_coffee_equipment",
+              "name": "Coffee & coffee equipment",
               "role": "domain"
             },
             {
-              "path": "product.vehicles.car_cargo.boot_protection",
-              "name": "Boot liners & protection",
+              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment",
+              "name": "Coffee equipment",
               "role": "shelf"
+            },
+            {
+              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
+              "name": "Coffee grinders",
+              "role": "kind"
+            }
+          ]
+        },
+        {
+          "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "name": "Electric burr coffee grinders",
+          "matched": "coffee grinder",
+          "under": [
+            {
+              "path": "product.food_kitchen",
+              "name": "Food & kitchen",
+              "role": "top"
+            },
+            {
+              "path": "product.food_kitchen.coffee_and_coffee_equipment",
+              "name": "Coffee & coffee equipment",
+              "role": "domain"
+            },
+            {
+              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment",
+              "name": "Coffee equipment",
+              "role": "shelf"
+            },
+            {
+              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
+              "name": "Coffee grinders",
+              "role": "kind"
+            },
+            {
+              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders",
+              "name": "Electric coffee grinders",
+              "role": "kind"
             }
           ]
         }
@@ -31,111 +240,61 @@
   "shopping_domain_get": {
     "response": {
       "status": "ok",
-      "path": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
-      "name": "Alpine ski boots",
+      "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
+      "name": "Coffee grinders",
       "labels": [
-        "μπότες_αλπικού_σκι",
-        "alpine_ski_boots"
+        "coffee_grinders",
+        "grinders"
       ],
       "specs": [
         {
-          "key": "mondo_size",
-          "display_name": "Size (Mondopoint)",
-          "description": "The size, and the only one that counts: the length of the foot in centimetres, never a street-shoe size. Shells come in half sizes, and a half size shares its shell with the whole size below it — 27 and 27.5 are the same shell with a thinner liner in the 27 — so a 27.2 cm foot is looking at both. Too long is the mistake that cannot be fixed afterwards.",
-          "type": "number",
-          "unit": "cm",
-          "step": 0.5,
-          "variant_spec": true,
+          "key": "finest_brew",
+          "display_name": "Finest brew",
+          "description": "The finest method the maker says it grinds for. A grinder that reaches espresso also grinds every coarser method; one that stops at filter will never pull a shot.",
+          "type": "enum",
+          "allowed_values": [
+            "greek",
+            "espresso",
+            "moka",
+            "filter",
+            "french press"
+          ],
+          "ordered": true,
           "operators": [
             "eq",
-            "in"
-          ],
-          "labels": [
-            "boot_size",
-            "mondo",
-            "mondopoint",
-            "size",
-            "μέγεθος_μπότας"
-          ],
-          "forms": {
-            "27/27.5": "27.5",
-            "42_1/2_(275)": "27.5"
-          }
-        },
-        {
-          "key": "last_width",
-          "display_name": "Last width",
-          "description": "How wide the shell is across the forefoot, quoted by the maker at the reference size 26.5 … A last within about 2 mm of the measured forefoot fits, so a 102 mm forefoot asks for 100 mm or more rather than an exact width. The maker's figure beats a shop's \"wide fit\" tag.",
-          "type": "number",
-          "unit": "mm",
-          "operators": [
+            "in",
             "gte",
             "lte"
           ]
         },
         {
-          "key": "sole_norm",
-          "display_name": "Sole norm",
-          "description": "The standard the sole is built to, and the only key here that can make a boot unusable rather than merely uncomfortable: a sole the binding does not accept will not click in, or will not release in a fall. Nearly every alpine binding sold since 2018 accepts both Alpine (ISO 5355) and GripWalk (ISO 23223) — ask which binding they own before shortlisting.",
+          "key": "coarsest_brew",
+          "display_name": "Coarsest brew",
+          "description": "The coarsest method the maker says it grinds for.",
           "type": "enum",
           "allowed_values": [
-            "alpine_iso5355",
-            "gripwalk_iso23223",
-            "touring_iso9523",
-            "walk_to_ride"
+            "espresso",
+            "moka",
+            "filter",
+            "french press",
+            "cold brew"
           ],
+          "ordered": true,
           "operators": [
             "eq",
             "in",
-            "neq",
-            "nin"
-          ]
-        },
-        {
-          "key": "skill_level",
-          "display_name": "Skill level",
-          "description": "How hard the skier drives the boot … A level is a floor and not an exact match, so it is asked as a set rather than as an equality.",
-          "type": "enum",
-          "allowed_values": [
-            "beginner",
-            "intermediate",
-            "advanced",
-            "expert"
-          ],
-          "operators": [
-            "eq",
-            "in",
-            "neq",
-            "nin"
-          ]
-        },
-        {
-          "key": "flex_index",
-          "display_name": "Flex index",
-          "description": "The maker's own stiffness number, printed on the cuff. It is an index, not a unit: it compares within one maker's line and nowhere else. Too soft and the boot folds under the skier in a hard turn; too stiff and it will not bend at all in the cold, which is the more common and more miserable mistake.",
-          "type": "number",
-          "unit": "index",
-          "operators": [
             "gte",
             "lte"
-          ],
-          "labels": [
-            "flex",
-            "flex_index",
-            "ευρετήριο_flex"
           ]
         },
         {
-          "key": "discipline",
-          "display_name": "Discipline",
-          "description": "Where the boot is meant to be skied … Buying across this line is the mistake a good fit cannot rescue.",
+          "key": "burr_material",
+          "display_name": "Burr material",
+          "description": "What the burrs are made of. Steel cuts the dense beans of a light roast cleanly; ceramic stays sharp but grinds less evenly at filter size.",
           "type": "enum",
           "allowed_values": [
-            "piste",
-            "all_mountain",
-            "freeride",
-            "touring",
-            "freeride_touring"
+            "steel",
+            "ceramic"
           ],
           "operators": [
             "eq",
@@ -145,15 +304,12 @@
           ]
         },
         {
-          "key": "model_year",
-          "display_name": "Model year",
-          "description": "The season the maker sells it as … Last season's model of the same boot is usually the same shell at a lower price.",
+          "key": "noise_level",
+          "display_name": "Noise level",
+          "description": "How loud it is grinding, in decibels up close. A hand grinder has no motor and is rarely measured.",
           "type": "number",
-          "unit": "year",
-          "product_spec": true,
+          "unit": "dB",
           "operators": [
-            "eq",
-            "in",
             "gte",
             "lte"
           ]
@@ -169,58 +325,13 @@
             "neq",
             "nin"
           ]
-        },
-        {
-          "key": "condition",
-          "display_name": "Condition",
-          "description": "Whether the item is sold new, used or refurbished.",
-          "type": "enum",
-          "allowed_values": [
-            "new",
-            "used",
-            "refurbished"
-          ],
-          "operators": [
-            "eq",
-            "in",
-            "neq",
-            "nin"
-          ]
-        },
-        {
-          "key": "gender",
-          "display_name": "Gender",
-          "description": "The fit the item is cut for; one model's men's and women's cut are two products.",
-          "type": "enum",
-          "allowed_values": [
-            "mens",
-            "womens",
-            "unisex",
-            "kids"
-          ],
-          "operators": [
-            "eq",
-            "in",
-            "neq",
-            "nin"
-          ]
-        },
-        {
-          "key": "weight",
-          "display_name": "Weight",
-          "type": "number",
-          "unit": "kg",
-          "operators": [
-            "gte",
-            "lte"
-          ]
         }
       ],
       "seller_specs": [
         {
           "key": "country",
           "display_name": "Seller country",
-          "description": "Where the seller is, as its own pages print it: an ISO 3166-1 alpha-2 code, as `sil_whoami` prints the buyer's.",
+          "description": "Where the seller is, as its own pages print it: an ISO 3166-1 alpha-2 code.",
           "type": "enum",
           "operators": [
             "eq",
@@ -232,157 +343,126 @@
         {
           "key": "return_window_days",
           "display_name": "Return window",
-          "description": "Days after delivery a return is accepted.",
           "type": "number",
           "unit": "days",
           "operators": [
             "gte",
             "lte"
-          ]
-        },
-        {
-          "key": "restocking_fee_ratio",
-          "display_name": "Restocking fee",
-          "type": "number",
-          "unit": "ratio",
-          "operators": [
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "delivery_days_min",
-          "display_name": "Delivery, from",
-          "type": "number",
-          "unit": "days",
-          "operators": [
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "delivery_days_max",
-          "display_name": "Delivery, up to",
-          "type": "number",
-          "unit": "days",
-          "operators": [
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "fee",
-          "display_name": "Shipping fee",
-          "type": "money",
-          "operators": [
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "free_threshold",
-          "display_name": "Free shipping from",
-          "type": "money",
-          "operators": [
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "duties_included",
-          "display_name": "Duties included",
-          "type": "boolean",
-          "operators": [
-            "eq"
           ]
         }
       ],
       "reach": [
         {
-          "from": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
-          "via": "own",
+          "from": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
+          "via": "leaf",
           "keys": [
-            "mondo_size",
-            "last_width",
-            "sole_norm",
-            "skill_level",
-            "flex_index",
-            "discipline",
-            "model_year"
+            "finest_brew",
+            "coarsest_brew",
+            "burr_material"
           ]
         },
         {
-          "from": "kind.made_for_a_person",
-          "via": "kind",
+          "from": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders",
+          "via": "leaf",
           "keys": [
-            "gender"
+            "finest_brew",
+            "coarsest_brew"
+          ]
+        },
+        {
+          "from": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "via": "leaf",
+          "keys": [
+            "noise_level",
+            "burr_material"
           ]
         },
         {
           "from": "product",
           "via": "kind",
           "keys": [
-            "brand",
-            "condition",
-            "weight"
+            "brand"
           ]
         }
       ],
       "kinds": [
         {
-          "path": "kind.made_for_a_person",
-          "name": "Made for a person"
-        },
-        {
           "path": "product",
           "name": "Product"
         }
       ],
-      "parts": [
-        {
-          "name": "liner",
-          "role": "product.sports.winter.ski.boot_liners",
-          "how": [
-            "built in"
-          ],
-          "optional": false,
-          "many": false,
-          "keys": []
-        }
-      ],
+      "parts": [],
       "made_for": [],
-      "record": "full"
+      "leaves": [
+        {
+          "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.blade_coffee_grinders",
+          "name": "Blade coffee grinders"
+        },
+        {
+          "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "name": "Electric burr coffee grinders"
+        },
+        {
+          "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
+          "name": "Hand coffee grinders"
+        }
+      ]
     }
   },
   "shopping_content": {
     "response": {
       "status": "ok",
-      "tokens": 246,
-      "total": 1,
+      "tokens": 212,
+      "total": 4,
       "passages": [
         {
-          "id": "measure-your-feet-for-ski-boots",
-          "kind": "tutorial",
-          "title": "Measure your feet for ski boots",
-          "from": "product.sports.skiing_snowboarding.ski_boots",
-          "role": "kind",
-          "written": "2026-10-09",
-          "part": 1,
-          "of": 1,
+          "id": "how-coffee-and-coffee-equipment-are-bought",
+          "kind": "guide",
+          "title": "How coffee and coffee equipment are bought",
+          "from": "product.food_kitchen.coffee_and_coffee_equipment",
+          "role": "domain",
+          "written": "2026-10-05",
+          "heading": "Grinders",
+          "part": 4,
+          "of": 9,
           "matched": [
-            "measure",
-            "foot"
+            "light",
+            "roast",
+            "steel",
+            "burr",
+            "evenness"
           ],
-          "text": "Measure both feet standing, in the thin socks you ski in. Stand on a sheet of paper with the heel against a wall and mark the tip of the longest toe; the distance from the wall is the foot length. Work from the longer foot, in centimetres. Then measure the width across the widest part of the forefoot, in millimetres. A ski boot's size, Mondopoint, is the foot length in centimetres: read it against the maker's own chart, which also gives the shell's sole length and its last width, the inside width at the forefoot for a reference size. Charts differ by maker, so read each one. A shell can be heated and widened by a boot fitter; it can never be made shorter or narrower, so too long is the mistake that cannot be fixed afterwards."
+          "text": "A light roast is denser than a dark one, and dull or soft burrs crush it rather than cut it. Steel burrs hold an even grind at filter size; ceramic ones stay sharp for years but scatter more fines, which a V60 tastes as bitterness beside sourness."
+        },
+        {
+          "id": "timemore-c3-esp-pro-review",
+          "kind": "review",
+          "title": "Timemore C3 ESP Pro, tested at filter size",
+          "author": "Coffee Kitchen Lab",
+          "url": "https://example.org/reviews/timemore-c3-esp-pro",
+          "published": "2026-03-18",
+          "from": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
+          "role": "leaf",
+          "written": "2026-10-05",
+          "part": 2,
+          "of": 5,
+          "matched": [
+            "steel",
+            "burr",
+            "evenness"
+          ],
+          "text": "At 45 clicks the steel burrs gave the tightest spread of the five hand grinders we sieved under €120."
         }
       ]
     },
     "request": {
-      "path": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
-      "q": "measure foot",
+      "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
+      "q": "light roast steel burr evenness",
       "kinds": [
-        "tutorial"
-      ]
+        "guide",
+        "review"
+      ],
+      "max_passages": 2
     }
   },
   "shopping_search": {
@@ -390,235 +470,105 @@
       "status": "ok",
       "products": [
         {
-          "id": "c1",
-          "title": "Hf 110 (GW) - Ανδρικές Μπότες Σκι Nordica Black/Anthracite/Red",
-          "brand": "Nordica",
-          "image": "https://freerider.gr/media/…/050k1201-7t1.jpg",
-          "host": "freerider.gr",
-          "fit": {
-            "condition": "unknown",
-            "flex_index": "unknown",
-            "last_width": 102
-          },
-          "price": [
-            {
-              "from": "399",
-              "to": "399",
-              "currency": "EUR"
-            }
-          ],
-          "variants": [
-            {
-              "id": "c1.27",
-              "mondo_size": 27,
-              "price": [
-                {
-                  "from": "399",
-                  "to": "399",
-                  "currency": "EUR"
-                }
-              ]
-            },
-            {
-              "id": "c1.27.5",
-              "mondo_size": 27.5,
-              "price": [
-                {
-                  "from": "399",
-                  "to": "399",
-                  "currency": "EUR"
-                }
-              ]
-            }
-          ],
-          "printed": {
-            "Όγκος (Volume)": "Medium / Wide",
-            "Βάρος (μισό ζευγάρι)": "1760 g",
-            "Σόλες (Soles)": "GripWalk Extra-Grip"
-          }
-        },
-        {
-          "id": "c2",
-          "title": "NORDICA NORDICA SPORTMACHINE 3 110 (24/25)",
-          "brand": "Nordica",
-          "image": "https://www.alpinehut.com/media/…/sportmachine-3-110.jpg",
-          "host": "www.alpinehut.com",
-          "fit": {
-            "condition": "unknown",
-            "flex_index": "unknown",
-            "last_width": "unknown",
-            "price": "unknown"
-          },
-          "price": [
-            {
-              "from": "349.99",
-              "to": "349.99",
-              "currency": "USD"
-            }
-          ],
-          "variants": [
-            {
-              "id": "c2.27.5",
-              "mondo_size": 27.5,
-              "price": [
-                {
-                  "from": "349.99",
-                  "to": "349.99",
-                  "currency": "USD"
-                }
-              ]
-            }
-          ],
-          "printed": {
-            "Color": "Anthracite/Black/Green"
-          }
-        },
-        {
-          "id": "c3",
-          "title": "HF S 110 Ski Boots",
-          "brand": "Nordica",
-          "image": "https://www.ellis-brigham.com/media/…/701601900.jpg",
-          "host": "www.ellis-brigham.com",
-          "fit": {
-            "condition": "unknown",
-            "flex_index": "unknown",
-            "last_width": "unknown",
-            "mondo_size": "unknown",
-            "price": "unknown"
-          },
-          "price": [
-            {
-              "from": "440.00",
-              "to": "440.00",
-              "currency": "GBP"
-            }
-          ],
-          "variants": [
-            {
-              "id": "c3.1",
-              "price": [
-                {
-                  "from": "440.00",
-                  "to": "440.00",
-                  "currency": "GBP"
-                }
-              ]
-            }
-          ],
-          "printed": {}
-        }
-      ]
-    },
-    "alternate": {
-      "status": "ok",
-      "products": [
-        {
           "id": "p1",
-          "title": "Nordica HF 110 GW",
-          "brand": "Nordica",
-          "image": "https://freerider.gr/media/…/050k1201-7t1.jpg",
+          "title": "Timemore C3 ESP Pro",
+          "brand": "Timemore",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
           "fit": {
-            "condition": "unknown",
-            "flex_index": 110,
-            "last_width": 102
+            "burr_material": "steel",
+            "finest_brew": "espresso",
+            "coarsest_brew": "french press",
+            "price": "109"
           },
           "price": [
             {
-              "from": "399",
-              "to": "399",
+              "from": "109",
+              "to": "115",
               "currency": "EUR"
             }
           ],
           "variants": [
             {
               "id": "v1",
-              "mondo_size": 27,
               "price": [
                 {
-                  "from": "399",
-                  "to": "399",
+                  "from": "109",
+                  "to": "115",
                   "currency": "EUR"
-                }
-              ]
-            },
-            {
-              "id": "v2",
-              "mondo_size": 27.5,
-              "price": [
-                {
-                  "from": "399",
-                  "to": "399",
-                  "currency": "EUR"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "id": "p2",
-          "title": "Nordica Sportmachine 3 110",
-          "brand": "Nordica",
-          "image": "https://www.alpinehut.com/media/…/sportmachine-3-110.jpg",
-          "fit": {
-            "condition": "unknown",
-            "flex_index": "unknown",
-            "last_width": 102,
-            "price": "unknown"
-          },
-          "price": [
-            {
-              "from": "349.99",
-              "to": "349.99",
-              "currency": "USD"
-            }
-          ],
-          "variants": [
-            {
-              "id": "v3",
-              "mondo_size": 27.5,
-              "price": [
-                {
-                  "from": "349.99",
-                  "to": "349.99",
-                  "currency": "USD"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "id": "p3",
-          "title": "Nordica HF S 110",
-          "brand": "Nordica",
-          "image": "https://www.ellis-brigham.com/media/…/701601900.jpg",
-          "fit": {
-            "condition": "unknown",
-            "flex_index": 115,
-            "last_width": 100,
-            "mondo_size": "unknown",
-            "price": "unknown"
-          },
-          "price": [
-            {
-              "from": "440.00",
-              "to": "440.00",
-              "currency": "GBP"
-            }
-          ],
-          "variants": [
-            {
-              "id": "v4",
-              "price": [
-                {
-                  "from": "440.00",
-                  "to": "440.00",
-                  "currency": "GBP"
                 }
               ]
             }
           ]
         }
-      ]
+      ],
+      "receipt": {
+        "shops": 26,
+        "products": 410,
+        "fit": 5,
+        "could_not_tell": 7,
+        "set_aside": [
+          {
+            "count": 212,
+            "key": "leaf",
+            "values": [
+              "blade coffee grinders"
+            ]
+          },
+          {
+            "count": 96,
+            "key": "burr_material",
+            "values": [
+              "ceramic"
+            ]
+          },
+          {
+            "count": 54,
+            "key": "noise_level"
+          },
+          {
+            "count": 36,
+            "key": "price"
+          }
+        ]
+      }
+    },
+    "request": {
+      "domain": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
+      "specs": [
+        {
+          "key": "leaf",
+          "op": "nin",
+          "value": [
+            "blade_coffee_grinders"
+          ]
+        },
+        {
+          "key": "burr_material",
+          "op": "eq",
+          "value": "steel"
+        },
+        {
+          "key": "noise_level",
+          "op": "lte",
+          "value": 60
+        },
+        {
+          "key": "finest_brew",
+          "op": "lte",
+          "value": "espresso"
+        },
+        {
+          "key": "coarsest_brew",
+          "op": "gte",
+          "value": "filter"
+        },
+        {
+          "key": "price",
+          "op": "lte",
+          "value": "110"
+        }
+      ],
+      "n": 3
     }
   },
   "shopping_product_get": {
@@ -627,29 +577,45 @@
       "variants": [
         {
           "id": "v1",
-          "title": "HAWX ULTRA 130 S DUAL BOA",
-          "brand": "Atomic",
-          "description": "… dual BOA system provides unmatched fit micro-adjustability. Flex: 130, Last: 98 mm, Intended Use: Freeride, Ability Level: Advanced to Expert",
+          "title": "Timemore C3 ESP Pro",
+          "brand": "Timemore",
           "images": [
-            "https://cdn.shopify.com/s/files/1/0670/5135/6456/files/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580-gs2qoce3w9aoubnfhm89.jpg?v=1770768168"
+            "https://www.greenplantation.eu/media/timemore-c3-esp-pro.jpg"
           ],
           "specs": {
-            "mondo_size": 27.5,
-            "model_year": 2027,
-            "flex_index": 130,
-            "last_width": 98,
-            "discipline": "freeride"
+            "burr_material": "steel",
+            "finest_brew": "espresso",
+            "coarsest_brew": "french press",
+            "clicks_per_rotation": 30,
+            "handle_foldable": true
           },
           "sources": [
             {
-              "host": "www.skiessentials.com",
-              "read_at": "2026-09-10T15:38:00Z"
-            },
-            {
-              "host": "www.atomic.com",
-              "read_at": "2026-09-10T15:38:05Z"
+              "host": "www.greenplantation.eu",
+              "read_at": "2026-10-08T07:40:00Z"
             }
-          ]
+          ],
+          "reviews": {
+            "count": 14,
+            "score": {
+              "value": 4.6,
+              "of": 5
+            },
+            "praised": [
+              "even at filter size",
+              "folds into a drawer"
+            ],
+            "complained": [
+              "slow for more than two cups"
+            ],
+            "sources": [
+              {
+                "name": "Coffee Kitchen Lab",
+                "url": "https://example.org/reviews/timemore-c3-esp-pro",
+                "date": "2026-03-18"
+              }
+            ]
+          }
         }
       ]
     }
@@ -657,36 +623,39 @@
   "shopping_offers": {
     "response": {
       "status": "ok",
-      "ship_to": "home",
       "offers": [
         {
-          "variant_id": "v1",
-          "seller_id": "s1",
-          "seller_name": "SkiEssentials",
-          "price": "939.95",
+          "variant_id": "v31",
+          "title": "Gigabyte GeForce RTX 3060 Gaming OC 12G",
+          "seller_id": "s7",
+          "seller_name": "Newegg",
+          "price": "419.00",
           "currency": "USD",
           "availability": "in_stock",
-          "observed_at": "2026-09-11T10:02:14Z",
-          "url": "https://www.skiessentials.com/products/2026-atomic-hawx-ultra-130-s-dual-boa-ski-boots-ae5033580",
+          "observed_at": "2026-10-09T06:10:00Z",
+          "url": "https://www.newegg.com/p/N82E16814932448",
           "seller_fit": {
-            "ships": "not_serviceable",
-            "return_window_days": 30
+            "ships": "serviceable"
           }
         },
         {
-          "variant_id": "v1",
-          "seller_id": "s2",
-          "seller_name": "Atomic",
-          "price": "1150.00",
+          "variant_id": "v32",
+          "title": "MSI GeForce RTX 3060 Ventus 2X 12G OC",
+          "seller_id": "s8",
+          "seller_name": "Micro Center",
+          "price": "429.99",
           "currency": "USD",
-          "availability": "out_of_stock",
-          "observed_at": "2026-09-11T10:02:14Z",
-          "url": "https://www.atomic.com/en-us/shop/product/hawx-ultra-130-s-dual-boa-ae0002296.html",
+          "availability": "in_stock",
+          "observed_at": "2026-10-08T22:45:00Z",
+          "url": "https://www.microcenter.com/product/635318",
           "seller_fit": {
-            "ships": "unknown"
+            "ships": "serviceable"
           }
         }
       ]
+    },
+    "request": {
+      "name": "RTX 3060 12GB"
     }
   },
   "shopping_seller_get": {
@@ -695,221 +664,60 @@
       "sellers": [
         {
           "id": "s1",
-          "name": "SkiEssentials",
-          "host": "www.skiessentials.com",
-          "country": "US",
-          "ships": "not_serviceable",
-          "specs": {
-            "return_window_days": 30
-          },
-          "shipping": {
-            "policy_url": "https://www.skiessentials.com/shipping",
-            "routes": [
-              {
-                "country": "US",
-                "service": "standard",
-                "label": "Eastern US",
-                "free_over": {
-                  "amount": "49",
-                  "currency": "USD"
-                }
-              },
-              {
-                "country": "US",
-                "service": "standard",
-                "label": "Western US",
-                "free_over": {
-                  "amount": "49",
-                  "currency": "USD"
-                }
-              },
-              {
-                "country": "US",
-                "service": "express",
-                "label": "Next Day Air"
-              },
-              {
-                "country": "US",
-                "service": "express",
-                "label": "2nd Day Air"
-              }
-            ]
+          "name": "Green Plantation",
+          "host": "www.greenplantation.eu",
+          "country": "GR",
+          "ships": "serviceable",
+          "delivery": {
+            "cost": {
+              "amount": "12.00",
+              "currency": "EUR"
+            },
+            "days": {
+              "min": 2,
+              "max": 4
+            }
           },
           "returns": {
-            "policy_url": "https://www.skiessentials.com/returns",
-            "window_days": 30
-          }
-        },
-        {
-          "id": "h.www.climber.gr",
-          "name": "Climber.gr by Klaoudatos",
-          "host": "www.climber.gr",
-          "country": "GR",
-          "ships": "unknown",
-          "specs": {},
+            "window_days": 14
+          },
+          "warranty": {
+            "months": 24
+          },
           "policy_urls": [
-            "https://www.climber.gr/apostoli-paraggelias/",
-            "https://www.climber.gr/epistrofes-proionton/"
-          ]
-        },
-        {
-          "id": "s2",
-          "name": "Atomic",
-          "host": "www.atomic.com",
-          "country": "AT",
-          "ships": "unknown",
-          "specs": {}
-        }
-      ]
-    }
-  },
-  "shopping_brief_create": {
-    "response": {
-      "status": "ok",
-      "id": "b1"
-    },
-    "request": {
-      "title": "Ski boots",
-      "narrative": "Advanced skier, short wide foot. Fit decides before brand.",
-      "domain": "product.sports.winter.ski.boots",
-      "specs": [
-        {
-          "key": "skill_level",
-          "op": "eq",
-          "value": "advanced",
-          "reason": "I am advanced skier"
-        }
-      ]
-    }
-  },
-  "shopping_brief_edit": {
-    "response": {
-      "status": "ok",
-      "id": "b1"
-    },
-    "alternate": {
-      "status": "ok",
-      "id": "b1"
-    },
-    "request": {
-      "id": "b1",
-      "domain": "product.sports.winter.ski.boots",
-      "narrative": "Advanced skier, short wide foot. Buying online, new only, from Greece. Fit decides before brand.",
-      "specs": [
-        {
-          "key": "price",
-          "op": "lte",
-          "value": "350",
-          "currency": "EUR",
-          "reason": "my top of the budget range is 350 euros"
-        },
-        {
-          "key": "condition",
-          "op": "eq",
-          "value": "new",
-          "reason": "I don't want used"
-        }
-      ]
-    }
-  },
-  "shopping_brief_read": {
-    "response": {
-      "status": "ok",
-      "brief": {
-        "id": "b1",
-        "title": "Ski boots",
-        "status": "active",
-        "narrative": "Advanced skier, short wide foot. Buying online, new only, from Greece. Fit decides before brand.",
-        "specs": {
-          "product.sports.winter.ski.boots": [
             {
-              "key": "mondo_size",
-              "op": "in",
-              "value": [
-                27,
-                27.5
-              ],
-              "reason": "length 27.2 cm"
+              "kind": "shipping",
+              "url": "https://www.greenplantation.eu/el/shipping"
             },
             {
-              "key": "last_width",
-              "op": "gte",
-              "value": 100,
-              "reason": "forefoot 101 mm"
-            },
-            {
-              "key": "skill_level",
-              "op": "eq",
-              "value": "advanced",
-              "reason": "I am advanced skier"
-            },
-            {
-              "key": "price",
-              "op": "lte",
-              "value": "400",
-              "currency": "EUR",
-              "reason": "Actually, 400 euros."
-            },
-            {
-              "key": "condition",
-              "op": "eq",
-              "value": "new",
-              "reason": "I don't want used"
+              "kind": "returns",
+              "url": "https://www.greenplantation.eu/el/returns"
             }
           ],
-          "seller": [
-            {
-              "key": "country",
-              "op": "in",
-              "value": [
-                "GR"
-              ],
-              "reason": "options that I can buy in Greece only"
-            }
-          ]
-        },
-        "decisions": [
-          {
-            "at": "2026-09-17T10:41:07Z",
-            "text": "Ceiling raised 350 → 400 EUR: nothing in 27.5 at 100 mm or wider under 350."
+          "specs": {
+            "return_window_days": 14
+          },
+          "reviews": {
+            "count": 312,
+            "score": {
+              "value": 4.7,
+              "of": 5
+            },
+            "praised": [
+              "fast delivery in Athens",
+              "careful packing"
+            ],
+            "complained": [
+              "slow replies by email"
+            ],
+            "sources": [
+              {
+                "name": "Google reviews",
+                "url": "https://www.google.com/maps/place/Green+Plantation",
+                "date": "2026-10-01"
+              }
+            ]
           }
-        ]
-      }
-    },
-    "alternate": {
-      "status": "ok",
-      "briefs": [
-        {
-          "id": "b1",
-          "title": "Ski boots",
-          "status": "active",
-          "domains": [
-            "product.sports.winter.ski.boots"
-          ],
-          "updated_at": "2026-09-17T10:41:07Z"
-        }
-      ]
-    }
-  },
-  "shopping_profile_edit": {
-    "response": {
-      "status": "ok"
-    },
-    "request": {
-      "measurements": [
-        {
-          "name": "foot_length",
-          "value": 27.2,
-          "unit": "cm"
-        },
-        {
-          "name": "forefoot_width",
-          "value": 101,
-          "unit": "mm"
-        },
-        {
-          "name": "shoe_size_us",
-          "value": 9
         }
       ]
     }

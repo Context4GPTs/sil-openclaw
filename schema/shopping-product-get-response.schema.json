@@ -29,7 +29,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 256,
-            "description": "Matches the entry back to the id it asked for."
+            "description": "Matches the entry to the id asked for."
           },
           "title": {
             "type": "string",
@@ -37,18 +37,18 @@
           },
           "brand": {
             "type": "string",
-            "description": "Names the maker to the buyer."
+            "description": "Names the maker."
           },
           "description": {
             "type": "string",
-            "description": "Quotes the page's own product description."
+            "description": "Quotes the page's own description."
           },
           "images": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Shows it to the buyer."
+            "description": "Shows it."
           },
           "specs": {
             "type": "object",
@@ -73,7 +73,7 @@
                 ]
               }
             },
-            "description": "Compares the shortlist on every key sil holds — the product's values and this variant's own — not only the asked ones."
+            "description": "Compares on every key sil holds."
           },
           "sources": {
             "type": "array",
@@ -98,6 +98,97 @@
             },
             "description": "Says where and when sil read them."
           },
+          "reviews": {
+            "type": "object",
+            "required": [
+              "count",
+              "praised",
+              "complained",
+              "sources"
+            ],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Says how many reviews sil read."
+              },
+              "score": {
+                "type": "object",
+                "required": [
+                  "value",
+                  "of"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "The average score."
+                  },
+                  "of": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "The scale’s top: 5, 10, 100."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Says the average score on its own scale, where the reviews give one."
+              },
+              "praised": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "One thing reviewers praise."
+                },
+                "maxItems": 5,
+                "description": "Says what reviewers praise, most often first."
+              },
+              "complained": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "One thing reviewers complain of."
+                },
+                "maxItems": 5,
+                "description": "Says what reviewers complain of, most often first."
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "url",
+                    "date"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Names the site or reviewer."
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "Hands the buyer the reviews."
+                    },
+                    "date": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Dates the latest review read there."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 5,
+                "description": "Cites where, and how recent."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Tells the buyer what other buyers said, from the reviews sil holds; absent until it holds any."
+          },
           "webpage_info": {
             "type": "object",
             "required": [
@@ -120,7 +211,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads the whole of what sil knows before recommending."
+      "description": "Reads the whole before recommending."
     }
   },
   "additionalProperties": false

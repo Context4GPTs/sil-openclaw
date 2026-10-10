@@ -36,7 +36,7 @@
  * request body:
  *
  *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
- *     200 { name, country?, addresses, measurements?, preferences? } → ok
+ *     200 { status, name, country?, currency?, gender?, language?, address? } → ok
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     5xx / network / abort                               → retryable
@@ -61,7 +61,7 @@
  * The VERB is load-bearing: only `GET /identity` is the self-read — `POST` is the
  * agent enrich route and carries no name. The identity rides in the envelope's
  * `result`, and a 200 with no usable identity (no `name`) falls to `retryable`,
- * never to a false `ok`. An EMPTY `addresses: []` IS a valid identity.
+ * never to a false `ok`. A buyer with no `address` is a valid identity.
  *
  * Tokens never appear in a log line here (mirrors sil-web's invariant) — they
  * only travel inside the returned union variant.
@@ -109,48 +109,24 @@ export type RefreshOutcome =
   | { kind: "invalid_grant" }
   | { kind: "retryable" };
 
-/** A postal address as returned by the sil-api identity read. These fields are
- * only optional HINTS — addresses pass through OPAQUE: `extractIdentity` filters
- * to plain objects and never reads or remaps individual fields. The ACTUAL wire
- * shape is sil-api's `AddressWire` (`street_address`, `address_locality`,
- * `address_region`, `postal_code`, `address_country`, … — sil-services
- * `packages/schemas/src/identity.ts`), NOT these `line1`/`city`/… names. Do NOT
- * remap to these fields — that would silently drop real address data. Extra
- * fields are tolerated and passed through untyped. */
+/** The buyer's default address, as sil-api's lean identity read answers it. */
 export interface IdentityAddress extends Record<string, unknown> {
-  line1?: string;
-  line2?: string;
-  city?: string;
-  region?: string;
-  postal_code?: string;
-  country?: string;
+  label?: string;
+  locality: string;
+  country: string;
 }
 
 /** The authenticated user's identity, unwrapped from the sil-api envelope's
- * `result`. `country` is the upper-case ISO-2 the read carries and is ABSENT
- * when nothing on file says it — never inferred from an address. */
+ * `result`. Every field but `name` is ABSENT when sil holds none — never inferred. */
 export interface Identity {
   name: string;
   country?: string;
-  /** `male`, `female` or `other` where the buyer stated one at onboarding; absent
-   * otherwise. Typed as a string: the vocabulary is the route's, not the plugin's. */
+  /** Typed as a string: the vocabulary is the route's, not the plugin's. */
   gender?: string;
   /** The ISO 4217 code the buyer prices in; a money row naming none means this one. */
   currency?: string;
-  addresses: IdentityAddress[];
-  /** What `shopping_profile_edit` wrote: a number with its unit, or a size as
-   * printed. Opaque, exactly as `addresses` are — empty is a real answer. */
-  measurements: ProfileEntry[];
-  /** A lasting taste in the buyer's own words. Same opacity. */
-  preferences: ProfileEntry[];
-}
-
-/** A profile entry as the identity read returns it. The named fields are HINTS —
- * the entries pass through opaque, and extra fields ride along untyped. */
-export interface ProfileEntry extends Record<string, unknown> {
-  name?: string;
-  value?: unknown;
-  unit?: string;
+  language?: string;
+  address?: IdentityAddress;
 }
 
 /**
@@ -292,7 +268,7 @@ export function classifyRefreshResponse(status: number, body: unknown): RefreshO
  *   401 → unauthorized (the ONLY refresh trigger)
  *   403 → forbidden (terminal; carries user_not_provisioned/principal_mismatch)
  *   5xx / non-200 → retryable
- *   200 → unwrap the envelope `result` and narrow to {name, addresses}; a 200
+ *   200 → unwrap the envelope `result` and narrow to {name, …}; a 200
  *         that yields no usable identity (no `name`) is `retryable`, NEVER `ok`
  *         (the anti-false-green guard — a partial/garbage 200, or the current
  *         /identity STUB shape with no name, must not read as success).
@@ -634,56 +610,31 @@ export async function refreshAndRetryOnce<O>(
 
 /**
  * Unwrap + narrow a sil-api identity body to a typed `Identity`, or null when it
- * carries none. The body may wrap the identity in `result` or return it bare.
- *
- * An EMPTY `addresses` is a real identity (a provisioned user who has not added
- * an address yet) — rejecting it would strand them on a `retryable` no retry can
- * clear. The non-empty `name` gate is what keeps a nameless body off `ok`.
+ * carries none. The body may wrap the identity in `result` or return it bare. The
+ * non-empty `name` gate is what keeps a nameless body off `ok`.
  */
 function extractIdentity(body: unknown): Identity | null {
   const envelope = asRecord(body);
   if (envelope === null) return null;
 
-  const result = asRecord(envelope["result"]);
-  const source = result ?? envelope;
+  const source = asRecord(envelope["result"]) ?? envelope;
 
   const name = source["name"];
   if (typeof name !== "string" || name.length === 0) return null;
 
-  const rawAddresses = source["addresses"];
-  if (!Array.isArray(rawAddresses)) return null;
-  const addresses = rawAddresses.filter(
-    (a): a is IdentityAddress => asRecord(a) !== null,
-  );
-
-  // The profile halves are NOT a gate: a read that carries neither is a buyer who
-  // has told sil nothing yet, and `[]` says exactly that — refusing here would
-  // strand them on a `retryable` no retry can clear.
-  const measurements = plainObjects(source["measurements"]);
-  const preferences = plainObjects(source["preferences"]);
-
-  // `country`, `gender` and `currency` are optional on the read and pass through only as
-  // strings — an absent or non-string one is dropped, never coerced or inferred. The VALUE
-  // is the route's to decide: a literal allow-list here would drop a vocabulary sil adds.
-  const country = source["country"];
-  const gender = source["gender"];
-  const currency = source["currency"];
+  // Optional fields pass through only as the right shape — an absent or malformed one is
+  // dropped, never coerced. The VALUES are the route's to decide.
+  const address = asRecord(source["address"]);
+  const optional = (key: string): { [k: string]: string } =>
+    typeof source[key] === "string" ? { [key]: source[key] as string } : {};
   return {
     name,
-    addresses,
-    measurements,
-    preferences,
-    ...(typeof country === "string" ? { country } : {}),
-    ...(typeof gender === "string" ? { gender } : {}),
-    ...(typeof currency === "string" ? { currency } : {}),
+    ...optional("country"),
+    ...optional("gender"),
+    ...optional("currency"),
+    ...optional("language"),
+    ...(address !== null ? { address: address as IdentityAddress } : {}),
   };
-}
-
-/** The elements of `value` that are plain objects, as `addresses` are filtered:
- * absent or shapeless is `[]`, never a partial read of a malformed entry. */
-function plainObjects(value: unknown): ProfileEntry[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((e): e is ProfileEntry => asRecord(e) !== null);
 }
 
 /** Pull the actionable reason out of a 403 body (`user_not_provisioned` /
@@ -763,16 +714,7 @@ function extractUser(raw: unknown): ClaimedUser {
   };
 }
 
-/**
- * A non-null plain object, or null for anything else (incl. arrays/primitives).
- *
- * The array arm decides an OUTCOME at exactly one site, and it is not a body gate:
- * {@link extractIdentity} filters `addresses` through this PER ELEMENT, so the return
- * value is membership rather than a branch — without the arm a bare array survives and
- * ships as one of the buyer's own addresses (pinned in `whoami.integration.test.ts`).
- * At the body sites it changes nothing, because each reads a named key and a parsed
- * array has none; the element site is the whole reason it stays.
- */
+/** A non-null plain object, or null for anything else (incl. arrays/primitives). */
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
