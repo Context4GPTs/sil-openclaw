@@ -65,11 +65,7 @@ const TOOL = "sil_whoami";
 const REAL_IDENTITY = {
   name: "Ada Lovelace",
   country: "GB",
-  addresses: [
-    { line1: "12 Analytical Engine Way", city: "London", country: "GB" },
-  ],
-  measurements: [{ name: "foot_length", value: 27.2, unit: "cm" }],
-  preferences: [{ name: "fit", value: "snug over the forefoot" }],
+  address: { label: "Home", locality: "London", country: "GB" },
 };
 
 let dataDir: string;
@@ -229,7 +225,7 @@ describe("sil_whoami — success result carries ONLY identity (no credential ech
     registerIdentityTools(api);
   });
 
-  it("surfaces the buyer's name, country, addresses, measurements and preferences INSIDE `identity`", async () => {
+  it("surfaces the buyer's name, country and default address INSIDE `identity`", async () => {
     // Contract §3.10: `country` rides beside `name`, not at the top level — an
     // agent that has to hunt for it asks the buyer instead. The profile halves are
     // there for the same reason and are the ones the founder's session re-asked:
@@ -238,13 +234,7 @@ describe("sil_whoami — success result carries ONLY identity (no credential ech
     const identity = payload["identity"] as Record<string, unknown>;
     expect(identity["name"]).toBe("Ada Lovelace");
     expect(identity["country"]).toBe("GB");
-    expect(JSON.stringify(identity["addresses"])).toContain("Analytical Engine Way");
-    expect(identity["measurements"]).toEqual([
-      { name: "foot_length", value: 27.2, unit: "cm" },
-    ]);
-    expect(identity["preferences"]).toEqual([
-      { name: "fit", value: "snug over the forefoot" },
-    ]);
+    expect(identity["address"]).toEqual({ label: "Home", locality: "London", country: "GB" });
   });
 
   it("does NOT echo the access token, refresh token, or Authorization header", async () => {

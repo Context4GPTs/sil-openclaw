@@ -109,7 +109,7 @@ describe("package.json — OpenClaw ESM plugin shape", () => {
     const artifacts = readdirSync(join(REPO_ROOT, "schema")).filter((f) =>
       f.endsWith(".schema.json"),
     );
-    expect(artifacts).toHaveLength(22);
+    expect(artifacts).toHaveLength(26);
   });
 
   it("declares build and test scripts", () => {

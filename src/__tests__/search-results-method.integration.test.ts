@@ -922,7 +922,7 @@ describe("every sil_search_results_* marker carries its callId and cause in the 
     const result = await getTool(api, TOOL).execute("call_refused", { ...SEARCH_PARAMS });
 
     expect(result.content).toHaveLength(1);
-    expect(rawOf(result)).toBe(JSON.stringify({ status: "invalid_request", message: "no" }, null, 2));
+    expect(rawOf(result)).toBe(JSON.stringify({ status: "invalid_request", message: "no" }));
   });
 
   it.each([
@@ -1097,20 +1097,21 @@ describe("registration shape (C5) and log privacy", () => {
   // sil_* add or removal must bump it, count in the title included. It went
   // undocumented for a release because nobody greps a "…-method…" file for tool
   // tests; see docs/knowledge/adding-a-sil-tool-fans-out-to-exact-set-mirrors.md.
-  it("registering the gateway method does not change the tool set (still fourteen)", () => {
+  it("registering the gateway method does not change the tool set (still fifteen)", () => {
     const api = registerPlugin();
     expect([...api._tools.keys()].sort()).toEqual([
-      "shopping_brief_create",
-      "shopping_brief_edit",
       "shopping_brief_read",
+      "shopping_brief_write",
       "shopping_content",
       "shopping_domain_get",
       "shopping_domain_search",
       "shopping_offers",
       "shopping_product_get",
-      "shopping_profile_edit",
       "shopping_search",
       "shopping_seller_get",
+      "shopping_user_forget",
+      "shopping_user_read",
+      "shopping_user_remember",
       "sil_doctor",
       "sil_register",
       "sil_whoami",

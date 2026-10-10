@@ -135,7 +135,7 @@ agent  [shopping_domain_search "backpacking tent" → shopping_domain_get]
 
 ## Tools
 
-Fourteen tools. The eleven the shopping loop calls are named `shopping_*` — for what
+Fifteen tools. The twelve the shopping loop calls are named `shopping_*` — for what
 they do for you — and the three account tools keep the `sil_` name. Your agent calls them
 for you; you just say what you want.
 
@@ -144,17 +144,18 @@ for you; you just say what you want.
 | Tool | What it does |
 |---|---|
 | `sil_register` | Start a browser sign-in and link your agent to your sil identity. Takes no arguments. |
-| `sil_whoami` | Read your sil identity — name, country, the currency you price in, saved addresses, and the measurements and preferences sil holds for you — as the agent sees it. Takes no arguments. |
+| `sil_whoami` | Read your sil identity — name, country, the currency you price in, language, gender and your default address — as the agent sees it. Takes no arguments. |
 | `sil_doctor` | Check the install: file modes, credential health, host wiring, and whether a newer plugin is published. Reports; repairs only what is safe. |
 
-**Your brief and your profile**
+**What sil keeps about you, and your briefs**
 
 | Tool | What it does |
 |---|---|
-| `shopping_brief_create` | Open the shopping job this conversation works from — a title and what you are after in your own words, plus any wants you have already stated. One brief per conversation, across every category it covers. |
-| `shopping_brief_edit` | Write a want, a change of mind or the end of the job into that brief: the values you want under the category they belong to, the seller terms under `seller`, the keys you have given up, and one sentence saying what you changed and why. |
-| `shopping_brief_read` | With no arguments, your shopping jobs, newest first — so a new chat carries on where the last one stopped. With an `id`, that whole brief: what you are after, every want under its category, and the decisions you have already taken. |
-| `shopping_profile_edit` | Write what is true of you whatever you are buying: a measurement with its unit, a size as it is printed, a lasting taste in your own words, or the currency you price in. Writing the same name again replaces it; `sil_whoami` reads it all back. A new currency changes which offers come first, never a price: sil converts nothing. |
+| `shopping_user_read` | Everything sil keeps about you — measurements, memories, preferences, purchases — each with what it gives you back. |
+| `shopping_user_remember` | Keep what lasts, in the turn you say it, with "forget that" as the undo. |
+| `shopping_user_forget` | Erase rows you name, or everything, on your word. |
+| `shopping_brief_write` | Open a brief for a buy with requirements, or update one: a title, what you are after in your own words, specs by domain, decisions and the end of the job. |
+| `shopping_brief_read` | With no arguments, your shopping jobs, newest first. With an `id`, that whole brief. |
 
 **Shopping**
 

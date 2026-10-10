@@ -49,13 +49,8 @@ describe("shopping_offers — one route, one request", () => {
     expect(router.other).toEqual([]);
   });
 
-  it("the request is the brief and the ids and NOTHING else — seller rows and an address are refused", () => {
-    // sil reads the brief's seller rows, its ceiling, the default address and the
-    // profile's currency itself. The artifact IS the tool's `parameters`, so a field it
-    // re-admitted is one the agent sends and the route never agreed to take.
-    const sellerRows = [{ key: "return_window_days", op: "gte", value: 14 }];
+  it("the request refuses a field it does not take", () => {
     expect(artifactErrors(TOOL, "request", ASK)).toEqual([]);
-    expect(artifactErrors(TOOL, "request", { ...ASK, seller_specs: sellerRows })).not.toEqual([]);
     expect(artifactErrors(TOOL, "request", { ...ASK, ship_to: "home" })).not.toEqual([]);
   });
 });
@@ -87,14 +82,5 @@ describe("shopping_offers — what the answer means", () => {
       expect(Object.keys(offer["seller_fit"] ?? {})).toContain("ships");
       expect(["serviceable", "not_serviceable", "unknown"]).toContain(offer["seller_fit"]["ships"]);
     }
-    // The contract's own body carries an unread seller beside a read one, so a
-    // pass-through keeping only the answerable half shows up here.
-    expect(offers.map((o) => o["seller_fit"]["ships"])).toContain("unknown");
-  });
-
-  it("the answer names the address its `ships` are about", async () => {
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok(contractResponse(TOOL)));
-    expect((await run())["ship_to"]).toBe("home");
   });
 });

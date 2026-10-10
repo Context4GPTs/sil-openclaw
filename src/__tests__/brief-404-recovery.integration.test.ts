@@ -27,7 +27,7 @@ const REFRESH = "rt-live-token";
  * A literal list, because deriving it from the `recovery` field under test would empty
  * itself with the wiring. */
 const BRIEF_BEARING: [ShoppingToolName, Record<string, unknown>][] = [
-  ["shopping_brief_edit", { id: "b1", decision: "Ceiling raised 350 → 400 EUR." }],
+  ["shopping_brief_write", { id: "b1", decision: "Ceiling raised 350 → 400 EUR." }],
   [
     "shopping_search",
     { brief: "b1", domain: "product.sports.winter.ski.boots", query: "ski boots 27.5", n: 3 },

@@ -62,14 +62,9 @@ const BEARER_TOOLS = [
     success: (): unknown => contractResponse("shopping_content"),
   },
   {
-    tool: "shopping_brief_create",
-    params: { title: "Ski boots", narrative: "Advanced skier, short wide foot." },
-    success: (): unknown => contractResponse("shopping_brief_create"),
-  },
-  {
-    tool: "shopping_brief_edit",
+    tool: "shopping_brief_write",
     params: { id: "b1", decision: "Ceiling raised." },
-    success: (): unknown => contractResponse("shopping_brief_edit"),
+    success: (): unknown => contractResponse("shopping_brief_write"),
   },
   {
     tool: "shopping_brief_read",
@@ -77,9 +72,21 @@ const BEARER_TOOLS = [
     success: (): unknown => contractResponse("shopping_brief_read"),
   },
   {
-    tool: "shopping_profile_edit",
-    params: { measurements: [{ name: "foot_length", value: 27.2, unit: "cm" }] },
-    success: (): unknown => contractResponse("shopping_profile_edit"),
+    tool: "shopping_user_read",
+    params: {},
+    success: (): unknown => contractResponse("shopping_user_read"),
+  },
+  {
+    tool: "shopping_user_remember",
+    params: {
+      rows: [{ kind: "memory", text: "Brews V60 at 7am.", source: "told", gives_back: "no asking" }],
+    },
+    success: (): unknown => contractResponse("shopping_user_remember"),
+  },
+  {
+    tool: "shopping_user_forget",
+    params: { all: true },
+    success: (): unknown => contractResponse("shopping_user_forget"),
   },
   {
     tool: "shopping_search",
@@ -104,7 +111,7 @@ const BEARER_TOOLS = [
   {
     tool: "sil_whoami",
     params: {},
-    success: (): unknown => ({ name: "Test Shopper", addresses: [] }),
+    success: (): unknown => ({ name: "Test Shopper" }),
   },
 ];
 

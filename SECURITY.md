@@ -31,9 +31,9 @@ The plugin talks to these hosts and no others:
   the published `@4gpts/sil` version: no token, no PII, bounded timeout, redirects
   refused, silent on any failure.
 
-The `shopping_*` tools are read-only, except `shopping_brief_create` /
-`shopping_brief_edit` / `shopping_profile_edit` (write the buyer's own brief and
-profile under their sil account). On a `401`, every sil call refreshes once and retries once. A second
+The `shopping_*` tools are read-only, except `shopping_brief_write` /
+`shopping_user_remember` / `shopping_user_forget` (write or erase the buyer's own brief
+and rows under their sil account). On a `401`, every sil call refreshes once and retries once. A second
 `401` or a dead refresh token clears `tokens.json`.
 
 ### Filesystem and credentials

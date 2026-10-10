@@ -20,7 +20,7 @@ import {
   seedTokens,
   useShoppingHarness,
 } from "./helpers/shopping-harness.js";
-import { SPEC_400, contractAlternate, contractResponse } from "./helpers/shopping-wire.js";
+import { SPEC_400, contractResponse } from "./helpers/shopping-wire.js";
 
 const TOOL = "shopping_search";
 const ACCESS = "at-live-token";
@@ -113,12 +113,6 @@ describe("shopping_search — what the answer means", () => {
     seedTokens(ACCESS, REFRESH);
     installRouter(() => ok(contractResponse(TOOL)));
     expect(await run()).toEqual(contractResponse(TOOL));
-  });
-
-  it("the contract's WARM 200 arrives verbatim too — same shape, filled `fit`", async () => {
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok(contractAlternate(TOOL)));
-    expect(await run()).toEqual(contractAlternate(TOOL));
   });
 
   it("`products: []` is a SUCCESS — an empty shortlist is an answer, not a failure", async () => {

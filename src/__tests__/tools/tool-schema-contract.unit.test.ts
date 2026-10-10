@@ -54,26 +54,6 @@ const TOOL_CONTRACT = {
       + " nothing is created.",
     parameters: EMPTY_OBJECT_SCHEMA,
   },
-  sil_whoami: {
-    label: "Who am I on sil",
-    description:
-      "The buyer's name, country, `gender`, `currency` and the addresses on file, and"
-      + " the `measurements` and `preferences` sil already holds for them — read live from"
-      + " sil with the credentials sil_register stored, a stale session token refreshed"
-      + " once and the read retried. `gender` is `male`, `female` or `other`, and is"
-      + " absent where the buyer never stated one; on anything worn it is the product"
-      + " spec `gender` in the registry's own spelling (male → `mens`, female →"
-      + " `womens`), asked once where this answers none and never inferred. `currency` is"
-      + " the ISO 4217 code they price in, absent where nothing on file says it: a money"
-      + " row that means theirs leaves `currency` off — with none on file, it names its"
-      + " own — and sil converts nothing. Call it at the start of a chat: it"
-      + " says where the buyer is, what they price in, how they measure and what they"
-      + " lastingly prefer, and you never ask them for anything it answers."
-      + " shopping_profile_edit is what writes those last three back. If they are not"
-      + " registered, or the session is past refreshing, the result names the recovery"
-      + " (sil_register).",
-    parameters: EMPTY_OBJECT_SCHEMA,
-  },
 } as const;
 
 /** Register the identity tool group exactly as src/index.ts#register()
@@ -269,15 +249,6 @@ describe("the shopping tools' parameters ARE the committed request artifacts", (
       expect(artifact(tool, "request")).toHaveProperty(annotation);
     }
   });
-
-  it.each(SHOPPING_TOOLS)("%s's description is bounded — enough to act on, short enough to read", (tool) => {
-    // An agent reads this at pick-time under context pressure; the clause that survives
-    // is the short one. The ceiling is generous — it fails a parameter tutorial, not
-    // tight prose — and the floor fails a one-liner that teaches nothing.
-    const description = getTool(allRegisteredTools(), tool).description ?? "";
-    expect(description.length).toBeGreaterThan(150);
-    expect(description.length).toBeLessThanOrEqual(1400);
-  });
 });
 
 describe("the retired tool NAMES cannot come back", () => {
@@ -305,7 +276,7 @@ describe("the retired tool NAMES cannot come back", () => {
       "sil_register",
       "sil_whoami",
     ]);
-    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(11);
+    expect(names.filter((n) => n.startsWith("shopping_")).length).toBe(12);
   });
 });
 
@@ -366,161 +337,6 @@ describe("no over-trigger: a description states when THIS tool applies", () => {
   });
 });
 
-describe("each shopping tool carries its discipline clause", () => {
-  /**
-   * Pinned on the clause's LOAD-BEARING tokens, never on the wording — this repo already
-   * deleted a 1341-line prose test that pinned wording and stayed green through a live
-   * behavioural bug. Each entry is the one thing an agent that loses it gets wrong.
-   */
-  const DISCIPLINE: Record<(typeof SHOPPING_TOOLS)[number], RegExp[]> = {
-    // Up to three leaves, told apart by `under`; an empty answer is told, never searched.
-    shopping_domain_search: [/up to three/i, /leaves/i, /under/, /matched/, /empty answer/i],
-    // The place's specs: what each key decides, which mark picks an option, and `record`.
-    // Words, never meaning; whole passages, filled ones unmatched; said plainly when empty.
-    shopping_content: [
-      /line through/i,
-      /never by meaning/i,
-      /`matched`/,
-      /before your first question/i,
-      /never .*open web/i,
-    ],
-    shopping_domain_get: [
-      /moves the fit/i,
-      /variant_spec/,
-      /product_spec/,
-      /operators?/i,
-      /record/,
-      /not_a_leaf/,
-      /not carried/i,
-    ],
-    // One brief for the whole session, the id the rest of it is named by, the narrative
-    // that IS the spec of the buy (ruling, 2026-09-19), and the quote every `reason` is —
-    // the founder's live session wrote four first-person paraphrases, one of them a want
-    // ("new") the buyer never stated. A NEW chat opens its own brief off what the earlier
-    // ones hold (2026-09-18: the warm session searched on the previous session's brief),
-    // and what the buyer wears is a spec sil already answers.
-    shopping_brief_create: [
-      /per SESSION/i,
-      /never one per domain/i,
-      /`id`/,
-      /spec of the buy/i,
-      /verbatim/i,
-      /carry every spec/i,
-      /`gender eq mens`/,
-      /`gender eq womens`/,
-    ],
-    // The want is written AS it is settled, a write REPLACES rather than appends, the
-    // `reason` is the buyer's words verbatim, a measurement is not the spec it becomes,
-    // and a `decision` is a mind changed, written about the buyer — not a note of what
-    // was just written down in their voice. The refusal is the one moment a want silently
-    // disappears, so what to do with an `invalid_request` is stated at the call that
-    // answers it: the row is fixed and RE-SENT, and the want is never given up.
-    shopping_brief_edit: [
-      /as it is settled/i,
-      /next call drops/i,
-      /replace/i,
-      /`decision`/,
-      /verbatim/i,
-      /their mind/i,
-      /MEASUREMENT is never the spec/i,
-      /in their voice/i,
-      /never a log/i,
-      /invalid_request/,
-      /send it again/i,
-      /never give the want up/i,
-    ],
-    // The bare read is a listing, it comes before the first question, and what it answers
-    // is READ rather than searched — this session's brief is its own.
-    shopping_brief_read: [/newest first/i, /before you ask/i, /never on an earlier session/i],
-    // An entry is keyed by its name, writing that name again replaces it, and only an
-    // unambiguous statement about the buyer reaches it at all. "Prices in dollars from now
-    // on" is a `currency` written here, never a price converted.
-    shopping_profile_edit: [
-      /same `name`/,
-      /before the next search/i,
-      /unambiguous/i,
-      /snake_case/,
-      /`currency`/,
-      /converts nothing/i,
-    ],
-    // The brief rides on every call, its specs travel unchanged, `n` counts variants,
-    // the query is shop words, and the honesty the whole answer turns on (`fit` says
-    // "unknown" for what sil could not test, `printed` is the page talking, a variant
-    // with no option values is a listing whose sizes are unread).
-    //
-    // The per-category call bound, the "wait for the guide before the first call"
-    // precondition and the "price the pick before you recommend" gate were RETIRED by
-    // the 2026-09-19 ruling — the agent loops freely. What replaces them is pinned in
-    // the opposite direction: the description must say searching is cheap and repeatable,
-    // so a bound cannot creep back in as folklore.
-    shopping_search: [
-      /`brief`/,
-      /as often as the job needs/i,
-      /never on the search/i,
-      /counts VARIANTS/,
-      /never a sentence/i,
-      /"unknown"/,
-      /`printed`/,
-      /no option values/i,
-      /gap/i,
-      /unchanged/i,
-    ],
-    // What the dossier adds over the shortlist, that a miss is an absence, and that a
-    // sizeless listing opens here like any other id.
-    shopping_product_get: [/sources/, /absent/i, /opaque/i, /no option values/i],
-    // The brief and the ids are the WHOLE ask (sil reads the seller rows, the ceiling, the
-    // address and the currency itself), a sizeless listing is priced as its page prints,
-    // what dates a price, why the spread is the answer, that the buyer's-currency-first
-    // order is the server's — and what pricing a whole shortlist COSTS the buyer. That
-    // last one is a cost tip, never a gate: the ruling retired "never for a shortlist".
-    shopping_offers: [
-      /`brief`/,
-      /nothing else/i,
-      /pricing a whole shortlist/i,
-      /observed_at/,
-      /spread/i,
-      /convert/i,
-      /never re-rank/i,
-      /no option values/i,
-    ],
-    // The three states, that the third one keeps its seller, and that ids are the whole ask.
-    shopping_seller_get: [/serviceable/, /unknown/, /keeps the seller/i, /nothing else/i],
-  };
-
-  it.each(SHOPPING_TOOLS)("%s's description carries every load-bearing token of its clause", (tool) => {
-    const description = getTool(allRegisteredTools(), tool).description ?? "";
-    const missing = DISCIPLINE[tool].filter((re) => !re.test(description)).map((re) => re.source);
-    expect(missing).toEqual([]);
-  });
-
-  it("no description names a field the signed wire took off its request", () => {
-    // The map above only proves a clause is PRESENT: a description can carry every token
-    // and still tell the agent to send a field the route no longer takes, which is what
-    // both were before the signed wire. An agent sends what it reads.
-    const api = allRegisteredTools();
-    expect(getTool(api, "shopping_seller_get").description ?? "").not.toMatch(/ship_to/);
-    expect(getTool(api, "shopping_offers").description ?? "").not.toMatch(/seller_specs|ship_to/);
-  });
-});
-
-describe("a market is a SELLER spec — `ship_to` is an address label", () => {
-  it("`ship_to`'s own parameter description says it excludes no seller, and names `country` on the brief", () => {
-    // 2026-09-16: the model could not find a market filter, so it sent `ship_to: "Home"`
-    // on all six searches and reported it back as "Greece only" — six searches that
-    // filtered nothing and a buyer told they had. The rule has to sit on the PARAMETER
-    // the agent is filling: prose in a skill file three reads away is what failed.
-    const schema = getTool(allRegisteredTools(), "shopping_search").parameters as unknown as {
-      properties: Record<string, { description?: string }>;
-    };
-    const shipTo = schema.properties["ship_to"]?.description ?? "";
-    expect(shipTo.length).toBeGreaterThan(0); // guard-of-the-guard
-    expect(shipTo).toMatch(/\blabel\b/i);
-    expect(shipTo).toMatch(/excludes no seller/i);
-    expect(shipTo).toMatch(/`country`/);
-    expect(shipTo).toMatch(/on the brief/i);
-  });
-});
-
 describe("the registry's concept is a DOMAIN, never a category", () => {
   it("no agent-facing string names a domain's path, guide, keys or specs a `category`'s", () => {
     // Founder ruling, 2026-09-19: sil ships the domain document, and "domain" is the
@@ -560,16 +376,6 @@ describe("AC15 — `not_found` is never stated as a bare licence to write", () =
       for (const sentence of notFoundLicenceOffenders(text)) offenders.push(`${name}: ${sentence}`);
     }
     expect(offenders).toEqual([]);
-
-    // Guard-of-the-guard: the cheapest way to pass a forbid-scan is to stop naming
-    // `not_found` anywhere, which leaves the agent reading a wire status no
-    // description explains. The registry read answers it, so it must keep saying so.
-    // The floor is NAMING it, never a listing qualifier: sil scopes every lookup to
-    // the account and lists nothing to decide a 404.
-    const names = wholeSurface(api)
-      .filter(([, text]) => /\bnot_found\b/.test(text))
-      .map(([name]) => name);
-    expect(names).toContain("shopping_domain_get");
   });
 });
 

@@ -78,11 +78,7 @@ const SIL_API = "https://sil-api.test.example.com"; // identity-read origin
 const REAL_IDENTITY = {
   name: "Ada Lovelace",
   country: "GB",
-  addresses: [
-    { line1: "12 Analytical Engine Way", city: "London", country: "GB" },
-  ],
-  measurements: [{ name: "foot_length", value: 27.2, unit: "cm" }],
-  preferences: [{ name: "fit", value: "snug over the forefoot" }],
+  address: { label: "Home", locality: "London", country: "GB" },
 };
 
 /** The agreed real-read response: identity in a UCP envelope's `result`. */
@@ -267,7 +263,7 @@ afterEach(() => {
 });
 
 describe("sil_whoami — happy path (valid access token)", () => {
-  it("returns the authenticated user's REAL name + addresses (NOT the stub shape)", async () => {
+  it("returns the authenticated user's REAL name + address (NOT the stub shape)", async () => {
     // Anti-false-green: the mock returns the agreed real identity contract.
     seedTokens("valid-at", "valid-rt");
     installRouter((kind) =>
@@ -282,7 +278,7 @@ describe("sil_whoami — happy path (valid access token)", () => {
     const blob = JSON.stringify(payload);
     // The product promise: real identity, surfaced (unwrapped from the envelope).
     expect(blob).toContain("Ada Lovelace");
-    expect(blob).toContain("Analytical Engine Way");
+    expect(blob).toContain("London");
     // And NOT the current sil-api stub payload shape — if the tool were wired to
     // the stub it would pass with these markers and no name/addresses.
     expect(blob).not.toContain("\"kind\"");
@@ -297,44 +293,12 @@ describe("sil_whoami — happy path (valid access token)", () => {
     const identity = payload["identity"] as {
       name?: unknown;
       country?: unknown;
-      addresses?: unknown;
+      address?: unknown;
     };
     expect(identity).toBeDefined();
     expect(identity.name).toBe("Ada Lovelace");
     expect(identity.country).toBe("GB");
-    expect(Array.isArray(identity.addresses)).toBe(true);
-    expect((identity.addresses as unknown[]).length).toBe(1);
-  });
-
-  it("drops an `addresses` element that is not an object — a bare array never ships as an address", async () => {
-    // Addresses pass through OPAQUE (the wire shape is sil-api's `AddressWire`, not the
-    // hint fields on `IdentityAddress`), so the only thing standing between a malformed
-    // element and the buyer's own address list is the per-element plain-object filter.
-    // Measured: with `asRecord`'s array arm removed, `[["x"], {…}]` reaches this payload
-    // whole — a JSON array typed as an address, which every consumer then renders,
-    // stores or posts as one. This is the one site where that arm decides an outcome.
-    seedTokens("valid-at", "valid-rt");
-    const REAL = { line1: "12 Analytical Engine Way", city: "London", country: "GB" };
-    installRouter((kind) =>
-      kind === "identity"
-        ? {
-            status: 200,
-            body: identityEnvelope({
-              name: "Ada Lovelace",
-              addresses: [["x"], REAL, "12 Analytical Engine Way", null, 7],
-            }),
-          }
-        : { status: 500, body: {} },
-    );
-    const api = createMockPluginApi();
-    registerIdentityTools(api);
-
-    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    expect(payload["status"]).toBe("ok");
-    const identity = payload["identity"] as { addresses: unknown[] };
-    // Exactly the one real address — and by VALUE, so "it dropped everything" cannot
-    // pass here either.
-    expect(identity.addresses).toEqual([REAL]);
+    expect(identity.address).toEqual({ label: "Home", locality: "London", country: "GB" });
   });
 
   it("calls sil-api with Authorization: Bearer <stored access token>", async () => {
