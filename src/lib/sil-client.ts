@@ -463,6 +463,9 @@ function routePath(
   for (const key of route.query ?? []) {
     const value = args[key];
     if (typeof value === "string") query.set(key, value);
+    else if (Array.isArray(value)) {
+      for (const item of value) if (typeof item === "string") query.append(key, item);
+    }
   }
   const search = query.toString();
   return search === "" ? path : `${path}?${search}`;

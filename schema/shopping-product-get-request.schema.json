@@ -16,8 +16,13 @@
         "description": "An id sil minted, passed back verbatim."
       },
       "minItems": 1,
-      "maxItems": 10,
+      "maxItems": 3,
       "description": "Sends the variant ids it wants the whole of; one sil cannot place is absent."
+    },
+    "page": {
+      "type": "boolean",
+      "const": true,
+      "description": "Sends it with exactly one id to read that variant’s page text too, in `webpage_info`; otherwise no page text is answered."
     }
   },
   "additionalProperties": false

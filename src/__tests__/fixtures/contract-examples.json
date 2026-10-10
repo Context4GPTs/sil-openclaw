@@ -250,7 +250,6 @@
         {
           "key": "finest_brew",
           "display_name": "Finest brew",
-          "description": "The finest method the maker says it grinds for. A grinder that reaches espresso also grinds every coarser method; one that stops at filter will never pull a shot.",
           "type": "enum",
           "allowed_values": [
             "greek",
@@ -270,7 +269,6 @@
         {
           "key": "coarsest_brew",
           "display_name": "Coarsest brew",
-          "description": "The coarsest method the maker says it grinds for.",
           "type": "enum",
           "allowed_values": [
             "espresso",
@@ -290,7 +288,6 @@
         {
           "key": "burr_material",
           "display_name": "Burr material",
-          "description": "What the burrs are made of. Steel cuts the dense beans of a light roast cleanly; ceramic stays sharp but grinds less evenly at filter size.",
           "type": "enum",
           "allowed_values": [
             "steel",
@@ -306,7 +303,6 @@
         {
           "key": "noise_level",
           "display_name": "Noise level",
-          "description": "How loud it is grinding, in decibels up close. A hand grinder has no motor and is rarely measured.",
           "type": "number",
           "unit": "dB",
           "operators": [
@@ -317,7 +313,6 @@
         {
           "key": "brand",
           "display_name": "Brand",
-          "description": "The maker's name.",
           "type": "enum",
           "operators": [
             "eq",
@@ -331,7 +326,6 @@
         {
           "key": "country",
           "display_name": "Seller country",
-          "description": "Where the seller is, as its own pages print it: an ISO 3166-1 alpha-2 code.",
           "type": "enum",
           "operators": [
             "eq",
@@ -407,6 +401,45 @@
           "name": "Hand coffee grinders"
         }
       ]
+    },
+    "alternate": {
+      "status": "ok",
+      "path": "product.vehicles.cars.motor_vehicles.passenger_cars",
+      "specs": [
+        {
+          "key": "boot_volume",
+          "display_name": "Boot volume",
+          "type": "number",
+          "unit": "l",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "fuel_type",
+          "display_name": "Fuel type",
+          "type": "enum",
+          "allowed_values": [
+            "petrol",
+            "diesel",
+            "hybrid",
+            "electric"
+          ],
+          "operators": [
+            "eq",
+            "in",
+            "neq",
+            "nin"
+          ]
+        }
+      ],
+      "next": "seats",
+      "keys_total": 154
+    },
+    "request": {
+      "path": "product.vehicles.cars.motor_vehicles.passenger_cars",
+      "after": "boot_volume"
     }
   },
   "shopping_content": {

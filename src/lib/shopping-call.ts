@@ -19,7 +19,11 @@ import { jsonResult } from "./tool-result.js";
 
 /** The guide read, as one route constant: two spellings of one path is a route nobody
  * owns. */
-export const DOMAIN_GET_ROUTE = { method: "GET", path: "/catalog/domains/:path" } as const;
+export const DOMAIN_GET_ROUTE = {
+  method: "GET",
+  path: "/catalog/domains/:path",
+  query: ["keys", "after"],
+} as const;
 
 /**
  * What the agent runs next on a 404. Only that: a status earns a fixed next call only when

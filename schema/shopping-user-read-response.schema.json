@@ -365,7 +365,6 @@
           }
         ]
       },
-      "maxItems": 200,
       "description": "Reads everything sil keeps about the buyer, whole: never asks what a row answers, and says the row when it uses it."
     }
   },

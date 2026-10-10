@@ -6,14 +6,7 @@
   "required": [
     "status",
     "path",
-    "name",
-    "labels",
-    "specs",
-    "seller_specs",
-    "reach",
-    "kinds",
-    "parts",
-    "made_for"
+    "specs"
   ],
   "properties": {
     "status": {
@@ -28,16 +21,7 @@
     "name": {
       "type": "string",
       "maxLength": 64,
-      "description": "Calls the thing this in English."
-    },
-    "labels": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "maxLength": 64
-      },
-      "maxItems": 20,
-      "description": "Reads every other word for the thing; never sends them."
+      "description": "Calls the thing this in English. Absent on a page read with `after`."
     },
     "specs": {
       "type": "array",
@@ -62,11 +46,6 @@
             "maxLength": 128,
             "description": "Calls the key this when it writes it down or says it out loud."
           },
-          "description": {
-            "type": "string",
-            "maxLength": 1024,
-            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back."
-          },
           "type": {
             "anyOf": [
               {
@@ -135,30 +114,15 @@
             "minItems": 1,
             "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
           },
+          "description": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back. Only on a `keys` read."
+          },
           "step": {
             "type": "number",
             "exclusiveMinimum": 0,
-            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value."
-          },
-          "forms": {
-            "type": "object",
-            "patternProperties": {
-              "^.*$": {
-                "type": "string"
-              }
-            },
-            "description": "Reads what pages print for a value, mapped to the value — `{\"27/27.5\": \"27.5\"}`. Never sent: the request takes the value, and this is how sil recognises it in the wild."
-          },
-          "labels": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 60
-            },
-            "minItems": 1,
-            "maxItems": 20,
-            "description": "Sends any of these as the key and reaches this one: the names sil maps here — the headings pages print it under and the keys other agents send for it, one mapping with no origin between them. Folded to the form the mapping stores, best-attested first, at most 20."
+            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value. Only on a `keys` read."
           },
           "variant_spec": {
             "type": "boolean",
@@ -183,7 +147,17 @@
         },
         "additionalProperties": false
       },
-      "description": "Builds spec rows with keys sil holds."
+      "description": "Builds spec rows with keys sil holds: index lines in the place’s own order, own keys first, as many as one answer holds; or only the `keys` asked, whole."
+    },
+    "next": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Sends it as `after` to read the index on: the first key not listed. Absent on the last page, so nothing is cut unseen."
+    },
+    "keys_total": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Counts the keys of the whole index, over its pages."
     },
     "seller_specs": {
       "type": "array",
@@ -207,11 +181,6 @@
             "minLength": 1,
             "maxLength": 128,
             "description": "Calls the key this when it writes it down or says it out loud."
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 1024,
-            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back."
           },
           "type": {
             "anyOf": [
@@ -281,35 +250,29 @@
             "minItems": 1,
             "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
           },
+          "description": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back. Only on a `keys` read."
+          },
           "step": {
             "type": "number",
             "exclusiveMinimum": 0,
-            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value."
-          },
-          "forms": {
-            "type": "object",
-            "patternProperties": {
-              "^.*$": {
-                "type": "string"
-              }
-            },
-            "description": "Reads what pages print for a value, mapped to the value — `{\"27/27.5\": \"27.5\"}`. Never sent: the request takes the value, and this is how sil recognises it in the wild."
-          },
-          "labels": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 60
-            },
-            "minItems": 1,
-            "maxItems": 20,
-            "description": "Sends any of these as the key and reaches this one: the names sil maps here — the headings pages print it under and the keys other agents send for it, one mapping with no origin between them. Folded to the form the mapping stores, best-attested first, at most 20."
+            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value. Only on a `keys` read."
           }
         },
         "additionalProperties": false
       },
-      "description": "Builds seller rows for `shopping_offers`."
+      "description": "Builds seller rows for `shopping_offers`; with `keys`, only those asked. First page only."
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64
+      },
+      "maxItems": 20,
+      "description": "Reads every other word for the thing; never sends them. Absent with `keys` and after the first page."
     },
     "reach": {
       "type": "array",
@@ -365,7 +328,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads where each key comes from."
+      "description": "Reads where each key comes from. Absent with `keys` and after the first page."
     },
     "kinds": {
       "type": "array",
@@ -390,7 +353,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads every kind this thing is, nearest first."
+      "description": "Reads every kind this thing is, nearest first. Absent with `keys` and after the first page."
     },
     "parts": {
       "type": "array",
@@ -462,7 +425,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads what the thing has."
+      "description": "Reads what the thing has. Absent with `keys` and after the first page."
     },
     "made_for": {
       "type": "array",
@@ -498,7 +461,7 @@
           }
         ]
       },
-      "description": "Reads what a part is made for."
+      "description": "Reads what a part is made for. Absent with `keys` and after the first page."
     },
     "leaves": {
       "type": "array",
@@ -523,7 +486,7 @@
         },
         "additionalProperties": false
       },
-      "description": "On a kind: every leaf under it. A search on the kind answers across them, `leaf` a key it takes."
+      "description": "On a kind: every leaf under it. A search on the kind answers across them, `leaf` a key it takes. Absent with `keys` and after the first page."
     },
     "record": {
       "anyOf": [
@@ -536,7 +499,7 @@
           "const": "specs"
         }
       ],
-      "description": "On a leaf: bought on its measures alone, or on its measures and its record."
+      "description": "On a leaf: bought on its measures alone, or on its measures and its record. Absent with `keys` and after the first page."
     }
   },
   "additionalProperties": false

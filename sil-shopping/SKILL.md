@@ -36,9 +36,10 @@ with the places above it. Pick the one that fits the ask. If they share one kind
 or search the kind.
 
 `shopping_domain_get { path }` answers every spec of the place on one line: its key, type,
-values and operators, and `ordered` where the values run in order. Then read the specs that
-decide this buy whole with `keys`. Their descriptions say what each decides, what goes wrong
-at either end, and how a buyer's fact becomes a value.
+values and operators, and `ordered` where the values run in order. A wide place answers in
+pages: when it carries `next`, read on with `after: next` until it does not. Then read the
+specs that decide this buy whole with `keys` (up to six). Their descriptions say what each
+decides, what goes wrong at either end, and how a buyer's fact becomes a value.
 
 `shopping_content { path, q }` greps what sil holds: guides, the brand's word, dated reviews
 and news. Narrow it with a `"quoted phrase"`. A passage with an author is quoted and named.
@@ -82,7 +83,7 @@ was set aside and why. Pass the receipt on in plain words and never recount it:
 
 For the one or two they lean to:
 
-- `shopping_product_get { ids }` gives specs, sources and the reviews sil holds. Add
+- `shopping_product_get { ids }` (up to three) gives specs, sources and the reviews sil holds. Add
   `page: true` with one id only when sil has not read its sizes.
 - `shopping_offers { ids }` (or `{ name }` for a price check) gives prices with the moment
   each was read, and whether the seller ships to the buyer. `seller_specs` such as
