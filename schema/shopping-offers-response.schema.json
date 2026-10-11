@@ -165,6 +165,17 @@
         "additionalProperties": false
       },
       "description": "Lists where it can be bought, best for the buyer first."
+    },
+    "pending": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "Names a variant whose offers sil is still finding."
+      },
+      "maxItems": 10,
+      "description": "Names the asked variants whose offers sil is still finding; ask again in a few seconds."
     }
   },
   "additionalProperties": false

@@ -172,10 +172,6 @@
             },
             "description": "Passes an `id` to the dossier and offers."
           },
-          "host": {
-            "type": "string",
-            "description": "Names the shop whose page was read in this call."
-          },
           "printed": {
             "type": "object",
             "patternProperties": {
@@ -197,6 +193,8 @@
         "products",
         "fit",
         "could_not_tell",
+        "offered",
+        "finding",
         "set_aside"
       ],
       "properties": {
@@ -208,7 +206,7 @@
         "products": {
           "type": "integer",
           "minimum": 0,
-          "description": "Says how many products sil weighed; every line below adds up to it."
+          "description": "Says how many products sil weighed: all it holds in the place asked; `fit`, `could_not_tell` and every `set_aside` line add up to it."
         },
         "fit": {
           "type": "integer",
@@ -219,6 +217,16 @@
           "type": "integer",
           "minimum": 0,
           "description": "Says how many sil could not tell: nothing failed, a value was unread. Never a failure."
+        },
+        "offered": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Says how many of the fit sil holds an offer for in the buyer’s country."
+        },
+        "finding": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Says how many products sil has started finding offers for in the buyer’s country; the next offers call reads them."
         },
         "set_aside": {
           "type": "array",
@@ -251,7 +259,7 @@
             },
             "additionalProperties": false
           },
-          "maxItems": 8,
+          "maxItems": 32,
           "description": "Says why the rest were set aside, in the buyer’s words."
         }
       },
