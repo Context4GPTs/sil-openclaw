@@ -60,7 +60,6 @@
 
 import { describe, it, expect } from "vitest";
 
-import { SHOPPING_TOOLS } from "../../tools/catalog.js";
 import { classifyClaimResponse } from "../../lib/sil-client.js";
 
 /** A well-formed success body per claim/route.ts:134-138. */
