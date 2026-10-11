@@ -131,8 +131,8 @@ export const SHOPPING_TOOLS = [
     label: "List who sells a variant, at what price and on what terms",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Who sells the picked variants, at what price and on what terms — the only live read"
-      + " of a price, and so a price check too.",
+      "Who sells the picked variants, at what price and on what terms, each price dated —"
+      + " a price check too; `confirm` re-reads a hand-off listing now.",
   },
   {
     name: "shopping_seller_get",

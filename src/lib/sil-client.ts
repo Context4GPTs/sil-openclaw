@@ -77,11 +77,6 @@ import { readTokens, writeTokens } from "./credentials.js";
  * calls sil-api went on to finish (2026-09-15). */
 const REQUEST_TIMEOUT_MS = 45_000;
 
-/** The search alone waits out its web leg, which the agent contract gives 120 s. Aborting
- * short of that changes nothing sil does — the index is billed, the pages are read and the
- * row is written — it only hides the answer from the agent that asked for it. */
-const SEARCH_TIMEOUT_MS = 130_000;
-
 /** The user identity sil-web returns inside a successful claim. */
 export interface ClaimedUser {
   id: string;
@@ -150,14 +145,6 @@ export interface ShoppingRoute {
   readonly path: string;
   readonly query?: readonly string[];
 }
-
-/** The search route, the one call that waits out a web leg. Resolved by PATH so a route
- * renamed in the tool table falls back to the shared ceiling loudly — `lib/sil-client.test.ts`
- * reads this off the production table. */
-const SEARCH_PATH = "/catalog/search";
-
-export const requestTimeoutMs = (route: ShoppingRoute): number =>
-  route.path === SEARCH_PATH ? SEARCH_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
 
 /**
  * The outcome of any shopping call — ONE union for all ten, because they share one
@@ -386,7 +373,7 @@ export async function callShopping(
   const headers = { authorization: `Bearer ${token}`, ...callerHeaders(caller, attempt) };
   let res: Response;
   try {
-    const timeoutMs = requestTimeoutMs(route);
+    const timeoutMs = REQUEST_TIMEOUT_MS;
     res =
       route.method === "GET"
         ? await getJson(url, headers, timeoutMs)

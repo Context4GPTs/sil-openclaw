@@ -73,8 +73,9 @@ Never recommend on a guess. A pick that rests on a key reading `unknown` is a qu
 - To refine, change a spec on the buyer's word and say so. Never re-word the same search.
 
 The answer carries `fit` per product (the value sil holds, or `"unknown"`) and sil's
-**receipt**: shops, products weighed, how many fit, how many it could not tell, and what
-was set aside and why. Pass the receipt on in plain words and never recount it:
+**receipt**: shops, products weighed, how many fit, how many it could not tell, what was set
+aside and why, how many of the fit it holds a price for in the buyer's country (`offered`) and
+how many it is still finding (`finding`). Pass the receipt on in plain words and never recount it:
 
 > Checked 26 Greek shops · 410 grinders · 5 fit you · 7 sil could not tell · set aside 212
 > blade, 96 ceramic burrs, 36 over €110.
