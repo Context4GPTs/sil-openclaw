@@ -11,7 +11,9 @@ import {
   writeConfig,
   writeTokens,
 } from "../lib/credentials.js";
-import { wiringAdvisories } from "../lib/host-wiring.js";
+import { readHostVersion, wiringAdvisories } from "../lib/host-wiring.js";
+import { readInstalledVersion } from "../lib/version-advisory.js";
+import { runOf } from "./catalog.js";
 import { deriveChallenge, newSessionId, newVerifier } from "../lib/pkce.js";
 import {
   POLL_DEADLINE_MS,
@@ -129,74 +131,80 @@ function registerRegister(api: PluginAPI): void {
  * result and is never logged; tokens reach neither.
  */
 function registerWhoami(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_whoami",
-    label: "Who am I on sil",
-    description:
-      "Who is signed in, where they are and what they price in: `name`, `country`,"
-      + " `currency`, `gender`, `language` and the default `address`, each absent where sil"
-      + " holds none. Fast: call it freely, and never ask the buyer for what it answers."
-      + " `gender` on anything worn is the product spec `gender` (male → `mens`, female →"
-      + " `womens`), asked once where it answers none. If they are not registered, or the"
-      + " session is past refreshing, the result names the recovery (sil_register).",
-    parameters: Type.Object({}),
-    async execute() {
-      // 1 — no tokens on disk is the SAME state for a never-registered buyer and
-      // for one whose token write failed in this process, so the in-process marker
-      // is the only thing that tells the two apart.
-      const stored = readTokens();
-      if (stored === null) {
-        const failure = getPersistFailure();
-        return failure !== null ? persistenceFailed(failure) : notRegistered();
-      }
+  const pluginVersion = readInstalledVersion();
+  const openclawVersion = readHostVersion(api) ?? undefined;
+  api.registerTool((ctx) => {
+    const run = runOf(ctx, pluginVersion, openclawVersion);
+    return {
+      name: "sil_whoami",
+      label: "Who am I on sil",
+      description:
+        "Who is signed in, where they are and what they price in: `name`, `country`,"
+        + " `currency`, `gender`, `language` and the default `address`, each absent where sil"
+        + " holds none. Fast: call it freely, and never ask the buyer for what it answers."
+        + " `gender` on anything worn is the product spec `gender` (male → `mens`, female →"
+        + " `womens`), asked once where it answers none. If they are not registered, or the"
+        + " session is past refreshing, the result names the recovery (sil_register).",
+      parameters: Type.Object({}),
+      async execute(callId: string) {
+        // 1 — no tokens on disk is the SAME state for a never-registered buyer and
+        // for one whose token write failed in this process, so the in-process marker
+        // is the only thing that tells the two apart.
+        const stored = readTokens();
+        if (stored === null) {
+          const failure = getPersistFailure();
+          return failure !== null ? persistenceFailed(failure) : notRegistered();
+        }
 
-      // A staging/self-host web origin is legitimate, so it is surfaced and warned
-      // about, never rejected — a wrong one is then diagnosable before anything 404s.
-      const webOrigin = getWebUrl();
-      const webOriginSource = getWebUrlSource();
-      if (webOriginSource !== "default") {
-        api.logger.warn("sil_whoami_web_origin_override", {
+        // A staging/self-host web origin is legitimate, so it is surfaced and warned
+        // about, never rejected — a wrong one is then diagnosable before anything 404s.
+        const webOrigin = getWebUrl();
+        const webOriginSource = getWebUrlSource();
+        if (webOriginSource !== "default") {
+          api.logger.warn("sil_whoami_web_origin_override", {
+            web_origin: webOrigin,
+            web_origin_source: webOriginSource,
+          });
+        }
+        const originBlock = {
           web_origin: webOrigin,
           web_origin_source: webOriginSource,
-        });
-      }
-      const originBlock = {
-        web_origin: webOrigin,
-        web_origin_source: webOriginSource,
-      };
+        };
 
-      // 2 — read identity; on a 401 refresh-and-retry ONCE, shared with every
-      // `shopping_*` call so the recovery cannot drift between tools.
-      const first = await fetchIdentity(getApiUrl(), stored.access_token);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => fetchIdentity(getApiUrl(), accessToken),
-      );
-      switch (recovered.kind) {
-        case "result":
-          // Logs-only, never a payload field: a session thrashing through silent
-          // 401 recoveries is invisible otherwise.
-          if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
-          return identityOutcomeToResult(api, recovered.outcome, originBlock);
-        case "must_reregister":
-          // Clear the known-dead pair so its stale presence cannot block the
-          // sil_register recovery; an empty re-read has nothing to clear.
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_whoami_must_reregister", { cause: recovered.reason });
-          return mustReregister();
-        case "second_unauthorized":
-          // A freshly-rotated token STILL rejected is structurally dead — terminal,
-          // never another refresh. Clear the dead pair.
-          clearTokens();
-          api.logger.info("sil_whoami_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister();
-        case "retryable":
-          api.logger.info("sil_whoami_refresh_retryable", {});
-          return transient();
-      }
-    },
-  });
+        // 2 — read identity; on a 401 refresh-and-retry ONCE, shared with every
+        // `shopping_*` call so the recovery cannot drift between tools.
+        const caller = { ...run, toolCallId: callId };
+        const first = await fetchIdentity(getApiUrl(), stored.access_token, caller, 1);
+        const recovered = await refreshAndRetryOnce(
+          first,
+          (o): boolean => o.kind === "unauthorized",
+          (accessToken) => fetchIdentity(getApiUrl(), accessToken, caller, 2),
+        );
+        switch (recovered.kind) {
+          case "result":
+            // Logs-only, never a payload field: a session thrashing through silent
+            // 401 recoveries is invisible otherwise.
+            if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
+            return identityOutcomeToResult(api, recovered.outcome, originBlock);
+          case "must_reregister":
+            // Clear the known-dead pair so its stale presence cannot block the
+            // sil_register recovery; an empty re-read has nothing to clear.
+            if (recovered.reason === "invalid_grant") clearTokens();
+            api.logger.info("sil_whoami_must_reregister", { cause: recovered.reason });
+            return mustReregister();
+          case "second_unauthorized":
+            // A freshly-rotated token STILL rejected is structurally dead — terminal,
+            // never another refresh. Clear the dead pair.
+            clearTokens();
+            api.logger.info("sil_whoami_must_reregister", { cause: "retry_unauthorized" });
+            return mustReregister();
+          case "retryable":
+            api.logger.info("sil_whoami_refresh_retryable", {});
+            return transient();
+        }
+      },
+    };
+  }, { name: "sil_whoami" });
 }
 
 /** The resolved sil-web origin and where it came from. Strings only. */

@@ -159,19 +159,25 @@ export function registerCatalogTools(api: PluginAPI): void {
   for (const tool of SHOPPING_TOOLS) {
     const parameters = requestSchema(tool.name);
     api.registerTool(
-      (ctx) => {
-        const { provider, modelId } = ctx.activeModel ?? {};
-        const run = {
-          pluginVersion,
-          ...(openclawVersion !== undefined ? { openclawVersion } : {}),
-          ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
-          ...(provider && modelId ? { model: `${provider}/${modelId}` } : {}),
-        };
-        return defineTool(api, tool, parameters, run);
-      },
+      (ctx) => defineTool(api, tool, parameters, runOf(ctx, pluginVersion, openclawVersion)),
       { name: tool.name },
     );
   }
+}
+
+/** Who is calling, as the host hands it to a tool factory once per agent run. */
+export function runOf(
+  ctx: { activeModel?: { provider?: string; modelId?: string }; sessionId?: string },
+  pluginVersion: string,
+  openclawVersion: string | undefined,
+): Omit<Caller, "toolCallId"> {
+  const { provider, modelId } = ctx.activeModel ?? {};
+  return {
+    pluginVersion,
+    ...(openclawVersion !== undefined ? { openclawVersion } : {}),
+    ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
+    ...(provider && modelId ? { model: `${provider}/${modelId}` } : {}),
+  };
 }
 
 function defineTool(

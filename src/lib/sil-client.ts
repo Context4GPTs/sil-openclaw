@@ -328,11 +328,13 @@ export async function refreshSession(
 export async function fetchIdentity(
   silApiUrl: string,
   token: string,
+  caller: Caller,
+  attempt: 1 | 2,
 ): Promise<IdentityOutcome> {
   const url = `${stripTrailingSlash(silApiUrl)}/identity`;
   let res: Response;
   try {
-    res = await getJson(url, { authorization: `Bearer ${token}` });
+    res = await getJson(url, { authorization: `Bearer ${token}`, ...callerHeaders(caller, attempt) });
   } catch {
     return { kind: "retryable" };
   }
