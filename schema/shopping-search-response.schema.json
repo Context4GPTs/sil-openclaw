@@ -171,15 +171,6 @@
               "description": "A variant that answers the ask, and every option value that identifies it. One carrying none is a listing sil has not read sizes from."
             },
             "description": "Passes an `id` to the dossier and offers."
-          },
-          "printed": {
-            "type": "object",
-            "patternProperties": {
-              "^.*$": {
-                "type": "string"
-              }
-            },
-            "description": "Reads labelled pairs no key catches."
           }
         },
         "additionalProperties": false

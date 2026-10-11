@@ -190,25 +190,6 @@
             },
             "additionalProperties": false,
             "description": "Tells the buyer what other buyers said, from the reviews sil holds; absent until it holds any."
-          },
-          "webpage_info": {
-            "type": "object",
-            "required": [
-              "url",
-              "text"
-            ],
-            "properties": {
-              "url": {
-                "type": "string",
-                "description": "Links the page it read the words off."
-              },
-              "text": {
-                "type": "string",
-                "description": "Reads the whole page in the shop's own words for what sil has not keyed yet — a provisional read, never a verified one."
-              }
-            },
-            "additionalProperties": false,
-            "description": "Reads a page sil has not read yet, in the page's own words."
           }
         },
         "additionalProperties": false

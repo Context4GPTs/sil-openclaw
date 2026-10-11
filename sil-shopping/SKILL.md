@@ -83,11 +83,12 @@ was set aside and why. Pass the receipt on in plain words and never recount it:
 
 For the one or two they lean to:
 
-- `shopping_product_get { ids }` (up to three) gives specs, sources and the reviews sil holds. Add
-  `page: true` with one id only when sil has not read its sizes.
+- `shopping_product_get { ids }` (up to three) gives specs, sources and the reviews sil holds.
 - `shopping_offers { ids }` (or `{ name }` for a price check) gives prices with the moment
   each was read, and whether the seller ships to the buyer. `seller_specs` such as
-  `country in [GR]` or `return_window_days gte 14` filter sellers.
+  `country in [GR]` or `return_window_days gte 14` filter sellers. Ids it names `pending` are
+  still being found: ask again a few seconds later. Before sending the buyer to a link, send
+  `confirm: true` with that id (up to three) for a price read just now.
 - `shopping_seller_get { ids }` gives delivery, returns, warranty, policy pages and reviews.
 
 Then tell it: where you started from their words, what you assumed, what sil verified, what
