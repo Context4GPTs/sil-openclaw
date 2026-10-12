@@ -84,8 +84,7 @@
     "n": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 10,
-      "description": "Asks for this many variants."
+      "description": "Asks for this many variants; at most 10, a larger ask is served at that."
     },
     "brief": {
       "type": "string",
