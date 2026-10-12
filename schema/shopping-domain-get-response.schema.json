@@ -558,13 +558,13 @@
           "about": {
             "type": "string",
             "maxLength": 160,
-            "description": "Reads the document’s opening sentence, cut at a word."
+            "description": "Reads what the document teaches, cut at a word."
           }
         },
         "additionalProperties": false
       },
-      "maxItems": 5,
-      "description": "Teaches from what sil has written on the place: its own documents, then each kind, then the places above, nearest first. Reads one with `shopping_content.document`. First page and `keys` only."
+      "maxItems": 6,
+      "description": "Teaches from what sil holds on the place; the first is the domain’s index of every source it holds, each with what it teaches. Then its own documents, then each kind, then the places above, nearest first. Reads one with `shopping_content.document`. First page and `keys` only."
     }
   },
   "additionalProperties": false
