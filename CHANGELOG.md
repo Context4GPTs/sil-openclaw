@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-12
+
 ### Changed
 
 - **Fifteen tools on sil's signed contract.** `shopping_brief_create`, `shopping_brief_edit` and
