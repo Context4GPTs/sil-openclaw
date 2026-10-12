@@ -587,6 +587,24 @@ describe("sil_whoami — 403 forbidden is terminal (NEVER refreshed)", () => {
     expect(blob).not.toMatch(/temporar|transient|unavailable|try.again.later/);
   });
 
+  it("426 (plugin too old) answers sil's own message and keeps the tokens", async () => {
+    const message = "this sil plugin (0.6.0) is older than sil accepts (0.7.0); update the sil plugin";
+    seedTokens("valid-at", "valid-rt");
+    const rec = installRouter((kind) =>
+      kind === "identity"
+        ? { status: 426, body: { error: "invalid_request", message } }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+
+    expect(payload).toEqual({ status: "invalid_request", message });
+    expect(rec.refresh.length).toBe(0);
+    expect(readTokens()!.access_token).toBe("valid-at");
+  });
+
   // CARD `surface-user-not-provisioned-and-fix-recovery` — NARROWED (was: "does NOT
   // clear tokens.json on a 403"). The card makes the token-clear UNIFORM across all
   // three sil-api tools (Decision B): the recovery loop is the same loop no matter
@@ -800,26 +818,14 @@ describe("sil_whoami — rotated tokens never leak to logs or the result", () =>
 });
 
 // ===========================================================================
-// FIX B — web-origin visibility (warn, never reject). Card lines 179-184.
+// FIX B — a non-default web origin is warned about, never rejected.
 //
 // A stray `SIL_WEB_URL` env or `sil_web_url` pluginConfig silently overrides the
-// safe default web origin (`https://sil.4gpts.com`); a dead/staging origin then
-// breaks the registration link with no clue why. The fix: `sil_whoami` surfaces
-// the resolved WEB origin + its `source ∈ {default, env, config}` on the success
-// payload (so a wrong origin is diagnosable BEFORE anything 404s), and emits a
-// visible warn ONLY when the source is non-default — staging/self-host is
-// legitimate, so it is WARNED, NEVER rejected.
-//
-// SCOPE (locked, card line 100/118): B surfaces the **sil-web** origin
-// (getWebUrl/getWebUrlSource — the origin the broken link is built from). The
-// sil-api origin (the whoami READ target) is OUT of scope.
-//
-// These are sil_whoami-execute behaviours wired through the fetch boundary →
-// integration tier. The identity read is mocked OK so execute() reaches its
-// success payload (where the origin block lives); the WEB origin is what each
-// test varies. The global beforeEach pins setApiUrl(SIL_API) — kept so the read
-// resolves — and setWebUrl(SIL_WEB), which each test re-points to drive the
-// source under test (the global afterEach resets both + both env vars).
+// safe default web origin; a dead/staging origin then breaks the registration link
+// with no clue why. `sil_whoami` warns ONLY when the source is non-default —
+// staging/self-host is legitimate, so it is WARNED, NEVER rejected. The identity
+// read is mocked OK so execute() reaches its success; the WEB origin is what each
+// test varies.
 //
 // The origin is warned about in the log, never in the reply: the reply is the
 // contract's flat shape and nothing else.
@@ -846,7 +852,7 @@ function warnsAboutOrigin(api: MockPluginAPI, origin: string): boolean {
     });
 }
 
-describe("sil_whoami — B: web-origin visibility on the DEFAULT origin (silent, no noise)", () => {
+describe("sil_whoami — B: the default web origin is silent", () => {
   it("emits NO origin warning", async () => {
     // The common path: no SIL_WEB_URL env, no sil_web_url config → default
     // origin, surfaced but SILENT (a warn on every whoami on the default origin
@@ -876,7 +882,7 @@ describe("sil_whoami — B: web-origin visibility on the DEFAULT origin (silent,
   });
 });
 
-describe("sil_whoami — B: a non-default origin via the SIL_WEB_URL env warns (never rejects)", () => {
+describe("sil_whoami — B: a SIL_WEB_URL env origin warns and still reads", () => {
   it("emits a VISIBLE warn, and still returns the identity (no reject/error)", async () => {
     // Drive the env source: an explicit SIL_WEB_URL with NO config layer.
     setWebUrl(""); // clear the config pin so env is the resolved source
@@ -904,7 +910,7 @@ describe("sil_whoami — B: a non-default origin via the SIL_WEB_URL env warns (
   });
 });
 
-describe("sil_whoami — B: a non-default origin via the sil_web_url pluginConfig warns (never rejects)", () => {
+describe("sil_whoami — B: a sil_web_url config origin warns and still reads", () => {
   it("emits a VISIBLE warn, and still returns the identity", async () => {
     // Drive the config source (the way applyPluginConfigOverrides would set it).
     setWebUrl("https://sil-web.selfhost.example.com");

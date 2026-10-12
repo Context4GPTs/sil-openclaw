@@ -155,7 +155,7 @@ function registerWhoami(api: PluginAPI): void {
           return failure !== null ? persistenceFailed(failure) : notRegistered();
         }
 
-        // A staging/self-host web origin is legitimate, so it is surfaced and warned
+        // A staging/self-host web origin is legitimate, so it is warned
         // about, never rejected — a wrong one is then diagnosable before anything 404s.
         const webOrigin = getWebUrl();
         const webOriginSource = getWebUrlSource();

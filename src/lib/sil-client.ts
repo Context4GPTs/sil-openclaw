@@ -39,7 +39,10 @@
  *     200 { status, name, country?, currency?, gender?, language?, address? } → ok
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
+ *     426 plugin older than sil accepts                   → refused (carries sil's message)
  *     5xx / network / abort                               → retryable
+ *
+ * Shopping routes: 426 (plugin too old) → invalid_request, carrying sil's message.
  *
  * THE SHOPPING WIRE IS NOT MIRRORED HERE. Each tool's request shape is the committed
  * artifact under `schema/`, registered as the tool's own `parameters`; each 200 body is
@@ -269,6 +272,7 @@ export function classifyRefreshResponse(status: number, body: unknown): RefreshO
  * auth-branch bug in this flow.
  */
 export function classifyIdentityResponse(status: number, body: unknown): IdentityOutcome {
+  // Not `invalid_request`: IdentityOutcome has no such variant; the tool surfaces it as one.
   if (status === 426) return { kind: "refused", message: extractApiError(body).message };
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
