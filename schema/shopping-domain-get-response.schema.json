@@ -500,6 +500,71 @@
         }
       ],
       "description": "On a leaf: bought on its measures alone, or on its measures and its record. Absent with `keys` and after the first page."
+    },
+    "guides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "about"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Sends it as `shopping_content.document` to read the guide."
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "guide"
+              },
+              {
+                "type": "string",
+                "const": "tutorial"
+              },
+              {
+                "type": "string",
+                "const": "faq"
+              },
+              {
+                "type": "string",
+                "const": "glossary"
+              },
+              {
+                "type": "string",
+                "const": "review"
+              },
+              {
+                "type": "string",
+                "const": "comparison"
+              },
+              {
+                "type": "string",
+                "const": "news"
+              }
+            ],
+            "description": "Names what the document is."
+          },
+          "title": {
+            "type": "string",
+            "description": "Reads the document’s title."
+          },
+          "about": {
+            "type": "string",
+            "maxLength": 160,
+            "description": "Reads the document’s opening sentence, cut at a word."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 5,
+      "description": "Teaches from what sil has written on the place: its own documents, then each kind, then the places above, nearest first. Reads one with `shopping_content.document`. First page and `keys` only."
     }
   },
   "additionalProperties": false
