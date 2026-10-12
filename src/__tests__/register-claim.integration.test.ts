@@ -417,8 +417,7 @@ describe("claim lifecycle — a premature 404 KEEPS POLLING (the headline regres
     // A subsequent sil_whoami resolves the identity (registration truly completed).
     const whoamiPayload = payloadOf(await getTool(api, "sil_whoami").execute("w1", {}));
     expect(whoamiPayload["status"]).toBe("ok");
-    const identity = whoamiPayload["identity"] as { name?: string } | undefined;
-    expect(identity?.name).toBe("Polled User");
+    expect(whoamiPayload["name"]).toBe("Polled User");
 
     // And the terminal `sil_register_not_found` was NEVER logged on the way there.
     const infoMarkers = (api.logger.info as ReturnType<typeof vi.fn>).mock.calls.map(
@@ -537,7 +536,7 @@ describe("system-browser steer — the awaiting_browser return carries the steer
     // ── sil_whoami resolves the same identity (registration truly completed). ──
     const whoami = payloadOf(await getTool(api, "sil_whoami").execute("w1", {}));
     expect(whoami["status"]).toBe("ok");
-    expect((whoami["identity"] as { name?: string }).name).toBe("Polled User");
+    expect(whoami["name"]).toBe("Polled User");
   });
 
   it("a SECOND sil_register after completion confirms already_registered (the confirmation path is unchanged) — and no longer steers a browser (nothing to open)", async () => {
