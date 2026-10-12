@@ -126,4 +126,12 @@ describe("shopping_search — what the answer means", () => {
     installRouter(() => ({ status: 400, body: SPEC_400 }));
     expect(await run()).toEqual({ status: "invalid_request", message: SPEC_400.message });
   });
+
+  it("a 426 reaches the agent as sil's own message, not a transient failure", async () => {
+    const message =
+      "this sil plugin (0.6.0) is older than sil accepts (0.7.0); update the sil plugin";
+    seedTokens(ACCESS, REFRESH);
+    installRouter(() => ({ status: 426, body: { error: "invalid_request", message } }));
+    expect(await run()).toEqual({ status: "invalid_request", message });
+  });
 });

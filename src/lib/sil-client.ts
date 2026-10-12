@@ -131,6 +131,7 @@ export interface Identity {
  */
 export type IdentityOutcome =
   | { kind: "ok"; identity: Identity }
+  | { kind: "refused"; message: string }
   | { kind: "unauthorized" }
   | { kind: "forbidden"; reason: string }
   | { kind: "retryable" };
@@ -172,7 +173,10 @@ export type ShoppingOutcome =
  * source, and a second opinion here would be the copy that drifts from it.
  */
 function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcome {
-  if (status === 400) return { kind: "invalid_request", message: extractApiError(body).message };
+  // 426: sil refuses a plugin older than it accepts; its message says to update.
+  if (status === 400 || status === 426) {
+    return { kind: "invalid_request", message: extractApiError(body).message };
+  }
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
   if (status === 404) return { kind: "not_found", message: extractApiError(body).message };
@@ -265,6 +269,7 @@ export function classifyRefreshResponse(status: number, body: unknown): RefreshO
  * auth-branch bug in this flow.
  */
 export function classifyIdentityResponse(status: number, body: unknown): IdentityOutcome {
+  if (status === 426) return { kind: "refused", message: extractApiError(body).message };
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
   if (status >= 500) return { kind: "retryable" };

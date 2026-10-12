@@ -152,6 +152,14 @@ describe("classifyIdentityResponse — status taxonomy (the auth branch)", () =>
     expect(out.kind).toBe("unauthorized");
   });
 
+  it("426 → refused carrying sil's own message (a plugin too old, not a blip)", () => {
+    const message = "this sil plugin (0.6.0) is older than sil accepts (0.7.0); update the sil plugin";
+    expect(classifyIdentityResponse(426, { error: "invalid_request", message })).toEqual({
+      kind: "refused",
+      message,
+    });
+  });
+
   it("403 user_not_provisioned → forbidden carrying the reason (terminal)", () => {
     const out = classifyIdentityResponse(403, { error: "user_not_provisioned" });
     expect(out.kind).toBe("forbidden");

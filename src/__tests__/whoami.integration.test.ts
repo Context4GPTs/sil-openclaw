@@ -284,20 +284,13 @@ describe("sil_whoami — happy path (valid access token)", () => {
     expect(blob).not.toContain("\"verified\"");
     expect(blob).not.toContain("\"note\"");
 
-    // The whole envelope, structurally: `{ status: "ok", identity: { name,
-    // country, address } }` — the shape an agent reads to know where the buyer is.
-    // What `identity` carries INSIDE it is `tools/whoami.test.ts`'s, through the same
-    // `execute()`; re-asserting it here would be two tests of one classifier.
-    expect(payload["status"]).toBe("ok");
-    const identity = payload["identity"] as {
-      name?: unknown;
-      country?: unknown;
-      address?: unknown;
-    };
-    expect(identity).toBeDefined();
-    expect(identity.name).toBe("Ada Lovelace");
-    expect(identity.country).toBe("GB");
-    expect(identity.address).toEqual({ label: "Home", locality: "London", country: "GB" });
+    // The contract's flat reply: identity beside `status`, nothing else.
+    expect(payload).toEqual({
+      status: "ok",
+      name: "Ada Lovelace",
+      country: "GB",
+      address: { label: "Home", locality: "London", country: "GB" },
+    });
   });
 
   it("calls sil-api with Authorization: Bearer <stored access token>", async () => {
@@ -828,18 +821,9 @@ describe("sil_whoami — rotated tokens never leak to logs or the result", () =>
 // resolves — and setWebUrl(SIL_WEB), which each test re-points to drive the
 // source under test (the global afterEach resets both + both env vars).
 //
-// EXPECT RED against current code: sil_whoami's success payload is
-// `{ status:"ok", identity }` (identity.ts:245-247) with NO web_origin /
-// web_origin_source block and NO origin warn at any source.
+// The origin is warned about in the log, never in the reply: the reply is the
+// contract's flat shape and nothing else.
 // ===========================================================================
-
-/** The success-path origin-visibility block the fix must attach. Returns the
- * { web_origin, web_origin_source } pulled off the (string-only) result. */
-function originBlock(
-  payload: Record<string, unknown>,
-): { origin: unknown; source: unknown } {
-  return { origin: payload["web_origin"], source: payload["web_origin_source"] };
-}
 
 /** Every `api.logger.warn(marker, …)` first-arg, collected. The origin warning
  * is a warn-level marker (warn, NOT error — staging is legitimate). */
@@ -863,7 +847,7 @@ function warnsAboutOrigin(api: MockPluginAPI, origin: string): boolean {
 }
 
 describe("sil_whoami — B: web-origin visibility on the DEFAULT origin (silent, no noise)", () => {
-  it("surfaces web_origin + web_origin_source='default' and emits NO origin warning", async () => {
+  it("emits NO origin warning", async () => {
     // The common path: no SIL_WEB_URL env, no sil_web_url config → default
     // origin, surfaced but SILENT (a warn on every whoami on the default origin
     // would be pure noise).
@@ -883,12 +867,6 @@ describe("sil_whoami — B: web-origin visibility on the DEFAULT origin (silent,
     // Read still succeeds (origin visibility does not perturb the happy read).
     expect(payload["status"]).toBe("ok");
 
-    // The resolved web origin + source are surfaced as STRINGS.
-    const { origin, source } = originBlock(payload);
-    expect(typeof origin).toBe("string");
-    expect(new URL(origin as string).origin).toBe(new URL(getWebUrl()).origin);
-    expect(source).toBe("default");
-
     // No origin warning on the default — the safe path is silent.
     expect(warnsAboutOrigin(api, getWebUrl())).toBe(false);
     // Defensive: NO warn marker mentions web-url/origin at all on the default.
@@ -899,7 +877,7 @@ describe("sil_whoami — B: web-origin visibility on the DEFAULT origin (silent,
 });
 
 describe("sil_whoami — B: a non-default origin via the SIL_WEB_URL env warns (never rejects)", () => {
-  it("surfaces web_origin + source='env', emits a VISIBLE warn, and still returns the identity (no reject/error)", async () => {
+  it("emits a VISIBLE warn, and still returns the identity (no reject/error)", async () => {
     // Drive the env source: an explicit SIL_WEB_URL with NO config layer.
     setWebUrl(""); // clear the config pin so env is the resolved source
     process.env["SIL_WEB_URL"] = "https://sil-web.staging.example.com";
@@ -919,12 +897,6 @@ describe("sil_whoami — B: a non-default origin via the SIL_WEB_URL env warns (
     expect(payload["status"]).toBe("ok");
     expect(JSON.stringify(payload)).toContain("Ada Lovelace");
 
-    // The resolved origin + env source are surfaced as strings.
-    const { origin, source } = originBlock(payload);
-    expect(typeof origin).toBe("string");
-    expect(new URL(origin as string).origin).toBe("https://sil-web.staging.example.com");
-    expect(source).toBe("env");
-
     // … and a VISIBLE warn fired (an operator/agent can see a non-default
     // origin is in effect). It is warn-level — NOT error (staging is legitimate).
     expect(warnsAboutOrigin(api, "https://sil-web.staging.example.com")).toBe(true);
@@ -933,7 +905,7 @@ describe("sil_whoami — B: a non-default origin via the SIL_WEB_URL env warns (
 });
 
 describe("sil_whoami — B: a non-default origin via the sil_web_url pluginConfig warns (never rejects)", () => {
-  it("surfaces web_origin + source='config', emits a VISIBLE warn, and still returns the identity", async () => {
+  it("emits a VISIBLE warn, and still returns the identity", async () => {
     // Drive the config source (the way applyPluginConfigOverrides would set it).
     setWebUrl("https://sil-web.selfhost.example.com");
     seedTokens("valid-at", "valid-rt");
@@ -948,45 +920,8 @@ describe("sil_whoami — B: a non-default origin via the sil_web_url pluginConfi
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
 
     expect(payload["status"]).toBe("ok");
-    const { origin, source } = originBlock(payload);
-    expect(typeof origin).toBe("string");
-    expect(new URL(origin as string).origin).toBe("https://sil-web.selfhost.example.com");
-    expect(source).toBe("config"); // config-source override is legitimate, exactly like env
-
     expect(warnsAboutOrigin(api, "https://sil-web.selfhost.example.com")).toBe(true);
     // Never an error/reject on a config override.
     expect(vi.mocked(api.logger.error)).not.toHaveBeenCalled();
-  });
-});
-
-describe("sil_whoami — B: a non-default origin is RELAYABLE to the user (not silently dropped)", () => {
-  it("the origin + source + warning are carried to the agent (payload field AND/OR a warn-level log)", async () => {
-    // The whole point of the fix: a wrong origin must be DIAGNOSABLE. The
-    // origin-visibility output must reach the agent — as part of the
-    // agent-facing result AND/OR a warn-level log — never silently dropped.
-    setWebUrl("https://sil-web.wrong-host.example.com");
-    seedTokens("valid-at", "valid-rt");
-    installRouter((kind) =>
-      kind === "identity"
-        ? { status: 200, body: identityEnvelope() }
-        : { status: 500, body: {} },
-    );
-    const api = createMockPluginApi();
-    registerIdentityTools(api);
-
-    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-
-    const inPayload = JSON.stringify(payload).includes(
-      "https://sil-web.wrong-host.example.com",
-    );
-    const inWarnLog = warnsAboutOrigin(api, "https://sil-web.wrong-host.example.com");
-
-    // Surfaced in the result, in a warn log, or both — but NOT swallowed.
-    expect(inPayload || inWarnLog).toBe(true);
-    // The product intent is the agent-facing surface carries it: the origin
-    // block is on the result payload (so the agent can relay it without
-    // needing log access).
-    expect(payload["web_origin"]).toBeDefined();
-    expect(payload["web_origin_source"]).toBeDefined();
   });
 });

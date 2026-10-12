@@ -225,16 +225,12 @@ describe("sil_whoami — success result carries ONLY identity (no credential ech
     registerIdentityTools(api);
   });
 
-  it("surfaces the buyer's name, country and default address INSIDE `identity`", async () => {
-    // Contract §3.10: `country` rides beside `name`, not at the top level — an
-    // agent that has to hunt for it asks the buyer instead. The profile halves are
-    // there for the same reason and are the ones the founder's session re-asked:
-    // a foot length sil already held, interviewed for a second time.
+  it("answers the buyer's name, country and default address flat, beside status", async () => {
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    const identity = payload["identity"] as Record<string, unknown>;
-    expect(identity["name"]).toBe("Ada Lovelace");
-    expect(identity["country"]).toBe("GB");
-    expect(identity["address"]).toEqual({ label: "Home", locality: "London", country: "GB" });
+    expect(payload).not.toHaveProperty("identity");
+    expect(payload["name"]).toBe("Ada Lovelace");
+    expect(payload["country"]).toBe("GB");
+    expect(payload["address"]).toEqual({ label: "Home", locality: "London", country: "GB" });
   });
 
   it("does NOT echo the access token, refresh token, or Authorization header", async () => {

@@ -18,6 +18,10 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   lean shape (name, country, currency, gender, language, one default address). Replies are
   compact JSON. `shopping_domain_get` pages with `keys` and `after`; `shopping_product_get`
   takes at most three ids and an optional `page`. The skill is rewritten to match.
+- **`sil_whoami` answers flat**, exactly the contract's shape: no `identity` wrapper, no
+  `web_origin` fields. `shopping_product_get` names ids sil does not hold in `not_held`.
+- **sil refuses a plugin older than 0.7.0** (HTTP 426); its message reaches the agent as it
+  stands.
 
 ## [0.6.0] - 2026-10-08
 

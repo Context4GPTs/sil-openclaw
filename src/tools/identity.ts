@@ -11,7 +11,7 @@ import {
   writeConfig,
   writeTokens,
 } from "../lib/credentials.js";
-import { readHostVersion, wiringAdvisories } from "../lib/host-wiring.js";
+import { readHostVersion, wiringAdvisories, wiringAdvisoryBlocks } from "../lib/host-wiring.js";
 import { readInstalledVersion } from "../lib/version-advisory.js";
 import { runOf } from "./catalog.js";
 import { deriveChallenge, newSessionId, newVerifier } from "../lib/pkce.js";
@@ -27,7 +27,6 @@ import {
   refreshAndRetryOnce,
   stripTrailingSlash,
   type ClaimOutcome,
-  type Identity,
   type IdentityOutcome,
 } from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
@@ -166,10 +165,6 @@ function registerWhoami(api: PluginAPI): void {
             web_origin_source: webOriginSource,
           });
         }
-        const originBlock = {
-          web_origin: webOrigin,
-          web_origin_source: webOriginSource,
-        };
 
         // 2 — read identity; on a 401 refresh-and-retry ONCE, shared with every
         // `shopping_*` call so the recovery cannot drift between tools.
@@ -185,7 +180,7 @@ function registerWhoami(api: PluginAPI): void {
             // Logs-only, never a payload field: a session thrashing through silent
             // 401 recoveries is invisible otherwise.
             if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
-            return identityOutcomeToResult(api, recovered.outcome, originBlock);
+            return identityOutcomeToResult(api, recovered.outcome);
           case "must_reregister":
             // Clear the known-dead pair so its stale presence cannot block the
             // sil_register recovery; an empty re-read has nothing to clear.
@@ -207,22 +202,14 @@ function registerWhoami(api: PluginAPI): void {
   }, { name: "sil_whoami" });
 }
 
-/** The resolved sil-web origin and where it came from. Strings only. */
-interface OriginBlock {
-  web_origin: string;
-  web_origin_source: string;
-}
-
-/** Map a non-401 identity outcome to the agent-facing result. The origin block
- * rides the SUCCESS payload only — pre-failure diagnosis is its whole point. */
-function identityOutcomeToResult(
-  api: PluginAPI,
-  outcome: IdentityOutcome,
-  originBlock: OriginBlock,
-) {
+/** Map a non-401 identity outcome to the agent-facing result. */
+function identityOutcomeToResult(api: PluginAPI, outcome: IdentityOutcome) {
   switch (outcome.kind) {
     case "ok":
-      return identityResult(api, outcome.identity, originBlock);
+      return jsonResult({ status: "ok", ...outcome.identity }, ...wiringAdvisoryBlocks(api));
+    case "refused":
+      api.logger.info("sil_whoami_refused", {});
+      return jsonResult({ status: "invalid_request", message: outcome.message });
     case "forbidden":
       // A token that maps to no account is structurally dead, so clear it or the
       // sil_register recovery answers `already_registered` and strands the buyer.
@@ -238,21 +225,6 @@ function identityOutcomeToResult(
       // exhaustive so a future refactor can't silently drop a variant.
       return mustReregister();
   }
-}
-
-/** Success: `identity` carries the buyer's name, country, gender and currency (each when
- * the read has one), language and the default address — no token, no Bearer header. */
-function identityResult(
-  api: PluginAPI,
-  identity: Identity,
-  originBlock: OriginBlock,
-) {
-  return jsonResult({
-    status: "ok",
-    identity,
-    ...originBlock,
-    ...wiringAdvisories(api),
-  });
 }
 
 /** Not registered: a distinct, actionable outcome naming the recovery tool. No
