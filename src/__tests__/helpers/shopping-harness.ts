@@ -38,10 +38,11 @@ const ROUTE_PATH = {
   product: "/catalog/product",
   offers: "/catalog/offers",
   sellers: "/catalog/sellers",
-  briefCreate: "/briefs/create",
-  briefEdit: "/briefs/edit",
+  briefWrite: "/briefs/write",
   briefRead: "/briefs/read",
-  profileEdit: "/profile/edit",
+  userRead: "/user/read",
+  userRemember: "/user/remember",
+  userForget: "/user/forget",
 } as const;
 
 /** `GET /catalog/domains` — the registry search. */
@@ -81,10 +82,11 @@ export interface Router {
   domainSearch: Recorded[];
   /** `GET /catalog/domains/<path>` — the guide read. */
   domainGet: Recorded[];
-  briefCreate: Recorded[];
-  briefEdit: Recorded[];
+  briefWrite: Recorded[];
   briefRead: Recorded[];
-  profileEdit: Recorded[];
+  userRead: Recorded[];
+  userRemember: Recorded[];
+  userForget: Recorded[];
   refresh: Recorded[];
   /** Anything that matched no known path. Always assert this is empty. */
   other: Recorded[];
@@ -109,10 +111,11 @@ export function installRouter(
     sellers: [],
     domainSearch: [],
     domainGet: [],
-    briefCreate: [],
-    briefEdit: [],
+    briefWrite: [],
     briefRead: [],
-    profileEdit: [],
+    userRead: [],
+    userRemember: [],
+    userForget: [],
     refresh: [],
     other: [],
   };

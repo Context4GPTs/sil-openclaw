@@ -2,7 +2,7 @@
  * INTEGRATION — the refusal envelope is UNIFORM across every sil-api-calling tool, and
  * it is one shared path, never a per-tool handler.
  *
- * Eleven tools reach sil-api with a Bearer: the ten `shopping_*` tools and
+ * Thirteen tools reach sil-api with a Bearer: the twelve `shopping_*` tools and
  * `sil_whoami`. Each drives `refreshAndRetryOnce` — at most one refresh, at most one
  * retry, no loop. The failure this file forecloses is DRIFT: a tool that refreshes twice,
  * retries a dead token, clears credentials on a transient blip, or (worst) succeeds where
@@ -13,7 +13,7 @@
  * produce the same STATUS, the same credential side effect and the same call counts.
  * Parity is asserted across the set, not tool by tool, so a divergence names itself. It
  * is also why the per-tool files do not each re-assert the shared arms: one code path,
- * one bar, driven eleven ways.
+ * one bar, driven thirteen ways.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -62,14 +62,9 @@ const BEARER_TOOLS = [
     success: (): unknown => contractResponse("shopping_content"),
   },
   {
-    tool: "shopping_brief_create",
-    params: { title: "Ski boots", narrative: "Advanced skier, short wide foot." },
-    success: (): unknown => contractResponse("shopping_brief_create"),
-  },
-  {
-    tool: "shopping_brief_edit",
+    tool: "shopping_brief_write",
     params: { id: "b1", decision: "Ceiling raised." },
-    success: (): unknown => contractResponse("shopping_brief_edit"),
+    success: (): unknown => contractResponse("shopping_brief_write"),
   },
   {
     tool: "shopping_brief_read",
@@ -77,9 +72,21 @@ const BEARER_TOOLS = [
     success: (): unknown => contractResponse("shopping_brief_read"),
   },
   {
-    tool: "shopping_profile_edit",
-    params: { measurements: [{ name: "foot_length", value: 27.2, unit: "cm" }] },
-    success: (): unknown => contractResponse("shopping_profile_edit"),
+    tool: "shopping_user_read",
+    params: {},
+    success: (): unknown => contractResponse("shopping_user_read"),
+  },
+  {
+    tool: "shopping_user_remember",
+    params: {
+      rows: [{ kind: "memory", text: "Brews V60 at 7am.", source: "told", gives_back: "no asking" }],
+    },
+    success: (): unknown => contractResponse("shopping_user_remember"),
+  },
+  {
+    tool: "shopping_user_forget",
+    params: { all: true },
+    success: (): unknown => contractResponse("shopping_user_forget"),
   },
   {
     tool: "shopping_search",
@@ -104,7 +111,7 @@ const BEARER_TOOLS = [
   {
     tool: "sil_whoami",
     params: {},
-    success: (): unknown => ({ name: "Test Shopper", addresses: [] }),
+    success: (): unknown => ({ name: "Test Shopper" }),
   },
 ];
 

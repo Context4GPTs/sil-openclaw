@@ -12,6 +12,24 @@
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
       "description": "Sends a leaf `shopping_domain_search` answered, or a kind to list its leaves. One that does not stand answers `not_found`; a shelf, domain or top answers `not_a_leaf` naming leaves under it; an area sil does not carry yet answers `not_carried`."
+    },
+    "keys": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "minItems": 1,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "description": "Sends keys of this place, from its index, to read only those whole — each with its `description` and `step`. Absent: the index of every key. A key the place has no spec for is refused. Not with `after`."
+    },
+    "after": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Sends the `next` of the page just read, to read the index on from that key; a key the place has no spec for is refused."
     }
   },
   "additionalProperties": false

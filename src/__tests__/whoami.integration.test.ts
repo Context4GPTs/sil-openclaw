@@ -6,8 +6,7 @@
  * ONLY thing mocked is `fetch` — the host/network boundary. There is no live
  * sil-api or Postgres in this repo; the true cross-service guarantee (real PII
  * over the wire from a live sil-api) is sil-stage's e2e (goal SC9), deferred
- * AND additionally blocked on the sil-services follow-on that makes sil-api's
- * /identity return real `{name, addresses}` (Signals). Here we prove the whole
+ * Here we prove the whole
  * PLUGIN-SIDE contract — the refresh choreography + error taxonomy + privacy —
  * against a mocked boundary, exactly as the register card proved its claim flow.
  *
@@ -19,7 +18,7 @@
  *
  * Wire shapes:
  *   - identity (sil-api):  POST <sil-api>/identity, Authorization: Bearer <at>
- *       200 envelope { ..., result: { name, addresses } } → ok
+ *       200 envelope { ..., result: { name, address? } } → ok
  *       401                                               → refresh-and-retry
  *       5xx / network throw                               → retryable
  *   - refresh (sil-web):   POST <sil-web>/api/v1/auth/refresh { refresh_token }
@@ -29,8 +28,8 @@
  *    is the agreed real-read contract the sil-services follow-on will satisfy.)
  *
  * THE anti-false-green (PO "latent-endpoint confusion"): the happy-path mock
- * returns the agreed REAL `{name, addresses}` and the test asserts the tool
- * surfaces the authenticated user's name + addresses — NOT the current sil-api
+ * returns the agreed REAL `{name, address}` and the test asserts the tool
+ * surfaces the authenticated user's name + address — NOT the current sil-api
  * stub shape `{kind, verified, subject, attributes, note}`. The suite is unable
  * to go green while the product promise (return real identity) is unmet.
  *
@@ -78,11 +77,7 @@ const SIL_API = "https://sil-api.test.example.com"; // identity-read origin
 const REAL_IDENTITY = {
   name: "Ada Lovelace",
   country: "GB",
-  addresses: [
-    { line1: "12 Analytical Engine Way", city: "London", country: "GB" },
-  ],
-  measurements: [{ name: "foot_length", value: 27.2, unit: "cm" }],
-  preferences: [{ name: "fit", value: "snug over the forefoot" }],
+  address: { label: "Home", locality: "London", country: "GB" },
 };
 
 /** The agreed real-read response: identity in a UCP envelope's `result`. */
@@ -267,7 +262,7 @@ afterEach(() => {
 });
 
 describe("sil_whoami — happy path (valid access token)", () => {
-  it("returns the authenticated user's REAL name + addresses (NOT the stub shape)", async () => {
+  it("returns the authenticated user's REAL name + address (NOT the stub shape)", async () => {
     // Anti-false-green: the mock returns the agreed real identity contract.
     seedTokens("valid-at", "valid-rt");
     installRouter((kind) =>
@@ -282,59 +277,20 @@ describe("sil_whoami — happy path (valid access token)", () => {
     const blob = JSON.stringify(payload);
     // The product promise: real identity, surfaced (unwrapped from the envelope).
     expect(blob).toContain("Ada Lovelace");
-    expect(blob).toContain("Analytical Engine Way");
+    expect(blob).toContain("London");
     // And NOT the current sil-api stub payload shape — if the tool were wired to
-    // the stub it would pass with these markers and no name/addresses.
+    // the stub it would pass with these markers and no name/address.
     expect(blob).not.toContain("\"kind\"");
     expect(blob).not.toContain("\"verified\"");
     expect(blob).not.toContain("\"note\"");
 
-    // The whole envelope, structurally: `{ status: "ok", identity: { name,
-    // country, addresses } }` — the shape an agent reads to know where the buyer is.
-    // What `identity` carries INSIDE it is `tools/whoami.test.ts`'s, through the same
-    // `execute()`; re-asserting it here would be two tests of one classifier.
-    expect(payload["status"]).toBe("ok");
-    const identity = payload["identity"] as {
-      name?: unknown;
-      country?: unknown;
-      addresses?: unknown;
-    };
-    expect(identity).toBeDefined();
-    expect(identity.name).toBe("Ada Lovelace");
-    expect(identity.country).toBe("GB");
-    expect(Array.isArray(identity.addresses)).toBe(true);
-    expect((identity.addresses as unknown[]).length).toBe(1);
-  });
-
-  it("drops an `addresses` element that is not an object — a bare array never ships as an address", async () => {
-    // Addresses pass through OPAQUE (the wire shape is sil-api's `AddressWire`, not the
-    // hint fields on `IdentityAddress`), so the only thing standing between a malformed
-    // element and the buyer's own address list is the per-element plain-object filter.
-    // Measured: with `asRecord`'s array arm removed, `[["x"], {…}]` reaches this payload
-    // whole — a JSON array typed as an address, which every consumer then renders,
-    // stores or posts as one. This is the one site where that arm decides an outcome.
-    seedTokens("valid-at", "valid-rt");
-    const REAL = { line1: "12 Analytical Engine Way", city: "London", country: "GB" };
-    installRouter((kind) =>
-      kind === "identity"
-        ? {
-            status: 200,
-            body: identityEnvelope({
-              name: "Ada Lovelace",
-              addresses: [["x"], REAL, "12 Analytical Engine Way", null, 7],
-            }),
-          }
-        : { status: 500, body: {} },
-    );
-    const api = createMockPluginApi();
-    registerIdentityTools(api);
-
-    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-    expect(payload["status"]).toBe("ok");
-    const identity = payload["identity"] as { addresses: unknown[] };
-    // Exactly the one real address — and by VALUE, so "it dropped everything" cannot
-    // pass here either.
-    expect(identity.addresses).toEqual([REAL]);
+    // The contract's flat reply: identity beside `status`, nothing else.
+    expect(payload).toEqual({
+      status: "ok",
+      name: "Ada Lovelace",
+      country: "GB",
+      address: { label: "Home", locality: "London", country: "GB" },
+    });
   });
 
   it("calls sil-api with Authorization: Bearer <stored access token>", async () => {
@@ -552,7 +508,7 @@ describe("sil_whoami — refresh also fails (dead refresh token)", () => {
     expect(blob).toMatch(/re-?register|sil_register|must.*register|session.*expired/);
     // Not presented as success.
     expect(payload["name"]).toBeUndefined();
-    expect(payload["addresses"]).toBeUndefined();
+    expect(payload["address"]).toBeUndefined();
 
     // The NO-STORM bound: with a dead refresh token, the tool does NOT retry the
     // identity read after the failed refresh — exactly ONE identity fetch and
@@ -619,7 +575,7 @@ describe("sil_whoami — 403 forbidden is terminal (NEVER refreshed)", () => {
     // Surfaces a terminal, actionable outcome — not a success, not a transient
     // "try again" (a 403 won't fix itself on retry), not a silent empty.
     expect(payload["name"]).toBeUndefined();
-    expect(payload["addresses"]).toBeUndefined();
+    expect(payload["address"]).toBeUndefined();
     const blob = JSON.stringify(payload).toLowerCase();
     // Carries the actionable provisioning/onboarding hint distinct from the
     // 401/5xx outcomes (a 403 is "you aren't set up", not "auth expired" or
@@ -629,6 +585,24 @@ describe("sil_whoami — 403 forbidden is terminal (NEVER refreshed)", () => {
     // itself by waiting (it may legitimately tell the user to fix-then-retry,
     // but it must not read as a passive "temporary, try later" blip).
     expect(blob).not.toMatch(/temporar|transient|unavailable|try.again.later/);
+  });
+
+  it("426 (plugin too old) answers sil's own message and keeps the tokens", async () => {
+    const message = "this sil plugin (0.6.0) is older than sil accepts (0.7.0); update the sil plugin";
+    seedTokens("valid-at", "valid-rt");
+    const rec = installRouter((kind) =>
+      kind === "identity"
+        ? { status: 426, body: { error: "invalid_request", message } }
+        : { status: 500, body: {} },
+    );
+    const api = createMockPluginApi();
+    registerIdentityTools(api);
+
+    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
+
+    expect(payload).toEqual({ status: "invalid_request", message });
+    expect(rec.refresh.length).toBe(0);
+    expect(readTokens()!.access_token).toBe("valid-at");
   });
 
   // CARD `surface-user-not-provisioned-and-fix-recovery` — NARROWED (was: "does NOT
@@ -844,39 +818,18 @@ describe("sil_whoami — rotated tokens never leak to logs or the result", () =>
 });
 
 // ===========================================================================
-// FIX B — web-origin visibility (warn, never reject). Card lines 179-184.
+// FIX B — a non-default web origin is warned about, never rejected.
 //
 // A stray `SIL_WEB_URL` env or `sil_web_url` pluginConfig silently overrides the
-// safe default web origin (`https://sil.4gpts.com`); a dead/staging origin then
-// breaks the registration link with no clue why. The fix: `sil_whoami` surfaces
-// the resolved WEB origin + its `source ∈ {default, env, config}` on the success
-// payload (so a wrong origin is diagnosable BEFORE anything 404s), and emits a
-// visible warn ONLY when the source is non-default — staging/self-host is
-// legitimate, so it is WARNED, NEVER rejected.
+// safe default web origin; a dead/staging origin then breaks the registration link
+// with no clue why. `sil_whoami` warns ONLY when the source is non-default —
+// staging/self-host is legitimate, so it is WARNED, NEVER rejected. The identity
+// read is mocked OK so execute() reaches its success; the WEB origin is what each
+// test varies.
 //
-// SCOPE (locked, card line 100/118): B surfaces the **sil-web** origin
-// (getWebUrl/getWebUrlSource — the origin the broken link is built from). The
-// sil-api origin (the whoami READ target) is OUT of scope.
-//
-// These are sil_whoami-execute behaviours wired through the fetch boundary →
-// integration tier. The identity read is mocked OK so execute() reaches its
-// success payload (where the origin block lives); the WEB origin is what each
-// test varies. The global beforeEach pins setApiUrl(SIL_API) — kept so the read
-// resolves — and setWebUrl(SIL_WEB), which each test re-points to drive the
-// source under test (the global afterEach resets both + both env vars).
-//
-// EXPECT RED against current code: sil_whoami's success payload is
-// `{ status:"ok", identity }` (identity.ts:245-247) with NO web_origin /
-// web_origin_source block and NO origin warn at any source.
+// The origin is warned about in the log, never in the reply: the reply is the
+// contract's flat shape and nothing else.
 // ===========================================================================
-
-/** The success-path origin-visibility block the fix must attach. Returns the
- * { web_origin, web_origin_source } pulled off the (string-only) result. */
-function originBlock(
-  payload: Record<string, unknown>,
-): { origin: unknown; source: unknown } {
-  return { origin: payload["web_origin"], source: payload["web_origin_source"] };
-}
 
 /** Every `api.logger.warn(marker, …)` first-arg, collected. The origin warning
  * is a warn-level marker (warn, NOT error — staging is legitimate). */
@@ -899,8 +852,8 @@ function warnsAboutOrigin(api: MockPluginAPI, origin: string): boolean {
     });
 }
 
-describe("sil_whoami — B: web-origin visibility on the DEFAULT origin (silent, no noise)", () => {
-  it("surfaces web_origin + web_origin_source='default' and emits NO origin warning", async () => {
+describe("sil_whoami — B: the default web origin is silent", () => {
+  it("emits NO origin warning", async () => {
     // The common path: no SIL_WEB_URL env, no sil_web_url config → default
     // origin, surfaced but SILENT (a warn on every whoami on the default origin
     // would be pure noise).
@@ -920,12 +873,6 @@ describe("sil_whoami — B: web-origin visibility on the DEFAULT origin (silent,
     // Read still succeeds (origin visibility does not perturb the happy read).
     expect(payload["status"]).toBe("ok");
 
-    // The resolved web origin + source are surfaced as STRINGS.
-    const { origin, source } = originBlock(payload);
-    expect(typeof origin).toBe("string");
-    expect(new URL(origin as string).origin).toBe(new URL(getWebUrl()).origin);
-    expect(source).toBe("default");
-
     // No origin warning on the default — the safe path is silent.
     expect(warnsAboutOrigin(api, getWebUrl())).toBe(false);
     // Defensive: NO warn marker mentions web-url/origin at all on the default.
@@ -935,8 +882,8 @@ describe("sil_whoami — B: web-origin visibility on the DEFAULT origin (silent,
   });
 });
 
-describe("sil_whoami — B: a non-default origin via the SIL_WEB_URL env warns (never rejects)", () => {
-  it("surfaces web_origin + source='env', emits a VISIBLE warn, and still returns the identity (no reject/error)", async () => {
+describe("sil_whoami — B: a SIL_WEB_URL env origin warns and still reads", () => {
+  it("emits a VISIBLE warn, and still returns the identity (no reject/error)", async () => {
     // Drive the env source: an explicit SIL_WEB_URL with NO config layer.
     setWebUrl(""); // clear the config pin so env is the resolved source
     process.env["SIL_WEB_URL"] = "https://sil-web.staging.example.com";
@@ -956,12 +903,6 @@ describe("sil_whoami — B: a non-default origin via the SIL_WEB_URL env warns (
     expect(payload["status"]).toBe("ok");
     expect(JSON.stringify(payload)).toContain("Ada Lovelace");
 
-    // The resolved origin + env source are surfaced as strings.
-    const { origin, source } = originBlock(payload);
-    expect(typeof origin).toBe("string");
-    expect(new URL(origin as string).origin).toBe("https://sil-web.staging.example.com");
-    expect(source).toBe("env");
-
     // … and a VISIBLE warn fired (an operator/agent can see a non-default
     // origin is in effect). It is warn-level — NOT error (staging is legitimate).
     expect(warnsAboutOrigin(api, "https://sil-web.staging.example.com")).toBe(true);
@@ -969,8 +910,8 @@ describe("sil_whoami — B: a non-default origin via the SIL_WEB_URL env warns (
   });
 });
 
-describe("sil_whoami — B: a non-default origin via the sil_web_url pluginConfig warns (never rejects)", () => {
-  it("surfaces web_origin + source='config', emits a VISIBLE warn, and still returns the identity", async () => {
+describe("sil_whoami — B: a sil_web_url config origin warns and still reads", () => {
+  it("emits a VISIBLE warn, and still returns the identity", async () => {
     // Drive the config source (the way applyPluginConfigOverrides would set it).
     setWebUrl("https://sil-web.selfhost.example.com");
     seedTokens("valid-at", "valid-rt");
@@ -985,45 +926,8 @@ describe("sil_whoami — B: a non-default origin via the sil_web_url pluginConfi
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
 
     expect(payload["status"]).toBe("ok");
-    const { origin, source } = originBlock(payload);
-    expect(typeof origin).toBe("string");
-    expect(new URL(origin as string).origin).toBe("https://sil-web.selfhost.example.com");
-    expect(source).toBe("config"); // config-source override is legitimate, exactly like env
-
     expect(warnsAboutOrigin(api, "https://sil-web.selfhost.example.com")).toBe(true);
     // Never an error/reject on a config override.
     expect(vi.mocked(api.logger.error)).not.toHaveBeenCalled();
-  });
-});
-
-describe("sil_whoami — B: a non-default origin is RELAYABLE to the user (not silently dropped)", () => {
-  it("the origin + source + warning are carried to the agent (payload field AND/OR a warn-level log)", async () => {
-    // The whole point of the fix: a wrong origin must be DIAGNOSABLE. The
-    // origin-visibility output must reach the agent — as part of the
-    // agent-facing result AND/OR a warn-level log — never silently dropped.
-    setWebUrl("https://sil-web.wrong-host.example.com");
-    seedTokens("valid-at", "valid-rt");
-    installRouter((kind) =>
-      kind === "identity"
-        ? { status: 200, body: identityEnvelope() }
-        : { status: 500, body: {} },
-    );
-    const api = createMockPluginApi();
-    registerIdentityTools(api);
-
-    const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
-
-    const inPayload = JSON.stringify(payload).includes(
-      "https://sil-web.wrong-host.example.com",
-    );
-    const inWarnLog = warnsAboutOrigin(api, "https://sil-web.wrong-host.example.com");
-
-    // Surfaced in the result, in a warn log, or both — but NOT swallowed.
-    expect(inPayload || inWarnLog).toBe(true);
-    // The product intent is the agent-facing surface carries it: the origin
-    // block is on the result payload (so the agent can relay it without
-    // needing log access).
-    expect(payload["web_origin"]).toBeDefined();
-    expect(payload["web_origin_source"]).toBeDefined();
   });
 });

@@ -20,7 +20,7 @@ export function jsonResult(data: unknown, ...extra: unknown[]): ToolResult {
   return {
     content: [data, ...extra].map((part) => ({
       type: "text" as const,
-      text: JSON.stringify(part, null, 2),
+      text: JSON.stringify(part),
     })),
   };
 }

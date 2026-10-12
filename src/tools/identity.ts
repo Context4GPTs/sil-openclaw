@@ -11,7 +11,9 @@ import {
   writeConfig,
   writeTokens,
 } from "../lib/credentials.js";
-import { wiringAdvisories } from "../lib/host-wiring.js";
+import { readHostVersion, wiringAdvisories, wiringAdvisoryBlocks } from "../lib/host-wiring.js";
+import { readInstalledVersion } from "../lib/version-advisory.js";
+import { runOf } from "./catalog.js";
 import { deriveChallenge, newSessionId, newVerifier } from "../lib/pkce.js";
 import {
   POLL_DEADLINE_MS,
@@ -25,7 +27,6 @@ import {
   refreshAndRetryOnce,
   stripTrailingSlash,
   type ClaimOutcome,
-  type Identity,
   type IdentityOutcome,
 } from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
@@ -129,101 +130,86 @@ function registerRegister(api: PluginAPI): void {
  * result and is never logged; tokens reach neither.
  */
 function registerWhoami(api: PluginAPI): void {
-  api.registerTool({
-    name: "sil_whoami",
-    label: "Who am I on sil",
-    description:
-      "The buyer's name, country, `gender`, `currency` and the addresses on file, and"
-      + " the `measurements` and `preferences` sil already holds for them — read live from"
-      + " sil with the credentials sil_register stored, a stale session token refreshed"
-      + " once and the read retried. `gender` is `male`, `female` or `other`, and is"
-      + " absent where the buyer never stated one; on anything worn it is the product"
-      + " spec `gender` in the registry's own spelling (male → `mens`, female →"
-      + " `womens`), asked once where this answers none and never inferred. `currency` is"
-      + " the ISO 4217 code they price in, absent where nothing on file says it: a money"
-      + " row that means theirs leaves `currency` off — with none on file, it names its"
-      + " own — and sil converts nothing. Call it at the start of a chat: it"
-      + " says where the buyer is, what they price in, how they measure and what they"
-      + " lastingly prefer, and you never ask them for anything it answers."
-      + " shopping_profile_edit is what writes those last three back. If they are not"
-      + " registered, or the session is past refreshing, the result names the recovery"
-      + " (sil_register).",
-    parameters: Type.Object({}),
-    async execute() {
-      // 1 — no tokens on disk is the SAME state for a never-registered buyer and
-      // for one whose token write failed in this process, so the in-process marker
-      // is the only thing that tells the two apart.
-      const stored = readTokens();
-      if (stored === null) {
-        const failure = getPersistFailure();
-        return failure !== null ? persistenceFailed(failure) : notRegistered();
-      }
+  const pluginVersion = readInstalledVersion();
+  const openclawVersion = readHostVersion(api) ?? undefined;
+  api.registerTool((ctx) => {
+    const run = runOf(ctx, pluginVersion, openclawVersion);
+    return {
+      name: "sil_whoami",
+      label: "Who am I on sil",
+      description:
+        "Who is signed in, where they are and what they price in: `name`, `country`,"
+        + " `currency`, `gender`, `language` and the default `address`, each absent where sil"
+        + " holds none. Fast: call it freely, and never ask the buyer for what it answers."
+        + " `gender` on anything worn is the product spec `gender` (male → `mens`, female →"
+        + " `womens`), asked once where it answers none. If they are not registered, or the"
+        + " session is past refreshing, the result names the recovery (sil_register).",
+      parameters: Type.Object({}),
+      async execute(callId: string) {
+        // 1 — no tokens on disk is the SAME state for a never-registered buyer and
+        // for one whose token write failed in this process, so the in-process marker
+        // is the only thing that tells the two apart.
+        const stored = readTokens();
+        if (stored === null) {
+          const failure = getPersistFailure();
+          return failure !== null ? persistenceFailed(failure) : notRegistered();
+        }
 
-      // A staging/self-host web origin is legitimate, so it is surfaced and warned
-      // about, never rejected — a wrong one is then diagnosable before anything 404s.
-      const webOrigin = getWebUrl();
-      const webOriginSource = getWebUrlSource();
-      if (webOriginSource !== "default") {
-        api.logger.warn("sil_whoami_web_origin_override", {
-          web_origin: webOrigin,
-          web_origin_source: webOriginSource,
-        });
-      }
-      const originBlock = {
-        web_origin: webOrigin,
-        web_origin_source: webOriginSource,
-      };
+        // A staging/self-host web origin is legitimate, so it is warned
+        // about, never rejected — a wrong one is then diagnosable before anything 404s.
+        const webOrigin = getWebUrl();
+        const webOriginSource = getWebUrlSource();
+        if (webOriginSource !== "default") {
+          api.logger.warn("sil_whoami_web_origin_override", {
+            web_origin: webOrigin,
+            web_origin_source: webOriginSource,
+          });
+        }
 
-      // 2 — read identity; on a 401 refresh-and-retry ONCE, shared with every
-      // `shopping_*` call so the recovery cannot drift between tools.
-      const first = await fetchIdentity(getApiUrl(), stored.access_token);
-      const recovered = await refreshAndRetryOnce(
-        first,
-        (o): boolean => o.kind === "unauthorized",
-        (accessToken) => fetchIdentity(getApiUrl(), accessToken),
-      );
-      switch (recovered.kind) {
-        case "result":
-          // Logs-only, never a payload field: a session thrashing through silent
-          // 401 recoveries is invisible otherwise.
-          if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
-          return identityOutcomeToResult(api, recovered.outcome, originBlock);
-        case "must_reregister":
-          // Clear the known-dead pair so its stale presence cannot block the
-          // sil_register recovery; an empty re-read has nothing to clear.
-          if (recovered.reason === "invalid_grant") clearTokens();
-          api.logger.info("sil_whoami_must_reregister", { cause: recovered.reason });
-          return mustReregister();
-        case "second_unauthorized":
-          // A freshly-rotated token STILL rejected is structurally dead — terminal,
-          // never another refresh. Clear the dead pair.
-          clearTokens();
-          api.logger.info("sil_whoami_must_reregister", { cause: "retry_unauthorized" });
-          return mustReregister();
-        case "retryable":
-          api.logger.info("sil_whoami_refresh_retryable", {});
-          return transient();
-      }
-    },
-  });
+        // 2 — read identity; on a 401 refresh-and-retry ONCE, shared with every
+        // `shopping_*` call so the recovery cannot drift between tools.
+        const caller = { ...run, toolCallId: callId };
+        const first = await fetchIdentity(getApiUrl(), stored.access_token, caller, 1);
+        const recovered = await refreshAndRetryOnce(
+          first,
+          (o): boolean => o.kind === "unauthorized",
+          (accessToken) => fetchIdentity(getApiUrl(), accessToken, caller, 2),
+        );
+        switch (recovered.kind) {
+          case "result":
+            // Logs-only, never a payload field: a session thrashing through silent
+            // 401 recoveries is invisible otherwise.
+            if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
+            return identityOutcomeToResult(api, recovered.outcome);
+          case "must_reregister":
+            // Clear the known-dead pair so its stale presence cannot block the
+            // sil_register recovery; an empty re-read has nothing to clear.
+            if (recovered.reason === "invalid_grant") clearTokens();
+            api.logger.info("sil_whoami_must_reregister", { cause: recovered.reason });
+            return mustReregister();
+          case "second_unauthorized":
+            // A freshly-rotated token STILL rejected is structurally dead — terminal,
+            // never another refresh. Clear the dead pair.
+            clearTokens();
+            api.logger.info("sil_whoami_must_reregister", { cause: "retry_unauthorized" });
+            return mustReregister();
+          case "retryable":
+            api.logger.info("sil_whoami_refresh_retryable", {});
+            return transient();
+        }
+      },
+    };
+  }, { name: "sil_whoami" });
 }
 
-/** The resolved sil-web origin and where it came from. Strings only. */
-interface OriginBlock {
-  web_origin: string;
-  web_origin_source: string;
-}
-
-/** Map a non-401 identity outcome to the agent-facing result. The origin block
- * rides the SUCCESS payload only — pre-failure diagnosis is its whole point. */
-function identityOutcomeToResult(
-  api: PluginAPI,
-  outcome: IdentityOutcome,
-  originBlock: OriginBlock,
-) {
+/** Map a non-401 identity outcome to the agent-facing result. */
+function identityOutcomeToResult(api: PluginAPI, outcome: IdentityOutcome) {
   switch (outcome.kind) {
     case "ok":
-      return identityResult(api, outcome.identity, originBlock);
+      return jsonResult({ status: "ok", ...outcome.identity }, ...wiringAdvisoryBlocks(api));
+    case "refused":
+      api.logger.info("sil_whoami_refused", {});
+      return jsonResult({ status: "invalid_request", message: outcome.message });
     case "forbidden":
       // A token that maps to no account is structurally dead, so clear it or the
       // sil_register recovery answers `already_registered` and strands the buyer.
@@ -241,23 +227,8 @@ function identityOutcomeToResult(
   }
 }
 
-/** Success: `identity` carries the buyer's name, country, gender and currency (each when
- * the read has one), addresses, measurements and preferences — no token, no Bearer header. */
-function identityResult(
-  api: PluginAPI,
-  identity: Identity,
-  originBlock: OriginBlock,
-) {
-  return jsonResult({
-    status: "ok",
-    identity,
-    ...originBlock,
-    ...wiringAdvisories(api),
-  });
-}
-
 /** Not registered: a distinct, actionable outcome naming the recovery tool. No
- * identity fields (name/addresses) so the agent can't mistake it for a read. */
+ * identity fields (name/address) so the agent can't mistake it for a read. */
 function notRegistered() {
   return jsonResult({
     status: "not_registered",

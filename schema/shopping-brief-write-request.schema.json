@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-brief-write-request.schema.json",
+  "title": "sil shopping_brief_write — request",
+  "anyOf": [
+    {
+      "type": "object",
+      "required": [
+        "title",
+        "narrative"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Opens a brief: names the buy so the buyer picks it out later."
+        },
+        "narrative": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Writes what a good buy is for this buyer, in their terms, and what would make it a bad one."
+        },
+        "domain": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+          "maxLength": 255,
+          "description": "Names where `specs` and `remove` sit: a place, or `seller` for seller specs."
+        },
+        "specs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "op",
+              "value"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names the key from the domain read; `price` is a key every domain has."
+              },
+              "op": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "eq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "neq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "gte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "lte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "in"
+                  },
+                  {
+                    "type": "string",
+                    "const": "nin"
+                  }
+                ],
+                "description": "Sends the operator the domain read listed for this key."
+              },
+              "value": {
+                "description": "Sends the desired value, typed by the key's type."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Quotes the buyer's own words behind the spec, in English — translated, never a paraphrase, never a sentence they did not say; a spec derived from a measurement quotes the measurement. Reads them back before proposing to relax it."
+              }
+            },
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "description": "Replaces every spec on the keys they name under that domain."
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Edits this brief; one that is not the buyer’s answers `not_found`."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Renames it."
+        },
+        "narrative": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Replaces the whole narrative."
+        },
+        "domain": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+          "maxLength": 255,
+          "description": "Names where `specs` and `remove` sit: a place, or `seller` for seller specs."
+        },
+        "specs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "op",
+              "value"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names the key from the domain read; `price` is a key every domain has."
+              },
+              "op": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "eq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "neq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "gte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "lte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "in"
+                  },
+                  {
+                    "type": "string",
+                    "const": "nin"
+                  }
+                ],
+                "description": "Sends the operator the domain read listed for this key."
+              },
+              "value": {
+                "description": "Sends the desired value, typed by the key's type."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Quotes the buyer's own words behind the spec, in English — translated, never a paraphrase, never a sentence they did not say; a spec derived from a measurement quotes the measurement. Reads them back before proposing to relax it."
+              }
+            },
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "description": "Replaces every spec on the keys they name under that domain."
+        },
+        "remove": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "A key whose specs go."
+          },
+          "maxItems": 32,
+          "description": "Drops the specs on these keys."
+        },
+        "decision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Logs in one sentence what the buyer changed and why."
+        },
+        "status": {
+          "type": "string",
+          "const": "closed",
+          "description": "Closes it: the buy is over."
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "type": "object"
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-user-remember-response.schema.json",
+  "title": "sil shopping_user_remember — response",
+  "type": "object",
+  "required": [
+    "status",
+    "kept"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "kept": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "gives_back"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Names the row to replace it, and to forget it."
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "measurement"
+              },
+              {
+                "type": "string",
+                "const": "memory"
+              },
+              {
+                "type": "string",
+                "const": "preference"
+              },
+              {
+                "type": "string",
+                "const": "purchase"
+              }
+            ],
+            "description": "Reads which kind was kept."
+          },
+          "gives_back": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Says what the row gives the buyer back next time; said when it is kept."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Tells the buyer each keep, what it gives back, and that \"forget that\" undoes it."
+    }
+  },
+  "additionalProperties": false
+}

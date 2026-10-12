@@ -16,8 +16,8 @@
         "description": "An id sil minted, passed back verbatim."
       },
       "minItems": 1,
-      "maxItems": 10,
-      "description": "Sends the variant ids it wants the whole of; one sil cannot place is absent."
+      "maxItems": 3,
+      "description": "Sends the variant ids it wants the whole of; one sil holds no product for is named in `not_held`."
     }
   },
   "additionalProperties": false

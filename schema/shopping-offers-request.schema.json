@@ -2,30 +2,181 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.sil.com/shopping-offers-request.schema.json",
   "title": "sil shopping_offers — request",
-  "type": "object",
-  "required": [
-    "brief",
-    "ids"
-  ],
-  "properties": {
-    "brief": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 256,
-      "description": "Names the session's brief, so sil records this call against the want behind it. A brief that is not the buyer's answers `not_found`."
-    },
-    "ids": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 256,
-        "description": "An id sil minted, passed back verbatim."
+  "anyOf": [
+    {
+      "type": "object",
+      "required": [
+        "ids"
+      ],
+      "properties": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "An id sil minted, passed back verbatim."
+          },
+          "minItems": 1,
+          "maxItems": 10,
+          "description": "Sends the picked variant ids."
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Re-reads the listing of up to three ids now, for the link the buyer is sent to."
+        },
+        "seller_specs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "op",
+              "value"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names the key from the domain read; `price` is a key every domain has."
+              },
+              "op": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "eq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "neq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "gte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "lte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "in"
+                  },
+                  {
+                    "type": "string",
+                    "const": "nin"
+                  }
+                ],
+                "description": "Sends the operator the domain read listed for this key."
+              },
+              "value": {
+                "description": "Sends the desired value, typed by the key's type."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
+              }
+            },
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "description": "Sends the seller terms the buyer settled; each offer answers them in `seller_fit`."
+        },
+        "brief": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Ties the call to a brief in sil’s record; never required."
+        }
       },
-      "minItems": 1,
-      "maxItems": 10,
-      "description": "Sends the picked variant ids and nothing else: sil reads the brief's seller specs and price, the buyer's address and currency, off the brief and the profile."
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Sends a product’s name for a price check: maker, model, the size if named."
+        },
+        "seller_specs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "op",
+              "value"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names the key from the domain read; `price` is a key every domain has."
+              },
+              "op": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "eq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "neq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "gte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "lte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "in"
+                  },
+                  {
+                    "type": "string",
+                    "const": "nin"
+                  }
+                ],
+                "description": "Sends the operator the domain read listed for this key."
+              },
+              "value": {
+                "description": "Sends the desired value, typed by the key's type."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
+              }
+            },
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "description": "Sends the seller terms the buyer settled; each offer answers them in `seller_fit`."
+        },
+        "brief": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Ties the call to a brief in sil’s record; never required."
+        }
+      },
+      "additionalProperties": false
     }
-  },
-  "additionalProperties": false
+  ],
+  "type": "object"
 }

@@ -24,7 +24,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Reads one document's passages in order instead of grepping: any `id` a passage or a domain's map carried, from part `from` on; past its last part, none."
+      "description": "Reads one document's passages in order instead of grepping: any `id` a passage or a domain's map or a place's `guides` carried, from part `from` on; past its last part, none."
     },
     "from": {
       "type": "integer",
@@ -72,20 +72,17 @@
     "min_passages": {
       "type": "integer",
       "minimum": 0,
-      "maximum": 20,
-      "description": "Fills up to this many from the nearest documents when too few match, marked by an empty `matched`. Default 1."
+      "description": "Fills up to this many from the nearest documents when too few match, marked by an empty `matched`. At most 20; a larger ask is served at that. Default 1."
     },
     "max_passages": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 20,
-      "description": "Caps the passages answered. Default 8."
+      "description": "Caps the passages answered, at most 20; a larger ask is served at that. Default 8."
     },
     "max_tokens": {
       "type": "integer",
       "minimum": 200,
-      "maximum": 2400,
-      "description": "Caps what the passages cost, a token being four characters of a passage as sent; the last passage is cut to fit and marked `truncated`. Default 2000."
+      "description": "Caps what the passages cost, a token being four characters of a passage as sent; the last passage is cut to fit and marked `truncated`. At most 2300; a larger ask is served at that. Default 2000."
     }
   },
   "additionalProperties": false
