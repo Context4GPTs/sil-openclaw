@@ -17,7 +17,7 @@
       },
       "minItems": 1,
       "maxItems": 3,
-      "description": "Sends the variant ids it wants the whole of; one sil cannot place is absent."
+      "description": "Sends the variant ids it wants the whole of; one sil holds no product for is named in `not_held`."
     }
   },
   "additionalProperties": false
