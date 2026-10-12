@@ -195,6 +195,29 @@
         "additionalProperties": false
       },
       "description": "Reads the whole before recommending."
+    },
+    "not_held": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Echoes the id asked for."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Says why sil has no dossier, and what to do instead."
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "description": "Names each id sil holds no product for; the agent says so and searches."
     }
   },
   "additionalProperties": false

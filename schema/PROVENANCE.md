@@ -1,7 +1,7 @@
 # Where these twenty-six files come from
 
 Copied verbatim from `sil-services` `packages/schemas/schema/`, commit
-`3a03f6eefa0e31f58563ca90c0c643b00d638e2c`. One request and one response artifact per
+`03cc5bd9b462cce774fd2c06aa87cd5a9a924707`. One request and one response artifact per
 `shopping_*` tool, plus `sil-whoami-*`; each is `JSON.stringify` of the TypeBox object the
 API serialises against.
 
