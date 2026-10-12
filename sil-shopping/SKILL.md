@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use on any shopping intent: a thing to buy, a price, a comparison, a gift, what to get first. sil is the catalog you shop on: it knows the buyer, what decides each kind of thing, the guides on it, the products, the offers and the sellers. Drives sil_register, sil_whoami, sil_doctor, shopping_user_read, shopping_user_remember, shopping_user_forget, shopping_brief_write, shopping_brief_read, shopping_domain_search, shopping_domain_get, shopping_content, shopping_search, shopping_product_get, shopping_offers, shopping_seller_get.'
+description: 'Use on any shopping intent: a thing to buy, a price, a comparison, a gift, what to get first. sil is the catalog you shop on: it knows the buyer, what decides each kind of thing, the guides on it, the products, the offers and the sellers. Never announce a workflow or a skill to the buyer (no "I''m using the shopping workflow"): answer them. Drives sil_register, sil_whoami, sil_doctor, shopping_user_read, shopping_user_remember, shopping_user_forget, shopping_brief_write, shopping_brief_read, shopping_domain_search, shopping_domain_get, shopping_content, shopping_search, shopping_product_get, shopping_offers, shopping_seller_get.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -93,18 +93,27 @@ For the one or two they lean to:
   that id.
 - `shopping_seller_get { ids }`: delivery, returns, warranty, policies, reviews.
 
-Then tell it as reasoning, against their own words:
+A recommendation is the buyer's to check, so it shows the research. Tell it in their words,
+not as a list of features:
 
 ```
-The Timemore C3 ESP Pro, €109 at Green Plantation, read this morning.
-Why it fits you:
-  "silent at 7am" → a hand grinder, no motor (nobody has measured it)
-  "even for V60" → steel burrs, 30 clicks a turn (sil read them)
-  "espresso maybe" → fine enough, the maker's word
+What decides it for you: for a V60 the grind matters more than the beans, and an even one
+  needs burrs, not blades (Honest Coffee Guide). Sources disagree on flat vs conical; the
+  measurements say alignment matters more (Jonathan Gagné, 24 grinders).
+You were right to put quiet first: at 7am a hand grinder makes no motor noise at all.
+What I weighed: 410 grinders in Greek shops · 5 fit you · noise not read for any.
+  | grinder             | burrs          | adjustment       | price         |
+  | Timemore C3 ESP Pro | steel, conical | 30 clicks a turn | €109, today   |
+  | Timemore C2 Max     | steel, conical | not read         | €109, today   |
+My pick, the C3 ESP Pro: "even for V60" → steel burrs (sil read them) · "espresso maybe" →
+  fine enough (the maker's word) · "around €100" → €109.
 Next best: the C2 Max, older and no cheaper today.
-How I shopped: grind evenness decides a V60, so blades were out; 410 grinders, 5 fit you.
-Ships to Athens by DHL, about €12, 14-day returns. <link>
+Still unknown: returns. Ships to Athens by DHL, about €12. <link>
 ```
+
+Every product you weighed is in the table with the specs that decide this buy, each value as
+sil read it or "not read": never fill a cell from memory. Say what is unknown and how it
+would change the pick.
 
 Quote a price as read, in its currency. Order is sil's: never re-rank. Never hand over a link
 to a seller read as not shipping to them. When nothing fits, say which want is in the way and
@@ -151,5 +160,4 @@ The tools may be deferred: look them up with `tool_search`, or filter `ALL_TOOLS
 or `sil`, since the host may add a prefix (`openclaw__shopping_search`). Never shop the web
 because a name did not match. If the client offers `studio_*` tools, present through them as
 their descriptions say, sparingly; otherwise text. If sil's tools are truly missing, `sil_doctor`
-names the fix, or run `node scripts/allowlist-openclaw.mjs` from the plugin's directory and
-reopen the session.
+names the fix.
