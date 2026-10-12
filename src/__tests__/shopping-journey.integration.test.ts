@@ -2,7 +2,7 @@
  * INTEGRATION — ask 1 of the contract's journey over ONE scripted `fetch`: a category
  * found, read, searched, opened, priced and checked for shipping.
  *
- *   shopping_domain_search → shopping_domain_get → shopping_brief_create
+ *   shopping_domain_search → shopping_domain_get → shopping_brief_write
  *     → shopping_search → shopping_product_get → shopping_offers → shopping_seller_get
  *
  * SCOPE, deliberately. This is the TOOL CHAIN, not the agent. What the agent SAYS — the
@@ -28,7 +28,8 @@ import {
 } from "./helpers/shopping-harness.js";
 import { contractRequest, contractResponse } from "./helpers/shopping-wire.js";
 
-const DOMAIN = "product.vehicles.car_cargo.boot_protection.car_boot_liners";
+const DOMAIN =
+  "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders";
 const ACCESS = "at-live-token";
 const REFRESH = "rt-live-token";
 
@@ -43,7 +44,7 @@ function scriptTheJourney(): Router {
   return installRouter((kind) => {
     if (kind === "domainSearch") return ok(contractResponse("shopping_domain_search"));
     if (kind === "domainGet") return ok(contractResponse("shopping_domain_get"));
-    if (kind === "briefCreate") return ok(contractResponse("shopping_brief_create"));
+    if (kind === "briefWrite") return ok(contractResponse("shopping_brief_write"));
     if (kind === "search") return ok(contractResponse("shopping_search"));
     if (kind === "product") return ok(contractResponse("shopping_product_get"));
     if (kind === "offers") return ok(contractResponse("shopping_offers"));
@@ -74,8 +75,8 @@ describe("ask 1 — the journey terminates at one seller's terms", () => {
     // GATHER's brief — ONE per session, opened before the first search, because both
     // priced steps name it. The id it answers is what the rest of the chain carries.
     const opened = await call(
-      "shopping_brief_create",
-      contractRequest("shopping_brief_create"),
+      "shopping_brief_write",
+      contractRequest("shopping_brief_write"),
       "j3",
     );
     expect(opened["status"]).toBe("ok");
@@ -123,7 +124,7 @@ describe("ask 1 — the journey terminates at one seller's terms", () => {
     // ONE brief, named by both priced legs — the link sil records the calls against.
     expect(router.search[0].body).toMatchObject({ brief });
     expect(router.offers[0].body).toMatchObject({ brief });
-    expect(router.briefCreate).toHaveLength(1);
+    expect(router.briefWrite).toHaveLength(1);
 
     // Each route hit exactly once, and nothing reached an unrouted path.
     expect(router.domainSearch).toHaveLength(1);

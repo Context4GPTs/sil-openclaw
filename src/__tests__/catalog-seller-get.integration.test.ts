@@ -55,27 +55,10 @@ describe("shopping_seller_get — one route, one request", () => {
 });
 
 describe("shopping_seller_get — what the answer means", () => {
-  it("the contract's own 200 arrives verbatim — the `unknown` seller included", async () => {
+  it("the contract's own 200 arrives verbatim", async () => {
     seedTokens(ACCESS, REFRESH);
     installRouter(() => ok(contractResponse(TOOL)));
     const payload = await run();
     expect(payload).toEqual(contractResponse(TOOL));
-    const sellers = payload["sellers"] as Record<string, unknown>[];
-    // The body carries a read seller and an unread one, so a pass-through that quietly
-    // kept only the answerable half would show up here rather than in production.
-    expect(sellers.map((s) => s["ships"])).toContain("unknown");
-    expect(sellers.length).toBeGreaterThan(1);
-  });
-
-  it("`specs` is the seller's WHOLE terms, and empty for a seller sil has not read", async () => {
-    // This is the details tool: `seller_fit` on an offer answers the rows the Brief
-    // asked, `specs` here answers everything sil holds. An empty map is the honest
-    // answer for an unread seller — never an absent key the agent reads as a gap in us.
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok(contractResponse(TOOL)));
-    const sellers = (await run())["sellers"] as Record<string, unknown>[];
-    for (const seller of sellers) expect(seller["specs"]).toEqual(expect.any(Object));
-    const unread = sellers.find((s) => s["ships"] === "unknown");
-    expect(unread?.["specs"]).toEqual({});
   });
 });

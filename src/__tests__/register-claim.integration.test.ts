@@ -336,7 +336,7 @@ describe("claim lifecycle — a premature 404 KEEPS POLLING (the headline regres
     domain: "identity",
     result: {
       name: "Polled User",
-      addresses: [{ line1: "1 Late Click Lane", city: "London", country: "GB" }],
+      address: { locality: "London", country: "GB" },
     },
   };
 
@@ -474,7 +474,7 @@ describe("system-browser steer — the awaiting_browser return carries the steer
     domain: "identity",
     result: {
       name: "Polled User",
-      addresses: [{ line1: "1 Late Click Lane", city: "London", country: "GB" }],
+      address: { locality: "London", country: "GB" },
     },
   };
 

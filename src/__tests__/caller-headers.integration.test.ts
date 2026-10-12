@@ -41,7 +41,7 @@ const silHeaders = (req: Recorded): Record<string, string> =>
   Object.fromEntries(Object.entries(req.headers).filter(([k]) => k.startsWith("sil-")));
 
 describe("caller headers", () => {
-  it("each of the eleven sends exactly the six caller headers, from the run's context", async () => {
+  it("each of the twelve sends exactly the six caller headers, from the run's context", async () => {
     seedTokens("at", "rt");
     const router = installRouter(() => ok({ status: "ok" }));
     const tool = apiFor(CTX);

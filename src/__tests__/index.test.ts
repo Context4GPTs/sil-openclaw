@@ -137,17 +137,18 @@ describe("plugin entry — registration contract", () => {
     const api = createMockPluginApi();
     capturedRegisterFn!(api);
     expect([...api._tools.keys()].sort()).toEqual([
-      "shopping_brief_create",
-      "shopping_brief_edit",
       "shopping_brief_read",
+      "shopping_brief_write",
       "shopping_content",
       "shopping_domain_get",
       "shopping_domain_search",
       "shopping_offers",
       "shopping_product_get",
-      "shopping_profile_edit",
       "shopping_search",
       "shopping_seller_get",
+      "shopping_user_forget",
+      "shopping_user_read",
+      "shopping_user_remember",
       "sil_doctor",
       "sil_register",
       "sil_whoami",
@@ -408,18 +409,18 @@ describe("applyPluginConfigOverrides — unit precedence", () => {
 });
 
 describe("jsonResult — tool-result shape", () => {
-  it("wraps data in a single text content block with pretty JSON", () => {
+  it("wraps data in a single text content block with compact JSON", () => {
     const data = { id: "abc", n: 1500, active: true };
     const result = jsonResult(data);
     expect(result.content).toHaveLength(1);
     expect(result.content[0]!.type).toBe("text");
-    expect(result.content[0]!.text).toBe(JSON.stringify(data, null, 2));
+    expect(result.content[0]!.text).toBe(JSON.stringify(data));
     expect(result.isError).toBeUndefined();
   });
 
   it("handles arrays, null, and primitives", () => {
     expect(jsonResult([1, 2, 3]).content[0]!.text).toBe(
-      JSON.stringify([1, 2, 3], null, 2),
+      JSON.stringify([1, 2, 3]),
     );
     expect(jsonResult(null).content[0]!.text).toBe("null");
     expect(jsonResult("hello").content[0]!.text).toBe('"hello"');

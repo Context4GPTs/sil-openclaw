@@ -49,6 +49,15 @@ describe("shopping_domain_get — the path is a segment, not a query", () => {
     expect(router.other).toEqual([]);
   });
 
+  it("sends `keys` as repeated params and `after` as a string", async () => {
+    seedTokens(ACCESS, REFRESH);
+    const router = installRouter(() => ok(contractResponse(TOOL)));
+    await run({ path: PATH, keys: ["flex", "last_width"], after: "flex" });
+    expect(router.domainGet[0].url).toBe(
+      `${getApiUrl()}/catalog/domains/${PATH}?keys=flex&keys=last_width&after=flex`,
+    );
+  });
+
   it.each([
     ["absent", {}],
     ["not a string", { path: 42 }],

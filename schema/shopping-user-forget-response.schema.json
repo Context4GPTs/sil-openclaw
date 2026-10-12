@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sil.com/shopping-user-forget-response.schema.json",
+  "title": "sil shopping_user_forget — response",
+  "type": "object",
+  "required": [
+    "status",
+    "removed",
+    "cannot_reach"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok",
+      "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "removed": {
+      "type": "object",
+      "required": [
+        "measurement",
+        "memory",
+        "preference",
+        "purchase",
+        "record",
+        "brief"
+      ],
+      "properties": {
+        "measurement": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Measurements removed."
+        },
+        "memory": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Memories removed."
+        },
+        "preference": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Preferences removed."
+        },
+        "purchase": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Purchases removed."
+        },
+        "record": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The buyer’s searches, offers calls and call traces removed; counts are kept."
+        },
+        "brief": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Briefs removed."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Tells the buyer exactly what went."
+    },
+    "cannot_reach": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "Something sil cannot erase, and who holds it."
+      },
+      "description": "Tells the buyer what sil cannot erase: the chat itself, a shop’s own copy."
+    }
+  },
+  "additionalProperties": false
+}

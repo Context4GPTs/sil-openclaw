@@ -20,7 +20,7 @@ import {
   seedTokens,
   useShoppingHarness,
 } from "./helpers/shopping-harness.js";
-import { SPEC_400, contractAlternate, contractResponse } from "./helpers/shopping-wire.js";
+import { SPEC_400, contractResponse } from "./helpers/shopping-wire.js";
 
 const TOOL = "shopping_search";
 const ACCESS = "at-live-token";
@@ -115,12 +115,6 @@ describe("shopping_search — what the answer means", () => {
     expect(await run()).toEqual(contractResponse(TOOL));
   });
 
-  it("the contract's WARM 200 arrives verbatim too — same shape, filled `fit`", async () => {
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok(contractAlternate(TOOL)));
-    expect(await run()).toEqual(contractAlternate(TOOL));
-  });
-
   it("`products: []` is a SUCCESS — an empty shortlist is an answer, not a failure", async () => {
     seedTokens(ACCESS, REFRESH);
     installRouter(() => ok({ status: "ok", products: [] }));
@@ -131,5 +125,13 @@ describe("shopping_search — what the answer means", () => {
     seedTokens(ACCESS, REFRESH);
     installRouter(() => ({ status: 400, body: SPEC_400 }));
     expect(await run()).toEqual({ status: "invalid_request", message: SPEC_400.message });
+  });
+
+  it("a 426 reaches the agent as sil's own message, not a transient failure", async () => {
+    const message =
+      "this sil plugin (0.6.0) is older than sil accepts (0.7.0); update the sil plugin";
+    seedTokens(ACCESS, REFRESH);
+    installRouter(() => ({ status: 426, body: { error: "invalid_request", message } }));
+    expect(await run()).toEqual({ status: "invalid_request", message });
   });
 });

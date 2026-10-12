@@ -23,18 +23,21 @@ const OUT = join(
   "contract-examples.json",
 );
 
-/** §3.N heading → the tools it defines, in the contract's own order. §3.8 defines three
+/** §3.N heading → the tools it defines, in the contract's own order. §3.5 defines two
  * under one heading, and its blocks name which one they are. */
 const SECTIONS = [
-  ["3.1", ["shopping_domain_search"]],
-  ["3.2", ["shopping_domain_get"]],
-  ["3.3", ["shopping_content"]],
-  ["3.4", ["shopping_search"]],
-  ["3.5", ["shopping_product_get"]],
-  ["3.6", ["shopping_offers"]],
-  ["3.7", ["shopping_seller_get"]],
-  ["3.8", ["shopping_brief_create", "shopping_brief_edit", "shopping_brief_read"]],
-  ["3.9", ["shopping_profile_edit"]],
+  ["3.1", ["sil_whoami"]],
+  ["3.2", ["shopping_user_read"]],
+  ["3.3", ["shopping_user_remember"]],
+  ["3.4", ["shopping_user_forget"]],
+  ["3.5", ["shopping_brief_write", "shopping_brief_read"]],
+  ["3.6", ["shopping_domain_search"]],
+  ["3.7", ["shopping_domain_get"]],
+  ["3.8", ["shopping_content"]],
+  ["3.9", ["shopping_search"]],
+  ["3.10", ["shopping_product_get"]],
+  ["3.11", ["shopping_offers"]],
+  ["3.12", ["shopping_seller_get"]],
 ];
 
 const TOOLS = SECTIONS.flatMap(([, tools]) => tools);
@@ -62,8 +65,7 @@ function fences(body) {
 
 /**
  * A fence cut into the calls it prints, each under the tool it belongs to. A line that is
- * a bare tool name opens a call and names it (§3.8 prints two writes of one buyer turn in
- * one block); a fence that names nothing belongs to the section's READ, which is the only
+ * a bare tool name opens a call and names it (a block may print several calls); a fence that names nothing belongs to the section's READ, which is the only
  * one a bare `json` body can be.
  */
 function chunks(block, tools) {
@@ -120,7 +122,7 @@ for (const [number, tools] of SECTIONS) {
   }
   for (const tool of tools) {
     // A response states `status`; anything else beside it is the request. Only `ok` is an
-    // artifact instance — §3.8 prints an `invalid_request` to show what the registry refuses.
+    // artifact instance — the contract may print an `invalid_request` to show what the registry refuses.
     const responses = bodies[tool].filter((b) => b.status === "ok");
     const requests = bodies[tool].filter((b) => b.status === undefined);
     if (responses.length === 0) throw new Error(`§${number}: no example response for ${tool}`);

@@ -267,7 +267,7 @@ describe("notFoundLicenceOffenders — `not_found` is a positive claim, never a 
     ],
     [
       "the second brief opened over the buyer's own",
-      "A brief id that answers not_found is gone — create another with shopping_brief_create.",
+      "A brief id that answers not_found is gone — create another with shopping_brief_write.",
     ],
     [
       "sentence scope — a qualifier in the NEXT sentence does not reach it",
