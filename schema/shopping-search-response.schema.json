@@ -185,7 +185,6 @@
         "fit",
         "could_not_tell",
         "offered",
-        "finding",
         "set_aside"
       ],
       "properties": {
@@ -213,11 +212,6 @@
           "type": "integer",
           "minimum": 0,
           "description": "Says how many of the fit sil holds an offer for in the buyer’s country."
-        },
-        "finding": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Says how many products sil has started finding offers for in the buyer’s country; the next offers call reads them."
         },
         "set_aside": {
           "type": "array",

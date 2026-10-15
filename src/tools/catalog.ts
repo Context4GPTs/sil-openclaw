@@ -132,7 +132,7 @@ export const SHOPPING_TOOLS = [
     recovery: { not_found: "shopping_brief_read" },
     description:
       "Who sells the picked variants, at what price and on what terms, each price dated —"
-      + " a price check too; `confirm` re-reads a hand-off listing now.",
+      + " a price check too.",
   },
   {
     name: "shopping_seller_get",
