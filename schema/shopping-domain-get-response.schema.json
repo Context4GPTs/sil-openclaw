@@ -250,6 +250,11 @@
             "minItems": 1,
             "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
           },
+          "several": {
+            "type": "boolean",
+            "const": true,
+            "description": "Reads a list for it: a shop states several at once."
+          },
           "description": {
             "type": "string",
             "maxLength": 1024,
@@ -328,7 +333,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads where each key comes from. Absent with `keys` and after the first page."
+      "description": "Reads where each of this page’s keys comes from. Absent with `keys`."
     },
     "kinds": {
       "type": "array",
