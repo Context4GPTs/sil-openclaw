@@ -39,11 +39,6 @@
             "type": "string",
             "description": "Names the maker."
           },
-          "description": {
-            "type": "string",
-            "maxLength": 1000,
-            "description": "Quotes the page's own description, cut at a word where it is long."
-          },
           "images": {
             "type": "array",
             "items": {

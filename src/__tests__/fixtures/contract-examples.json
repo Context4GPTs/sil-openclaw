@@ -501,6 +501,52 @@
   "shopping_search": {
     "response": {
       "status": "ok",
+      "asked": {
+        "kind": "Coffee grinders",
+        "wants": [
+          {
+            "key": "leaf",
+            "name": "Kind",
+            "op": "nin",
+            "value": [
+              "blade_coffee_grinders"
+            ]
+          },
+          {
+            "key": "burr_material",
+            "name": "Burr material",
+            "op": "eq",
+            "value": "steel"
+          },
+          {
+            "key": "noise_level",
+            "name": "Noise level",
+            "op": "lte",
+            "value": 60,
+            "unit": "dB"
+          },
+          {
+            "key": "finest_brew",
+            "name": "Finest brew",
+            "op": "lte",
+            "value": "espresso"
+          },
+          {
+            "key": "coarsest_brew",
+            "name": "Coarsest brew",
+            "op": "gte",
+            "value": "filter"
+          },
+          {
+            "key": "price",
+            "name": "Price",
+            "op": "lte",
+            "value": "110",
+            "currency": "EUR"
+          }
+        ],
+        "units": {}
+      },
       "products": [
         {
           "id": "p1",
@@ -513,6 +559,7 @@
             "coarsest_brew": "french press",
             "price": "109"
           },
+          "shops": 2,
           "price": [
             {
               "from": "109",
@@ -523,6 +570,7 @@
           "variants": [
             {
               "id": "v1",
+              "shops": 2,
               "price": [
                 {
                   "from": "109",

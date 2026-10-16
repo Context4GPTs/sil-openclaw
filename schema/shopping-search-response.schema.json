@@ -5,6 +5,7 @@
   "type": "object",
   "required": [
     "status",
+    "asked",
     "products",
     "receipt"
   ],
@@ -14,6 +15,101 @@
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
     },
+    "asked": {
+      "type": "object",
+      "required": [
+        "kind",
+        "wants",
+        "units"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Names what was searched, in English."
+        },
+        "wants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "op",
+              "value",
+              "name"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names the key from the domain read; `price` is a key every domain has."
+              },
+              "op": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "eq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "neq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "gte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "lte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "in"
+                  },
+                  {
+                    "type": "string",
+                    "const": "nin"
+                  }
+                ],
+                "description": "Sends the operator the domain read listed for this key."
+              },
+              "value": {
+                "description": "Sends the desired value, typed by the key's type."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
+              },
+              "name": {
+                "type": "string",
+                "description": "Names the key as a buyer reads it."
+              },
+              "unit": {
+                "type": "string",
+                "description": "Reads the value's unit."
+              }
+            },
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "description": "Lists each want as sil read it."
+        },
+        "units": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "string"
+            }
+          },
+          "description": "Reads the unit of each key the answer's options and fit carry one for."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Says what this search asked, so a screen can name it; once per answer."
+    },
     "products": {
       "type": "array",
       "items": {
@@ -22,6 +118,7 @@
           "id",
           "title",
           "fit",
+          "shops",
           "price",
           "variants"
         ],
@@ -75,6 +172,11 @@
             },
             "description": "Answers each asked key with the value sil holds, or `\"unknown\"`: what to say as unverified."
           },
+          "shops": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Says how many shops sell the variants returned, each shop once."
+          },
           "price": {
             "type": "array",
             "items": {
@@ -101,6 +203,45 @@
                   "minLength": 3,
                   "maxLength": 3,
                   "description": "Reads which currency the range is in; sil converts nothing."
+                },
+                "unit": {
+                  "type": "object",
+                  "required": [
+                    "from",
+                    "to",
+                    "per"
+                  ],
+                  "properties": {
+                    "from": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                      "description": "Quotes the lowest price per unit."
+                    },
+                    "to": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                      "description": "Quotes the highest."
+                    },
+                    "per": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "kg"
+                        },
+                        {
+                          "type": "string",
+                          "const": "l"
+                        },
+                        {
+                          "type": "string",
+                          "const": "piece"
+                        }
+                      ],
+                      "description": "Reads the unit: a kilo, a litre or a piece."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "description": "Compares packs of different sizes; present where the leaf is sold by weight, volume or count."
                 }
               },
               "additionalProperties": false
@@ -113,6 +254,7 @@
               "type": "object",
               "required": [
                 "id",
+                "shops",
                 "price"
               ],
               "properties": {
@@ -121,6 +263,11 @@
                   "minLength": 1,
                   "maxLength": 256,
                   "description": "Passes it to `shopping_product_get` and `shopping_offers`."
+                },
+                "shops": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Says how many shops sell this option, over the offers its price is quoted from."
                 },
                 "price": {
                   "type": "array",
@@ -148,6 +295,45 @@
                         "minLength": 3,
                         "maxLength": 3,
                         "description": "Reads which currency the range is in; sil converts nothing."
+                      },
+                      "unit": {
+                        "type": "object",
+                        "required": [
+                          "from",
+                          "to",
+                          "per"
+                        ],
+                        "properties": {
+                          "from": {
+                            "type": "string",
+                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                            "description": "Quotes the lowest price per unit."
+                          },
+                          "to": {
+                            "type": "string",
+                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                            "description": "Quotes the highest."
+                          },
+                          "per": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "kg"
+                              },
+                              {
+                                "type": "string",
+                                "const": "l"
+                              },
+                              {
+                                "type": "string",
+                                "const": "piece"
+                              }
+                            ],
+                            "description": "Reads the unit: a kilo, a litre or a piece."
+                          }
+                        },
+                        "additionalProperties": false,
+                        "description": "Compares packs of different sizes; present where the leaf is sold by weight, volume or count."
                       }
                     },
                     "additionalProperties": false
