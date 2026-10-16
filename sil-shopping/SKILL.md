@@ -100,7 +100,7 @@ What decides it for you: for a V60 the grind matters more than the beans, and an
   needs burrs, not blades (Honest Coffee Guide). Sources disagree on flat vs conical; the
   measurements say alignment matters more (Jonathan Gagné, 24 grinders).
 You were right to put quiet first: at 7am a hand grinder makes no motor noise at all.
-What I weighed: 410 grinders in Greek shops · 5 fit you · noise not read for any.
+What I weighed: 410 grinders from 26 shops · 5 fit you, 3 sold in Greece · noise not read for any.
   | grinder             | burrs          | adjustment       | price         |
   | Timemore C3 ESP Pro | steel, conical | 30 clicks a turn | €109, today   |
   | Timemore C2 Max     | steel, conical | not read         | €109, today   |
@@ -114,7 +114,9 @@ Every product you weighed is in the table with the specs that decide this buy, e
 sil read it or "not read": never fill a cell from memory. Say what is unknown and how it
 would change the pick.
 
-Quote a price as read, in its currency. Order is sil's: never re-rank. Never hand over a link
+Quote a price as read, in its currency. Between pack sizes, compare by the range's `unit` price per
+kilo, litre or piece; without one, never work it out. `shops` counts the shops selling it. Order is
+sil's: never re-rank. Never hand over a link
 to a seller read as not shipping to them. When nothing fits, say which want is in the way and
 ask for the one change that would free it.
 
