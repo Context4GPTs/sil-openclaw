@@ -23,6 +23,12 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 - **sil refuses a plugin older than 0.7.0** (HTTP 426); its message reaches the agent as it
   stands.
 
+### Removed
+
+- **Nothing to wait for or re-read.** The search receipt's `finding`, and `shopping_offers`'
+  `pending` answer and `confirm` request field, are gone: sil answers every call from what it
+  holds. The skill no longer tells the agent to ask again or confirm before a hand-off.
+
 ## [0.6.0] - 2026-10-08
 
 ### Added

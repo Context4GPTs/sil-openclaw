@@ -21,10 +21,6 @@
           "maxItems": 10,
           "description": "Sends the picked variant ids."
         },
-        "confirm": {
-          "type": "boolean",
-          "description": "Re-reads the listing of up to three ids now, for the link the buyer is sent to."
-        },
         "seller_specs": {
           "type": "array",
           "items": {

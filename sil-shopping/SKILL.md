@@ -89,9 +89,7 @@ For the one or two they lean to:
 - `shopping_product_get { ids }` (up to three): specs, sources, reviews. A `not_held` id is
   a product sil does not have: say so plainly, then search for it.
 - `shopping_offers { ids }` (or `{ name }` for a price check): prices with when each was read,
-  and whether the seller ships to them. `seller_specs` filter sellers. Ids named `pending` are
-  still being found: ask again shortly. Before handing over a link, send `confirm: true` with
-  that id.
+  and whether the seller ships to them. `seller_specs` filter sellers.
 - `shopping_seller_get { ids }`: delivery, returns, warranty, policies, reviews.
 
 A recommendation is the buyer's to check, so it shows the research. Tell it in their words,
