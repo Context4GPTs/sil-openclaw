@@ -114,8 +114,9 @@ Every product you weighed is in the table with the specs that decide this buy, e
 sil read it or "not read": never fill a cell from memory. Say what is unknown and how it
 would change the pick.
 
-Quote a price as read, in its currency; between pack sizes, compare by its `unit` price per kilo,
-litre or piece. `shops` counts the shops behind that price. Order is sil's: never re-rank. Never hand over a link
+Quote a price as read, in its currency. Between pack sizes, compare by the range's `unit` price per
+kilo, litre or piece; without one, never work it out. `shops` counts the shops selling it. Order is
+sil's: never re-rank. Never hand over a link
 to a seller read as not shipping to them. When nothing fits, say which want is in the way and
 ask for the one change that would free it.
 
