@@ -28,8 +28,8 @@
     "after": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 64,
-      "description": "Sends the `next` of the page just read, to read the index on from that key; a key the place has no spec for is refused."
+      "maxLength": 71,
+      "description": "Sends the `next` of the page just read, to read the index on from there; one the index holds no entry for is refused."
     }
   },
   "additionalProperties": false

@@ -62,6 +62,10 @@
           {
             "type": "string",
             "const": "news"
+          },
+          {
+            "type": "string",
+            "const": "discussion"
           }
         ]
       },

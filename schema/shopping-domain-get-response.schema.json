@@ -143,6 +143,13 @@
             "type": "boolean",
             "const": true,
             "description": "`allowed_values` run in order, least first: `gte`/`lte` take one and reach every one past it — \"filter or coarser\" is `gte filter`, never `eq filter`."
+          },
+          "unordered_values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The `allowed_values` outside that order: asked by `eq`/`in`, never reached by a range."
           }
         },
         "additionalProperties": false
@@ -151,8 +158,8 @@
     },
     "next": {
       "type": "string",
-      "maxLength": 64,
-      "description": "Sends it as `after` to read the index on: the first key not listed. Absent on the last page, so nothing is cut unseen."
+      "maxLength": 71,
+      "description": "Sends it as `after` to read the index on: the first entry not listed — a key, then the parts, then the seller keys. Absent on the last page, so nothing is cut unseen."
     },
     "keys_total": {
       "type": "integer",
@@ -268,7 +275,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Builds seller rows for `shopping_offers`; with `keys`, only those asked. First page only."
+      "description": "Builds seller rows for `shopping_offers`: paged after the keys and the parts; with `keys`, only those asked."
     },
     "labels": {
       "type": "array",
@@ -430,7 +437,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads what the thing has. Absent with `keys` and after the first page."
+      "description": "Reads what the thing has: paged after the keys, before the seller keys. Absent with `keys`."
     },
     "made_for": {
       "type": "array",
@@ -552,6 +559,10 @@
               {
                 "type": "string",
                 "const": "news"
+              },
+              {
+                "type": "string",
+                "const": "discussion"
               }
             ],
             "description": "Names what the document is."

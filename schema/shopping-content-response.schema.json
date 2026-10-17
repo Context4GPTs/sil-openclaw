@@ -263,9 +263,13 @@
                   {
                     "type": "string",
                     "const": "news"
+                  },
+                  {
+                    "type": "string",
+                    "const": "discussion"
                   }
                 ],
-                "description": "Reads a dated review or a dated report."
+                "description": "Reads a dated review, report or forum discussion."
               },
               "author": {
                 "type": "string",
