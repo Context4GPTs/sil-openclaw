@@ -36,7 +36,6 @@
               "title",
               "from",
               "role",
-              "written",
               "part",
               "of",
               "matched",
@@ -90,7 +89,7 @@
               "written": {
                 "type": "string",
                 "format": "date",
-                "description": "Dates sil’s copy of the document."
+                "description": "Dates the document as written; absent, its page prints no date."
               },
               "heading": {
                 "type": "string",
@@ -165,7 +164,6 @@
               "title",
               "from",
               "role",
-              "written",
               "part",
               "of",
               "matched",
@@ -222,7 +220,7 @@
               "written": {
                 "type": "string",
                 "format": "date",
-                "description": "Dates sil’s copy of the document."
+                "description": "Dates the document as written; absent, its page prints no date."
               },
               "heading": {
                 "type": "string",
