@@ -790,7 +790,7 @@
               "return_postage_paid_by": "buyer"
             },
             "warranty": {
-              "warranty_months": 24
+              "seller_warranty": 24
             }
           },
           "record": {
