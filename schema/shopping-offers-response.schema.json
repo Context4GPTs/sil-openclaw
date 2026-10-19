@@ -78,6 +78,10 @@
               },
               {
                 "type": "string",
+                "const": "by_enquiry"
+              },
+              {
+                "type": "string",
                 "const": "out_of_stock"
               },
               {
@@ -99,6 +103,29 @@
           "url": {
             "type": "string",
             "description": "Hands the buyer the listing."
+          },
+          "pack": {
+            "type": "object",
+            "required": [
+              "count",
+              "with"
+            ],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Says how many of the variant it holds."
+              },
+              "with": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Names what else comes in it."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Says the listing sells a pack, not one of the variant."
           },
           "seller_fit": {
             "type": "object",
