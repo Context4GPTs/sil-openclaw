@@ -135,7 +135,11 @@
           },
           "brand": {
             "type": "string",
-            "description": "Names the maker."
+            "description": "Names the brand it is sold under."
+          },
+          "maker": {
+            "type": "string",
+            "description": "Names who makes it, `\"OEM\"` for a maker sil cannot name; absent when unknown."
           },
           "image": {
             "type": "string",
