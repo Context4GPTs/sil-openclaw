@@ -104,6 +104,10 @@
             "type": "string",
             "description": "Hands the buyer the listing."
           },
+          "plan": {
+            "type": "string",
+            "description": "Says the price is a subscription’s, at this cadence (every 4 weeks); absent, one purchase."
+          },
           "pack": {
             "type": "object",
             "required": [

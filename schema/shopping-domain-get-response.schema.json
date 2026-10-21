@@ -119,20 +119,10 @@
             "maxLength": 1024,
             "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back. Only on a `keys` read."
           },
-          "step": {
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value. Only on a `keys` read."
-          },
           "variant_spec": {
             "type": "boolean",
             "const": true,
             "description": "Expects its values under `variants[]`."
-          },
-          "product_spec": {
-            "type": "boolean",
-            "const": true,
-            "description": "Never treats two products that differ on it as one."
           },
           "several": {
             "type": "boolean",
@@ -143,13 +133,6 @@
             "type": "boolean",
             "const": true,
             "description": "`allowed_values` run in order, least first: `gte`/`lte` take one and reach every one past it — \"filter or coarser\" is `gte filter`, never `eq filter`."
-          },
-          "unordered_values": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The `allowed_values` outside that order: asked by `eq`/`in`, never reached by a range."
           }
         },
         "additionalProperties": false
@@ -266,11 +249,6 @@
             "type": "string",
             "maxLength": 1024,
             "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back. Only on a `keys` read."
-          },
-          "step": {
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Asks on the grid the maker prints the axis in — 0.5 for a Mondopoint size. A figure off the grid is something sil has not read as a value. Only on a `keys` read."
           }
         },
         "additionalProperties": false
@@ -314,18 +292,10 @@
               },
               {
                 "type": "string",
-                "const": "part"
-              },
-              {
-                "type": "string",
                 "const": "leaf"
               }
             ],
-            "description": "Reads how: its own, a kind it is, a part’s link, or a leaf under a kind."
-          },
-          "part": {
-            "type": "string",
-            "description": "Names the part, where `via` is one."
+            "description": "Reads how: its own, a kind it is, or a leaf under a kind."
           },
           "keys": {
             "type": "array",
@@ -373,10 +343,9 @@
         "type": "object",
         "required": [
           "name",
-          "how",
+          "role",
           "optional",
-          "many",
-          "keys"
+          "many"
         ],
         "properties": {
           "name": {
@@ -387,35 +356,7 @@
             "type": "string",
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
-            "description": "Reads the node any thing that fills this part is."
-          },
-          "elsewhere": {
-            "type": "string",
-            "description": "Reads the part in plain words, where no node draws it yet."
-          },
-          "how": {
-            "type": "array",
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "const": "built in"
-                },
-                {
-                  "type": "string",
-                  "const": "in the box"
-                },
-                {
-                  "type": "string",
-                  "const": "sold separately"
-                },
-                {
-                  "type": "string",
-                  "const": "used with"
-                }
-              ]
-            },
-            "description": "Knows whether the part is built in, in the box, bought apart or used with it."
+            "description": "Reads the leaf, or the kind of leaves, the part is a product of."
           },
           "optional": {
             "type": "boolean",
@@ -424,15 +365,6 @@
           "many": {
             "type": "boolean",
             "description": "Knows whether the thing has several of the part."
-          },
-          "keys": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64
-            },
-            "description": "Reads the keys the link says about the part, here."
           }
         },
         "additionalProperties": false
