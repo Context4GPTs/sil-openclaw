@@ -71,9 +71,8 @@ guess: a pick that rests on a key reading `unknown` is a question.
 
 `shopping_search { domain, specs, query?, n }`. Nothing to set up first.
 
-- Every settled want is a spec `{ key, op, value }`, keys verbatim from the place.
-- On an `ordered` key, "filter or coarser" is `gte filter`, never `eq`; a value in its
-  `unordered_values` takes `eq` or `in`, never a range.
+- Every settled want is a spec `{ key, op, value }`, keys verbatim from the domain read.
+- On an `ordered` key, "filter or coarser" is `gte filter`, never `eq`.
 - On a kind, `leaf` is a key (`leaf nin [blade_coffee_grinders]`).
 - `price` takes `lte`/`gte`; no currency means the buyer's own.
 - A measurement is not a spec: the key's description says how a 27.6 cm foot becomes a value.
