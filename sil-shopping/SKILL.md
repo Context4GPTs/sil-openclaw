@@ -88,8 +88,7 @@ Pass the receipt on in plain words; never recount it.
 For the one or two they lean to:
 
 - `shopping_product_get { ids }` (up to three): its sheet filled, each value's page. A
-  `not_held` id is
-  a product sil does not have: say so plainly, then search for it.
+  `not_held` id is a product sil does not have: say so plainly, then search for it.
 - `shopping_offers { ids }` (or `{ name }` for a price check): prices with when each was read,
   and whether the seller ships to them. `seller_specs` filter sellers.
 - `shopping_seller_get { ids }`: delivery, returns, warranty, policies, reviews.
