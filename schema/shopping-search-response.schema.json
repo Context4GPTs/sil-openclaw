@@ -42,7 +42,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 64,
-                "description": "Names the key from the domain read; `price` is a key every domain has."
+                "description": "Names the key from the domain read, or a part’s spec by its path (`boiler.boilerVolume`); `price` is a key every domain has."
               },
               "op": {
                 "anyOf": [

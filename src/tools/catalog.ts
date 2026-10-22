@@ -121,8 +121,8 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/product",
     label: "Read the whole dossier on a shortlisted variant",
     description:
-      "One product whole: send 1–3 variant ids from a search and get everything sil holds for each,"
-      + " with the source and date of every reading.",
+      "One product whole: send 1–3 variant or product ids from a search and get its sheet filled —"
+      + " specs, parts, options — with the page and date behind every value, and its variants.",
   },
   {
     name: "shopping_offers",

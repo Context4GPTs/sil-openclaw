@@ -71,7 +71,8 @@ guess: a pick that rests on a key reading `unknown` is a question.
 
 `shopping_search { domain, specs, query?, n }`. Nothing to set up first.
 
-- Every settled want is a spec `{ key, op, value }`, keys verbatim from the domain read.
+- Every settled want is a spec `{ key, op, value }`, keys verbatim from the domain read; a
+  part's spec by its path (`boiler.boilerVolume`).
 - On an `ordered` key, "filter or coarser" is `gte filter`, never `eq`.
 - On a kind, `leaf` is a key (`leaf nin [blade_coffee_grinders]`).
 - `price` takes `lte`/`gte`; no currency means the buyer's own.
@@ -86,7 +87,8 @@ Pass the receipt on in plain words; never recount it.
 
 For the one or two they lean to:
 
-- `shopping_product_get { ids }` (up to three): specs, sources, reviews. A `not_held` id is
+- `shopping_product_get { ids }` (up to three): its sheet filled, each value's page. A
+  `not_held` id is
   a product sil does not have: say so plainly, then search for it.
 - `shopping_offers { ids }` (or `{ name }` for a price check): prices with when each was read,
   and whether the seller ships to them. `seller_specs` filter sellers.

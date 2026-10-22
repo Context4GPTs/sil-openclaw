@@ -104,9 +104,44 @@
             "type": "string",
             "description": "Hands the buyer the listing."
           },
-          "plan": {
+          "subscription": {
+            "type": "object",
+            "required": [
+              "cadence"
+            ],
+            "properties": {
+              "cadence": {
+                "type": "string",
+                "description": "Says how often it is delivered: `every 2 weeks`."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Says the price is a subscription’s; absent, one purchase."
+          },
+          "sku": {
             "type": "string",
-            "description": "Says the price is a subscription’s, at this cadence (every 4 weeks); absent, one purchase."
+            "description": "Quotes the shop’s code for what it sells."
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "new"
+              },
+              {
+                "type": "string",
+                "const": "used"
+              },
+              {
+                "type": "string",
+                "const": "refurbished"
+              },
+              {
+                "type": "string",
+                "const": "damaged"
+              }
+            ],
+            "description": "Says it is not sold new where the shop says so; absent, unstated."
           },
           "pack": {
             "type": "object",
