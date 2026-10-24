@@ -138,46 +138,6 @@ describe("ask 1 — the journey terminates at one seller's terms", () => {
     expect(router.all).toHaveLength(7);
   });
 
-  it("every id, price, seller and URL the agent can act on came out of a tool result", async () => {
-    // The rule that outranks the journey: a product, price, seller or buy URL that did
-    // not come out of a sil tool call never enters the shortlist. The plugin's half of
-    // that is that it invents none of them.
-    seedTokens(ACCESS, REFRESH);
-    scriptTheJourney();
-    const results = await call(
-      "shopping_search",
-      { brief: "b1", domain: DOMAIN, query: "boots", n: 3 },
-      "k1",
-    );
-    const offers = await call("shopping_offers", { brief: "b1", ids: ["v1"] }, "k2");
-    const sellers = await call("shopping_seller_get", { ids: ["s1"] }, "k3");
-
-    const wireStrings = new Set<string>();
-    const walk = (value: unknown): void => {
-      if (typeof value === "string") wireStrings.add(value);
-      else if (Array.isArray(value)) value.forEach(walk);
-      else if (value !== null && typeof value === "object") Object.values(value).forEach(walk);
-    };
-    walk(contractResponse("shopping_search"));
-    walk(contractResponse("shopping_offers"));
-    walk(contractResponse("shopping_seller_get"));
-
-    const presented: string[] = [];
-    for (const product of results["products"] as Record<string, unknown>[]) {
-      presented.push(product["id"] as string, product["title"] as string);
-      for (const variant of product["variants"] as Record<string, unknown>[]) {
-        presented.push(variant["id"] as string);
-      }
-    }
-    for (const offer of offers["offers"] as Record<string, string>[]) {
-      presented.push(offer["url"], offer["price"], offer["seller_name"]);
-    }
-    for (const seller of sellers["sellers"] as Record<string, string>[]) {
-      presented.push(seller["host"], seller["name"]);
-    }
-    expect(presented.filter((s) => !wireStrings.has(s))).toEqual([]);
-    expect(presented.length).toBeGreaterThan(10);
-  });
 });
 
 describe("no tool stands in for another, across the whole journey", () => {

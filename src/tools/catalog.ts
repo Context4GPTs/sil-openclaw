@@ -119,10 +119,10 @@ export const SHOPPING_TOOLS = [
     name: "shopping_product_get",
     method: "POST",
     path: "/catalog/product",
-    label: "Read the whole dossier on a shortlisted product",
+    label: "Read a shortlisted product whole",
     description:
-      "One product whole: send 1–3 variant or product ids from a search and get its sheet filled —"
-      + " specs, parts, options — with the page and date behind every value, and its variants.",
+      "One product whole: send 1–3 variant or product ids from a search and get what its variants"
+      + " share, what sets each apart and each shop's offers of it, and what was sold beside it.",
   },
   {
     name: "shopping_offers",

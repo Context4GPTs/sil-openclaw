@@ -570,6 +570,7 @@
           "variants": [
             {
               "id": "v1",
+              "differs": {},
               "shops": 2,
               "price": [
                 {
@@ -658,78 +659,73 @@
       "status": "ok",
       "products": [
         {
-          "id": "v1",
+          "id": "v2",
           "product_id": "p1",
-          "variant_id": "v1",
-          "title": "Lelit Bianca V3",
-          "brand": "Lelit",
-          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_machines.espresso_machines.portafilter_espresso_machines",
+          "variant_id": "v2",
           "images": [],
           "product": {
-            "weight": 29.5,
-            "heatingSystem": "dual_boiler",
-            "made_of": {
-              "boiler": {
-                "number": "several",
-                "type": [
-                  {
-                    "boilerVolume": 800
-                  },
-                  {
-                    "boilerVolume": 2500
-                  }
-                ]
-              }
-            },
-            "options": {
-              "color": {
-                "number": 1,
-                "optional": false,
-                "type": [
-                  "walnut",
-                  "black"
-                ]
-              }
-            }
+            "leaf": "coffee_beans_and_ground_coffee",
+            "brand": "Brown & Jenkins - The Vermont Coffee Roasters",
+            "title": "Colombian Supremo Coffee - 10 ounce bag",
+            "netWeight": 283.5,
+            "originCountry": "CO",
+            "roastLevel": "medium",
+            "tastingNotes": [
+              "nutty",
+              "caramel"
+            ],
+            "description": "Colombian Supremo coffee in a 10 ounce bag, medium roast."
           },
-          "sources": {
-            "weight": 0,
-            "heatingSystem": 0,
-            "made_of.boiler.number": 0,
-            "made_of.boiler.type[0].boilerVolume": 0,
-            "made_of.boiler.type[1].boilerVolume": 1
-          },
-          "pages": [
-            {
-              "host": "lelit.com",
-              "url": "https://lelit.com/bianca-v3",
-              "read_at": "2026-10-20T08:00:00Z",
-              "by": "maker"
-            },
-            {
-              "host": "www.cliffandpebble.com",
-              "url": "https://www.cliffandpebble.com/lelit-bianca",
-              "read_at": "2026-10-21T09:30:00Z",
-              "by": "shop"
-            }
-          ],
           "variants": [
             {
               "id": "v1",
-              "name": "Walnut",
-              "selection": {
-                "color": "walnut"
+              "differs": {
+                "grind": "whole bean"
               },
-              "gtin": [
-                "8051556801234"
+              "offers": [
+                {
+                  "seller": "brownjenkins.com",
+                  "price": {
+                    "value": 15,
+                    "currency": "USD"
+                  },
+                  "sku": "2114-B - Whole Bean",
+                  "availability": "in_stock",
+                  "row": "Whole Bean"
+                },
+                {
+                  "seller": "brownjenkins.com",
+                  "price": {
+                    "value": 13.8,
+                    "currency": "USD"
+                  },
+                  "plan": "every week",
+                  "was": {
+                    "value": 15,
+                    "currency": "USD"
+                  },
+                  "discount": 8,
+                  "row": "Whole Bean"
+                }
               ]
             },
             {
               "id": "v2",
-              "name": "Black",
-              "selection": {
-                "color": "black"
-              }
+              "differs": {
+                "grind": "ground"
+              },
+              "offers": [
+                {
+                  "seller": "brownjenkins.com",
+                  "price": {
+                    "value": 15,
+                    "currency": "USD"
+                  },
+                  "sku": "2114-B - Espresso",
+                  "availability": "in_stock",
+                  "row": "Espresso"
+                }
+              ]
             }
           ]
         }
@@ -745,8 +741,10 @@
           "title": "Gigabyte GeForce RTX 3060 Gaming OC 12G",
           "seller_id": "s7",
           "seller_name": "Newegg",
-          "price": "419.00",
-          "currency": "USD",
+          "price": {
+            "value": 419,
+            "currency": "USD"
+          },
           "availability": "in_stock",
           "observed_at": "2026-10-09T06:10:00Z",
           "url": "https://www.newegg.com/p/N82E16814932448",
@@ -759,8 +757,10 @@
           "title": "MSI GeForce RTX 3060 Ventus 2X 12G OC",
           "seller_id": "s8",
           "seller_name": "Micro Center",
-          "price": "429.99",
-          "currency": "USD",
+          "price": {
+            "value": 429.99,
+            "currency": "USD"
+          },
           "availability": "in_stock",
           "observed_at": "2026-10-08T22:45:00Z",
           "url": "https://www.microcenter.com/product/635318",

@@ -23,7 +23,6 @@
           "seller_id",
           "seller_name",
           "price",
-          "currency",
           "availability",
           "observed_at",
           "url",
@@ -38,7 +37,7 @@
           },
           "title": {
             "type": "string",
-            "description": "Names what the listing sells."
+            "description": "Names the product the listing sells."
           },
           "seller_id": {
             "type": "string",
@@ -51,16 +50,35 @@
             "description": "Names the shop."
           },
           "price": {
-            "type": "string",
-            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-            "description": "Quotes the price as read, never converted."
+            "type": "object",
+            "required": [
+              "value",
+              "currency"
+            ],
+            "properties": {
+              "value": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Quotes the amount."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "Quotes it in this currency."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Quotes what it costs, as the shop printed it."
           },
-          "currency": {
+          "plan": {
             "type": "string",
-            "pattern": "^[A-Z]{3}$",
-            "minLength": 3,
-            "maxLength": 3,
-            "description": "Quotes the price in this currency."
+            "description": "Says the price is a plan’s, and how often: `every 2 weeks`."
+          },
+          "sku": {
+            "type": "string",
+            "description": "Quotes the shop’s code for what it sells."
           },
           "availability": {
             "anyOf": [
@@ -95,32 +113,38 @@
             ],
             "description": "Tells the buyer whether it can be bought now."
           },
-          "observed_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Dates the price: when sil last read it."
-          },
-          "url": {
-            "type": "string",
-            "description": "Hands the buyer the listing."
-          },
-          "subscription": {
+          "was": {
             "type": "object",
             "required": [
-              "cadence"
+              "value",
+              "currency"
             ],
             "properties": {
-              "cadence": {
+              "value": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Quotes the amount."
+              },
+              "currency": {
                 "type": "string",
-                "description": "Says how often it is delivered: `every 2 weeks`."
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "Quotes it in this currency."
               }
             },
             "additionalProperties": false,
-            "description": "Says the price is a subscription’s; absent, one purchase."
+            "description": "Quotes the price it was, struck through."
           },
-          "sku": {
+          "discount": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Quotes the discount, in percent."
+          },
+          "row": {
             "type": "string",
-            "description": "Quotes the shop’s code for what it sells."
+            "description": "Names the option as the shop prints it."
           },
           "condition": {
             "anyOf": [
@@ -142,6 +166,15 @@
               }
             ],
             "description": "Says it is not sold new where the shop says so; absent, unstated."
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Dates the price: when sil last read it."
+          },
+          "url": {
+            "type": "string",
+            "description": "Hands the buyer the listing."
           },
           "pack": {
             "type": "object",

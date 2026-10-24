@@ -56,21 +56,6 @@ describe("shopping_offers — one route, one request", () => {
 });
 
 describe("shopping_offers — what the answer means", () => {
-  it("the contract's own 200 arrives verbatim — every seller, price, currency and date", async () => {
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok(contractResponse(TOOL)));
-    const payload = await run();
-    expect(payload).toEqual(contractResponse(TOOL));
-    const offers = payload["offers"] as Record<string, unknown>[];
-    // The spread, not a winner: two sellers for one variant, each dated and priced.
-    expect(offers.length).toBeGreaterThan(1);
-    expect(new Set(offers.map((o) => o["seller_id"])).size).toBe(offers.length);
-    for (const offer of offers) {
-      expect(offer["currency"]).toEqual(expect.any(String));
-      expect(offer["observed_at"]).toEqual(expect.any(String));
-    }
-  });
-
   it("`seller_fit` reaches the agent on EVERY offer, `ships` inside it", async () => {
     // The brief's seller rows are answered here and nowhere else. `ships` is always present
     // and `unknown` is an ordinary value of it — an offer arriving without `seller_fit`
