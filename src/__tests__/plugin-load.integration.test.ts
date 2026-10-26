@@ -305,12 +305,11 @@ const AS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
 describe.skipIf(AS_ROOT)(
   "plugin load — an uncreatable data dir registers NOTHING: no tool, and no gateway method (AC10)",
   () => {
-    // The half 0.4.5 added and nothing pinned. `register()` now hands the host a
-    // SECOND surface (`sil.search_results`), and under the new `onStartup: true`
-    // posture it runs on the gateway's boot path. `ensureDataDir()` throws BEFORE
-    // any `registerXTools`/`registerSearchResultsMethod` call, so the fail-closed
+    // `register()` hands the host a SECOND surface (`sil.answer`, `sil.call`), and
+    // under `onStartup: true` it runs on the gateway's boot path. `ensureDataDir()`
+    // throws BEFORE any `registerXTools`/`registerScreenMethods` call, so the fail-closed
     // terminal must leave the api COMPLETELY untouched — a half-registered plugin
-    // would hand a paired client a gateway method backed by a store whose home
+    // would hand a paired screen a gateway method backed by an account whose home
     // does not exist.
     //
     // The fault is injected with REAL filesystem permissions (a `0o500` containing

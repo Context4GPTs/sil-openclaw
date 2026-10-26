@@ -1,11 +1,6 @@
 /**
- * INTEGRATION — `shopping_offers` on the wire: the prices and seller terms, read live.
- *
- * Several offers on one variant ARE the price spread, and the spread is the answer. The
- * assertion that matters here is that every one of them crosses intact, each still
- * carrying its own currency, its own `observed_at` and its own `seller_fit` — a collapse
- * to a "best" offer, a lost timestamp, or a dropped `ships` turns a dated, sourced quote
- * into an undated claim about a seller nobody checked.
+ * INTEGRATION — `shopping_offers` on the wire: the picked variants' ids go to sil once,
+ * and its answer crosses untouched.
  */
 
 import { describe, it, expect } from "vitest";

@@ -137,7 +137,7 @@ tell the same compactly in text.
 
 ## What sil does not hold
 
-Price history, sizing charts, what fits what, local rules, services nearby. Say so plainly and
+Price history, sizing charts, local rules, services nearby. Say so plainly and
 how the buyer can settle it.
 
 ## Tools

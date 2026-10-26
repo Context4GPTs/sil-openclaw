@@ -73,6 +73,7 @@ Two methods, scope `operator.read`, authorized by the host before the handler ru
 `callId` it saw. Answers live in an in-memory buffer: at most 64, each dropped 15
 minutes after its call, never written to disk, served only to the sil account that
 produced it. `sil.call` runs one read — products, offers, shops, a domain, content,
-what sil keeps — or a forget, as the signed-in buyer, recorded by sil as the buyer's
-own (`studio/buyer`). An unknown, expired or foreign reference, and a signed-out
-plugin, get one identical not-found body.
+what sil keeps — or a forget of the rows it names, never everything, as the
+signed-in buyer, recorded by sil as the buyer's own (`studio/buyer`). An unknown,
+expired or foreign reference, and a signed-out plugin, get one identical
+not-found body.

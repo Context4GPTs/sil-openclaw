@@ -18,14 +18,14 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   `shopping_offers` takes variant `ids` only. Every tool description is one line on its place
   in the journey, and the skill is rewritten to the journey.
 - **`sil.answer` and `sil.call` replace `sil.search_results`.** A paired screen reads back any
-  sil answer the agent got (15 minutes, the last 64), and runs a read or a forget as the buyer.
+  sil answer the agent got (15 minutes, the last 64), and runs a read, or a forget of the rows it names, as the buyer.
 - **Fifteen tools on sil's signed contract.** `shopping_brief_create`, `shopping_brief_edit` and
   `shopping_profile_edit` are gone; `shopping_brief_write`, `shopping_user_read`,
   `shopping_user_remember` and `shopping_user_forget` replace them. `sil_whoami` answers the
   lean shape (name, country, currency, gender, language, one default address). Replies are
   compact JSON. `shopping_product_get` takes at most three ids.
 - **`sil_whoami` answers flat**, exactly the contract's shape: no `identity` wrapper, no
-  `web_origin` fields. `shopping_product_get` names ids sil does not hold in `not_held`.
+  `web_origin` fields.
 - **sil refuses a plugin older than 0.7.0** (HTTP 426); its message reaches the agent as it
   stands.
 
