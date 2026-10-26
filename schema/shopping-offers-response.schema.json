@@ -19,35 +19,73 @@
         "type": "object",
         "required": [
           "variant_id",
-          "title",
-          "seller_id",
-          "seller_name",
+          "seller",
           "price",
-          "availability",
-          "observed_at",
           "url",
-          "seller_fit"
+          "read_on"
         ],
         "properties": {
           "variant_id": {
             "type": "string",
             "minLength": 1,
             "maxLength": 256,
-            "description": "Matches the offer to the pick; passes it to the dossier."
+            "description": "Matches the offer to the variant asked for."
           },
-          "title": {
-            "type": "string",
-            "description": "Names the product the listing sells."
-          },
-          "seller_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256,
-            "description": "Passes it to `shopping_seller_get`."
-          },
-          "seller_name": {
-            "type": "string",
-            "description": "Names the shop."
+          "seller": {
+            "type": "object",
+            "required": [
+              "id",
+              "host",
+              "country",
+              "ships"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Passes it to `shopping_seller_get` for its delivery, returns and terms."
+              },
+              "host": {
+                "type": "string",
+                "description": "Names the shop by its site."
+              },
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$",
+                    "minLength": 2,
+                    "maxLength": 2,
+                    "description": "Where the shop is."
+                  },
+                  {
+                    "type": "string",
+                    "const": "unknown"
+                  }
+                ],
+                "description": "Says where the shop is."
+              },
+              "ships": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "serviceable"
+                  },
+                  {
+                    "type": "string",
+                    "const": "not_serviceable"
+                  },
+                  {
+                    "type": "string",
+                    "const": "unknown"
+                  }
+                ],
+                "description": "Says whether it ships there; `unknown` keeps the seller and says sil has not read its policy."
+              }
+            },
+            "additionalProperties": false,
+            "description": "The shop selling it."
           },
           "price": {
             "type": "object",
@@ -72,13 +110,28 @@
             "additionalProperties": false,
             "description": "Quotes what it costs, as the shop printed it."
           },
-          "plan": {
-            "type": "string",
-            "description": "Says the price is a plan’s, and how often: `every 2 weeks`."
-          },
-          "sku": {
-            "type": "string",
-            "description": "Quotes the shop’s code for what it sells."
+          "was": {
+            "type": "object",
+            "required": [
+              "value",
+              "currency"
+            ],
+            "properties": {
+              "value": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Quotes the amount."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "Quotes it in this currency."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Quotes the price it was, struck through."
           },
           "availability": {
             "anyOf": [
@@ -113,39 +166,6 @@
             ],
             "description": "Tells the buyer whether it can be bought now."
           },
-          "was": {
-            "type": "object",
-            "required": [
-              "value",
-              "currency"
-            ],
-            "properties": {
-              "value": {
-                "type": "number",
-                "minimum": 0,
-                "description": "Quotes the amount."
-              },
-              "currency": {
-                "type": "string",
-                "pattern": "^[A-Z]{3}$",
-                "minLength": 3,
-                "maxLength": 3,
-                "description": "Quotes it in this currency."
-              }
-            },
-            "additionalProperties": false,
-            "description": "Quotes the price it was, struck through."
-          },
-          "discount": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100,
-            "description": "Quotes the discount, in percent."
-          },
-          "row": {
-            "type": "string",
-            "description": "Names the option as the shop prints it."
-          },
           "condition": {
             "anyOf": [
               {
@@ -165,16 +185,15 @@
                 "const": "damaged"
               }
             ],
-            "description": "Says it is not sold new where the shop says so; absent, unstated."
+            "description": "Says it is not sold new where the shop says so; absent, new or unstated."
           },
-          "observed_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Dates the price: when sil last read it."
-          },
-          "url": {
-            "type": "string",
-            "description": "Hands the buyer the listing."
+          "plan": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Says the price is a subscription’s, and each cadence the shop offers."
           },
           "pack": {
             "type": "object",
@@ -197,79 +216,22 @@
               }
             },
             "additionalProperties": false,
-            "description": "Says the listing sells a pack, not one of the variant."
+            "description": "Says the price buys a pack or a bundle, not one of the variant."
           },
-          "seller_fit": {
-            "type": "object",
-            "required": [
-              "ships"
-            ],
-            "properties": {
-              "ships": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "serviceable"
-                  },
-                  {
-                    "type": "string",
-                    "const": "not_serviceable"
-                  },
-                  {
-                    "type": "string",
-                    "const": "unknown"
-                  }
-                ],
-                "description": "Says whether it ships there; `unknown` keeps the seller and says sil has not read its policy."
-              }
-            },
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "object",
-                  "required": [
-                    "amount",
-                    "currency"
-                  ],
-                  "properties": {
-                    "amount": {
-                      "type": "string",
-                      "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                      "description": "Quotes the amount as the page states it."
-                    },
-                    "currency": {
-                      "type": "string",
-                      "pattern": "^[A-Z]{3}$",
-                      "minLength": 3,
-                      "maxLength": 3,
-                      "description": "Quotes the amount in this currency."
-                    }
-                  },
-                  "additionalProperties": false
-                }
-              ]
-            },
-            "description": "Compares each requested seller key with what it asked, on this seller's value; `ships` says whether it reaches the address."
+          "url": {
+            "type": "string",
+            "description": "Hands the buyer the listing."
+          },
+          "read_on": {
+            "type": "string",
+            "format": "date",
+            "description": "Dates the price: the day sil read it."
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "One shop’s offer of a variant."
       },
-      "description": "Lists where it can be bought, best for the buyer first."
+      "description": "Lists where each variant can be bought: from shops reaching the buyer first, cheapest first."
     }
   },
   "additionalProperties": false

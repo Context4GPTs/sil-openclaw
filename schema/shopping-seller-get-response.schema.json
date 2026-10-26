@@ -23,10 +23,10 @@
           "host",
           "country",
           "ships",
+          "promotions",
+          "terms",
           "policy_urls",
-          "specs",
-          "reviews",
-          "sources"
+          "reviews"
         ],
         "properties": {
           "id": {
@@ -84,21 +84,21 @@
                   {
                     "type": "object",
                     "required": [
-                      "amount",
+                      "value",
                       "currency"
                     ],
                     "properties": {
-                      "amount": {
-                        "type": "string",
-                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                        "description": "Quotes the amount as the page states it."
+                      "value": {
+                        "type": "number",
+                        "minimum": 0,
+                        "description": "Quotes the amount."
                       },
                       "currency": {
                         "type": "string",
                         "pattern": "^[A-Z]{3}$",
                         "minLength": 3,
                         "maxLength": 3,
-                        "description": "Quotes the amount in this currency."
+                        "description": "Quotes it in this currency."
                       }
                     },
                     "additionalProperties": false
@@ -112,13 +112,13 @@
                     ],
                     "properties": {
                       "min": {
-                        "type": "string",
-                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                        "type": "number",
+                        "minimum": 0,
                         "description": "Quotes the low end."
                       },
                       "max": {
-                        "type": "string",
-                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                        "type": "number",
+                        "minimum": 0,
                         "description": "Quotes the high end."
                       },
                       "currency": {
@@ -126,32 +126,32 @@
                         "pattern": "^[A-Z]{3}$",
                         "minLength": 3,
                         "maxLength": 3,
-                        "description": "Quotes the range in this currency."
+                        "description": "Quotes the range in this currency; sil converts nothing."
                       }
                     },
                     "additionalProperties": false
                   }
                 ],
-                "description": "Quotes what delivery there costs."
+                "description": "Quotes one fee, or a range where sil holds both ends."
               },
               "free_over": {
                 "type": "object",
                 "required": [
-                  "amount",
+                  "value",
                   "currency"
                 ],
                 "properties": {
-                  "amount": {
-                    "type": "string",
-                    "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                    "description": "Quotes the amount as the page states it."
+                  "value": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Quotes the amount."
                   },
                   "currency": {
                     "type": "string",
                     "pattern": "^[A-Z]{3}$",
                     "minLength": 3,
                     "maxLength": 3,
-                    "description": "Quotes the amount in this currency."
+                    "description": "Quotes it in this currency."
                   }
                 },
                 "additionalProperties": false,
@@ -178,7 +178,385 @@
               }
             },
             "additionalProperties": false,
-            "description": "Tells the buyer what delivery to their address costs and how long it takes."
+            "description": "Tells the buyer what delivery to their country costs and how long it takes."
+          },
+          "returns_days": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Says how many days the buyer has to return it."
+          },
+          "warranty_months": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Says how many months the shop stands behind it."
+          },
+          "promotions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "what"
+              ],
+              "properties": {
+                "what": {
+                  "type": "string",
+                  "description": "Quotes the promotion as the shop prints it."
+                },
+                "discount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "Quotes its discount, in percent, where the shop states one."
+                },
+                "minimum_spend": {
+                  "type": "string",
+                  "description": "Quotes the spend it needs."
+                },
+                "until": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Says when it ends."
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Quotes the shop’s promotions: ask who qualifies; a reduced price only from `discount` and only on the buyer’s yes."
+          },
+          "terms": {
+            "type": "object",
+            "properties": {
+              "who": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "value",
+                          "currency"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Quotes the amount."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "Quotes it in this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says who the shop is."
+              },
+              "delivery": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "value",
+                          "currency"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Quotes the amount."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "Quotes it in this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says how the shop delivers, beyond the buyer’s own country."
+              },
+              "payment": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "value",
+                          "currency"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Quotes the amount."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "Quotes it in this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says how the buyer pays."
+              },
+              "support": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "value",
+                          "currency"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Quotes the amount."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "Quotes it in this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says how the buyer reaches help."
+              },
+              "returns": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "value",
+                          "currency"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Quotes the amount."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "Quotes it in this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says how a return works."
+              },
+              "warranty": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "value",
+                          "currency"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Quotes the amount."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "Quotes it in this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says what the shop stands behind."
+              },
+              "guarantees": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "value",
+                          "currency"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Quotes the amount."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "Quotes it in this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says what the shop promises."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Reads every other term sil holds, by the lever it weighs the shop by; a lever with nothing held is absent."
           },
           "policy_urls": {
             "type": "array",
@@ -217,358 +595,7 @@
               },
               "additionalProperties": false
             },
-            "description": "Hands the buyer the shop’s own policy pages, those it prints first; a link is not a claim."
-          },
-          "contact": {
-            "type": "object",
-            "properties": {
-              "email": {
-                "type": "string",
-                "description": "Writes to the shop."
-              },
-              "phone": {
-                "type": "string",
-                "description": "Calls the shop."
-              }
-            },
-            "additionalProperties": false,
-            "description": "Reaches the shop, as it prints them."
-          },
-          "specs": {
-            "type": "object",
-            "properties": {
-              "who": {
-                "type": "object",
-                "patternProperties": {
-                  "^.*$": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "amount",
-                          "currency"
-                        ],
-                        "properties": {
-                          "amount": {
-                            "type": "string",
-                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                            "description": "Quotes the amount as the page states it."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes the amount in this currency."
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    ]
-                  }
-                },
-                "description": "Says who the shop is."
-              },
-              "delivery": {
-                "type": "object",
-                "patternProperties": {
-                  "^.*$": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "amount",
-                          "currency"
-                        ],
-                        "properties": {
-                          "amount": {
-                            "type": "string",
-                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                            "description": "Quotes the amount as the page states it."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes the amount in this currency."
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    ]
-                  }
-                },
-                "description": "Says how the shop delivers, beyond the buyer’s own address."
-              },
-              "payment": {
-                "type": "object",
-                "patternProperties": {
-                  "^.*$": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "amount",
-                          "currency"
-                        ],
-                        "properties": {
-                          "amount": {
-                            "type": "string",
-                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                            "description": "Quotes the amount as the page states it."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes the amount in this currency."
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    ]
-                  }
-                },
-                "description": "Says how the buyer pays."
-              },
-              "support": {
-                "type": "object",
-                "patternProperties": {
-                  "^.*$": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "amount",
-                          "currency"
-                        ],
-                        "properties": {
-                          "amount": {
-                            "type": "string",
-                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                            "description": "Quotes the amount as the page states it."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes the amount in this currency."
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    ]
-                  }
-                },
-                "description": "Says how the buyer reaches help."
-              },
-              "returns": {
-                "type": "object",
-                "patternProperties": {
-                  "^.*$": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "amount",
-                          "currency"
-                        ],
-                        "properties": {
-                          "amount": {
-                            "type": "string",
-                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                            "description": "Quotes the amount as the page states it."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes the amount in this currency."
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    ]
-                  }
-                },
-                "description": "Says how a return works."
-              },
-              "warranty": {
-                "type": "object",
-                "patternProperties": {
-                  "^.*$": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "amount",
-                          "currency"
-                        ],
-                        "properties": {
-                          "amount": {
-                            "type": "string",
-                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                            "description": "Quotes the amount as the page states it."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes the amount in this currency."
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    ]
-                  }
-                },
-                "description": "Says what the shop stands behind."
-              },
-              "guarantees": {
-                "type": "object",
-                "patternProperties": {
-                  "^.*$": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "amount",
-                          "currency"
-                        ],
-                        "properties": {
-                          "amount": {
-                            "type": "string",
-                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                            "description": "Quotes the amount as the page states it."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes the amount in this currency."
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    ]
-                  }
-                },
-                "description": "Says what the shop promises."
-              }
-            },
-            "additionalProperties": false,
-            "description": "Reads every seller key sil holds a value for, by the lever it weighs the shop by; a lever with nothing held is absent."
+            "description": "Hands the buyer the shop’s own policy pages."
           },
           "reviews": {
             "type": "array",
@@ -579,8 +606,7 @@
                 "url",
                 "score",
                 "of",
-                "count",
-                "read_at"
+                "count"
               ],
               "properties": {
                 "source": {
@@ -594,56 +620,22 @@
                 "score": {
                   "type": "number",
                   "minimum": 0,
-                  "description": "The score as that site gives it."
+                  "description": "Quotes the score as that site gives it."
                 },
                 "of": {
                   "type": "number",
                   "exclusiveMinimum": 0,
-                  "description": "The scale’s top: 5, 10, 100."
+                  "description": "Reads the scale’s top: 5, 10, 100."
                 },
                 "count": {
                   "type": "integer",
                   "minimum": 0,
-                  "description": "How many reviews the score rests on."
-                },
-                "read_at": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "Says when sil read it."
+                  "description": "Says how many reviews the score rests on."
                 }
               },
               "additionalProperties": false
             },
             "description": "Gives scores from a source the shop does not control; empty until sil reads one."
-          },
-          "sources": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "host",
-                "url",
-                "read_at"
-              ],
-              "properties": {
-                "host": {
-                  "type": "string",
-                  "description": "Says which site the value rests on."
-                },
-                "url": {
-                  "type": "string",
-                  "description": "Hands the buyer the page."
-                },
-                "read_at": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "Says when sil read it."
-                }
-              },
-              "additionalProperties": false
-            },
-            "maxItems": 12,
-            "description": "Names the pages behind these values, newest read first."
           }
         },
         "additionalProperties": false

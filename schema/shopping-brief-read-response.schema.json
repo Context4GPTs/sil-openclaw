@@ -74,7 +74,7 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 64,
-                        "description": "Names the key from the domain read, or a part’s spec by its path (`boiler.boilerVolume`); `price` is a key every domain has."
+                        "description": "Sends a key the domain read listed, unchanged: a part’s by its path (`boiler.boilerVolume`)."
                       },
                       "op": {
                         "anyOf": [

@@ -4,15 +4,14 @@
   "title": "sil shopping_search — request",
   "type": "object",
   "required": [
-    "domain",
-    "n"
+    "domain"
   ],
   "properties": {
     "domain": {
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Sends a leaf, or the kind above its leaves when the question is which kind; a shelf, domain or top answers `not_a_leaf`."
+      "description": "Sends the leaf, or the kind above its leaves when the question is which kind; a shelf, domain or top answers `not_a_leaf`."
     },
     "specs": {
       "type": "array",
@@ -28,7 +27,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Names the key from the domain read, or a part’s spec by its path (`boiler.boilerVolume`); `price` is a key every domain has."
+            "description": "Sends a key the domain read listed, unchanged: a part’s by its path (`boiler.boilerVolume`)."
           },
           "op": {
             "anyOf": [
@@ -61,30 +60,76 @@
           },
           "value": {
             "description": "Sends the desired value, typed by the key's type."
-          },
-          "currency": {
-            "type": "string",
-            "pattern": "^[A-Z]{3}$",
-            "minLength": 3,
-            "maxLength": 3,
-            "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
           }
         },
         "additionalProperties": false
       },
       "maxItems": 32,
-      "description": "Sends every settled want as a spec with the operator it needs; on a kind, `leaf` in or nin its leaves. A key the place does not hold is recorded, never refused."
+      "description": "Sends every settled want: a key from the domain read, one of its operators, a value in its unit or its set; on a kind, `leaf` in or nin its leaves."
+    },
+    "price": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "object",
+          "required": [
+            "value",
+            "currency"
+          ],
+          "properties": {
+            "value": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Quotes the amount."
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$",
+              "minLength": 3,
+              "maxLength": 3,
+              "description": "Quotes it in this currency."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Keeps variants with an offer at or above it."
+        },
+        "max": {
+          "type": "object",
+          "required": [
+            "value",
+            "currency"
+          ],
+          "properties": {
+            "value": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Quotes the amount."
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$",
+              "minLength": 3,
+              "maxLength": 3,
+              "description": "Quotes it in this currency."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Keeps variants with an offer at or under it."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Tests each variant’s own offers in the money’s currency; sil converts nothing."
     },
     "query": {
       "type": "string",
       "minLength": 1,
       "maxLength": 512,
-      "description": "Sends words only for what no spec holds, never a sentence."
+      "description": "Sends the words the buyer used for what no spec holds — a name, a model, \"travel\" — matched against the products’ titles and words."
     },
     "n": {
       "type": "integer",
       "minimum": 1,
-      "description": "Asks for this many variants; at most 10, a larger ask is served at that."
+      "description": "Asks for this many products, at most 10; default 5."
     },
     "brief": {
       "type": "string",

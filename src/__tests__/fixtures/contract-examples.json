@@ -19,38 +19,26 @@
       "status": "ok",
       "rows": [
         {
-          "id": "r1",
+          "id": "01a17790-1c2e-7a41-9b0e-3f6d2a8c4e11",
           "kind": "purchase",
           "product": "Hario V60 02 dripper",
           "place": "coffee drippers",
-          "store": "Green Plantation",
+          "store": "verenastreet.com",
           "when": "2026-09",
-          "note": "with paper filters",
+          "note": "ceramic, white",
           "source": "told",
           "gives_back": "what she brews with is never asked",
           "kept_at": "2026-09-14T09:12:00Z"
         },
         {
-          "id": "r2",
+          "id": "01a17790-1c2e-7a41-9b0e-3f6d2a8c4e12",
           "kind": "purchase",
           "product": "Fellow Stagg gooseneck kettle",
           "place": "kettles",
-          "store": "Green Plantation",
           "when": "2026-09",
           "source": "told",
           "gives_back": "kettles are not offered again",
           "kept_at": "2026-09-14T09:12:00Z"
-        },
-        {
-          "id": "r3",
-          "kind": "measurement",
-          "what": "shoe size",
-          "value": 38,
-          "unit": "EU",
-          "place": "trainers",
-          "gives_back": "trainers are searched in her size without asking",
-          "source": "told",
-          "kept_at": "2026-08-02T18:40:00Z"
         }
       ]
     }
@@ -60,19 +48,14 @@
       "status": "ok",
       "kept": [
         {
-          "id": "r4",
+          "id": "01a17791-08b4-7c3e-8a52-61f0d2b7e901",
           "kind": "memory",
-          "gives_back": "next time she shops for coffee gear or beans, the agent starts from how she brews and asks nothing about it"
+          "gives_back": "next time she shops for coffee gear, the agent starts from how she brews and asks nothing about it"
         },
         {
-          "id": "r5",
+          "id": "01a17791-08b4-7c3e-8a52-61f0d2b7e902",
           "kind": "preference",
-          "gives_back": "loud machines are left out without her saying so again"
-        },
-        {
-          "id": "r6",
-          "kind": "preference",
-          "gives_back": "picks start from the cheapest thing that does the job, without asking her budget again"
+          "gives_back": "grinders are searched under €130 without asking her budget again"
         }
       ]
     },
@@ -80,31 +63,21 @@
       "rows": [
         {
           "kind": "memory",
-          "text": "Makes one or two cups of V60 at 7am on weekdays, while her partner is still asleep. Her counter is about a chopping board wide. Might try espresso one day.",
+          "text": "Brews one or two cups of V60 at 7am on weekdays while her partner sleeps. Her counter is tiny.",
           "place": "coffee",
           "source": "told",
-          "gives_back": "next time she shops for coffee gear or beans, the agent starts from how she brews and asks nothing about it"
-        },
-        {
-          "kind": "preference",
-          "subject": "noise",
-          "op": "eq",
-          "value": "quiet",
-          "place": "coffee",
-          "reason": "partner asleep at 7am",
-          "source": "told",
-          "gives_back": "loud machines are left out without her saying so again"
+          "gives_back": "next time she shops for coffee gear, the agent starts from how she brews and asks nothing about it"
         },
         {
           "kind": "preference",
           "subject": "price",
           "op": "lte",
-          "value": 110,
+          "value": 130,
           "unit": "EUR",
-          "place": "coffee gear",
-          "reason": "would rather spend less than get something fancy",
+          "place": "coffee grinders",
+          "reason": "about a hundred euros",
           "source": "told",
-          "gives_back": "picks start from the cheapest thing that does the job, without asking her budget again"
+          "gives_back": "grinders are searched under €130 without asking her budget again"
         }
       ]
     }
@@ -113,16 +86,16 @@
     "response": {
       "status": "ok",
       "removed": {
-        "measurement": 1,
+        "measurement": 0,
         "memory": 1,
-        "preference": 2,
+        "preference": 1,
         "purchase": 2,
-        "record": 41,
+        "record": 14,
         "brief": 0
       },
       "cannot_reach": [
         "this chat, which your assistant's app keeps",
-        "your order at Green Plantation, which the shop keeps"
+        "an order at a shop, which the shop keeps"
       ]
     },
     "request": {
@@ -132,25 +105,19 @@
   "shopping_brief_write": {
     "response": {
       "status": "ok",
-      "id": "b1"
+      "id": "01a17792-55aa-7d10-b3c4-0e9f8a7b6c51"
     },
     "request": {
-      "title": "Ski boots",
-      "narrative": "First own boots after two winters of rentals that numbed his toes. A wide forefoot decides before brand; soft, for blues and easy reds; under 250 euros.",
-      "domain": "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots",
+      "title": "A grinder for the V60",
+      "narrative": "Two cups at seven while her partner sleeps; a tiny counter; about a hundred euros. An even grind for pour-over decides before brand.",
+      "domain": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
       "specs": [
-        {
-          "key": "last_width",
-          "op": "gte",
-          "value": 102,
-          "reason": "104 mm wide"
-        },
         {
           "key": "price",
           "op": "lte",
-          "value": "250",
+          "value": "130",
           "currency": "EUR",
-          "reason": "Around €250"
+          "reason": "About €100"
         }
       ]
     }
@@ -160,13 +127,13 @@
       "status": "ok",
       "briefs": [
         {
-          "id": "b1",
-          "title": "Ski boots",
+          "id": "01a17792-55aa-7d10-b3c4-0e9f8a7b6c51",
+          "title": "A grinder for the V60",
           "status": "active",
           "domains": [
-            "product.sports.skiing_snowboarding.ski_boots.alpine_ski_boots"
+            "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders"
           ],
-          "updated_at": "2026-10-06T21:04:00Z"
+          "updated_at": "2026-10-26T09:04:00Z"
         }
       ]
     }
@@ -177,121 +144,29 @@
       "matches": [
         {
           "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
-          "name": "Hand coffee grinders",
-          "matched": "coffee grinder",
-          "under": [
-            {
-              "path": "product.food_kitchen",
-              "name": "Food & kitchen",
-              "role": "top"
-            },
-            {
-              "path": "product.food_kitchen.coffee_and_coffee_equipment",
-              "name": "Coffee & coffee equipment",
-              "role": "domain"
-            },
-            {
-              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment",
-              "name": "Coffee equipment",
-              "role": "shelf"
-            },
-            {
-              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
-              "name": "Coffee grinders",
-              "role": "kind"
-            }
-          ]
+          "name": "Hand coffee grinders"
         },
         {
           "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "name": "Electric burr coffee grinders",
-          "matched": "coffee grinder",
-          "under": [
-            {
-              "path": "product.food_kitchen",
-              "name": "Food & kitchen",
-              "role": "top"
-            },
-            {
-              "path": "product.food_kitchen.coffee_and_coffee_equipment",
-              "name": "Coffee & coffee equipment",
-              "role": "domain"
-            },
-            {
-              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment",
-              "name": "Coffee equipment",
-              "role": "shelf"
-            },
-            {
-              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
-              "name": "Coffee grinders",
-              "role": "kind"
-            },
-            {
-              "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders",
-              "name": "Electric coffee grinders",
-              "role": "kind"
-            }
-          ]
+          "name": "Electric burr coffee grinders"
         }
       ]
+    },
+    "request": {
+      "query": "coffee grinder"
     }
   },
   "shopping_domain_get": {
     "response": {
       "status": "ok",
       "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
-      "name": "Coffee grinders",
-      "labels": [
-        "coffee_grinders",
-        "grinders"
-      ],
       "specs": [
         {
-          "key": "finest_brew",
-          "display_name": "Finest brew",
+          "key": "feed",
           "type": "enum",
-          "allowed_values": [
-            "greek",
-            "espresso",
-            "moka",
-            "filter",
-            "french press"
-          ],
-          "ordered": true,
-          "operators": [
-            "eq",
-            "in",
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "coarsest_brew",
-          "display_name": "Coarsest brew",
-          "type": "enum",
-          "allowed_values": [
-            "espresso",
-            "moka",
-            "filter",
-            "french press",
-            "cold brew"
-          ],
-          "ordered": true,
-          "operators": [
-            "eq",
-            "in",
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "burr_material",
-          "display_name": "Burr material",
-          "type": "enum",
-          "allowed_values": [
-            "steel",
-            "ceramic"
+          "values": [
+            "single dose",
+            "hopper"
           ],
           "operators": [
             "eq",
@@ -301,8 +176,16 @@
           ]
         },
         {
-          "key": "noise_level",
-          "display_name": "Noise level",
+          "key": "depth",
+          "type": "number",
+          "unit": "mm",
+          "operators": [
+            "gte",
+            "lte"
+          ]
+        },
+        {
+          "key": "noiseLevel",
           "type": "number",
           "unit": "dB",
           "operators": [
@@ -311,120 +194,23 @@
           ]
         },
         {
-          "key": "brand",
-          "display_name": "Brand",
-          "type": "enum",
-          "operators": [
-            "eq",
-            "in",
-            "neq",
-            "nin"
-          ]
-        }
-      ],
-      "seller_specs": [
-        {
-          "key": "country",
-          "display_name": "Seller country",
-          "type": "enum",
-          "operators": [
-            "eq",
-            "in",
-            "neq",
-            "nin"
-          ]
-        },
-        {
-          "key": "return_window_days",
-          "display_name": "Return window",
+          "key": "width",
           "type": "number",
-          "unit": "days",
-          "operators": [
-            "gte",
-            "lte"
-          ]
-        }
-      ],
-      "reach": [
-        {
-          "from": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
-          "via": "leaf",
-          "keys": [
-            "finest_brew",
-            "coarsest_brew",
-            "burr_material"
-          ]
-        },
-        {
-          "from": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders",
-          "via": "leaf",
-          "keys": [
-            "finest_brew",
-            "coarsest_brew"
-          ]
-        },
-        {
-          "from": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "via": "leaf",
-          "keys": [
-            "noise_level",
-            "burr_material"
-          ]
-        },
-        {
-          "from": "product",
-          "via": "kind",
-          "keys": [
-            "brand"
-          ]
-        }
-      ],
-      "kinds": [
-        {
-          "path": "product",
-          "name": "Product"
-        }
-      ],
-      "parts": [],
-      "made_for": [],
-      "leaves": [
-        {
-          "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.blade_coffee_grinders",
-          "name": "Blade coffee grinders"
-        },
-        {
-          "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "name": "Electric burr coffee grinders"
-        },
-        {
-          "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
-          "name": "Hand coffee grinders"
-        }
-      ]
-    },
-    "alternate": {
-      "status": "ok",
-      "path": "product.vehicles.cars.motor_vehicles.passenger_cars",
-      "specs": [
-        {
-          "key": "boot_volume",
-          "display_name": "Boot volume",
-          "type": "number",
-          "unit": "l",
+          "unit": "mm",
           "operators": [
             "gte",
             "lte"
           ]
         },
         {
-          "key": "fuel_type",
-          "display_name": "Fuel type",
+          "key": "burrSet.burrMaterial",
           "type": "enum",
-          "allowed_values": [
-            "petrol",
-            "diesel",
-            "hybrid",
-            "electric"
+          "values": [
+            "hardened special steel",
+            "stainless steel",
+            "ceramic",
+            "steel",
+            "titanium-coated steel"
           ],
           "operators": [
             "eq",
@@ -432,226 +218,119 @@
             "neq",
             "nin"
           ]
+        },
+        {
+          "key": "grindAdjustment",
+          "type": "enum",
+          "values": [
+            "stepless",
+            "stepped",
+            "by run time"
+          ],
+          "operators": [
+            "eq",
+            "in",
+            "neq",
+            "nin"
+          ]
+        },
+        {
+          "key": "with",
+          "type": "enum",
+          "values": [
+            "grinder_travel_cases",
+            "cleaning_brushes"
+          ],
+          "operators": [
+            "in",
+            "nin"
+          ]
         }
       ],
-      "next": "seats",
-      "keys_total": 154
+      "next_page": 2
     },
     "request": {
-      "path": "product.vehicles.cars.motor_vehicles.passenger_cars",
-      "after": "boot_volume"
+      "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
+      "query": "quiet, single dose, small counter",
+      "spec_keywords": [
+        "noise",
+        "feed",
+        "depth"
+      ]
     }
   },
   "shopping_content": {
     "response": {
       "status": "ok",
-      "tokens": 212,
-      "total": 4,
       "passages": [
         {
-          "id": "how-coffee-and-coffee-equipment-are-bought",
           "kind": "guide",
           "title": "How coffee and coffee equipment are bought",
-          "from": "product.food_kitchen.coffee_and_coffee_equipment",
-          "role": "domain",
-          "written": "2026-10-05",
-          "heading": "Grinders",
-          "part": 4,
-          "of": 9,
-          "matched": [
-            "light",
-            "roast",
-            "steel",
-            "burr",
-            "evenness"
-          ],
-          "text": "A light roast is denser than a dark one, and dull or soft burrs crush it rather than cut it. Steel burrs hold an even grind at filter size; ceramic ones stay sharp for years but scatter more fines, which a V60 tastes as bitterness beside sourness."
-        },
-        {
-          "id": "timemore-c3-esp-pro-review",
-          "kind": "review",
-          "title": "Timemore C3 ESP Pro, tested at filter size",
-          "author": "Coffee Kitchen Lab",
-          "url": "https://example.org/reviews/timemore-c3-esp-pro",
-          "published": "2026-03-18",
-          "from": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
-          "role": "leaf",
-          "written": "2026-10-05",
-          "part": 2,
-          "of": 5,
-          "matched": [
-            "steel",
-            "burr",
-            "evenness"
-          ],
-          "text": "At 45 clicks the steel burrs gave the tightest spread of the five hand grinders we sieved under €120."
+          "text": "The grinder matters more than the beans. A blade grinder chops unevenly, so a pour-over tastes bitter and sour at once; burrs cut every grain to one size, and a V60 needs exactly that."
         }
       ]
     },
     "request": {
       "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
-      "q": "light roast steel burr evenness",
+      "about": "burr grind evenness pour-over",
       "kinds": [
-        "guide",
-        "review"
+        "guide"
       ],
-      "max_passages": 2
+      "max_tokens": 600
     }
   },
   "shopping_search": {
     "response": {
       "status": "ok",
-      "asked": {
-        "kind": "Coffee grinders",
-        "wants": [
-          {
-            "key": "leaf",
-            "name": "Kind",
-            "op": "nin",
-            "value": [
-              "blade_coffee_grinders"
-            ]
-          },
-          {
-            "key": "burr_material",
-            "name": "Burr material",
-            "op": "eq",
-            "value": "steel"
-          },
-          {
-            "key": "noise_level",
-            "name": "Noise level",
-            "op": "lte",
-            "value": 60,
-            "unit": "dB"
-          },
-          {
-            "key": "finest_brew",
-            "name": "Finest brew",
-            "op": "lte",
-            "value": "espresso"
-          },
-          {
-            "key": "coarsest_brew",
-            "name": "Coarsest brew",
-            "op": "gte",
-            "value": "filter"
-          },
-          {
-            "key": "price",
-            "name": "Price",
-            "op": "lte",
-            "value": "110",
-            "currency": "EUR"
-          }
-        ],
-        "units": {}
-      },
       "products": [
         {
-          "id": "p1",
-          "title": "Timemore C3 ESP Pro",
-          "brand": "Timemore",
-          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.hand_coffee_grinders",
+          "id": "01a17757-3af6-736f-8bd1-41f3757ac2bc",
+          "title": "Gaggia MD15",
+          "brand": "Gaggia",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "images": [],
           "fit": {
-            "burr_material": "steel",
-            "finest_brew": "espresso",
-            "coarsest_brew": "french press",
-            "price": "109"
+            "depth": 225
           },
-          "shops": 2,
-          "price": [
-            {
-              "from": "109",
-              "to": "115",
-              "currency": "EUR"
-            }
-          ],
-          "variants": [
-            {
-              "id": "v1",
-              "differs": {},
-              "shops": 2,
-              "price": [
-                {
-                  "from": "109",
-                  "to": "115",
-                  "currency": "EUR"
-                }
-              ]
-            }
-          ]
+          "starting_from": {
+            "value": 119,
+            "currency": "EUR"
+          },
+          "store_stock": 1
+        },
+        {
+          "id": "01a1775c-d8d1-714d-b234-7e3c69c442ac",
+          "title": "Turin Grinders SK40",
+          "brand": "Turin Grinders",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "images": [],
+          "fit": {
+            "depth": 171.45
+          },
+          "starting_from": {
+            "value": 199,
+            "currency": "USD"
+          },
+          "store_stock": 1
         }
-      ],
-      "receipt": {
-        "shops": 26,
-        "products": 410,
-        "fit": 5,
-        "could_not_tell": 7,
-        "offered": 3,
-        "set_aside": [
-          {
-            "count": 212,
-            "key": "leaf",
-            "values": [
-              "blade coffee grinders"
-            ]
-          },
-          {
-            "count": 96,
-            "key": "burr_material",
-            "values": [
-              "ceramic"
-            ]
-          },
-          {
-            "count": 54,
-            "key": "noise_level"
-          },
-          {
-            "count": 36,
-            "key": "price"
-          }
-        ]
-      }
+      ]
     },
     "request": {
       "domain": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
       "specs": [
         {
-          "key": "leaf",
-          "op": "nin",
-          "value": [
-            "blade_coffee_grinders"
-          ]
-        },
-        {
-          "key": "burr_material",
-          "op": "eq",
-          "value": "steel"
-        },
-        {
-          "key": "noise_level",
+          "key": "depth",
           "op": "lte",
-          "value": 60
-        },
-        {
-          "key": "finest_brew",
-          "op": "lte",
-          "value": "espresso"
-        },
-        {
-          "key": "coarsest_brew",
-          "op": "gte",
-          "value": "filter"
-        },
-        {
-          "key": "price",
-          "op": "lte",
-          "value": "110"
+          "value": 250
         }
       ],
-      "n": 3
+      "price": {
+        "max": {
+          "value": 130,
+          "currency": "EUR"
+        }
+      },
+      "n": 2
     }
   },
   "shopping_product_get": {
@@ -659,73 +338,81 @@
       "status": "ok",
       "products": [
         {
-          "id": "v2",
-          "product_id": "p1",
-          "variant_id": "v2",
+          "id": "01a17757-3af6-736f-8bd1-41f3757ac2bc",
+          "title": "Gaggia MD15",
+          "brand": "Gaggia",
+          "maker": "Gaggia",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
           "images": [],
-          "product": {
-            "leaf": "coffee_beans_and_ground_coffee",
-            "brand": "Brown & Jenkins - The Vermont Coffee Roasters",
-            "title": "Colombian Supremo Coffee - 10 ounce bag",
+          "values": {
+            "feed": "hopper",
+            "depth": 225,
+            "width": 151,
+            "weight": 2.11,
+            "burrSet.burrShape": "conical",
+            "burrSet.burrMaterial": "stainless steel",
+            "grindAdjustment": "stepped",
+            "grindSettingCount": 15,
+            "hopper.beanCapacity": 300,
+            "hopper.removable": true,
+            "motor.motorPower": 150,
+            "dosingControl": [
+              "timed",
+              "on demand"
+            ]
+          },
+          "reviews": [],
+          "variants": [
+            {
+              "id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
+              "values": {},
+              "starting_from": {
+                "value": 119,
+                "currency": "EUR"
+              }
+            }
+          ]
+        },
+        {
+          "id": "01a17755-9005-7c19-852b-f1e91a1f5056",
+          "title": "Brown & Jenkins Colombian Supremo",
+          "brand": "Brown & Jenkins",
+          "maker": "Brown & Jenkins - The Vermont Coffee Roasters",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee.coffee_beans_and_ground_coffee",
+          "images": [],
+          "values": {
             "netWeight": 283.5,
             "originCountry": "CO",
             "roastLevel": "medium",
             "tastingNotes": [
               "nutty",
               "caramel"
-            ],
-            "description": "Colombian Supremo coffee in a 10 ounce bag, medium roast."
+            ]
           },
+          "reviews": [],
           "variants": [
             {
-              "id": "v1",
-              "differs": {
+              "id": "01a17755-900a-7dc7-ad2c-94ba805464bf",
+              "values": {
                 "grind": "whole bean"
               },
-              "offers": [
-                {
-                  "seller": "brownjenkins.com",
-                  "price": {
-                    "value": 15,
-                    "currency": "USD"
-                  },
-                  "sku": "2114-B - Whole Bean",
-                  "availability": "in_stock",
-                  "row": "Whole Bean"
-                },
-                {
-                  "seller": "brownjenkins.com",
-                  "price": {
-                    "value": 13.8,
-                    "currency": "USD"
-                  },
-                  "plan": "every week",
-                  "was": {
-                    "value": 15,
-                    "currency": "USD"
-                  },
-                  "discount": 8,
-                  "row": "Whole Bean"
-                }
-              ]
+              "starting_from": {
+                "value": 15,
+                "currency": "USD"
+              }
             },
             {
-              "id": "v2",
-              "differs": {
-                "grind": "ground"
+              "id": "01a17755-900d-7217-a812-b65d45a76bc8",
+              "values": {
+                "grind": "ground",
+                "brewMethods": [
+                  "espresso"
+                ]
               },
-              "offers": [
-                {
-                  "seller": "brownjenkins.com",
-                  "price": {
-                    "value": 15,
-                    "currency": "USD"
-                  },
-                  "sku": "2114-B - Espresso",
-                  "availability": "in_stock",
-                  "row": "Espresso"
-                }
-              ]
+              "starting_from": {
+                "value": 15,
+                "currency": "USD"
+              }
             }
           ]
         }
@@ -737,41 +424,27 @@
       "status": "ok",
       "offers": [
         {
-          "variant_id": "v31",
-          "title": "Gigabyte GeForce RTX 3060 Gaming OC 12G",
-          "seller_id": "s7",
-          "seller_name": "Newegg",
+          "variant_id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
+          "seller": {
+            "id": "01a17737-7b50-72d5-83c3-06f39cefd20d",
+            "host": "premiumco.gr",
+            "country": "GR",
+            "ships": "serviceable"
+          },
           "price": {
-            "value": 419,
-            "currency": "USD"
+            "value": 119,
+            "currency": "EUR"
           },
           "availability": "in_stock",
-          "observed_at": "2026-10-09T06:10:00Z",
-          "url": "https://www.newegg.com/p/N82E16814932448",
-          "seller_fit": {
-            "ships": "serviceable"
-          }
-        },
-        {
-          "variant_id": "v32",
-          "title": "MSI GeForce RTX 3060 Ventus 2X 12G OC",
-          "seller_id": "s8",
-          "seller_name": "Micro Center",
-          "price": {
-            "value": 429.99,
-            "currency": "USD"
-          },
-          "availability": "in_stock",
-          "observed_at": "2026-10-08T22:45:00Z",
-          "url": "https://www.microcenter.com/product/635318",
-          "seller_fit": {
-            "ships": "serviceable"
-          }
+          "url": "https://www.premiumco.gr/shop/%ce%bc%cf%8d%ce%bb%ce%bf%cf%82-%ce%ac%ce%bb%ce%b5%cf%83%ce%b7%cf%82-%ce%ba%ce%b1%cf%86%ce%ad-gaggia-md-15/",
+          "read_on": "2026-10-26"
         }
       ]
     },
     "request": {
-      "name": "RTX 3060 12GB"
+      "ids": [
+        "01a17757-3afa-7959-a887-a0f9b5f08e94"
+      ]
     }
   },
   "shopping_seller_get": {
@@ -779,67 +452,60 @@
       "status": "ok",
       "sellers": [
         {
-          "id": "s1",
-          "name": "Green Plantation",
-          "host": "www.greenplantation.eu",
+          "id": "01a17737-7b50-72d5-83c3-06f39cefd20d",
+          "name": "PREMIUMCO EE",
+          "host": "premiumco.gr",
           "country": "GR",
           "ships": "serviceable",
           "delivery": {
             "cost": {
-              "amount": "12.00",
+              "min": 2.9,
+              "max": 5.9,
               "currency": "EUR"
             },
-            "days": {
-              "min": 2,
-              "max": 4
+            "free_over": {
+              "value": 69,
+              "currency": "EUR"
+            }
+          },
+          "returns_days": 30,
+          "promotions": [],
+          "terms": {
+            "who": {
+              "legalName": "PREMIUMCO EE",
+              "vatId": "801194834"
+            },
+            "payment": {
+              "paymentMethods": [
+                "bank deposit",
+                "credit/debit card",
+                "cash on delivery",
+                "PayPal",
+                "Revolut"
+              ]
+            },
+            "support": {
+              "supportChannels": [
+                "phone",
+                "email",
+                "form",
+                "in store"
+              ],
+              "supportHours": "Monday–Friday 9:00–16:00"
+            },
+            "returns": {
+              "refundDays": 14,
+              "returnPostagePaidBy": "buyer",
+              "returnMethod": "by mail"
             }
           },
           "policy_urls": [
             {
-              "kind": "shipping",
-              "url": "https://www.greenplantation.eu/el/shipping"
-            },
-            {
-              "kind": "returns",
-              "url": "https://www.greenplantation.eu/el/returns"
+              "kind": "terms",
+              "url": "https://www.premiumco.gr/terms-conditions/"
             }
           ],
-          "specs": {
-            "who": {
-              "founded": 2009
-            },
-            "payment": {
-              "payment_methods": [
-                "card",
-                "bank transfer",
-                "cash on delivery"
-              ],
-              "cash_on_delivery_fee": {
-                "amount": "2.50",
-                "currency": "EUR"
-              }
-            },
-            "returns": {
-              "return_window_days": 14,
-              "return_postage_paid_by": "buyer"
-            },
-            "warranty": {
-              "seller_warranty": 24
-            }
-          },
-          "reviews": [],
-          "sources": [
-            {
-              "host": "www.greenplantation.eu",
-              "url": "https://www.greenplantation.eu/el/returns",
-              "read_at": "2026-10-09T06:12:00Z"
-            },
-            {
-              "host": "www.greenplantation.eu",
-              "url": "https://www.greenplantation.eu/el/about",
-              "read_at": "2026-10-09T06:10:00Z"
-            }
-          ]
+          "reviews": []
         }
       ]
     }

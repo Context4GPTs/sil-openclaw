@@ -19,9 +19,11 @@
         "type": "object",
         "required": [
           "id",
-          "product_id",
+          "title",
+          "leaf",
           "images",
-          "product",
+          "values",
+          "reviews",
           "variants"
         ],
         "properties": {
@@ -29,19 +31,25 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 256,
-            "description": "Matches the entry to the id asked for."
-          },
-          "product_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256,
             "description": "Names the product."
           },
-          "variant_id": {
+          "title": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 256,
-            "description": "Names the variant asked for, where a variant id was sent."
+            "description": "Names the product."
+          },
+          "brand": {
+            "type": "string",
+            "description": "Names the brand it is sold under."
+          },
+          "maker": {
+            "type": "string",
+            "description": "Names who makes it; `OEM` where the page names no one."
+          },
+          "leaf": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Reads what kind of thing it is."
           },
           "images": {
             "type": "array",
@@ -49,9 +57,9 @@
               "type": "string"
             },
             "maxItems": 5,
-            "description": "Shows it."
+            "description": "Shows it: pictures sil holds, first the one that shows it best."
           },
-          "product": {
+          "values": {
             "type": "object",
             "patternProperties": {
               "^.*$": {
@@ -89,28 +97,6 @@
                         },
                         "additionalProperties": false,
                         "description": "A range, in the key’s unit."
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "value",
-                          "currency"
-                        ],
-                        "properties": {
-                          "value": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Quotes the amount."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes it in this currency."
-                          }
-                        },
-                        "additionalProperties": false
                       },
                       {
                         "type": "object",
@@ -171,28 +157,6 @@
                         },
                         {
                           "type": "object",
-                          "required": [
-                            "value",
-                            "currency"
-                          ],
-                          "properties": {
-                            "value": {
-                              "type": "number",
-                              "minimum": 0,
-                              "description": "Quotes the amount."
-                            },
-                            "currency": {
-                              "type": "string",
-                              "pattern": "^[A-Z]{3}$",
-                              "minLength": 3,
-                              "maxLength": 3,
-                              "description": "Quotes it in this currency."
-                            }
-                          },
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
                           "patternProperties": {
                             "^.*$": {
                               "anyOf": [
@@ -216,7 +180,63 @@
                 ]
               }
             },
-            "description": "Reads it whole: `leaf`, `brand`, `title`, then every value its variants share by flat path (`netWeight`, `boiler[1].role`), then `description`, `pros`, `cons` and `persona` in the page’s own words."
+            "description": "Reads every value its variants share, once, keyed as the search takes them."
+          },
+          "description": {
+            "type": "string",
+            "description": "Reads the page’s own words about it."
+          },
+          "pros": {
+            "type": "string",
+            "description": "Reads what the page praises."
+          },
+          "cons": {
+            "type": "string",
+            "description": "Reads what the page warns of."
+          },
+          "persona": {
+            "type": "string",
+            "description": "Reads who the page says it is for."
+          },
+          "reviews": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "source",
+                "url",
+                "score",
+                "of",
+                "count"
+              ],
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "description": "Names the site that gathered the reviews."
+                },
+                "url": {
+                  "type": "string",
+                  "description": "Hands the buyer the reviews."
+                },
+                "score": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Quotes the score as that site gives it."
+                },
+                "of": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Reads the scale’s top: 5, 10, 100."
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Says how many reviews the score rests on."
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Gives scores from sources the shops do not control; empty until sil reads one."
           },
           "variants": {
             "type": "array",
@@ -224,8 +244,7 @@
               "type": "object",
               "required": [
                 "id",
-                "differs",
-                "offers"
+                "values"
               ],
               "properties": {
                 "id": {
@@ -234,7 +253,7 @@
                   "maxLength": 256,
                   "description": "Passes it to `shopping_offers`."
                 },
-                "differs": {
+                "values": {
                   "type": "object",
                   "patternProperties": {
                     "^.*$": {
@@ -272,28 +291,6 @@
                               },
                               "additionalProperties": false,
                               "description": "A range, in the key’s unit."
-                            },
-                            {
-                              "type": "object",
-                              "required": [
-                                "value",
-                                "currency"
-                              ],
-                              "properties": {
-                                "value": {
-                                  "type": "number",
-                                  "minimum": 0,
-                                  "description": "Quotes the amount."
-                                },
-                                "currency": {
-                                  "type": "string",
-                                  "pattern": "^[A-Z]{3}$",
-                                  "minLength": 3,
-                                  "maxLength": 3,
-                                  "description": "Quotes it in this currency."
-                                }
-                              },
-                              "additionalProperties": false
                             },
                             {
                               "type": "object",
@@ -354,28 +351,6 @@
                               },
                               {
                                 "type": "object",
-                                "required": [
-                                  "value",
-                                  "currency"
-                                ],
-                                "properties": {
-                                  "value": {
-                                    "type": "number",
-                                    "minimum": 0,
-                                    "description": "Quotes the amount."
-                                  },
-                                  "currency": {
-                                    "type": "string",
-                                    "pattern": "^[A-Z]{3}$",
-                                    "minLength": 3,
-                                    "maxLength": 3,
-                                    "description": "Quotes it in this currency."
-                                  }
-                                },
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "object",
                                 "patternProperties": {
                                   "^.*$": {
                                     "anyOf": [
@@ -401,374 +376,38 @@
                   },
                   "description": "Reads what sets this variant apart from the product’s others; empty where it is the only one."
                 },
-                "offers": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "required": [
-                      "seller",
-                      "price"
-                    ],
-                    "properties": {
-                      "seller": {
-                        "type": "string",
-                        "description": "Names the shop’s site."
-                      },
-                      "price": {
-                        "type": "object",
-                        "required": [
-                          "value",
-                          "currency"
-                        ],
-                        "properties": {
-                          "value": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Quotes the amount."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes it in this currency."
-                          }
-                        },
-                        "additionalProperties": false,
-                        "description": "Quotes what it costs, as the shop printed it."
-                      },
-                      "plan": {
-                        "type": "string",
-                        "description": "Says the price is a plan’s, and how often: `every 2 weeks`."
-                      },
-                      "sku": {
-                        "type": "string",
-                        "description": "Quotes the shop’s code for what it sells."
-                      },
-                      "availability": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "const": "in_stock"
-                          },
-                          {
-                            "type": "string",
-                            "const": "backorder"
-                          },
-                          {
-                            "type": "string",
-                            "const": "preorder"
-                          },
-                          {
-                            "type": "string",
-                            "const": "by_enquiry"
-                          },
-                          {
-                            "type": "string",
-                            "const": "out_of_stock"
-                          },
-                          {
-                            "type": "string",
-                            "const": "discontinued"
-                          },
-                          {
-                            "type": "string",
-                            "const": "unknown"
-                          }
-                        ],
-                        "description": "Tells the buyer whether it can be bought now."
-                      },
-                      "was": {
-                        "type": "object",
-                        "required": [
-                          "value",
-                          "currency"
-                        ],
-                        "properties": {
-                          "value": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Quotes the amount."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes it in this currency."
-                          }
-                        },
-                        "additionalProperties": false,
-                        "description": "Quotes the price it was, struck through."
-                      },
-                      "discount": {
-                        "type": "number",
-                        "minimum": 0,
-                        "maximum": 100,
-                        "description": "Quotes the discount, in percent."
-                      },
-                      "row": {
-                        "type": "string",
-                        "description": "Names the option as the shop prints it."
-                      },
-                      "condition": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "const": "new"
-                          },
-                          {
-                            "type": "string",
-                            "const": "used"
-                          },
-                          {
-                            "type": "string",
-                            "const": "refurbished"
-                          },
-                          {
-                            "type": "string",
-                            "const": "damaged"
-                          }
-                        ],
-                        "description": "Says it is not sold new where the shop says so; absent, unstated."
-                      },
-                      "count": {
-                        "type": "integer",
-                        "minimum": 2,
-                        "description": "Says the price is for this many of it."
-                      },
-                      "with": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Names what else the price buys with it."
-                      }
+                "starting_from": {
+                  "type": "object",
+                  "required": [
+                    "value",
+                    "currency"
+                  ],
+                  "properties": {
+                    "value": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Quotes the amount."
                     },
-                    "additionalProperties": false,
-                    "description": "One shop’s offer of this variant."
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$",
+                      "minLength": 3,
+                      "maxLength": 3,
+                      "description": "Quotes it in this currency."
+                    }
                   },
-                  "description": "Lists each shop’s offers of it: one-off first, then each plan, cheapest first."
+                  "additionalProperties": false,
+                  "description": "Quotes the lowest one-off price it is sold at; `shopping_offers` lists every offer."
                 }
               },
               "additionalProperties": false
             },
-            "description": "Lists every variant sold, each with what sets it apart and its offers."
-          },
-          "beside": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "seller",
-                "items",
-                "price"
-              ],
-              "properties": {
-                "seller": {
-                  "type": "string",
-                  "description": "Names the shop’s site."
-                },
-                "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "required": [
-                      "ref",
-                      "kind",
-                      "count"
-                    ],
-                    "properties": {
-                      "ref": {
-                        "type": "string",
-                        "description": "Names it as the page does: a link, a code or a name."
-                      },
-                      "kind": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "const": "link"
-                          },
-                          {
-                            "type": "string",
-                            "const": "sku"
-                          },
-                          {
-                            "type": "string",
-                            "const": "name"
-                          }
-                        ],
-                        "description": "Says which of the three `ref` is."
-                      },
-                      "count": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "description": "Says how many."
-                      },
-                      "product_id": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 256,
-                        "description": "Names the product sil holds it as; read it by this id."
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  "minItems": 1,
-                  "description": "Names what it sells."
-                },
-                "price": {
-                  "type": "object",
-                  "required": [
-                    "value",
-                    "currency"
-                  ],
-                  "properties": {
-                    "value": {
-                      "type": "number",
-                      "minimum": 0,
-                      "description": "Quotes the amount."
-                    },
-                    "currency": {
-                      "type": "string",
-                      "pattern": "^[A-Z]{3}$",
-                      "minLength": 3,
-                      "maxLength": 3,
-                      "description": "Quotes it in this currency."
-                    }
-                  },
-                  "additionalProperties": false,
-                  "description": "Quotes what it costs, as the shop printed it."
-                },
-                "plan": {
-                  "type": "string",
-                  "description": "Says the price is a plan’s, and how often: `every 2 weeks`."
-                },
-                "sku": {
-                  "type": "string",
-                  "description": "Quotes the shop’s code for what it sells."
-                },
-                "availability": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "const": "in_stock"
-                    },
-                    {
-                      "type": "string",
-                      "const": "backorder"
-                    },
-                    {
-                      "type": "string",
-                      "const": "preorder"
-                    },
-                    {
-                      "type": "string",
-                      "const": "by_enquiry"
-                    },
-                    {
-                      "type": "string",
-                      "const": "out_of_stock"
-                    },
-                    {
-                      "type": "string",
-                      "const": "discontinued"
-                    },
-                    {
-                      "type": "string",
-                      "const": "unknown"
-                    }
-                  ],
-                  "description": "Tells the buyer whether it can be bought now."
-                },
-                "was": {
-                  "type": "object",
-                  "required": [
-                    "value",
-                    "currency"
-                  ],
-                  "properties": {
-                    "value": {
-                      "type": "number",
-                      "minimum": 0,
-                      "description": "Quotes the amount."
-                    },
-                    "currency": {
-                      "type": "string",
-                      "pattern": "^[A-Z]{3}$",
-                      "minLength": 3,
-                      "maxLength": 3,
-                      "description": "Quotes it in this currency."
-                    }
-                  },
-                  "additionalProperties": false,
-                  "description": "Quotes the price it was, struck through."
-                },
-                "discount": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 100,
-                  "description": "Quotes the discount, in percent."
-                },
-                "row": {
-                  "type": "string",
-                  "description": "Names the option as the shop prints it."
-                },
-                "condition": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "const": "new"
-                    },
-                    {
-                      "type": "string",
-                      "const": "used"
-                    },
-                    {
-                      "type": "string",
-                      "const": "refurbished"
-                    },
-                    {
-                      "type": "string",
-                      "const": "damaged"
-                    }
-                  ],
-                  "description": "Says it is not sold new where the shop says so; absent, unstated."
-                }
-              },
-              "additionalProperties": false,
-              "description": "An add-on the product’s page sold beside it."
-            },
-            "minItems": 1,
-            "description": "Lists what its pages sold beside it."
+            "description": "Lists every variant: pick the ones to buy, then read their offers."
           }
         },
         "additionalProperties": false
       },
       "description": "Reads the whole before recommending."
-    },
-    "not_held": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "id",
-          "reason"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Echoes the id asked for."
-          },
-          "reason": {
-            "type": "string",
-            "description": "Says why sil has no dossier, and what to do instead."
-          }
-        },
-        "additionalProperties": false
-      },
-      "minItems": 1,
-      "description": "Names each id sil holds no product for; the agent says so and searches."
     }
   },
   "additionalProperties": false

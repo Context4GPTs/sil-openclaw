@@ -5,110 +5,13 @@
   "type": "object",
   "required": [
     "status",
-    "asked",
-    "products",
-    "receipt"
+    "products"
   ],
   "properties": {
     "status": {
       "type": "string",
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
-    },
-    "asked": {
-      "type": "object",
-      "required": [
-        "kind",
-        "wants",
-        "units"
-      ],
-      "properties": {
-        "kind": {
-          "type": "string",
-          "description": "Names what was searched, in English."
-        },
-        "wants": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "key",
-              "op",
-              "value",
-              "name"
-            ],
-            "properties": {
-              "key": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 64,
-                "description": "Names the key from the domain read, or a part’s spec by its path (`boiler.boilerVolume`); `price` is a key every domain has."
-              },
-              "op": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "eq"
-                  },
-                  {
-                    "type": "string",
-                    "const": "neq"
-                  },
-                  {
-                    "type": "string",
-                    "const": "gte"
-                  },
-                  {
-                    "type": "string",
-                    "const": "lte"
-                  },
-                  {
-                    "type": "string",
-                    "const": "in"
-                  },
-                  {
-                    "type": "string",
-                    "const": "nin"
-                  }
-                ],
-                "description": "Sends the operator the domain read listed for this key."
-              },
-              "value": {
-                "description": "Sends the desired value, typed by the key's type."
-              },
-              "currency": {
-                "type": "string",
-                "pattern": "^[A-Z]{3}$",
-                "minLength": 3,
-                "maxLength": 3,
-                "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
-              },
-              "name": {
-                "type": "string",
-                "description": "Names the key as a buyer reads it."
-              },
-              "unit": {
-                "type": "string",
-                "description": "Reads the value's unit."
-              }
-            },
-            "additionalProperties": false
-          },
-          "maxItems": 32,
-          "description": "Lists each want as sil read it."
-        },
-        "units": {
-          "type": "object",
-          "patternProperties": {
-            "^.*$": {
-              "type": "string"
-            }
-          },
-          "description": "Reads the unit of each key the answer's options and fit carry one for."
-        }
-      },
-      "additionalProperties": false,
-      "description": "Says what this search asked, so a screen can name it; once per answer."
     },
     "products": {
       "type": "array",
@@ -117,35 +20,38 @@
         "required": [
           "id",
           "title",
+          "images",
           "fit",
-          "shops",
-          "price",
-          "variants"
+          "store_stock"
         ],
         "properties": {
           "id": {
             "type": "string",
             "minLength": 1,
             "maxLength": 256,
-            "description": "Names the product."
+            "description": "Passes it to `shopping_product_get`."
           },
           "title": {
             "type": "string",
-            "description": "Draws the card with it."
+            "description": "Names the product."
           },
           "brand": {
             "type": "string",
             "description": "Names the brand it is sold under."
-          },
-          "image": {
-            "type": "string",
-            "description": "Shows it."
           },
           "leaf": {
             "type": "string",
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
             "description": "On a search over a kind: which leaf it is."
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "description": "Shows it: pictures sil holds, first the one that shows it best."
           },
           "fit": {
             "type": "object",
@@ -185,28 +91,6 @@
                         },
                         "additionalProperties": false,
                         "description": "A range, in the key’s unit."
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "value",
-                          "currency"
-                        ],
-                        "properties": {
-                          "value": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Quotes the amount."
-                          },
-                          "currency": {
-                            "type": "string",
-                            "pattern": "^[A-Z]{3}$",
-                            "minLength": 3,
-                            "maxLength": 3,
-                            "description": "Quotes it in this currency."
-                          }
-                        },
-                        "additionalProperties": false
                       },
                       {
                         "type": "object",
@@ -267,28 +151,6 @@
                         },
                         {
                           "type": "object",
-                          "required": [
-                            "value",
-                            "currency"
-                          ],
-                          "properties": {
-                            "value": {
-                              "type": "number",
-                              "minimum": 0,
-                              "description": "Quotes the amount."
-                            },
-                            "currency": {
-                              "type": "string",
-                              "pattern": "^[A-Z]{3}$",
-                              "minLength": 3,
-                              "maxLength": 3,
-                              "description": "Quotes it in this currency."
-                            }
-                          },
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
                           "patternProperties": {
                             "^.*$": {
                               "anyOf": [
@@ -312,428 +174,40 @@
                 ]
               }
             },
-            "description": "Answers each asked key with the value every variant shares, or `\"unknown\"`: what to say as unverified. A key the variants differ on is read off each variant’s `differs`."
+            "description": "Answers each asked key with the value its fitting variants share, the list of their values where they differ, or `\"unknown\"`: what to say as unverified."
           },
-          "shops": {
+          "starting_from": {
+            "type": "object",
+            "required": [
+              "value",
+              "currency"
+            ],
+            "properties": {
+              "value": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Quotes the amount."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "Quotes it in this currency."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Quotes the lowest one-off price a fitting variant is sold at, for the card: in the price filter’s or the buyer’s currency where sil holds one; absent where none is buyable."
+          },
+          "store_stock": {
             "type": "integer",
             "minimum": 0,
-            "description": "Says how many shops sell the variants returned, each shop once."
-          },
-          "price": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "from",
-                "to",
-                "currency"
-              ],
-              "properties": {
-                "from": {
-                  "type": "string",
-                  "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                  "description": "Quotes the low end of what the product costs in this currency."
-                },
-                "to": {
-                  "type": "string",
-                  "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                  "description": "Quotes the high end."
-                },
-                "currency": {
-                  "type": "string",
-                  "pattern": "^[A-Z]{3}$",
-                  "minLength": 3,
-                  "maxLength": 3,
-                  "description": "Reads which currency the range is in; sil converts nothing."
-                },
-                "unit": {
-                  "type": "object",
-                  "required": [
-                    "from",
-                    "to",
-                    "per"
-                  ],
-                  "properties": {
-                    "from": {
-                      "type": "string",
-                      "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                      "description": "Quotes the lowest price per unit."
-                    },
-                    "to": {
-                      "type": "string",
-                      "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                      "description": "Quotes the highest."
-                    },
-                    "per": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "const": "kg"
-                        },
-                        {
-                          "type": "string",
-                          "const": "l"
-                        },
-                        {
-                          "type": "string",
-                          "const": "piece"
-                        }
-                      ],
-                      "description": "Reads the unit: a kilo, a litre or a piece."
-                    }
-                  },
-                  "additionalProperties": false,
-                  "description": "Compares packs of different sizes; present where the leaf is sold by weight, volume or count."
-                }
-              },
-              "additionalProperties": false
-            },
-            "description": "Quotes the range over the variants returned."
-          },
-          "variants": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "id",
-                "differs",
-                "shops",
-                "price"
-              ],
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "description": "Passes it to `shopping_product_get` and `shopping_offers`."
-                },
-                "differs": {
-                  "type": "object",
-                  "patternProperties": {
-                    "^.*$": {
-                      "anyOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "boolean"
-                                },
-                                {
-                                  "type": "string"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "object",
-                              "required": [
-                                "min",
-                                "max"
-                              ],
-                              "properties": {
-                                "min": {
-                                  "type": "number",
-                                  "description": "Reads the low end."
-                                },
-                                "max": {
-                                  "type": "number",
-                                  "description": "Reads the high end."
-                                }
-                              },
-                              "additionalProperties": false,
-                              "description": "A range, in the key’s unit."
-                            },
-                            {
-                              "type": "object",
-                              "required": [
-                                "value",
-                                "currency"
-                              ],
-                              "properties": {
-                                "value": {
-                                  "type": "number",
-                                  "minimum": 0,
-                                  "description": "Quotes the amount."
-                                },
-                                "currency": {
-                                  "type": "string",
-                                  "pattern": "^[A-Z]{3}$",
-                                  "minLength": 3,
-                                  "maxLength": 3,
-                                  "description": "Quotes it in this currency."
-                                }
-                              },
-                              "additionalProperties": false
-                            },
-                            {
-                              "type": "object",
-                              "patternProperties": {
-                                "^.*$": {
-                                  "anyOf": [
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {
-                                      "type": "string"
-                                    }
-                                  ]
-                                }
-                              },
-                              "description": "One entry of a `records` key."
-                            }
-                          ]
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "anyOf": [
-                              {
-                                "anyOf": [
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {
-                                    "type": "string"
-                                  }
-                                ]
-                              },
-                              {
-                                "type": "object",
-                                "required": [
-                                  "min",
-                                  "max"
-                                ],
-                                "properties": {
-                                  "min": {
-                                    "type": "number",
-                                    "description": "Reads the low end."
-                                  },
-                                  "max": {
-                                    "type": "number",
-                                    "description": "Reads the high end."
-                                  }
-                                },
-                                "additionalProperties": false,
-                                "description": "A range, in the key’s unit."
-                              },
-                              {
-                                "type": "object",
-                                "required": [
-                                  "value",
-                                  "currency"
-                                ],
-                                "properties": {
-                                  "value": {
-                                    "type": "number",
-                                    "minimum": 0,
-                                    "description": "Quotes the amount."
-                                  },
-                                  "currency": {
-                                    "type": "string",
-                                    "pattern": "^[A-Z]{3}$",
-                                    "minLength": 3,
-                                    "maxLength": 3,
-                                    "description": "Quotes it in this currency."
-                                  }
-                                },
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "object",
-                                "patternProperties": {
-                                  "^.*$": {
-                                    "anyOf": [
-                                      {
-                                        "type": "number"
-                                      },
-                                      {
-                                        "type": "boolean"
-                                      },
-                                      {
-                                        "type": "string"
-                                      }
-                                    ]
-                                  }
-                                },
-                                "description": "One entry of a `records` key."
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  "description": "Reads what sets this variant apart from the product’s others; empty where it is the only one."
-                },
-                "shops": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "description": "Says how many shops sell this variant, over the offers its price is quoted from."
-                },
-                "price": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "required": [
-                      "from",
-                      "to",
-                      "currency"
-                    ],
-                    "properties": {
-                      "from": {
-                        "type": "string",
-                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                        "description": "Quotes the low end of what the product costs in this currency."
-                      },
-                      "to": {
-                        "type": "string",
-                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                        "description": "Quotes the high end."
-                      },
-                      "currency": {
-                        "type": "string",
-                        "pattern": "^[A-Z]{3}$",
-                        "minLength": 3,
-                        "maxLength": 3,
-                        "description": "Reads which currency the range is in; sil converts nothing."
-                      },
-                      "unit": {
-                        "type": "object",
-                        "required": [
-                          "from",
-                          "to",
-                          "per"
-                        ],
-                        "properties": {
-                          "from": {
-                            "type": "string",
-                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                            "description": "Quotes the lowest price per unit."
-                          },
-                          "to": {
-                            "type": "string",
-                            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                            "description": "Quotes the highest."
-                          },
-                          "per": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "const": "kg"
-                              },
-                              {
-                                "type": "string",
-                                "const": "l"
-                              },
-                              {
-                                "type": "string",
-                                "const": "piece"
-                              }
-                            ],
-                            "description": "Reads the unit: a kilo, a litre or a piece."
-                          }
-                        },
-                        "additionalProperties": false,
-                        "description": "Compares packs of different sizes; present where the leaf is sold by weight, volume or count."
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  "description": "Quotes what THIS variant costs, over its own offers; a currency other than the ask's is a bound sil could not test."
-                }
-              },
-              "additionalProperties": false,
-              "description": "A variant that answers the ask."
-            },
-            "description": "Passes an `id` to the dossier and offers."
+            "description": "Says how many shops sell the product, any variant."
           }
         },
         "additionalProperties": false
       },
-      "description": "Shows the shortlist in this order."
-    },
-    "receipt": {
-      "type": "object",
-      "required": [
-        "shops",
-        "products",
-        "fit",
-        "could_not_tell",
-        "offered",
-        "set_aside"
-      ],
-      "properties": {
-        "shops": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Says how many shops sil looked across."
-        },
-        "products": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Says how many products sil weighed: all it holds in the place asked; `fit`, `could_not_tell` and every `set_aside` line add up to it."
-        },
-        "fit": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Says how many meet every asked spec on values sil read."
-        },
-        "could_not_tell": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Says how many sil could not tell: nothing failed, a value was unread. Never a failure."
-        },
-        "offered": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Says how many of the fit sil holds an offer for in the buyer’s country."
-        },
-        "set_aside": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "count",
-              "key"
-            ],
-            "properties": {
-              "count": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Says how many were set aside on this key, each product once, on its first failing spec."
-              },
-              "key": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 64,
-                "description": "Names the asked spec they failed."
-              },
-              "values": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "maxItems": 3,
-                "description": "On a choice: the values they held, most common first."
-              }
-            },
-            "additionalProperties": false
-          },
-          "maxItems": 32,
-          "description": "Says why the rest were set aside, in the buyer’s words."
-        }
-      },
-      "additionalProperties": false,
-      "description": "Shows the buyer what sil checked, in a shop assistant’s words; relayed, never recounted."
+      "description": "Shows the shortlist in sil’s order."
     }
   },
   "additionalProperties": false

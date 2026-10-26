@@ -18,18 +18,12 @@
       "type": "string",
       "description": "Sends it verbatim as `shopping_search.domain`."
     },
-    "name": {
-      "type": "string",
-      "maxLength": 64,
-      "description": "Calls the thing this in English. Absent on a page read with `after`."
-    },
     "specs": {
       "type": "array",
       "items": {
         "type": "object",
         "required": [
           "key",
-          "display_name",
           "type",
           "operators"
         ],
@@ -38,13 +32,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Names the key in the Brief and sends it as a `shopping_search` spec key."
-          },
-          "display_name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "description": "Calls the key this when it writes it down or says it out loud."
+            "description": "Sends it unchanged as `shopping_search.specs[].key`: a part’s by its path (`burrSet.burrMaterial`), the box by `with`."
           },
           "type": {
             "anyOf": [
@@ -70,16 +58,16 @@
           "unit": {
             "type": "string",
             "minLength": 1,
-            "description": "States the value in this unit, the one sil holds it in."
+            "description": "Sends the value in this unit."
           },
-          "allowed_values": {
+          "values": {
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
             },
             "minItems": 1,
-            "description": "Maps the buyer's word into the closed set; an enum without one takes any name, a maker's for `brand`."
+            "description": "Maps the buyer's word into this set; where `gte`/`lte` are offered, they run least first."
           },
           "operators": {
             "type": "array",
@@ -112,407 +100,17 @@
               ]
             },
             "minItems": 1,
-            "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 1024,
-            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back. Only on a `keys` read."
-          },
-          "variant_spec": {
-            "type": "boolean",
-            "const": true,
-            "description": "Expects its values under `variants[]`."
-          },
-          "several": {
-            "type": "boolean",
-            "const": true,
-            "description": "Reads a list for it: a product holds several at once."
-          },
-          "ordered": {
-            "type": "boolean",
-            "const": true,
-            "description": "`allowed_values` run in order, least first: `gte`/`lte` take one and reach every one past it — \"filter or coarser\" is `gte filter`, never `eq filter`."
+            "description": "Sends one of these as the spec’s `op`."
           }
         },
         "additionalProperties": false
       },
-      "description": "Builds spec rows with keys sil holds: index lines in the place’s own order, own keys first, as many as one answer holds; or only the `keys` asked, whole."
+      "description": "Lists the keys a search here takes: those `spec_keywords` and `query` reach first, then those most products hold a value for; a key no product holds only where they reach it."
     },
-    "next": {
-      "type": "string",
-      "maxLength": 71,
-      "description": "Sends it as `after` to read the index on: the first entry not listed — a key, then the parts, then the seller keys. Absent on the last page, so nothing is cut unseen."
-    },
-    "keys_total": {
+    "next_page": {
       "type": "integer",
-      "minimum": 0,
-      "description": "Counts the keys of the whole index, over its pages."
-    },
-    "seller_specs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "key",
-          "display_name",
-          "type",
-          "operators"
-        ],
-        "properties": {
-          "key": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64,
-            "description": "Names the key in the Brief and sends it as a `shopping_search` spec key."
-          },
-          "display_name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "description": "Calls the key this when it writes it down or says it out loud."
-          },
-          "type": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "number"
-              },
-              {
-                "type": "string",
-                "const": "boolean"
-              },
-              {
-                "type": "string",
-                "const": "enum"
-              },
-              {
-                "type": "string",
-                "const": "money"
-              }
-            ],
-            "description": "Types the value the agent sends and reads for this key."
-          },
-          "unit": {
-            "type": "string",
-            "minLength": 1,
-            "description": "States the value in this unit, the one sil holds it in."
-          },
-          "allowed_values": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            },
-            "minItems": 1,
-            "description": "Maps the buyer's word into the closed set; an enum without one takes any name, a maker's for `brand`."
-          },
-          "operators": {
-            "type": "array",
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "const": "eq"
-                },
-                {
-                  "type": "string",
-                  "const": "neq"
-                },
-                {
-                  "type": "string",
-                  "const": "gte"
-                },
-                {
-                  "type": "string",
-                  "const": "lte"
-                },
-                {
-                  "type": "string",
-                  "const": "in"
-                },
-                {
-                  "type": "string",
-                  "const": "nin"
-                }
-              ]
-            },
-            "minItems": 1,
-            "description": "Picks the comparison that fits: `eq`/`in` on a variant spec and on enums, `gte`/`lte` on numbers and money."
-          },
-          "several": {
-            "type": "boolean",
-            "const": true,
-            "description": "Reads a list for it: a shop states several at once."
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 1024,
-            "description": "Reads how this one key moves the fit — what it decides, what goes wrong at either end of it, and how a buyer's own fact becomes a value for it. Reason from it; ask from it; never recite it back. Only on a `keys` read."
-          }
-        },
-        "additionalProperties": false
-      },
-      "description": "Builds seller rows for `shopping_offers`: paged after the keys and the parts; with `keys`, only those asked."
-    },
-    "labels": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "maxLength": 64
-      },
-      "maxItems": 20,
-      "description": "Reads every other word for the thing; never sends them. Absent with `keys` and after the first page."
-    },
-    "reach": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "from",
-          "via",
-          "keys"
-        ],
-        "properties": {
-          "from": {
-            "type": "string",
-            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-            "maxLength": 255,
-            "description": "Reads the node that declares these keys."
-          },
-          "via": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "own"
-              },
-              {
-                "type": "string",
-                "const": "kind"
-              },
-              {
-                "type": "string",
-                "const": "leaf"
-              }
-            ],
-            "description": "Reads how: its own, a kind it is, or a leaf under a kind."
-          },
-          "keys": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "description": "A key."
-            },
-            "description": "Reads the keys, in the node’s order."
-          }
-        },
-        "additionalProperties": false
-      },
-      "description": "Reads where each of this page’s keys comes from. Absent with `keys`."
-    },
-    "kinds": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "path",
-          "name"
-        ],
-        "properties": {
-          "path": {
-            "type": "string",
-            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-            "maxLength": 255,
-            "description": "Reads the kind on its own node."
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 64,
-            "description": "Calls the kind this."
-          }
-        },
-        "additionalProperties": false
-      },
-      "description": "Reads every kind this thing is, nearest first. Absent with `keys` and after the first page."
-    },
-    "parts": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "name",
-          "role",
-          "optional",
-          "many"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Calls the part this."
-          },
-          "role": {
-            "type": "string",
-            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-            "maxLength": 255,
-            "description": "Reads the leaf, or the kind of leaves, the part is a product of."
-          },
-          "optional": {
-            "type": "boolean",
-            "description": "Knows whether some of these things come without it."
-          },
-          "many": {
-            "type": "boolean",
-            "description": "Knows whether the thing has several of the part."
-          }
-        },
-        "additionalProperties": false
-      },
-      "description": "Reads what the thing has: paged after the keys, before the seller keys. Absent with `keys`."
-    },
-    "made_for": {
-      "type": "array",
-      "items": {
-        "anyOf": [
-          {
-            "type": "object",
-            "required": [
-              "path"
-            ],
-            "properties": {
-              "path": {
-                "type": "string",
-                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-                "maxLength": 255,
-                "description": "Reads the node this part or consumable is made for."
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "elsewhere"
-            ],
-            "properties": {
-              "elsewhere": {
-                "type": "string",
-                "description": "Reads what it is made for in plain words, where no node draws it yet."
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "description": "Reads what a part is made for. Absent with `keys` and after the first page."
-    },
-    "leaves": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "path",
-          "name"
-        ],
-        "properties": {
-          "path": {
-            "type": "string",
-            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-            "maxLength": 255,
-            "description": "Sends the leaf to `shopping_domain_get` or `shopping_search`."
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 64,
-            "description": "Calls the leaf this."
-          }
-        },
-        "additionalProperties": false
-      },
-      "description": "On a kind: every leaf under it. A search on the kind answers across them, `leaf` a key it takes. Absent with `keys` and after the first page."
-    },
-    "record": {
-      "anyOf": [
-        {
-          "type": "string",
-          "const": "full"
-        },
-        {
-          "type": "string",
-          "const": "specs"
-        }
-      ],
-      "description": "On a leaf: bought on its measures alone, or on its measures and its record. Absent with `keys` and after the first page."
-    },
-    "guides": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "id",
-          "kind",
-          "title",
-          "about"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256,
-            "description": "Sends it as `shopping_content.document` to read the guide."
-          },
-          "kind": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "guide"
-              },
-              {
-                "type": "string",
-                "const": "tutorial"
-              },
-              {
-                "type": "string",
-                "const": "faq"
-              },
-              {
-                "type": "string",
-                "const": "glossary"
-              },
-              {
-                "type": "string",
-                "const": "review"
-              },
-              {
-                "type": "string",
-                "const": "comparison"
-              },
-              {
-                "type": "string",
-                "const": "news"
-              },
-              {
-                "type": "string",
-                "const": "discussion"
-              }
-            ],
-            "description": "Names what the document is."
-          },
-          "title": {
-            "type": "string",
-            "description": "Reads the document’s title."
-          },
-          "about": {
-            "type": "string",
-            "maxLength": 160,
-            "description": "Reads what the document teaches, cut at a word."
-          }
-        },
-        "additionalProperties": false
-      },
-      "maxItems": 6,
-      "description": "Teaches from what sil holds on the place; the first is the domain’s index of every source it holds, each with what it teaches. Then its own documents, then each kind, then the places above, nearest first. Reads one with `shopping_content.document`. First page and `keys` only."
+      "minimum": 2,
+      "description": "Sends it as `page` to read the keys on; absent on the last page."
     }
   },
   "additionalProperties": false

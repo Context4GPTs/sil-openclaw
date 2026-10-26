@@ -25,7 +25,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Names the row to replace it, and to forget it."
+                "description": "Replaces this row: only an id `shopping_user_read` or a keep answered, never made up. A new row has none."
               },
               "kind": {
                 "type": "string",
@@ -105,7 +105,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Names the row to replace it, and to forget it."
+                "description": "Replaces this row: only an id `shopping_user_read` or a keep answered, never made up. A new row has none."
               },
               "kind": {
                 "type": "string",
@@ -161,7 +161,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Names the row to replace it, and to forget it."
+                "description": "Replaces this row: only an id `shopping_user_read` or a keep answered, never made up. A new row has none."
               },
               "kind": {
                 "type": "string",
@@ -271,7 +271,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Names the row to replace it, and to forget it."
+                "description": "Replaces this row: only an id `shopping_user_read` or a keep answered, never made up. A new row has none."
               },
               "kind": {
                 "type": "string",
@@ -333,7 +333,7 @@
       },
       "minItems": 1,
       "maxItems": 10,
-      "description": "Keeps what lasts beyond this buy, in the turn that settled it; an `id` replaces that row."
+      "description": "Keeps what lasts beyond this buy, in the turn that settled it. Kept only when the answer is `ok` and lists the row in `kept`."
     }
   },
   "additionalProperties": false
