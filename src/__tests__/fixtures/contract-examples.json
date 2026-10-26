@@ -9,7 +9,6 @@
       "language": "el",
       "addresses": [
         {
-          "label": "Home",
           "locality": "Athens",
           "country": "GR",
           "default": true

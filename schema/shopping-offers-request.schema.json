@@ -22,7 +22,7 @@
     "ship_to": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 64,
+      "maxLength": 128,
       "description": "Names one of the buyer’s addresses from `sil_whoami`, by label or town; the default when absent."
     }
   },
