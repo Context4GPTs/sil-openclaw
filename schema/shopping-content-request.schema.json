@@ -66,7 +66,7 @@
     "max_tokens": {
       "type": "integer",
       "minimum": 200,
-      "description": "Caps what the passages cost, a token being four characters; the last is cut at a word and marked `truncated`. At most 2300, a larger ask served at that. Default 2000."
+      "description": "Caps what the passages cost, a token being four characters; whole passages are answered while they fit. At most 2300, a larger ask served at that. Default 2000."
     }
   },
   "additionalProperties": false
