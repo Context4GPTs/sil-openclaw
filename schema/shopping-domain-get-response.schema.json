@@ -47,10 +47,6 @@
               {
                 "type": "string",
                 "const": "enum"
-              },
-              {
-                "type": "string",
-                "const": "money"
               }
             ],
             "description": "Types the value the agent sends and reads for this key."
@@ -105,7 +101,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Lists the keys a search here takes: those `spec_keywords` and `query` reach first, then those most products hold a value for; a key no product holds only where they reach it."
+      "description": "Lists the keys a search here takes: those `spec_keywords` and `query` reach first, then those most products hold a value for; a key of the thing no product holds only where they reach it, a part’s never."
     },
     "next_page": {
       "type": "integer",
