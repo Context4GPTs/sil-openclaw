@@ -26,7 +26,8 @@ export const SHOPPING_TOOLS = [
     label: "Read what sil keeps about the buyer",
     description:
       "Know the buyer: everything kept about them is here, never in your own memory files."
-      + " Read once per conversation before asking anything, and when they ask what you keep.",
+      + " Read once per conversation before asking anything, when they ask what you keep, and"
+      + " before a forget.",
   },
   {
     name: "shopping_user_remember",
@@ -91,8 +92,8 @@ export const SHOPPING_TOOLS = [
     label: "Search sil's products",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Search once on what is settled, each spec a want the buyer said: cards that fit and a shop"
-      + " reaching them sells. When few fit, `nearest` names the wants each misses.",
+      "Search once on what is settled, each spec a want the buyer said or sil keeps: cards that"
+      + " fit and a shop reaching them sells. When few fit, `nearest` names the wants each misses.",
   },
   {
     name: "shopping_product_get",
@@ -118,7 +119,7 @@ export const SHOPPING_TOOLS = [
     label: "Read the shops' terms",
     description:
       "The terms of the shops the offers named: delivery, returns, warranty and promotions. Quote a"
-      + " promotion and ask whether they qualify; a reduced price only on their yes.",
+      + " promotion and ask whether they qualify; a reduced price only from its `discount`, on their yes.",
   },
 ] as const satisfies readonly ShoppingTool[];
 
