@@ -68,9 +68,11 @@ tools.
 
 ### Gateway method
 
-`sil.search_results` (scope `operator.read`, authorized by the host before the
-handler runs) lets a paired client read back a `shopping_search` page by the
-`callId` it saw. Pages live in an in-memory buffer: at most 32 of them, each
-dropped 15 minutes after its search, never written to disk. A page is served only
-to the sil account that produced it. An unknown, expired or foreign reference gets
-one identical not-found body. No network call, no agent run.
+Two methods, scope `operator.read`, authorized by the host before the handler runs.
+`sil.answer` lets a paired screen read back any sil answer the agent got, by the
+`callId` it saw. Answers live in an in-memory buffer: at most 64, each dropped 15
+minutes after its call, never written to disk, served only to the sil account that
+produced it. `sil.call` runs one read — products, offers, shops, a domain, content,
+what sil keeps — or a forget, as the signed-in buyer, recorded by sil as the buyer's
+own (`studio/buyer`). An unknown, expired or foreign reference, and a signed-out
+plugin, get one identical not-found body.
