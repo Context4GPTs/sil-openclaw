@@ -33,6 +33,7 @@ these answer. When you use a row, say so: *"you're a 27.6, so I searched in that
 
 `shopping_domain_search { query }`, the thing in English: up to three leaves, each a buyable
 kind of thing with its `path`. When the ask spans them, the kind above them is searchable too.
+The leaf is a want: until the buyer names one, search the kind above them.
 Empty: sil does not carry it yet; say so and never shop the open web.
 
 ## Learn how to search it
@@ -162,6 +163,6 @@ how the buyer can settle it.
 Every answer carries a `status`. On anything but `ok`, say what happened and follow its
 `recovery`; never improvise one. `not_registered` goes to `sil_register`.
 
-The tools may be deferred: look them up with `tool_search`, or filter `ALL_TOOLS` by `shopping`
-or `sil`, since the host may add a prefix (`openclaw__shopping_search`). Never shop the web
-because a name did not match. If sil's tools are truly missing, `sil_doctor` names the fix.
+The tools may be deferred: find them with `tool_search` or by `shopping`/`sil` in `ALL_TOOLS`
+(the host may prefix them). Never shop the web because a name did not match; if sil's tools
+are truly missing, `sil_doctor` names the fix.
