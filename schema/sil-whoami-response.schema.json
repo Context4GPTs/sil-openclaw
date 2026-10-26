@@ -5,7 +5,8 @@
   "type": "object",
   "required": [
     "status",
-    "name"
+    "name",
+    "addresses"
   ],
   "properties": {
     "status": {
@@ -55,35 +56,43 @@
       "pattern": "^[a-z]{2}$",
       "description": "Speaks to the buyer in it; sil is always spoken to in English."
     },
-    "address": {
-      "type": "object",
-      "required": [
-        "locality",
-        "country"
-      ],
-      "properties": {
-        "label": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 64,
-          "description": "Calls the address this to the buyer."
+    "addresses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "locality",
+          "country",
+          "default"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Names the address; send it as `ship_to` to price delivery there."
+          },
+          "locality": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Says where things ship to, by town."
+          },
+          "country": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$",
+            "minLength": 2,
+            "maxLength": 2,
+            "description": "Says which country things ship to."
+          },
+          "default": {
+            "type": "boolean",
+            "description": "Is the address delivery is priced to when no `ship_to` is sent."
+          }
         },
-        "locality": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "description": "Says where things ship to, by town."
-        },
-        "country": {
-          "type": "string",
-          "pattern": "^[A-Z]{2}$",
-          "minLength": 2,
-          "maxLength": 2,
-          "description": "Says which country things ship to."
-        }
+        "additionalProperties": false
       },
-      "additionalProperties": false,
-      "description": "Knows where things ship to; never asks the buyer for it."
+      "description": "Knows where things ship to, the default first; never asks the buyer for it. Empty: none on file."
     }
   },
   "additionalProperties": false

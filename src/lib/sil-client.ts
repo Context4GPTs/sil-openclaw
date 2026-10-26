@@ -36,7 +36,7 @@
  * request body:
  *
  *   GET <silApiUrl>/identity    Authorization: Bearer <access_token>
- *     200 { status, name, country?, currency?, gender?, language?, address? } → ok
+ *     200 { status, name, country?, currency?, gender?, language?, addresses } → ok
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
  *     426 plugin older than sil accepts                   → refused (carries sil's message)
@@ -64,7 +64,7 @@
  * The VERB is load-bearing: only `GET /identity` is the self-read — `POST` is the
  * agent enrich route and carries no name. The identity rides in the envelope's
  * `result`, and a 200 with no usable identity (no `name`) falls to `retryable`,
- * never to a false `ok`. A buyer with no `address` is a valid identity.
+ * never to a false `ok`. A buyer with no address on file is a valid identity.
  *
  * Tokens never appear in a log line here (mirrors sil-web's invariant) — they
  * only travel inside the returned union variant.
@@ -107,11 +107,12 @@ export type RefreshOutcome =
   | { kind: "invalid_grant" }
   | { kind: "retryable" };
 
-/** The buyer's default address, as sil-api's lean identity read answers it. */
+/** One of the buyer's addresses, as sil-api's identity read answers it; `ship_to` names it by `label`. */
 export interface IdentityAddress extends Record<string, unknown> {
   label?: string;
   locality: string;
   country: string;
+  default: boolean;
 }
 
 /** The authenticated user's identity, unwrapped from the sil-api envelope's
@@ -124,7 +125,8 @@ export interface Identity {
   /** The ISO 4217 code the buyer prices in; a money row naming none means this one. */
   currency?: string;
   language?: string;
-  address?: IdentityAddress;
+  /** Every address on file, the default first; empty with none. */
+  addresses: IdentityAddress[];
 }
 
 /**
@@ -636,7 +638,9 @@ function extractIdentity(body: unknown): Identity | null {
 
   // Optional fields pass through only as the right shape — an absent or malformed one is
   // dropped, never coerced. The VALUES are the route's to decide.
-  const address = asRecord(source["address"]);
+  const addresses = Array.isArray(source["addresses"])
+    ? (source["addresses"] as unknown[]).flatMap((one) => asRecord(one) ?? [])
+    : [];
   const optional = (key: string): { [k: string]: string } =>
     typeof source[key] === "string" ? { [key]: source[key] as string } : {};
   return {
@@ -645,7 +649,7 @@ function extractIdentity(body: unknown): Identity | null {
     ...optional("gender"),
     ...optional("currency"),
     ...optional("language"),
-    ...(address !== null ? { address: address as IdentityAddress } : {}),
+    addresses: addresses as IdentityAddress[],
   };
 }
 

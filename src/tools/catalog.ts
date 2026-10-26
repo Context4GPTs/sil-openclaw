@@ -92,8 +92,8 @@ export const SHOPPING_TOOLS = [
     label: "Search sil's products",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Search once on what is settled, each spec a want the buyer said or sil keeps: cards that"
-      + " fit and a shop reaching them sells. When few fit, `nearest` names the wants each misses.",
+      "Search once on what is settled, each spec a want the buyer said or sil keeps: the products"
+      + " closest to the wants, those that fit first, each card's `misses` naming the wants it misses.",
   },
   {
     name: "shopping_product_get",
@@ -109,9 +109,9 @@ export const SHOPPING_TOOLS = [
     label: "Where to buy the picked variants",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Where to buy: send variant ids from `shopping_product_get`, never product ids. Every offer,"
-      + " each with its shop and whether it ships to the buyer; delivery, returns and warranty come"
-      + " only from `shopping_seller_get`.",
+      "Where to buy: variant ids from `shopping_product_get`, never product ids, and `ship_to`, one"
+      + " of the buyer's addresses by name (the default when absent). Every offer, each with its"
+      + " shop, whether it ships there and its stock; delivery and returns come from `shopping_seller_get`.",
   },
   {
     name: "shopping_seller_get",
@@ -119,8 +119,9 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/sellers",
     label: "Read the shops' terms",
     description:
-      "The terms of the shops the offers named: delivery, returns, warranty and promotions. Quote a"
-      + " promotion and ask whether they qualify; a reduced price only from its `discount`, on their yes.",
+      "The terms of the shops the offers named, delivered to `ship_to` (the default address when"
+      + " absent): delivery, returns, warranty and promotions. Quote a promotion and ask whether"
+      + " they qualify; a reduced price only from its `discount`, on their yes.",
   },
 ] as const satisfies readonly ShoppingTool[];
 

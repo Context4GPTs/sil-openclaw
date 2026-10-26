@@ -140,8 +140,8 @@ function registerWhoami(api: PluginAPI): void {
       label: "Who am I on sil",
       description:
         "Who is signed in, where they are and what they price in: `name`, `country`,"
-        + " `currency`, `gender`, `language` and the default `address`, each absent where sil"
-        + " holds none. Fast: call it freely, and never ask the buyer for what it answers."
+        + " `currency`, `gender`, `language`, each absent where sil holds none, and `addresses`,"
+        + " each by its name, the default first; `ship_to` on offers names one. Fast: call it freely, and never ask the buyer for what it answers."
         + " `gender` on anything worn is the product spec `gender` (male → `mens`, female →"
         + " `womens`), asked once where it answers none. If they are not registered, or the"
         + " session is past refreshing, the result names the recovery (sil_register).",

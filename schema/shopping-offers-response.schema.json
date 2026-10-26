@@ -5,6 +5,7 @@
   "type": "object",
   "required": [
     "status",
+    "ship_to",
     "offers"
   ],
   "properties": {
@@ -12,6 +13,34 @@
       "type": "string",
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "ship_to": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Names the address."
+        },
+        "locality": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Says the town."
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "minLength": 2,
+          "maxLength": 2,
+          "description": "Says the country every `ships` is relative to."
+        }
+      },
+      "additionalProperties": false
     },
     "offers": {
       "type": "array",
@@ -231,7 +260,7 @@
         "additionalProperties": false,
         "description": "One shop’s offer of a variant."
       },
-      "description": "Lists where each variant can be bought: from shops reaching the buyer first, cheapest first."
+      "description": "Lists where each variant can be bought: shops shipping to `ship_to` first, cheapest first."
     }
   },
   "additionalProperties": false

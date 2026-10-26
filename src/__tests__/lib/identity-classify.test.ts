@@ -34,7 +34,7 @@
  * `src/lib/sil-client.ts`:
  *   classifyIdentityResponse(status: number, body: unknown): IdentityOutcome
  *   where IdentityOutcome is a discriminated union on `kind`:
- *     | { kind: "ok"; identity: { name: string; address?: … } }
+ *     | { kind: "ok"; identity: { name: string; addresses: … } }
  *     | { kind: "unauthorized" }
  *     | { kind: "forbidden"; reason: "user_not_provisioned" | "principal_mismatch" | string }
  *     | { kind: "retryable" }
@@ -49,10 +49,10 @@ import { describe, it, expect } from "vitest";
 
 import { classifyIdentityResponse } from "../../lib/sil-client.js";
 
-/** sil-api's lean identity read: the name plus the default address. Bare shape. */
+/** sil-api's lean identity read: the name plus every address, the default first. Bare shape. */
 const REAL_IDENTITY = {
   name: "Ada Lovelace",
-  address: { label: "Home", locality: "London", country: "GB" },
+  addresses: [{ label: "Home", locality: "London", country: "GB", default: true }],
 };
 
 /** The same identity wrapped in sil-api's current UCP envelope (architect
@@ -80,17 +80,17 @@ describe("classifyIdentityResponse — status taxonomy (the auth branch)", () =>
     expect(out.kind).toBe("ok");
     if (out.kind === "ok") {
       expect(out.identity.name).toBe("Ada Lovelace");
-      expect(out.identity.address).toEqual({ label: "Home", locality: "London", country: "GB" });
+      expect(out.identity.addresses).toEqual([{ label: "Home", locality: "London", country: "GB", default: true }]);
     }
   });
 
-  it("200 → a name alone is a valid identity, and a malformed `address` is dropped", () => {
+  it("200 → a name alone is a valid identity, and a malformed `addresses` reads as none", () => {
     // A buyer sil holds nothing else on must not be stranded on a `retryable` no retry clears.
     const bare = classifyIdentityResponse(200, { name: "Ada Lovelace" });
-    expect(bare).toEqual({ kind: "ok", identity: { name: "Ada Lovelace" } });
+    expect(bare).toEqual({ kind: "ok", identity: { name: "Ada Lovelace", addresses: [] } });
 
-    const garbage = classifyIdentityResponse(200, { name: "Ada Lovelace", address: "London" });
-    expect(garbage).toEqual({ kind: "ok", identity: { name: "Ada Lovelace" } });
+    const garbage = classifyIdentityResponse(200, { name: "Ada Lovelace", addresses: "London" });
+    expect(garbage).toEqual({ kind: "ok", identity: { name: "Ada Lovelace", addresses: [] } });
   });
 
   it("200 → `country` passes through when the read carries a string, and is ABSENT otherwise", () => {
@@ -143,7 +143,7 @@ describe("classifyIdentityResponse — status taxonomy (the auth branch)", () =>
     expect(out.kind).toBe("ok");
     if (out.kind === "ok") {
       expect(out.identity.name).toBe("Ada Lovelace");
-      expect(out.identity.address).toBeDefined();
+      expect(out.identity.addresses).toHaveLength(1);
     }
   });
 
@@ -229,7 +229,7 @@ describe("classifyIdentityResponse — the anti-false-green body gate on 200", (
   it("200 with an address but NO name is NOT ok (the name gate is non-negotiable)", () => {
     // The `name` requirement is the load-bearing anti-false-green guard and
     // is non-negotiable — a body with an address but no name must still be `retryable`.
-    expect(classifyIdentityResponse(200, { address: { locality: "x", country: "GB" } }).kind).not.toBe("ok");
+    expect(classifyIdentityResponse(200, { addresses: [{ locality: "x", country: "GB", default: true }] }).kind).not.toBe("ok");
     expect(classifyIdentityResponse(200, { name: "" }).kind).not.toBe("ok");
   });
 
