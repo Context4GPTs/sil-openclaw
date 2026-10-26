@@ -486,7 +486,18 @@ export type RefreshStoredResult =
  * "must re-register" signal and DO NOT rotate (a rejected refresh must never be
  * presented as a fresh, valid pair). A 5xx / network blip is retryable.
  */
-export async function refreshStoredTokens(): Promise<RefreshStoredResult> {
+export function refreshStoredTokens(): Promise<RefreshStoredResult> {
+  // Single-flight: sil-web rotates the refresh token, so a second exchange of the same one
+  // answers invalid_grant and its caller clears a live session.
+  refreshing ??= rotateStoredTokens().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
+let refreshing: Promise<RefreshStoredResult> | null = null;
+
+async function rotateStoredTokens(): Promise<RefreshStoredResult> {
   const stored = readTokens();
   if (stored === null) {
     return { status: "must_reregister", reason: "no_stored_tokens" };

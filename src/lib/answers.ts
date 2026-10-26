@@ -44,6 +44,8 @@ export function keepAnswer(
     return;
   }
   const now = Date.now();
+  // Map order is age: a re-kept callId must move to the newest end.
+  answers.delete(callId);
   for (const [id, kept] of answers) if (kept.expiresAtMs <= now) answers.delete(id);
   while (answers.size >= MAX_ANSWERS) {
     const oldest = answers.keys().next();

@@ -44,8 +44,9 @@ const PRODUCT_IDS_PER_READ = 3;
 /** sil's record tells the buyer's taps from the agent's calls by this model. */
 const SCREEN_MODEL = "studio/buyer";
 
-/** sil-api's rule for `sil-tool-call-id`. */
+/** sil-api's rules for `sil-tool-call-id` and `sil-session-id`. */
 const REQUEST_ID = /^[\x21-\x7E]{1,256}$/;
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Refusals whose recovery is signing in again: on a screen that is signed out. */
 const SIGNED_OUT: ReadonlySet<RefusalBody["status"]> = new Set([
@@ -82,7 +83,11 @@ async function guarded(
   try {
     await handle();
   } catch (err) {
-    logScreen(api, "error", "failed", { cause: err instanceof Error ? err.message : String(err) });
+    logScreen(api, "error", "failed", {
+      error_type: err instanceof Error ? err.name : typeof err,
+      cause: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? (err.stack ?? "") : "",
+    });
     respond(true, NOT_FOUND);
   }
 }
@@ -110,41 +115,25 @@ async function call(
   params: Record<string, unknown>,
   respond: RespondFn,
 ): Promise<void> {
-  const { tool: name, args, requestId } = params;
-  const tool = SHOPPING_TOOLS.find((t) => t.name === name && SCREEN_TOOLS.has(t.name));
-  if (tool === undefined) {
-    invalid(api, respond, `sil.call runs only ${[...SCREEN_TOOLS].join(", ")}.`);
+  const parsed = parseCall(params);
+  if ("invalid" in parsed) {
+    invalid(api, respond, parsed.invalid);
     return;
   }
-  if (args === null || typeof args !== "object" || Array.isArray(args)) {
-    invalid(api, respond, "sil.call takes `args`, the tool's arguments as an object.");
-    return;
-  }
-  if (typeof requestId !== "string" || !REQUEST_ID.test(requestId)) {
-    invalid(api, respond, "sil.call takes `requestId`, 1–256 printable characters, no spaces.");
-    return;
-  }
-  const reads =
-    tool.name === "shopping_product_get"
-      ? productReads(args as Record<string, unknown>)
-      : [args as Record<string, unknown>];
-  if (reads === null) {
-    invalid(api, respond, `shopping_product_get takes \`ids\`, 1–${PRODUCT_IDS_MAX} strings.`);
-    return;
-  }
+  const { tool, reads, requestId } = parsed;
   const principal = signedInPrincipal();
   if (principal === undefined) {
     logScreen(api, "info", "call_refused", { requestId, tool: tool.name, reason: "no_principal" });
     respond(true, NOT_FOUND);
     return;
   }
-  // sil-api requires a conversation UUID; a tap belongs to the one the agent last answered
-  // in, and a screen opened with none behind it gets its own.
+  // sil-api requires a conversation UUID: the one the screen shows, else the one the agent
+  // last answered in, else the screen's own.
   const caller: Caller = {
     ...run,
     toolCallId: requestId,
     model: SCREEN_MODEL,
-    sessionId: latestSession(principal) ?? randomUUID(),
+    sessionId: parsed.sessionId ?? latestSession(principal) ?? randomUUID(),
   };
   const answered = await readAll(api, tool, reads, caller);
   if (answered.kind === "refused") {
@@ -157,22 +146,61 @@ async function call(
   respond(true, answered.body);
 }
 
-/** Every read in turn — concurrent ones would race the one refresh-token rotation — the
- * product reads' `products` joined, and the first refusal answering for all. */
+type ScreenTool = (typeof SHOPPING_TOOLS)[number];
+
+interface ParsedCall {
+  tool: ScreenTool;
+  reads: Record<string, unknown>[];
+  requestId: string;
+  sessionId: string | undefined;
+}
+
+function parseCall(params: Record<string, unknown>): ParsedCall | { invalid: string } {
+  const { tool: name, args, requestId, sessionId } = params;
+  const tool = SHOPPING_TOOLS.find((t) => t.name === name && SCREEN_TOOLS.has(t.name));
+  if (tool === undefined) return { invalid: `sil.call runs only ${[...SCREEN_TOOLS].join(", ")}.` };
+  if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    return { invalid: "sil.call takes `args`, the tool's arguments as an object." };
+  }
+  if (typeof requestId !== "string" || !REQUEST_ID.test(requestId)) {
+    return { invalid: "sil.call takes `requestId`, 1–256 printable characters, no spaces." };
+  }
+  if (sessionId !== undefined && (typeof sessionId !== "string" || !SESSION_ID.test(sessionId))) {
+    return { invalid: "sil.call takes `sessionId`, when sent, as a UUID." };
+  }
+  const body = args as Record<string, unknown>;
+  // A tap erases the rows it names; everything goes only on the buyer's word to the agent.
+  if (tool.name === "shopping_user_forget" && !namesRowsOnly(body)) {
+    return { invalid: "shopping_user_forget from a screen takes `ids` only." };
+  }
+  const reads = tool.name === "shopping_product_get" ? productReads(body) : [body];
+  if (reads === null) {
+    return { invalid: `shopping_product_get takes \`ids\`, 1–${PRODUCT_IDS_MAX} strings.` };
+  }
+  return { tool, reads, requestId, sessionId };
+}
+
+function namesRowsOnly(args: Record<string, unknown>): boolean {
+  const ids = args["ids"];
+  return Object.keys(args).length === 1 && Array.isArray(ids) && ids.length > 0;
+}
+
+/** The reads at once — the refresh they may share is single-flight — the product reads'
+ * `products` joined in order, and the first refusal answering for all. */
 async function readAll(
   api: PluginAPI,
-  tool: (typeof SHOPPING_TOOLS)[number],
+  tool: ScreenTool,
   reads: Record<string, unknown>[],
   caller: Caller,
 ): Promise<CallResult> {
   if (reads.length === 1) return callRoute(api, tool, reads[0] ?? {}, caller);
-  const products: unknown[] = [];
-  for (const read of reads) {
-    const called = await callRoute(api, tool, read, caller);
-    if (called.kind === "refused") return called;
-    const page = called.body["products"];
-    if (Array.isArray(page)) products.push(...page);
-  }
+  const called = await Promise.all(reads.map((read) => callRoute(api, tool, read, caller)));
+  const refused = called.find((c) => c.kind === "refused");
+  if (refused !== undefined) return refused;
+  const products = called.flatMap((c) => {
+    const page = c.body["products"];
+    return Array.isArray(page) ? page : [];
+  });
   return { kind: "ok", body: { status: "ok", products } };
 }
 
