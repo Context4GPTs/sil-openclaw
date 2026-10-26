@@ -282,55 +282,37 @@
   "shopping_search": {
     "response": {
       "status": "ok",
-      "products": [
+      "products": [],
+      "nearest": [
         {
           "id": "01a17757-3af6-736f-8bd1-41f3757ac2bc",
           "title": "Gaggia MD15",
           "brand": "Gaggia",
-          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
           "images": [],
-          "fit": {
-            "depth": 225
-          },
+          "fit": {},
           "starting_from": {
             "value": 119,
             "currency": "EUR"
           },
-          "store_stock": 1
-        },
-        {
-          "id": "01a1775c-d8d1-714d-b234-7e3c69c442ac",
-          "title": "Turin Grinders SK40",
-          "brand": "Turin Grinders",
-          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "images": [],
-          "fit": {
-            "depth": 171.45
-          },
-          "starting_from": {
-            "value": 199,
-            "currency": "USD"
-          },
-          "store_stock": 1
+          "store_stock": 1,
+          "misses": {
+            "price": {
+              "value": 119,
+              "currency": "EUR"
+            }
+          }
         }
       ]
     },
     "request": {
       "domain": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
-      "specs": [
-        {
-          "key": "depth",
-          "op": "lte",
-          "value": 250
-        }
-      ],
       "price": {
         "max": {
-          "value": 130,
+          "value": 100,
           "currency": "EUR"
         }
       },
-      "n": 2
+      "n": 3
     }
   },
   "shopping_product_get": {

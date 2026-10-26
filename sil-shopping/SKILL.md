@@ -63,6 +63,7 @@ Never recommend on a guess.
 `shopping_search { domain, specs, price?, query?, n? }`:
 
 - Every settled want is a spec `{ key, op, value }`, a key and an operator from the domain read.
+  Send only wants the buyer said or their rows hold; never add one, never drop one yourself.
 - `price` is money: `{ "max": { "value": 130, "currency": "EUR" } }`, in the buyer's currency.
 - `query` is only the buyer's words for what no spec holds, never a sentence.
 - On a kind, `leaf` is a key, and each card says its leaf.
@@ -70,12 +71,13 @@ Never recommend on a guess.
 
 Each card carries `fit`: per asked key the value sil holds, the values its variants span, or
 `"unknown"`. Unknown is never a failure: dig into it or say it is unverified. `starting_from`
-is the lowest price a fitting variant sells at; `store_stock` counts the shops. Order is
-sil's: never re-rank. Copy every id exactly as sil gave it.
+is the lowest price a fitting variant sells at; `store_stock` counts the shops that reach the
+buyer. Order is sil's: never re-rank. Copy every id exactly as sil gave it.
 
-Name a pick only from a card with a `starting_from` a shop reaching the buyer sells at. When no
-card has one, or nothing fits the budget, search once more without `price` and tell the buyer the
-nearest that ships to them, with its price: say which want is in the way and what freeing it buys.
+Name a pick only from `products`: each is sold by a shop reaching the buyer. When they are fewer
+than you need, `nearest` lists the closest, each with `misses`: the want in the way and what it
+holds there (`price` its price, `ships: false` no shop reaching them). Tell the buyer the nearest
+that ships, its price and the want it misses, and ask before searching without that want.
 
 ## Read the shortlist
 

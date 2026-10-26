@@ -25,15 +25,17 @@ export const SHOPPING_TOOLS = [
     path: "/user/read",
     label: "Read what sil keeps about the buyer",
     description:
-      "Know the buyer: every row sil keeps about them, read once per conversation before"
-      + " asking anything, and before any forget.",
+      "Know the buyer: everything kept about them is here, never in your own memory files."
+      + " Read once per conversation before asking anything, and when they ask what you keep.",
   },
   {
     name: "shopping_user_remember",
     method: "POST",
     path: "/user/remember",
     label: "Keep what lasts about the buyer",
-    description: "Keep what will matter next time about the buyer, the turn you learn it.",
+    description:
+      "Keep what will matter next time about the buyer, the turn you learn it: the only place the"
+      + " buyer is kept. \"Remember this\" means this call, never a note or memory file.",
   },
   {
     name: "shopping_user_forget",
@@ -88,7 +90,9 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/search",
     label: "Search sil's products",
     recovery: { not_found: "shopping_brief_read" },
-    description: "Search once on what is settled: product cards in sil's order, to shortlist from.",
+    description:
+      "Search once on what is settled, each spec a want the buyer said: cards that fit and a shop"
+      + " reaching them sells. When few fit, `nearest` names the wants each misses.",
   },
   {
     name: "shopping_product_get",
