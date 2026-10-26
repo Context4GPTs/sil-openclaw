@@ -282,12 +282,85 @@
   "shopping_search": {
     "response": {
       "status": "ok",
+      "products": [
+        {
+          "id": "01a17757-3af6-736f-8bd1-41f3757ac2bc",
+          "title": "Gaggia MD15",
+          "brand": "Gaggia",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "images": [],
+          "fit": {
+            "depth": 225
+          },
+          "starting_from": {
+            "value": 119,
+            "currency": "EUR"
+          },
+          "store_stock": 1
+        }
+      ],
+      "nearest": [
+        {
+          "id": "01a1775c-d8d1-714d-b234-7e3c69c442ac",
+          "title": "Turin Grinders SK40",
+          "brand": "Turin Grinders",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "images": [],
+          "fit": {
+            "depth": 171.45
+          },
+          "starting_from": {
+            "value": 199,
+            "currency": "USD"
+          },
+          "store_stock": 0,
+          "misses": {
+            "ships": false
+          }
+        },
+        {
+          "id": "01a1774e-625f-778b-8e58-86d30f5878d2",
+          "title": "Varia VS4",
+          "brand": "Varia",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "images": [],
+          "fit": {
+            "depth": 161.4
+          },
+          "store_stock": 0,
+          "misses": {
+            "ships": false
+          }
+        },
+        {
+          "id": "01a1774e-6f44-7965-8732-ec65bc11d099",
+          "title": "Turin DF83 Gen 2",
+          "brand": "Turin",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "images": [],
+          "fit": {
+            "depth": 228.6
+          },
+          "starting_from": {
+            "value": 499,
+            "currency": "USD"
+          },
+          "store_stock": 0,
+          "misses": {
+            "ships": false
+          }
+        }
+      ]
+    },
+    "alternate": {
+      "status": "ok",
       "products": [],
       "nearest": [
         {
           "id": "01a17757-3af6-736f-8bd1-41f3757ac2bc",
           "title": "Gaggia MD15",
           "brand": "Gaggia",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
           "images": [],
           "fit": {},
           "starting_from": {
@@ -301,18 +374,63 @@
               "currency": "EUR"
             }
           }
+        },
+        {
+          "id": "01a17743-60dd-7f02-b873-30667542389b",
+          "title": "HiBREW G5",
+          "brand": "HiBREW",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "images": [],
+          "fit": {},
+          "starting_from": {
+            "value": 186,
+            "currency": "EUR"
+          },
+          "store_stock": 1,
+          "misses": {
+            "price": {
+              "value": 186,
+              "currency": "EUR"
+            }
+          }
+        },
+        {
+          "id": "01a17763-0729-76e2-9903-1d1565655573",
+          "title": "Markibar ORHI",
+          "brand": "Markibar",
+          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
+          "images": [],
+          "fit": {},
+          "starting_from": {
+            "value": 1450.8,
+            "currency": "EUR"
+          },
+          "store_stock": 1,
+          "misses": {
+            "price": {
+              "value": 1450.8,
+              "currency": "EUR"
+            }
+          }
         }
       ]
     },
     "request": {
       "domain": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
+      "specs": [
+        {
+          "key": "depth",
+          "op": "lte",
+          "value": 250
+        }
+      ],
       "price": {
         "max": {
-          "value": 100,
+          "value": 130,
           "currency": "EUR"
         }
       },
-      "n": 3
+      "n": 2
     }
   },
   "shopping_product_get": {
