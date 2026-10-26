@@ -107,7 +107,9 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/offers",
     label: "Where to buy the picked variants",
     recovery: { not_found: "shopping_brief_read" },
-    description: "Where to buy the picked variants: every offer, each with its shop.",
+    description:
+      "Where to buy the picked variants: every offer, each with its shop and whether it ships to"
+      + " the buyer. Delivery, returns and warranty come only from `shopping_seller_get`.",
   },
   {
     name: "shopping_seller_get",
@@ -115,7 +117,8 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/sellers",
     label: "Read the shops' terms",
     description:
-      "The terms of the shops the offers named: delivery, returns, warranty and promotions.",
+      "The terms of the shops the offers named: delivery, returns, warranty and promotions. Quote a"
+      + " promotion and ask whether they qualify; a reduced price only on their yes.",
   },
 ] as const satisfies readonly ShoppingTool[];
 
