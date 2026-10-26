@@ -439,7 +439,7 @@ function callerHeaders(caller: Caller, attempt: 1 | 2): Record<string, string> {
  * Both halves are encoded, never concatenated: a dotted registry path is one PATH
  * SEGMENT (a stray `/` in it would re-route the call), and an unencoded query value
  * could inject a second parameter. Only the keys the agent actually sent travel — an
- * empty `q=` is a DIFFERENT request from an omitted `q`, and each gets its own refusal
+ * empty `query=` is a DIFFERENT request from an omitted `query`, and each gets its own refusal
  * message, which is the agent's whole recourse.
  */
 function routePath(
@@ -460,7 +460,7 @@ function routePath(
   const query = new URLSearchParams();
   for (const key of route.query ?? []) {
     const value = args[key];
-    if (typeof value === "string") query.set(key, value);
+    if (typeof value === "string" || typeof value === "number") query.set(key, String(value));
     else if (Array.isArray(value)) {
       for (const item of value) if (typeof item === "string") query.append(key, item);
     }

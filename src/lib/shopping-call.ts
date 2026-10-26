@@ -4,7 +4,7 @@
  * second copy is what `cross-tool-401-parity` forbids. The caller owns only the `ok` body.
  */
 
-import type { PluginAPI, ToolResult } from "openclaw/plugin-sdk/plugin-entry";
+import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 
 import { getApiUrl } from "./config.js";
 import { clearTokens, readTokens } from "./credentials.js";
@@ -15,14 +15,13 @@ import {
   type ShoppingOutcome,
   type ShoppingRoute,
 } from "./sil-client.js";
-import { jsonResult } from "./tool-result.js";
 
 /** The guide read, as one route constant: two spellings of one path is a route nobody
  * owns. */
 export const DOMAIN_GET_ROUTE = {
   method: "GET",
   path: "/catalog/domains/:path",
-  query: ["keys", "after"],
+  query: ["query", "spec_keywords", "page"],
 } as const;
 
 /**
@@ -49,13 +48,18 @@ export type RefusalStatus =
   | "forbidden"
   | "retryable";
 
-/** The API's own 200 body, or the refusal to hand the agent as it stands. */
+export interface RefusalBody extends Record<string, unknown> {
+  status: RefusalStatus;
+  message: string;
+}
+
+/** The API's own 200 body, or the refusal to hand over as it stands. */
 export type CallResult =
   | { kind: "ok"; body: Record<string, unknown> }
-  | { kind: "refused"; status: RefusalStatus; result: ToolResult };
+  | { kind: "refused"; body: RefusalBody };
 
-function refused(status: RefusalStatus, result: ToolResult): CallResult {
-  return { kind: "refused", status, result };
+function refused(body: RefusalBody): CallResult {
+  return { kind: "refused", body };
 }
 
 /**
@@ -70,7 +74,7 @@ export async function callRoute(
   caller: Caller,
 ): Promise<CallResult> {
   const stored = readTokens();
-  if (stored === null) return refused("not_registered", notRegistered(call.name));
+  if (stored === null) return refused(notRegistered(call.name));
 
   const first = await callShopping(getApiUrl(), stored.access_token, call, args, caller, 1);
   const recovered = await refreshAndRetryOnce(
@@ -85,14 +89,14 @@ export async function callRoute(
     case "must_reregister":
       if (recovered.reason === "invalid_grant") clearTokens();
       api.logger.info(`${call.name}_must_reregister`, { cause: recovered.reason });
-      return refused("must_reregister", mustReregister(call.name));
+      return refused(mustReregister(call.name));
     case "second_unauthorized":
       clearTokens();
       api.logger.info(`${call.name}_must_reregister`, { cause: "retry_unauthorized" });
-      return refused("must_reregister", mustReregister(call.name));
+      return refused(mustReregister(call.name));
     case "retryable":
       api.logger.info(`${call.name}_refresh_retryable`, {});
-      return refused("retryable", transient(call.name));
+      return refused(transient(call.name));
   }
 }
 
@@ -102,31 +106,31 @@ function mapOutcome(api: PluginAPI, call: ShoppingCall, outcome: ShoppingOutcome
       return { kind: "ok", body: outcome.body };
     case "invalid_request":
       api.logger.info(`${call.name}_invalid_request`, {});
-      return refused("invalid_request", refusal("invalid_request", outcome.message));
+      return refused(refusal("invalid_request", outcome.message));
     case "not_found":
       api.logger.info(`${call.name}_not_found`, {});
-      return refused("not_found", refusal("not_found", outcome.message, call.recovery?.not_found));
+      return refused(refusal("not_found", outcome.message, call.recovery?.not_found));
     case "forbidden":
-      return refused("forbidden", forbiddenResult(api, call.name, outcome.reason));
+      return refused(forbiddenResult(api, call.name, outcome.reason));
     case "retryable":
       api.logger.info(`${call.name}_retryable`, outcome.source ? { source: outcome.source } : {});
-      return refused("retryable", transient(call.name, outcome.source, outcome.detail));
+      return refused(transient(call.name, outcome.source, outcome.detail));
     case "unauthorized":
       // Structurally unreachable past the 401 choreography, kept exhaustive so a
       // refactor cannot silently drop a variant.
-      return refused("must_reregister", mustReregister(call.name));
+      return refused(mustReregister(call.name));
   }
 }
 
 /** Not registered: a distinct, actionable outcome naming the recovery tool, with
  * no results field the agent could mistake for an empty answer. */
-function notRegistered(tool: string): ToolResult {
-  return jsonResult({
+function notRegistered(tool: string): RefusalBody {
+  return {
     status: "not_registered",
     message:
       `Not registered on sil. Run sil_register to authenticate, then call ${tool} again.`,
     recovery: "sil_register",
-  });
+  };
 }
 
 /**
@@ -140,23 +144,19 @@ function refusal(
   status: "invalid_request" | "not_found",
   message: string,
   recovery?: string,
-): ToolResult {
-  return jsonResult({
-    status,
-    message,
-    ...(recovery !== undefined ? { recovery } : {}),
-  });
+): RefusalBody {
+  return { status, message, ...(recovery !== undefined ? { recovery } : {}) };
 }
 
 /** Terminal: the session is dead — reached only after the shared refresh-and-retry
  * choreography has exhausted its one refresh + one retry. */
-function mustReregister(tool: string): ToolResult {
-  return jsonResult({
+function mustReregister(tool: string): RefusalBody {
+  return {
     status: "must_reregister",
     message:
       `Your sil session has expired. Run sil_register to sign in again, then call ${tool} again.`,
     recovery: "sil_register",
-  });
+  };
 }
 
 /**
@@ -169,7 +169,7 @@ function mustReregister(tool: string): ToolResult {
  * `principal_mismatch` can be transient and MUST NOT clear — the exact-equality gate is
  * the correctness boundary here, and a truthy or prefix check would wipe a good session.
  */
-function forbiddenResult(api: PluginAPI, tool: string, reason: string): ToolResult {
+function forbiddenResult(api: PluginAPI, tool: string, reason: string): RefusalBody {
   api.logger.warn(`${tool}_forbidden`, { reason });
   if (reason === "user_not_provisioned") clearTokens();
   const message =
@@ -178,7 +178,7 @@ function forbiddenResult(api: PluginAPI, tool: string, reason: string): ToolResu
         + " sil_register) and try again."
       : "sil rejected this request (" + reason + "). Run sil_register to"
         + " re-establish your session, then try again.";
-  return jsonResult({ status: "forbidden", reason, message, recovery: "sil_register" });
+  return { status: "forbidden", reason, message, recovery: "sil_register" };
 }
 
 /**
@@ -190,18 +190,18 @@ function forbiddenResult(api: PluginAPI, tool: string, reason: string): ToolResu
  * the copy must never say "sil is unavailable". `detail` (the upstream cause) is
  * relayed as its own field rather than folded into our sentence.
  */
-export function transient(tool: string, source?: string, detail?: string): ToolResult {
+function transient(tool: string, source?: string, detail?: string): RefusalBody {
   if (source === undefined) {
-    return jsonResult({
+    return {
       status: "retryable",
       message: `sil is temporarily unavailable. Please try ${tool} again.`,
-    });
+    };
   }
-  return jsonResult({
+  return {
     status: "retryable",
     message:
       `The catalog source "${source}" is temporarily unavailable.`
       + ` sil itself is fine — retry ${tool} shortly.`,
     ...(detail !== undefined ? { detail } : {}),
-  });
+  };
 }
