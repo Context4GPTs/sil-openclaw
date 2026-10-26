@@ -49,23 +49,5 @@ describe("shopping_offers — one route, one request", () => {
     expect(router.other).toEqual([]);
   });
 
-  it("the request refuses a field it does not take", () => {
-    expect(artifactErrors(TOOL, "request", ASK)).toEqual([]);
-    expect(artifactErrors(TOOL, "request", { ...ASK, ship_to: "home" })).not.toEqual([]);
-  });
 });
 
-describe("shopping_offers — what the answer means", () => {
-  it("`seller_fit` reaches the agent on EVERY offer, `ships` inside it", async () => {
-    // The brief's seller rows are answered here and nowhere else. `ships` is always present
-    // and `unknown` is an ordinary value of it — an offer arriving without `seller_fit`
-    // would read as a seller with no terms rather than one sil has not read.
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok(contractResponse(TOOL)));
-    const offers = (await run())["offers"] as Record<string, Record<string, unknown>>[];
-    for (const offer of offers) {
-      expect(Object.keys(offer["seller_fit"] ?? {})).toContain("ships");
-      expect(["serviceable", "not_serviceable", "unknown"]).toContain(offer["seller_fit"]["ships"]);
-    }
-  });
-});

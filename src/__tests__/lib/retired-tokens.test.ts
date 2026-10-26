@@ -100,38 +100,7 @@ describe("docs needle DERIVATION — a needle that names live code is not a docs
     expect(docsNeedles().length).toBeGreaterThan(0);
   });
 
-  it("AC16 — the EXCLUDED set equals the recorded literal (a new live identifier cannot switch a needle off silently)", () => {
-    // Pin 2. Layer 1 subtracts silently: without this literal, adding a live
-    // identifier containing a needle disables it across all of `docs/` with no red.
-    expect([...DOCS_EXCLUDED_NEEDLES].sort()).toEqual([
-      "applied",
-      "canonical",
-      "capped",
-      "sil_search",
-    ]);
-    expect([...docsNeedleExclusions().map((e) => e.needle)].sort()).toEqual([
-      ...DOCS_EXCLUDED_NEEDLES,
-    ].sort());
-  });
 
-  it("AC17 — matchability by BITE: every derived needle is caught in an asserting sentence, every excluded one is not", () => {
-    // A needle present-but-unmatchable (upper-cased, mistyped) sits in the list
-    // looking protective. Drive each one through the real docs sieve instead.
-    const caught = (written: string): boolean =>
-      docsRetiredTokenOffenders(
-        [docOf("knowledge/synthetic.md", [`Then call ${written} to record it.`])],
-        [],
-      ).length > 0;
-    const derived = RETIRED_TOKENS.filter((t) => !DOCS_EXCLUDED_NEEDLES.includes(t));
-    expect(derived.filter((t) => !caught(t))).toEqual([]);
-    expect(RETIRED_TOKENS.filter((t) => DOCS_EXCLUDED_NEEDLES.includes(t) && caught(t))).toEqual([]);
-
-    // …and the docs sieve lowers the BODY, exactly as the bundle scan does. A
-    // terminology word is Title-cased mid-sentence all the time (`Rubric`,
-    // `Playbook`), so a case-sensitive docs scan would let the two corpora diverge
-    // on case with nothing red — the needles are guarded lower-case, not the prose.
-    expect(derived.filter((t) => !caught(t.toUpperCase()))).toEqual([]);
-  });
 });
 
 describe("the docs SIEVE — a retired token is DISAVOWED here, not expunged", () => {

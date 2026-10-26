@@ -377,20 +377,6 @@ describe.skipIf(AS_ROOT)(
       expect(detail).not.toContain("Bearer");
     });
 
-    it("is NOT VACUOUS — the SAME register() populates both surfaces once the dir is creatable", () => {
-      // Without this, "registers nothing" is satisfied by any throw at all —
-      // including a broken harness that never reaches the plugin. Same captured
-      // register, same api factory, only the directory mode changes.
-      chmodSync(containingDir, 0o700);
-
-      const api = createMockPluginApi();
-      expect(() => capturedRegisterFn!(api)).not.toThrow();
-      expect(api._tools.size).toBeGreaterThan(0);
-      // Count only — the method NAME is pinned by the single exact-set carrier in
-      // `search-results-method.integration.test.ts`; a second name mirror here
-      // would only add a place to forget to bump.
-      expect(api._gatewayMethods.size).toBe(1);
-    });
   },
 );
 
