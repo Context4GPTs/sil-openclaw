@@ -109,8 +109,9 @@ export const SHOPPING_TOOLS = [
     label: "Where to buy the picked variants",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Where to buy the picked variants: every offer, each with its shop and whether it ships to"
-      + " the buyer. Delivery, returns and warranty come only from `shopping_seller_get`.",
+      "Where to buy: send variant ids from `shopping_product_get`, never product ids. Every offer,"
+      + " each with its shop and whether it ships to the buyer; delivery, returns and warranty come"
+      + " only from `shopping_seller_get`.",
   },
   {
     name: "shopping_seller_get",
