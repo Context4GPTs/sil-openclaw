@@ -40,7 +40,8 @@
           "description": "Says the country every `ships` is relative to."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Says where delivery was priced to: every `ships` is relative to it."
     },
     "offers": {
       "type": "array",

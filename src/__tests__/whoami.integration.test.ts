@@ -77,7 +77,7 @@ const SIL_API = "https://sil-api.test.example.com"; // identity-read origin
 const REAL_IDENTITY = {
   name: "Ada Lovelace",
   country: "GB",
-  address: { label: "Home", locality: "London", country: "GB" },
+  addresses: [{ label: "Home", locality: "London", country: "GB", default: true }],
 };
 
 /** The agreed real-read response: identity in a UCP envelope's `result`. */
@@ -289,7 +289,7 @@ describe("sil_whoami — happy path (valid access token)", () => {
       status: "ok",
       name: "Ada Lovelace",
       country: "GB",
-      address: { label: "Home", locality: "London", country: "GB" },
+      addresses: [{ label: "Home", locality: "London", country: "GB", default: true }],
     });
   });
 

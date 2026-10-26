@@ -70,7 +70,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Names the address; send it as `ship_to` to price delivery there."
+            "description": "Names the address; send it, or the town where it has none, as `ship_to`."
           },
           "locality": {
             "type": "string",

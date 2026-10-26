@@ -7,11 +7,20 @@
       "currency": "EUR",
       "gender": "female",
       "language": "el",
-      "address": {
-        "label": "Home",
-        "locality": "Athens",
-        "country": "GR"
-      }
+      "addresses": [
+        {
+          "label": "Home",
+          "locality": "Athens",
+          "country": "GR",
+          "default": true
+        },
+        {
+          "label": "Office",
+          "locality": "Piraeus",
+          "country": "GR",
+          "default": false
+        }
+      ]
     }
   },
   "shopping_user_read": {
@@ -296,10 +305,9 @@
             "value": 119,
             "currency": "EUR"
           },
-          "store_stock": 1
-        }
-      ],
-      "nearest": [
+          "store_stock": 1,
+          "misses": {}
+        },
         {
           "id": "01a1775c-d8d1-714d-b234-7e3c69c442ac",
           "title": "Turin Grinders SK40",
@@ -313,49 +321,14 @@
             "value": 199,
             "currency": "USD"
           },
-          "store_stock": 0,
-          "misses": {
-            "ships": false
-          }
-        },
-        {
-          "id": "01a1774e-625f-778b-8e58-86d30f5878d2",
-          "title": "Varia VS4",
-          "brand": "Varia",
-          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "images": [],
-          "fit": {
-            "depth": 161.4
-          },
-          "store_stock": 0,
-          "misses": {
-            "ships": false
-          }
-        },
-        {
-          "id": "01a1774e-6f44-7965-8732-ec65bc11d099",
-          "title": "Turin DF83 Gen 2",
-          "brand": "Turin",
-          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "images": [],
-          "fit": {
-            "depth": 228.6
-          },
-          "starting_from": {
-            "value": 499,
-            "currency": "USD"
-          },
-          "store_stock": 0,
-          "misses": {
-            "ships": false
-          }
+          "store_stock": 1,
+          "misses": {}
         }
       ]
     },
     "alternate": {
       "status": "ok",
-      "products": [],
-      "nearest": [
+      "products": [
         {
           "id": "01a17757-3af6-736f-8bd1-41f3757ac2bc",
           "title": "Gaggia MD15",
@@ -371,44 +344,6 @@
           "misses": {
             "price": {
               "value": 119,
-              "currency": "EUR"
-            }
-          }
-        },
-        {
-          "id": "01a17743-60dd-7f02-b873-30667542389b",
-          "title": "HiBREW G5",
-          "brand": "HiBREW",
-          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "images": [],
-          "fit": {},
-          "starting_from": {
-            "value": 186,
-            "currency": "EUR"
-          },
-          "store_stock": 1,
-          "misses": {
-            "price": {
-              "value": 186,
-              "currency": "EUR"
-            }
-          }
-        },
-        {
-          "id": "01a17763-0729-76e2-9903-1d1565655573",
-          "title": "Markibar ORHI",
-          "brand": "Markibar",
-          "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "images": [],
-          "fit": {},
-          "starting_from": {
-            "value": 1450.8,
-            "currency": "EUR"
-          },
-          "store_stock": 1,
-          "misses": {
-            "price": {
-              "value": 1450.8,
               "currency": "EUR"
             }
           }
@@ -522,6 +457,10 @@
   "shopping_offers": {
     "response": {
       "status": "ok",
+      "ship_to": {
+        "locality": "Athens",
+        "country": "GR"
+      },
       "offers": [
         {
           "variant_id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
@@ -550,6 +489,10 @@
   "shopping_seller_get": {
     "response": {
       "status": "ok",
+      "ship_to": {
+        "locality": "Athens",
+        "country": "GR"
+      },
       "sellers": [
         {
           "id": "01a17737-7b50-72d5-83c3-06f39cefd20d",
