@@ -40,7 +40,8 @@ export const SHOPPING_TOOLS = [
       + " cap for this kind of thing, a measurement) in the turn you learn it, before any"
       + " search, and say so with the undo. This is the only place the buyer is kept: \"remember"
       + " this\" means this call, not a note or memory file. A one-off wish for this buy rides on"
-      + " its calls instead. A price is `value` with `unit` its currency; money is in the minor"
+      + " its calls instead. Each row's `place` is the `name` of the kind you are shopping, from"
+      + " the domain read. A price is `value` with `unit` its currency; money is in the minor"
       + " unit: €130 is 13000.",
   },
   {
