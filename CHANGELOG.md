@@ -12,11 +12,13 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
-- **The buyer contract of iteration 32.** `shopping_domain_search` sends `query`;
-  `shopping_domain_get` sends the ask (`query`), the `spec_keywords` sought and `page`, and
-  answers the search grammar alone; `shopping_search` answers cards with a starting price;
-  `shopping_offers` takes variant `ids` only. Every tool description is one line on its place
-  in the journey, and the skill is rewritten to the journey.
+- **The Ask-to-Offer Journey contract.** Money is `{ amount, currency }` in integer minor units
+  (€130 is 13000), a range `{ min?, max?, currency }`; spec rows are `spec`, not `key`, and
+  the search's `price` is the range. `shopping_domain_get` answers `name`, `reached` and
+  `decides`/`why` on deciding specs. `shopping_search` answers `asked` numbered,
+  `search_stats`, `holds`/`misses`/`unknown` as ask numbers in place of `fit`, up to five
+  `images` and `variants` with one `recommended`. `shopping_offers` and `shopping_seller_get`
+  take `page` and answer `next_page`. Descriptions and the skill are re-cut to the journey.
 - **`sil.answer` and `sil.call` replace `sil.search_results`.** A paired screen reads back any
   sil answer the agent got (15 minutes, the last 64), and runs a read, or a forget of the rows it names, as the buyer.
 - **Fifteen tools on sil's signed contract.** `shopping_brief_create`, `shopping_brief_edit` and

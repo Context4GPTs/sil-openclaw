@@ -55,8 +55,8 @@ export const SHOPPING_TOOLS = [
     recovery: { not_found: "shopping_brief_read" },
     description:
       "Write down a buy that spans asks or conversations; no other call needs one. Spec rows"
-      + " are `{ spec, op, value }`, a price the range `{ min?, max?, currency }`; money is in"
-      + " the minor unit: €130 is 13000.",
+      + " are `{ spec, op, value }`, a money row `{ spec: \"price\", range: { min?, max?, currency"
+      + " } }`; money is in the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_brief_read",

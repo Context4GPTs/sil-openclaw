@@ -6,10 +6,9 @@
  * `per-niche-expert.ts`: one module means the allowance can never drift between
  * the two surfaces that carry the same rule.
  *
- * WHAT IT PROTECTS. The wire answers with honesty fields — `ships: unknown`, a `fit` key
- * answered `"unknown"`, a variant with no option values, the `printed` pairs of a page
- * sil read cold, a `webpage_info` block on the dossier, a price in a currency the bound
- * could not be tested against. Every one of them is an ORDINARY answer that KEEPS its
+ * WHAT IT PROTECTS. The wire answers with honesty fields — `ships: unknown`, an ask number
+ * in a card's `unknown`, a variant with no option values, a `webpage_info` block on the
+ * dossier, a price in a currency the bound could not be tested against. Every one of them is an ORDINARY answer that KEEPS its
  * subject. The agent learns what to do with them almost entirely from the tool
  * descriptions, and prose is the only carrier of the rule — so prose is what is guarded.
  *
@@ -158,8 +157,8 @@ export function honestyExclusionOffenders(body: string): string[] {
 /**
  * Claims a route cannot honour. Each names a state the wire can genuinely be in: a price
  * range on a card is dated by nothing and is not "the current price"; a seller whose
- * `ships` is `unknown` does not "ship to you"; a product whose `fit` is silent on a key
- * does not "match your requirements"; a shortlist bounded by `n` is not "everything
+ * `ships` is `unknown` does not "ship to you"; a product with an ask in its `unknown` does
+ * not "match your requirements"; a shortlist bounded by `n` is not "everything
  * available".
  *
  * Same sentence scope and same negation allowance — prose must be able to
