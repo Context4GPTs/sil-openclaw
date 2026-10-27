@@ -27,7 +27,8 @@ export const SHOPPING_TOOLS = [
     description:
       "Know the buyer: everything kept about them is here, never in your own memory files."
       + " Read once per conversation before asking anything, when they ask what you keep, and"
-      + " before a forget.",
+      + " before a forget. A price row is `value` with `unit` its currency; money is in the minor"
+      + " unit: €130 is 13000.",
   },
   {
     name: "shopping_user_remember",
@@ -36,7 +37,8 @@ export const SHOPPING_TOOLS = [
     label: "Keep what lasts about the buyer",
     description:
       "Keep what will matter next time about the buyer, the turn you learn it: the only place the"
-      + " buyer is kept. \"Remember this\" means this call, never a note or memory file.",
+      + " buyer is kept. \"Remember this\" means this call, never a note or memory file. A price is"
+      + " `value` with `unit` its currency; money is in the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_user_forget",
@@ -51,14 +53,17 @@ export const SHOPPING_TOOLS = [
     path: "/briefs/write",
     label: "Open or update a brief",
     recovery: { not_found: "shopping_brief_read" },
-    description: "Write down a buy that spans asks or conversations; no other call needs one.",
+    description:
+      "Write down a buy that spans asks or conversations; no other call needs one. Spec rows"
+      + " are `{ spec, op, value }`, a price the range `{ min?, max?, currency }`; money is in"
+      + " the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_brief_read",
     method: "POST",
     path: "/briefs/read",
     label: "Read a brief, or list the buyer's briefs",
-    description: "Pick a written-down buy up again.",
+    description: "Pick a written-down buy up again; money is in the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_domain_search",
@@ -74,8 +79,11 @@ export const SHOPPING_TOOLS = [
     label: "Read how to search a place",
     recovery: { not_found: "shopping_domain_search" },
     description:
-      "Learn how to search a leaf: send the buyer's ask and the specs you are after, and get"
-      + " the keys a search takes, those first.",
+      "Learn what decides a leaf and how to search it: send the buyer's ask in English and a word"
+      + " for each spec you are after. Back come the place's `name` and one line per spec (`spec`,"
+      + " `type`, `unit`, `values`, `operators`), the first `reached` answering your words; a spec"
+      + " marked `decides` carries its `why`, to teach and ask from. Send `page` = `next_page` only"
+      + " for a spec you need that is not there yet.",
   },
   {
     name: "shopping_content",
@@ -83,7 +91,9 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/content",
     label: "Read what sil holds about it",
     recovery: { not_found: "shopping_domain_search" },
-    description: "Teach before you ask: the passages sil holds that bear on what the buyer said.",
+    description:
+      "Teach before you ask: the passages sil holds that bear on what the buyer said. A"
+      + " question's why comes from here or from a spec's `why`, never invented.",
   },
   {
     name: "shopping_search",
@@ -92,15 +102,23 @@ export const SHOPPING_TOOLS = [
     label: "Search sil's products",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Search once on what is settled, each spec a want the buyer said or sil keeps: the products"
-      + " closest to the wants, those that fit first, each card's `misses` naming the wants it misses.",
+      "Search once on what is settled: `specs` `{ spec, op, value }` from the domain read, each a"
+      + " want the buyer said or sil keeps, and `price` the range `{ min?, max?, currency }`; money"
+      + " is in the minor unit: €130 is 13000."
+      + " Back come `asked`, the ask numbered; `search_stats`, the products and shops weighed and"
+      + " those holding every ask, to explain the shortlist; and the closest cards, each with"
+      + " `holds`, `misses` and `unknown` as ask numbers, `price_range` and its `variants`, one"
+      + " `recommended`.",
   },
   {
     name: "shopping_product_get",
     method: "POST",
     path: "/catalog/product",
     label: "Read shortlisted products whole",
-    description: "Read the products the buyer leans to whole, and pick the variants to buy there.",
+    description:
+      "Read the products the buyer leans to whole: values once, reviews, every picture, and each"
+      + " variant with what sets it apart and its `starting_from`. Pick the variants to buy here;"
+      + " money is in the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_offers",
@@ -110,8 +128,11 @@ export const SHOPPING_TOOLS = [
     recovery: { not_found: "shopping_brief_read" },
     description:
       "Where to buy: variant ids from `shopping_product_get`, never product ids, and `ship_to`, one"
-      + " of the buyer's addresses by name (the default when absent). Every offer, each with its"
-      + " shop, whether it ships there and its stock; delivery and returns come from `shopping_seller_get`.",
+      + " of the buyer's addresses by name (the default when absent). Every offer, shops shipping"
+      + " there first, each with its shop, whether it `ships`, `price`, `was`, `pack` or `plan`,"
+      + " and its stock; nothing marks a best. Money is in the minor unit: €130 is 13000. Send"
+      + " `page` = `next_page` only when a shop the buyer needs may be past it. Delivery and"
+      + " returns come from `shopping_seller_get`.",
   },
   {
     name: "shopping_seller_get",
@@ -120,8 +141,10 @@ export const SHOPPING_TOOLS = [
     label: "Read the shops' terms",
     description:
       "The terms of the shops the offers named, delivered to `ship_to` (the default address when"
-      + " absent): delivery, returns, warranty and promotions. Quote a promotion and ask whether"
-      + " they qualify; a reduced price only from its `discount`, on their yes.",
+      + " absent): delivery cost, `free_over` and days, returns, warranty and promotions; money is"
+      + " in the minor unit: €130 is 13000."
+      + " Quote a promotion and ask whether they qualify; a reduced price only from its `discount`,"
+      + " on their yes. Send `page` = `next_page` only when a shop the buyer needs may be past it.",
   },
 ] as const satisfies readonly ShoppingTool[];
 
