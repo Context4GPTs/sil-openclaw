@@ -109,11 +109,13 @@
                       "min": {
                         "type": "integer",
                         "minimum": 0,
+                        "maximum": 9007199254740991,
                         "description": "The low end, in the minor unit."
                       },
                       "max": {
                         "type": "integer",
                         "minimum": 0,
+                        "maximum": 9007199254740991,
                         "description": "The high end, in the minor unit."
                       },
                       "currency": {
@@ -255,11 +257,13 @@
                       "min": {
                         "type": "integer",
                         "minimum": 0,
+                        "maximum": 9007199254740991,
                         "description": "The low end, in the minor unit."
                       },
                       "max": {
                         "type": "integer",
                         "minimum": 0,
+                        "maximum": 9007199254740991,
                         "description": "The high end, in the minor unit."
                       },
                       "currency": {

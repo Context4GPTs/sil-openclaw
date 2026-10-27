@@ -127,6 +127,7 @@
               "amount": {
                 "type": "integer",
                 "minimum": 0,
+                "maximum": 9007199254740991,
                 "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
               },
               "currency": {
@@ -150,6 +151,7 @@
               "amount": {
                 "type": "integer",
                 "minimum": 0,
+                "maximum": 9007199254740991,
                 "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
               },
               "currency": {
