@@ -6,6 +6,8 @@
   "required": [
     "status",
     "path",
+    "name",
+    "reached",
     "specs"
   ],
   "properties": {
@@ -18,21 +20,31 @@
       "type": "string",
       "description": "Sends it verbatim as `shopping_search.domain`."
     },
+    "name": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Calls the place this."
+    },
+    "reached": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Says how many of the first specs answer the buyer’s words; the rest follow by how many products hold them."
+    },
     "specs": {
       "type": "array",
       "items": {
         "type": "object",
         "required": [
-          "key",
+          "spec",
           "type",
           "operators"
         ],
         "properties": {
-          "key": {
+          "spec": {
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Sends it unchanged as `shopping_search.specs[].key`: a part’s by its path (`burrSet.burrMaterial`), the box by `with`."
+            "description": "Sends it unchanged as `shopping_search.specs[].spec`: a part’s by its path (`burrSet.burrMaterial`), the box by `with`."
           },
           "type": {
             "anyOf": [
@@ -97,16 +109,26 @@
             },
             "minItems": 1,
             "description": "Sends one of these as the spec’s `op`."
+          },
+          "decides": {
+            "type": "boolean",
+            "const": true,
+            "description": "Decides this kind of buy: ask the buyer for it where sil holds no answer."
+          },
+          "why": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Says what a deciding spec decides, in the graph’s words: teach and ask from it."
           }
         },
         "additionalProperties": false
       },
-      "description": "Lists the keys a search here takes: those `spec_keywords` and `query` reach first, then those most products hold a value for; a key of the thing no product holds only where they reach it, a part’s never."
+      "description": "Lists the specs a search here takes: those `spec_keywords` and `query` reach first, then those most products hold a value for; a spec of the thing no product holds only where they reach it, a part’s never."
     },
     "next_page": {
       "type": "integer",
       "minimum": 2,
-      "description": "Sends it as `page` to read the keys on; absent on the last page."
+      "description": "Sends it as `page` to read the specs on; absent on the last page."
     }
   },
   "additionalProperties": false

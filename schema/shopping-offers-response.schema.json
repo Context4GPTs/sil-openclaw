@@ -120,21 +120,21 @@
           "price": {
             "type": "object",
             "required": [
-              "value",
+              "amount",
               "currency"
             ],
             "properties": {
-              "value": {
-                "type": "number",
+              "amount": {
+                "type": "integer",
                 "minimum": 0,
-                "description": "Quotes the amount."
+                "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
               },
               "currency": {
                 "type": "string",
                 "pattern": "^[A-Z]{3}$",
                 "minLength": 3,
                 "maxLength": 3,
-                "description": "Quotes it in this currency."
+                "description": "In this currency."
               }
             },
             "additionalProperties": false,
@@ -143,21 +143,21 @@
           "was": {
             "type": "object",
             "required": [
-              "value",
+              "amount",
               "currency"
             ],
             "properties": {
-              "value": {
-                "type": "number",
+              "amount": {
+                "type": "integer",
                 "minimum": 0,
-                "description": "Quotes the amount."
+                "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
               },
               "currency": {
                 "type": "string",
                 "pattern": "^[A-Z]{3}$",
                 "minLength": 3,
                 "maxLength": 3,
-                "description": "Quotes it in this currency."
+                "description": "In this currency."
               }
             },
             "additionalProperties": false,
@@ -262,6 +262,11 @@
         "description": "One shop’s offer of a variant."
       },
       "description": "Lists where each variant can be bought: shops shipping to `ship_to` first, cheapest first."
+    },
+    "next_page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Sends it as `page` to read the offers on; absent on the last page."
     }
   },
   "additionalProperties": false

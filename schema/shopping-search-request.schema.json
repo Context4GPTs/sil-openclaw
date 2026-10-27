@@ -18,16 +18,16 @@
       "items": {
         "type": "object",
         "required": [
-          "key",
+          "spec",
           "op",
           "value"
         ],
         "properties": {
-          "key": {
+          "spec": {
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Sends a key the domain read listed, unchanged: a part’s by its path (`boiler.boilerVolume`)."
+            "description": "Sends a spec the domain read listed, unchanged: a part’s by its path (`boiler.boilerVolume`)."
           },
           "op": {
             "anyOf": [
@@ -56,69 +56,43 @@
                 "const": "nin"
               }
             ],
-            "description": "Sends the operator the domain read listed for this key."
+            "description": "Sends the operator the domain read listed for this spec."
           },
           "value": {
-            "description": "Sends the desired value, typed by the key's type."
+            "description": "Sends the desired value, typed by the spec's type."
           }
         },
         "additionalProperties": false
       },
       "maxItems": 32,
-      "description": "Sends every settled want: a key from the domain read, one of its operators, a value in its unit or its set; on a kind, `leaf` in or nin its leaves."
+      "description": "Sends every settled want: a spec from the domain read, one of its operators, a value in its unit or its set; on a kind, `leaf` in or nin its leaves."
     },
     "price": {
       "type": "object",
+      "required": [
+        "currency"
+      ],
       "properties": {
         "min": {
-          "type": "object",
-          "required": [
-            "value",
-            "currency"
-          ],
-          "properties": {
-            "value": {
-              "type": "number",
-              "minimum": 0,
-              "description": "Quotes the amount."
-            },
-            "currency": {
-              "type": "string",
-              "pattern": "^[A-Z]{3}$",
-              "minLength": 3,
-              "maxLength": 3,
-              "description": "Quotes it in this currency."
-            }
-          },
-          "additionalProperties": false,
-          "description": "Keeps variants with an offer at or above it."
+          "type": "integer",
+          "minimum": 0,
+          "description": "The low end, in the minor unit."
         },
         "max": {
-          "type": "object",
-          "required": [
-            "value",
-            "currency"
-          ],
-          "properties": {
-            "value": {
-              "type": "number",
-              "minimum": 0,
-              "description": "Quotes the amount."
-            },
-            "currency": {
-              "type": "string",
-              "pattern": "^[A-Z]{3}$",
-              "minLength": 3,
-              "maxLength": 3,
-              "description": "Quotes it in this currency."
-            }
-          },
-          "additionalProperties": false,
-          "description": "Keeps variants with an offer at or under it."
+          "type": "integer",
+          "minimum": 0,
+          "description": "The high end, in the minor unit."
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "minLength": 3,
+          "maxLength": 3,
+          "description": "Both ends in this currency; sil converts nothing."
         }
       },
       "additionalProperties": false,
-      "description": "Tests each variant’s own offers in the money’s currency; sil converts nothing."
+      "description": "Keeps variants with an offer in this currency within one or both ends; sil converts nothing."
     },
     "query": {
       "type": "string",
@@ -138,5 +112,6 @@
       "description": "Ties the call to a brief in sil’s record; never required."
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Money is in the minor unit: €130 is 13000."
 }

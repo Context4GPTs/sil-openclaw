@@ -62,8 +62,13 @@
         },
         {
           "id": "01a17791-08b4-7c3e-8a52-61f0d2b7e902",
+          "kind": "measurement",
+          "gives_back": "anything for her counter is searched to 20 cm without asking"
+        },
+        {
+          "id": "01a17791-08b4-7c3e-8a52-61f0d2b7e903",
           "kind": "preference",
-          "gives_back": "grinders are searched under €130 without asking her budget again"
+          "gives_back": "grinders are searched under €100 without asking her budget again"
         }
       ]
     },
@@ -71,21 +76,29 @@
       "rows": [
         {
           "kind": "memory",
-          "text": "Brews one or two cups of V60 at 7am on weekdays while her partner sleeps. Her counter is tiny.",
+          "text": "Brews one or two cups of V60 at 7am while her partner sleeps. Her counter is tiny.",
           "place": "coffee",
           "source": "told",
           "gives_back": "next time she shops for coffee gear, the agent starts from how she brews and asks nothing about it"
         },
         {
+          "kind": "measurement",
+          "what": "counter depth",
+          "value": 20,
+          "unit": "cm",
+          "place": "kitchen",
+          "source": "told",
+          "gives_back": "anything for her counter is searched to 20 cm without asking"
+        },
+        {
           "kind": "preference",
           "subject": "price",
           "op": "lte",
-          "value": 130,
+          "value": 10000,
           "unit": "EUR",
           "place": "coffee grinders",
-          "reason": "about a hundred euros",
           "source": "told",
-          "gives_back": "grinders are searched under €130 without asking her budget again"
+          "gives_back": "grinders are searched under €100 without asking her budget again"
         }
       ]
     }
@@ -94,7 +107,7 @@
     "response": {
       "status": "ok",
       "removed": {
-        "measurement": 0,
+        "measurement": 1,
         "memory": 1,
         "preference": 1,
         "purchase": 2,
@@ -121,11 +134,18 @@
       "domain": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
       "specs": [
         {
-          "key": "price",
+          "spec": "depth",
           "op": "lte",
-          "value": "130",
-          "currency": "EUR",
-          "reason": "About €100"
+          "value": 200,
+          "reason": "Up to 20 cm"
+        },
+        {
+          "spec": "price",
+          "range": {
+            "max": 10000,
+            "currency": "EUR"
+          },
+          "reason": "Up to €100"
         }
       ]
     }
@@ -133,17 +153,31 @@
   "shopping_brief_read": {
     "response": {
       "status": "ok",
-      "briefs": [
-        {
-          "id": "01a17792-55aa-7d10-b3c4-0e9f8a7b6c51",
-          "title": "A grinder for the V60",
-          "status": "active",
-          "domains": [
-            "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders"
-          ],
-          "updated_at": "2026-10-26T09:04:00Z"
-        }
-      ]
+      "brief": {
+        "id": "01a17792-55aa-7d10-b3c4-0e9f8a7b6c51",
+        "title": "A grinder for the V60",
+        "status": "active",
+        "narrative": "Two cups at seven while her partner sleeps; a tiny counter; about a hundred euros. An even grind for pour-over decides before brand.",
+        "specs": {
+          "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders": [
+            {
+              "spec": "depth",
+              "op": "lte",
+              "value": 200,
+              "reason": "Up to 20 cm"
+            },
+            {
+              "spec": "price",
+              "range": {
+                "max": 10000,
+                "currency": "EUR"
+              },
+              "reason": "Up to €100"
+            }
+          ]
+        },
+        "decisions": []
+      }
     }
   },
   "shopping_domain_search": {
@@ -168,9 +202,33 @@
     "response": {
       "status": "ok",
       "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
+      "name": "Coffee grinders",
+      "reached": 3,
       "specs": [
         {
-          "key": "feed",
+          "spec": "noiseLevel",
+          "type": "number",
+          "unit": "dB",
+          "operators": [
+            "gte",
+            "lte"
+          ],
+          "decides": true,
+          "why": "Loudness while grinding; what a sleeping household hears."
+        },
+        {
+          "spec": "depth",
+          "type": "number",
+          "unit": "mm",
+          "operators": [
+            "gte",
+            "lte"
+          ],
+          "decides": true,
+          "why": "Front to back, as the maker states it: a counter or a shelf has a depth."
+        },
+        {
+          "spec": "feed",
           "type": "enum",
           "values": [
             "single dose",
@@ -181,37 +239,20 @@
             "in",
             "neq",
             "nin"
-          ]
+          ],
+          "decides": true,
+          "why": "Whether it is loaded dose by dose or from a standing hopper."
         },
         {
-          "key": "depth",
+          "spec": "grindSettingCount",
           "type": "number",
-          "unit": "mm",
           "operators": [
             "gte",
             "lte"
           ]
         },
         {
-          "key": "noiseLevel",
-          "type": "number",
-          "unit": "dB",
-          "operators": [
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "width",
-          "type": "number",
-          "unit": "mm",
-          "operators": [
-            "gte",
-            "lte"
-          ]
-        },
-        {
-          "key": "burrSet.burrMaterial",
+          "spec": "burrSet.burrMaterial",
           "type": "enum",
           "values": [
             "hardened special steel",
@@ -228,22 +269,7 @@
           ]
         },
         {
-          "key": "grindAdjustment",
-          "type": "enum",
-          "values": [
-            "stepless",
-            "stepped",
-            "by run time"
-          ],
-          "operators": [
-            "eq",
-            "in",
-            "neq",
-            "nin"
-          ]
-        },
-        {
-          "key": "with",
+          "spec": "with",
           "type": "enum",
           "values": [
             "grinder_travel_cases",
@@ -259,11 +285,11 @@
     },
     "request": {
       "path": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
-      "query": "quiet, single dose, small counter",
+      "query": "quiet, small counter",
       "spec_keywords": [
         "noise",
-        "feed",
-        "depth"
+        "depth",
+        "feed"
       ]
     }
   },
@@ -290,62 +316,193 @@
   "shopping_search": {
     "response": {
       "status": "ok",
+      "asked": [
+        {
+          "n": 1,
+          "spec": "noiseLevel",
+          "op": "lte",
+          "value": 70,
+          "unit": "dB"
+        },
+        {
+          "n": 2,
+          "spec": "depth",
+          "op": "lte",
+          "value": 200,
+          "unit": "mm"
+        },
+        {
+          "n": 3,
+          "price": {
+            "max": 13000,
+            "currency": "EUR"
+          }
+        }
+      ],
+      "search_stats": {
+        "sellers": {
+          "searched": 7,
+          "with_fit": 1
+        },
+        "products": {
+          "searched": 9,
+          "with_all_specs": 3
+        }
+      },
       "products": [
         {
           "id": "01a17757-3af6-736f-8bd1-41f3757ac2bc",
           "title": "Gaggia MD15",
           "brand": "Gaggia",
           "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "images": [],
-          "fit": {
-            "depth": 225
-          },
-          "starting_from": {
-            "value": 119,
+          "images": [
+            "http://localhost:3001/media/5f988ce3f9debfb4058afa9c49f4d594813cda598b029fdcb4ac79276074f755/card.webp",
+            "http://localhost:3001/media/17a88c2d517b3b1e5d457b603c9031a9cd85d5af6d273c4fb4184881177877a8/card.webp",
+            "http://localhost:3001/media/9c1e7a294521cc2044c10dfda01e4385e6a29344b09b33ccee20a3b50b59f582/card.webp"
+          ],
+          "holds": [
+            2,
+            3
+          ],
+          "misses": [],
+          "unknown": [
+            1
+          ],
+          "price_range": {
+            "min": 11900,
+            "max": 11900,
             "currency": "EUR"
           },
-          "store_stock": 1,
-          "misses": {}
+          "store_stock": 2,
+          "variants": [
+            {
+              "id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
+              "values": {},
+              "starting_from": {
+                "amount": 11900,
+                "currency": "EUR"
+              },
+              "images": [
+                0,
+                1,
+                2
+              ],
+              "recommended": true
+            }
+          ]
         },
         {
           "id": "01a1775c-d8d1-714d-b234-7e3c69c442ac",
           "title": "Turin Grinders SK40",
           "brand": "Turin Grinders",
           "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "images": [],
-          "fit": {
-            "depth": 171.45
-          },
-          "starting_from": {
-            "value": 199,
+          "images": [
+            "http://localhost:3001/media/7a5033880854f852958717995ecee5306ef3358c08937d1ebdd4b00f3f28aa1b/card.webp"
+          ],
+          "holds": [
+            2
+          ],
+          "misses": [],
+          "unknown": [
+            1,
+            3
+          ],
+          "price_range": {
+            "min": 19900,
+            "max": 19900,
             "currency": "USD"
           },
           "store_stock": 1,
-          "misses": {}
+          "variants": [
+            {
+              "id": "01a1775c-d8d4-7a12-9e33-5b0c1f2e7d90",
+              "values": {},
+              "starting_from": {
+                "amount": 19900,
+                "currency": "USD"
+              },
+              "images": [
+                0
+              ],
+              "recommended": true
+            }
+          ]
         }
       ]
     },
     "alternate": {
       "status": "ok",
+      "asked": [
+        {
+          "n": 1,
+          "spec": "noiseLevel",
+          "op": "lte",
+          "value": 70,
+          "unit": "dB"
+        },
+        {
+          "n": 2,
+          "spec": "depth",
+          "op": "lte",
+          "value": 200,
+          "unit": "mm"
+        },
+        {
+          "n": 3,
+          "price": {
+            "max": 10000,
+            "currency": "EUR"
+          }
+        }
+      ],
+      "search_stats": {
+        "sellers": {
+          "searched": 7,
+          "with_fit": 0
+        },
+        "products": {
+          "searched": 9,
+          "with_all_specs": 3
+        }
+      },
       "products": [
         {
           "id": "01a17757-3af6-736f-8bd1-41f3757ac2bc",
           "title": "Gaggia MD15",
           "brand": "Gaggia",
           "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "images": [],
-          "fit": {},
-          "starting_from": {
-            "value": 119,
+          "images": [
+            "http://localhost:3001/media/5f988ce3f9debfb4058afa9c49f4d594813cda598b029fdcb4ac79276074f755/card.webp"
+          ],
+          "holds": [
+            2
+          ],
+          "misses": [
+            3
+          ],
+          "unknown": [
+            1
+          ],
+          "price_range": {
+            "min": 11900,
+            "max": 11900,
             "currency": "EUR"
           },
-          "store_stock": 1,
-          "misses": {
-            "price": {
-              "value": 119,
-              "currency": "EUR"
+          "store_stock": 2,
+          "variants": [
+            {
+              "id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
+              "values": {},
+              "starting_from": {
+                "amount": 11900,
+                "currency": "EUR"
+              },
+              "images": [
+                0
+              ],
+              "recommended": true
             }
-          }
+          ]
         }
       ]
     },
@@ -353,18 +510,21 @@
       "domain": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders",
       "specs": [
         {
-          "key": "depth",
+          "spec": "noiseLevel",
           "op": "lte",
-          "value": 250
+          "value": 70
+        },
+        {
+          "spec": "depth",
+          "op": "lte",
+          "value": 200
         }
       ],
       "price": {
-        "max": {
-          "value": 130,
-          "currency": "EUR"
-        }
+        "max": 13000,
+        "currency": "EUR"
       },
-      "n": 2
+      "n": 5
     }
   },
   "shopping_product_get": {
@@ -377,10 +537,14 @@
           "brand": "Gaggia",
           "maker": "Gaggia",
           "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee_equipment.coffee_grinders.electric_coffee_grinders.electric_burr_coffee_grinders",
-          "images": [],
+          "images": [
+            "http://localhost:3001/media/5f988ce3f9debfb4058afa9c49f4d594813cda598b029fdcb4ac79276074f755/full.webp",
+            "http://localhost:3001/media/17a88c2d517b3b1e5d457b603c9031a9cd85d5af6d273c4fb4184881177877a8/full.webp",
+            "http://localhost:3001/media/9c1e7a294521cc2044c10dfda01e4385e6a29344b09b33ccee20a3b50b59f582/full.webp"
+          ],
           "values": {
             "feed": "hopper",
-            "depth": 225,
+            "depth": 150,
             "width": 151,
             "weight": 2.11,
             "burrSet.burrShape": "conical",
@@ -401,9 +565,14 @@
               "id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
               "values": {},
               "starting_from": {
-                "value": 119,
+                "amount": 11900,
                 "currency": "EUR"
-              }
+              },
+              "images": [
+                0,
+                1,
+                2
+              ]
             }
           ]
         },
@@ -413,7 +582,11 @@
           "brand": "Brown & Jenkins",
           "maker": "Brown & Jenkins - The Vermont Coffee Roasters",
           "leaf": "product.food_kitchen.coffee_and_coffee_equipment.coffee.coffee_beans_and_ground_coffee",
-          "images": [],
+          "images": [
+            "http://localhost:3001/media/5e3bc0979deed15bf26246cbf93462c881d4486b694fbb724801d2d7a447d0d4/full.webp",
+            "http://localhost:3001/media/1efdff1f4a4d6fc0fdddf6f16a26b47dbc47562c66ffba03136336821b0b0d99/full.webp",
+            "http://localhost:3001/media/8c2060e41ca391dd8172c8518fb4cc0177fbd5b5d1b57e0e8b503151a28694ed/full.webp"
+          ],
           "values": {
             "netWeight": 283.5,
             "originCountry": "CO",
@@ -431,9 +604,13 @@
                 "grind": "whole bean"
               },
               "starting_from": {
-                "value": 15,
+                "amount": 1500,
                 "currency": "USD"
-              }
+              },
+              "images": [
+                0,
+                2
+              ]
             },
             {
               "id": "01a17755-900d-7217-a812-b65d45a76bc8",
@@ -444,9 +621,13 @@
                 ]
               },
               "starting_from": {
-                "value": 15,
+                "amount": 1500,
                 "currency": "USD"
-              }
+              },
+              "images": [
+                1,
+                2
+              ]
             }
           ]
         }
@@ -464,17 +645,60 @@
         {
           "variant_id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
           "seller": {
+            "id": "01a17740-2c1e-7f0a-9b44-8d2e6a1c3f57",
+            "host": "coffee-corner.gr",
+            "country": "GR",
+            "ships": "serviceable"
+          },
+          "price": {
+            "amount": 11500,
+            "currency": "EUR"
+          },
+          "was": {
+            "amount": 13900,
+            "currency": "EUR"
+          },
+          "availability": "backorder",
+          "url": "https://coffee-corner.gr/gaggia-md15",
+          "read_on": "2026-10-25"
+        },
+        {
+          "variant_id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
+          "seller": {
             "id": "01a17737-7b50-72d5-83c3-06f39cefd20d",
             "host": "premiumco.gr",
             "country": "GR",
             "ships": "serviceable"
           },
           "price": {
-            "value": 119,
+            "amount": 11900,
             "currency": "EUR"
           },
           "availability": "in_stock",
           "url": "https://www.premiumco.gr/shop/%ce%bc%cf%8d%ce%bb%ce%bf%cf%82-%ce%ac%ce%bb%ce%b5%cf%83%ce%b7%cf%82-%ce%ba%ce%b1%cf%86%ce%ad-gaggia-md-15/",
+          "read_on": "2026-10-26"
+        },
+        {
+          "variant_id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
+          "seller": {
+            "id": "01a17737-7b50-72d5-83c3-06f39cefd20d",
+            "host": "premiumco.gr",
+            "country": "GR",
+            "ships": "serviceable"
+          },
+          "price": {
+            "amount": 14900,
+            "currency": "EUR"
+          },
+          "pack": {
+            "count": 1,
+            "with": [
+              "Gaggia cleaning brush",
+              "250 g Gaggia beans"
+            ]
+          },
+          "availability": "in_stock",
+          "url": "https://www.premiumco.gr/shop/gaggia-md15-bundle/",
           "read_on": "2026-10-26"
         }
       ]
@@ -501,17 +725,22 @@
           "ships": "serviceable",
           "delivery": {
             "cost": {
-              "min": 2.9,
-              "max": 5.9,
+              "min": 290,
+              "max": 590,
               "currency": "EUR"
             },
             "free_over": {
-              "value": 69,
+              "amount": 6900,
               "currency": "EUR"
             }
           },
           "returns_days": 30,
-          "promotions": [],
+          "promotions": [
+            {
+              "what": "10% off your first order with WELCOME10",
+              "discount": 10
+            }
+          ],
           "terms": {
             "who": {
               "legalName": "PREMIUMCO EE",
@@ -526,15 +755,6 @@
                 "Revolut"
               ]
             },
-            "support": {
-              "supportChannels": [
-                "phone",
-                "email",
-                "form",
-                "in store"
-              ],
-              "supportHours": "Monday–Friday 9:00–16:00"
-            },
             "returns": {
               "refundDays": 14,
               "returnPostagePaidBy": "buyer",
@@ -547,6 +767,36 @@
               "url": "https://www.premiumco.gr/terms-conditions/"
             }
           ],
+          "reviews": []
+        },
+        {
+          "id": "01a17740-2c1e-7f0a-9b44-8d2e6a1c3f57",
+          "name": "Coffee Corner",
+          "host": "coffee-corner.gr",
+          "country": "GR",
+          "ships": "serviceable",
+          "delivery": {
+            "cost": {
+              "amount": 490,
+              "currency": "EUR"
+            },
+            "days": {
+              "min": 3,
+              "max": 5
+            }
+          },
+          "returns_days": 14,
+          "promotions": [
+            {
+              "what": "A free tamper with any order over €50",
+              "minimum_spend": {
+                "amount": 5000,
+                "currency": "EUR"
+              }
+            }
+          ],
+          "terms": {},
+          "policy_urls": [],
           "reviews": []
         }
       ]

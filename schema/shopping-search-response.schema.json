@@ -5,6 +5,8 @@
   "type": "object",
   "required": [
     "status",
+    "asked",
+    "search_stats",
     "products"
   ],
   "properties": {
@@ -12,6 +14,169 @@
       "type": "string",
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "asked": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "n",
+              "spec",
+              "op",
+              "value"
+            ],
+            "properties": {
+              "n": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "An ask by its number in `asked`."
+              },
+              "spec": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Names the spec asked."
+              },
+              "op": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "eq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "neq"
+                  },
+                  {
+                    "type": "string",
+                    "const": "gte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "lte"
+                  },
+                  {
+                    "type": "string",
+                    "const": "in"
+                  },
+                  {
+                    "type": "string",
+                    "const": "nin"
+                  }
+                ],
+                "description": "Reads the operator asked."
+              },
+              "value": {
+                "description": "Reads the value asked, as sent."
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Reads the value in this unit."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "n",
+              "price"
+            ],
+            "properties": {
+              "n": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "An ask by its number in `asked`."
+              },
+              "price": {
+                "type": "object",
+                "required": [
+                  "currency"
+                ],
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The low end, in the minor unit."
+                  },
+                  "max": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The high end, in the minor unit."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "description": "Both ends in this currency; sil converts nothing."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Reads the price filter, as sent."
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "Echoes the ask, numbered from 1: each spec with its unit, then the price."
+    },
+    "search_stats": {
+      "type": "object",
+      "required": [
+        "sellers",
+        "products"
+      ],
+      "properties": {
+        "sellers": {
+          "type": "object",
+          "required": [
+            "searched",
+            "with_fit"
+          ],
+          "properties": {
+            "searched": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Shops behind the products searched."
+            },
+            "with_fit": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Shops behind a product holding every ask."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Counts the shops."
+        },
+        "products": {
+          "type": "object",
+          "required": [
+            "searched",
+            "with_all_specs"
+          ],
+          "properties": {
+            "searched": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Products weighed under the place."
+            },
+            "with_all_specs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Products holding a value for every spec asked."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Counts the products."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Explains the shortlist: how much was searched, and how much answers the whole ask."
     },
     "products": {
       "type": "array",
@@ -21,9 +186,11 @@
           "id",
           "title",
           "images",
-          "fit",
+          "holds",
+          "misses",
+          "unknown",
           "store_stock",
-          "misses"
+          "variants"
         ],
         "properties": {
           "id": {
@@ -52,259 +219,91 @@
               "type": "string"
             },
             "maxItems": 5,
-            "description": "Shows it: pictures sil holds, first the one that shows it best."
+            "description": "Shows it: the recommended variant’s pictures first, then the product’s; the product read has every one."
           },
-          "fit": {
-            "type": "object",
-            "patternProperties": {
-              "^.*$": {
-                "anyOf": [
-                  {
-                    "anyOf": [
-                      {
-                        "anyOf": [
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "string"
-                          }
-                        ]
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "min",
-                          "max"
-                        ],
-                        "properties": {
-                          "min": {
-                            "type": "number",
-                            "description": "Reads the low end."
-                          },
-                          "max": {
-                            "type": "number",
-                            "description": "Reads the high end."
-                          }
-                        },
-                        "additionalProperties": false,
-                        "description": "A range, in the key’s unit."
-                      },
-                      {
-                        "type": "object",
-                        "patternProperties": {
-                          "^.*$": {
-                            "anyOf": [
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "string"
-                              }
-                            ]
-                          }
-                        },
-                        "description": "One entry of a `records` key."
-                      }
-                    ]
-                  },
-                  {
-                    "type": "array",
-                    "items": {
-                      "anyOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "boolean"
-                            },
-                            {
-                              "type": "string"
-                            }
-                          ]
-                        },
-                        {
-                          "type": "object",
-                          "required": [
-                            "min",
-                            "max"
-                          ],
-                          "properties": {
-                            "min": {
-                              "type": "number",
-                              "description": "Reads the low end."
-                            },
-                            "max": {
-                              "type": "number",
-                              "description": "Reads the high end."
-                            }
-                          },
-                          "additionalProperties": false,
-                          "description": "A range, in the key’s unit."
-                        },
-                        {
-                          "type": "object",
-                          "patternProperties": {
-                            "^.*$": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "boolean"
-                                },
-                                {
-                                  "type": "string"
-                                }
-                              ]
-                            }
-                          },
-                          "description": "One entry of a `records` key."
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
+          "holds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "An ask by its number in `asked`."
             },
-            "description": "Answers each asked key with the value its fitting variants share, the list of their values where they differ, or `\"unknown\"`: what to say as unverified."
+            "description": "Names the asks one of its variants holds."
           },
-          "starting_from": {
+          "misses": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "An ask by its number in `asked`."
+            },
+            "description": "Names the asks it holds a value for that fails on every variant."
+          },
+          "unknown": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "An ask by its number in `asked`."
+            },
+            "description": "Names the asks sil could not test on it: say them as unverified."
+          },
+          "price_range": {
             "type": "object",
             "required": [
-              "value",
               "currency"
             ],
             "properties": {
-              "value": {
-                "type": "number",
+              "min": {
+                "type": "integer",
                 "minimum": 0,
-                "description": "Quotes the amount."
+                "description": "The low end, in the minor unit."
+              },
+              "max": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The high end, in the minor unit."
               },
               "currency": {
                 "type": "string",
                 "pattern": "^[A-Z]{3}$",
                 "minLength": 3,
                 "maxLength": 3,
-                "description": "Quotes it in this currency."
+                "description": "Both ends in this currency; sil converts nothing."
               }
             },
             "additionalProperties": false,
-            "description": "Quotes the lowest one-off price a fitting variant is sold at, for the card: in the price filter’s or the buyer’s currency where sil holds one; absent where none is buyable."
+            "description": "Quotes its variants’ lowest prices, cheapest to dearest, in one currency."
           },
           "store_stock": {
             "type": "integer",
             "minimum": 0,
             "description": "Says how many shops sell the product, any variant."
           },
-          "misses": {
-            "type": "object",
-            "patternProperties": {
-              "^.*$": {
-                "anyOf": [
-                  {
-                    "anyOf": [
-                      {
-                        "anyOf": [
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "string"
-                          }
-                        ]
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "min",
-                          "max"
-                        ],
-                        "properties": {
-                          "min": {
-                            "type": "number",
-                            "description": "Reads the low end."
-                          },
-                          "max": {
-                            "type": "number",
-                            "description": "Reads the high end."
-                          }
-                        },
-                        "additionalProperties": false,
-                        "description": "A range, in the key’s unit."
-                      },
-                      {
-                        "type": "object",
-                        "patternProperties": {
-                          "^.*$": {
-                            "anyOf": [
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "string"
-                              }
-                            ]
-                          }
-                        },
-                        "description": "One entry of a `records` key."
-                      }
-                    ]
-                  },
-                  {
-                    "type": "array",
-                    "items": {
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "values",
+                "images"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Passes it to `shopping_offers`."
+                },
+                "values": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^.*$": {
                       "anyOf": [
                         {
                           "anyOf": [
                             {
-                              "type": "number"
-                            },
-                            {
-                              "type": "boolean"
-                            },
-                            {
-                              "type": "string"
-                            }
-                          ]
-                        },
-                        {
-                          "type": "object",
-                          "required": [
-                            "min",
-                            "max"
-                          ],
-                          "properties": {
-                            "min": {
-                              "type": "number",
-                              "description": "Reads the low end."
-                            },
-                            "max": {
-                              "type": "number",
-                              "description": "Reads the high end."
-                            }
-                          },
-                          "additionalProperties": false,
-                          "description": "A range, in the key’s unit."
-                        },
-                        {
-                          "type": "object",
-                          "patternProperties": {
-                            "^.*$": {
                               "anyOf": [
                                 {
                                   "type": "number"
@@ -316,22 +315,155 @@
                                   "type": "string"
                                 }
                               ]
+                            },
+                            {
+                              "type": "object",
+                              "required": [
+                                "min",
+                                "max"
+                              ],
+                              "properties": {
+                                "min": {
+                                  "type": "number",
+                                  "description": "Reads the low end."
+                                },
+                                "max": {
+                                  "type": "number",
+                                  "description": "Reads the high end."
+                                }
+                              },
+                              "additionalProperties": false,
+                              "description": "A range, in the key’s unit."
+                            },
+                            {
+                              "type": "object",
+                              "patternProperties": {
+                                "^.*$": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "description": "One entry of a `records` key."
                             }
-                          },
-                          "description": "One entry of a `records` key."
+                          ]
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "required": [
+                                  "min",
+                                  "max"
+                                ],
+                                "properties": {
+                                  "min": {
+                                    "type": "number",
+                                    "description": "Reads the low end."
+                                  },
+                                  "max": {
+                                    "type": "number",
+                                    "description": "Reads the high end."
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "description": "A range, in the key’s unit."
+                              },
+                              {
+                                "type": "object",
+                                "patternProperties": {
+                                  "^.*$": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      },
+                                      {
+                                        "type": "string"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "description": "One entry of a `records` key."
+                              }
+                            ]
+                          }
                         }
                       ]
                     }
-                  }
-                ]
-              }
+                  },
+                  "description": "Reads what sets this variant apart from the product’s others; empty where it is the only one."
+                },
+                "starting_from": {
+                  "type": "object",
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$",
+                      "minLength": 3,
+                      "maxLength": 3,
+                      "description": "In this currency."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "description": "Quotes the lowest one-off price it is sold at; absent where none is buyable."
+                },
+                "images": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "description": "Shows its own pictures: positions in the product’s `images`, first its best."
+                },
+                "recommended": {
+                  "type": "boolean",
+                  "const": true,
+                  "description": "Is the one to show and start from: most asks held, then most it holds a value for, then the cheapest."
+                }
+              },
+              "additionalProperties": false
             },
-            "description": "Names each want it misses and what it holds there, `price` its lowest price; empty where it fits."
+            "description": "Lists the variants the ask leaves standing, one of them recommended."
           }
         },
         "additionalProperties": false
       },
-      "description": "Shows the products closest to the ask: those that fit, then fewest wants missed."
+      "description": "Shows the products closest to the ask: those holding most asks first."
     }
   },
   "additionalProperties": false

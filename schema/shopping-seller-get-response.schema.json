@@ -114,21 +114,21 @@
                   {
                     "type": "object",
                     "required": [
-                      "value",
+                      "amount",
                       "currency"
                     ],
                     "properties": {
-                      "value": {
-                        "type": "number",
+                      "amount": {
+                        "type": "integer",
                         "minimum": 0,
-                        "description": "Quotes the amount."
+                        "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                       },
                       "currency": {
                         "type": "string",
                         "pattern": "^[A-Z]{3}$",
                         "minLength": 3,
                         "maxLength": 3,
-                        "description": "Quotes it in this currency."
+                        "description": "In this currency."
                       }
                     },
                     "additionalProperties": false
@@ -136,52 +136,50 @@
                   {
                     "type": "object",
                     "required": [
-                      "min",
-                      "max",
                       "currency"
                     ],
                     "properties": {
                       "min": {
-                        "type": "number",
+                        "type": "integer",
                         "minimum": 0,
-                        "description": "Quotes the low end."
+                        "description": "The low end, in the minor unit."
                       },
                       "max": {
-                        "type": "number",
+                        "type": "integer",
                         "minimum": 0,
-                        "description": "Quotes the high end."
+                        "description": "The high end, in the minor unit."
                       },
                       "currency": {
                         "type": "string",
                         "pattern": "^[A-Z]{3}$",
                         "minLength": 3,
                         "maxLength": 3,
-                        "description": "Quotes the range in this currency; sil converts nothing."
+                        "description": "Both ends in this currency; sil converts nothing."
                       }
                     },
                     "additionalProperties": false
                   }
                 ],
-                "description": "Quotes one fee, or a range where sil holds both ends."
+                "description": "Quotes one fee, or the range from the cheapest route’s to the dearest’s."
               },
               "free_over": {
                 "type": "object",
                 "required": [
-                  "value",
+                  "amount",
                   "currency"
                 ],
                 "properties": {
-                  "value": {
-                    "type": "number",
+                  "amount": {
+                    "type": "integer",
                     "minimum": 0,
-                    "description": "Quotes the amount."
+                    "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                   },
                   "currency": {
                     "type": "string",
                     "pattern": "^[A-Z]{3}$",
                     "minLength": 3,
                     "maxLength": 3,
-                    "description": "Quotes it in this currency."
+                    "description": "In this currency."
                   }
                 },
                 "additionalProperties": false,
@@ -239,7 +237,26 @@
                   "description": "Quotes its discount, in percent, where the shop states one."
                 },
                 "minimum_spend": {
-                  "type": "string",
+                  "type": "object",
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$",
+                      "minLength": 3,
+                      "maxLength": 3,
+                      "description": "In this currency."
+                    }
+                  },
+                  "additionalProperties": false,
                   "description": "Quotes the spend it needs."
                 },
                 "until": {
@@ -278,21 +295,21 @@
                       {
                         "type": "object",
                         "required": [
-                          "value",
+                          "amount",
                           "currency"
                         ],
                         "properties": {
-                          "value": {
-                            "type": "number",
+                          "amount": {
+                            "type": "integer",
                             "minimum": 0,
-                            "description": "Quotes the amount."
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                           },
                           "currency": {
                             "type": "string",
                             "pattern": "^[A-Z]{3}$",
                             "minLength": 3,
                             "maxLength": 3,
-                            "description": "Quotes it in this currency."
+                            "description": "In this currency."
                           }
                         },
                         "additionalProperties": false
@@ -325,21 +342,21 @@
                       {
                         "type": "object",
                         "required": [
-                          "value",
+                          "amount",
                           "currency"
                         ],
                         "properties": {
-                          "value": {
-                            "type": "number",
+                          "amount": {
+                            "type": "integer",
                             "minimum": 0,
-                            "description": "Quotes the amount."
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                           },
                           "currency": {
                             "type": "string",
                             "pattern": "^[A-Z]{3}$",
                             "minLength": 3,
                             "maxLength": 3,
-                            "description": "Quotes it in this currency."
+                            "description": "In this currency."
                           }
                         },
                         "additionalProperties": false
@@ -372,21 +389,21 @@
                       {
                         "type": "object",
                         "required": [
-                          "value",
+                          "amount",
                           "currency"
                         ],
                         "properties": {
-                          "value": {
-                            "type": "number",
+                          "amount": {
+                            "type": "integer",
                             "minimum": 0,
-                            "description": "Quotes the amount."
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                           },
                           "currency": {
                             "type": "string",
                             "pattern": "^[A-Z]{3}$",
                             "minLength": 3,
                             "maxLength": 3,
-                            "description": "Quotes it in this currency."
+                            "description": "In this currency."
                           }
                         },
                         "additionalProperties": false
@@ -419,21 +436,21 @@
                       {
                         "type": "object",
                         "required": [
-                          "value",
+                          "amount",
                           "currency"
                         ],
                         "properties": {
-                          "value": {
-                            "type": "number",
+                          "amount": {
+                            "type": "integer",
                             "minimum": 0,
-                            "description": "Quotes the amount."
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                           },
                           "currency": {
                             "type": "string",
                             "pattern": "^[A-Z]{3}$",
                             "minLength": 3,
                             "maxLength": 3,
-                            "description": "Quotes it in this currency."
+                            "description": "In this currency."
                           }
                         },
                         "additionalProperties": false
@@ -466,21 +483,21 @@
                       {
                         "type": "object",
                         "required": [
-                          "value",
+                          "amount",
                           "currency"
                         ],
                         "properties": {
-                          "value": {
-                            "type": "number",
+                          "amount": {
+                            "type": "integer",
                             "minimum": 0,
-                            "description": "Quotes the amount."
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                           },
                           "currency": {
                             "type": "string",
                             "pattern": "^[A-Z]{3}$",
                             "minLength": 3,
                             "maxLength": 3,
-                            "description": "Quotes it in this currency."
+                            "description": "In this currency."
                           }
                         },
                         "additionalProperties": false
@@ -513,21 +530,21 @@
                       {
                         "type": "object",
                         "required": [
-                          "value",
+                          "amount",
                           "currency"
                         ],
                         "properties": {
-                          "value": {
-                            "type": "number",
+                          "amount": {
+                            "type": "integer",
                             "minimum": 0,
-                            "description": "Quotes the amount."
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                           },
                           "currency": {
                             "type": "string",
                             "pattern": "^[A-Z]{3}$",
                             "minLength": 3,
                             "maxLength": 3,
-                            "description": "Quotes it in this currency."
+                            "description": "In this currency."
                           }
                         },
                         "additionalProperties": false
@@ -560,21 +577,21 @@
                       {
                         "type": "object",
                         "required": [
-                          "value",
+                          "amount",
                           "currency"
                         ],
                         "properties": {
-                          "value": {
-                            "type": "number",
+                          "amount": {
+                            "type": "integer",
                             "minimum": 0,
-                            "description": "Quotes the amount."
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                           },
                           "currency": {
                             "type": "string",
                             "pattern": "^[A-Z]{3}$",
                             "minLength": 3,
                             "maxLength": 3,
-                            "description": "Quotes it in this currency."
+                            "description": "In this currency."
                           }
                         },
                         "additionalProperties": false
@@ -671,6 +688,11 @@
         "additionalProperties": false
       },
       "description": "Reads the terms before recommending a seller."
+    },
+    "next_page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Sends it as `page` to read the sellers on; absent on the last page."
     }
   },
   "additionalProperties": false

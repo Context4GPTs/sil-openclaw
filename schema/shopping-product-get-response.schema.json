@@ -56,8 +56,7 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 5,
-            "description": "Shows it: pictures sil holds, first the one that shows it best."
+            "description": "Shows it: every picture sil holds, each variant’s own by position."
           },
           "values": {
             "type": "object",
@@ -244,7 +243,8 @@
               "type": "object",
               "required": [
                 "id",
-                "values"
+                "values",
+                "images"
               ],
               "properties": {
                 "id": {
@@ -379,25 +379,33 @@
                 "starting_from": {
                   "type": "object",
                   "required": [
-                    "value",
+                    "amount",
                     "currency"
                   ],
                   "properties": {
-                    "value": {
-                      "type": "number",
+                    "amount": {
+                      "type": "integer",
                       "minimum": 0,
-                      "description": "Quotes the amount."
+                      "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                     },
                     "currency": {
                       "type": "string",
                       "pattern": "^[A-Z]{3}$",
                       "minLength": 3,
                       "maxLength": 3,
-                      "description": "Quotes it in this currency."
+                      "description": "In this currency."
                     }
                   },
                   "additionalProperties": false,
                   "description": "Quotes the lowest one-off price it is sold at; `shopping_offers` lists every offer."
+                },
+                "images": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "description": "Shows its own pictures: positions in the product’s `images`, first its best."
                 }
               },
               "additionalProperties": false

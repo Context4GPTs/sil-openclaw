@@ -20,5 +20,6 @@
       "description": "Sends the product or variant ids it wants the whole of; one sil does not hold is left out."
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Money is in the minor unit: €130 is 13000."
 }

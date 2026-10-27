@@ -17,7 +17,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "Sends what the buyer wants, in English — \"quiet, small counter, about €100\" — so the keys it reaches come first."
+      "description": "Sends what the buyer wants, in English — \"quiet, small counter, about €100\" — so the specs it reaches come first."
     },
     "spec_keywords": {
       "type": "array",
@@ -29,7 +29,7 @@
       },
       "minItems": 1,
       "maxItems": 32,
-      "description": "Sends the specs the agent is looking for, in a word each; the keys they name rank first."
+      "description": "Sends the specs the agent is looking for, in a word each; the specs they name rank first."
     },
     "page": {
       "type": "integer",
