@@ -117,9 +117,10 @@ export const SHOPPING_TOOLS = [
       + " \"clarity\"` when no spec holds clarity, bad `query: \"Eureka Mignon\"` when the buyer"
       + " never said it. Back come `asked` numbered, `search_stats` to explain the shortlist,"
       + " and the closest cards with `holds`, `misses` and `unknown` as ask numbers,"
-      + " `price_range` and `variants` each with its own `price_range`, one `recommended`. When few fit or many are unknown,"
-      + " tell the buyer what came back and ask the one question that would change it, or ask"
-      + " before relaxing a want, rather than searching again in other words.",
+      + " `price_range` and `variants`, each with its own `price_range`, one `recommended`. When"
+      + " few fit or many are unknown, tell the buyer what came back and ask the one question"
+      + " that would change it, or ask before relaxing a want, rather than searching again in"
+      + " other words.",
   },
   {
     name: "shopping_product_get",
@@ -129,8 +130,7 @@ export const SHOPPING_TOOLS = [
     description:
       "Read the products the buyer leans to whole: values once, reviews, every picture, and"
       + " each variant with what sets it apart and its `price_range`, cheapest to dearest offer."
-      + " Pick the variants to buy"
-      + " here; money is in the minor unit: €130 is 13000.",
+      + " Pick the variants to buy here; money is in the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_offers",
