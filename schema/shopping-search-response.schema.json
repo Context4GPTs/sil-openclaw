@@ -450,7 +450,7 @@
                     }
                   },
                   "additionalProperties": false,
-                  "description": "Quotes its offers’ one-off prices, cheapest to dearest, in one currency; absent where none is buyable."
+                  "description": "Quotes its offers’ one-off prices, cheapest to dearest, in one currency; absent where none is buyable in it."
                 },
                 "images": {
                   "type": "array",

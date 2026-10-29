@@ -101,12 +101,13 @@ next best and why not; its price, from its offer. With a screen, `studio_decide`
 addresses, the default when absent. Every offer, shops shipping there first: its `seller` by
 `name` with `ships`, `delivery` there, `returns_days` and its own `promotions`, then `price`,
 `was`, `availability`, `pack`, `plan`, `url`, the day read. Out of stock is not "does not
-ship": say which. `shopping_seller_get { ids, ship_to? }` reads a shop whole when the buyer
-needs warranty, policies, reviews or any other term. Read either on with
+ship": say which. `shopping_seller_get { ids, ship_to? }` reads a shop whole for warranty,
+policies, reviews and every other term. Read either on with
 `page: next_page` only when a shop the buyer needs may be past it.
 
-**Say why: the offer.** sil marks no best. Name the best for this buyer from both reads (ships,
-availability, delivery, free over, returns, promotions, was, pack), not the cheapest by habit.
+**Say why: the offer.** sil marks no best. Name the best for this buyer from the offers (ships,
+availability, delivery, free over, returns, promotions, was, pack), not the cheapest by habit;
+warranty only where you read the shop.
 With a screen, `studio_decide` carries it, ★ Best with its reason.
 
 - A promotion belongs to its own shop: quote it only on that shop's offer, never on another

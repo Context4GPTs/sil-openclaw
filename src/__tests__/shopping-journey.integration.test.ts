@@ -78,7 +78,7 @@ describe("no tool stands in for another, across the whole journey", () => {
     expect(router.all).toHaveLength(1);
   });
 
-  it("`shopping_offers` never reads a seller's terms — that is `shopping_seller_get`'s", async () => {
+  it("`shopping_offers` never calls the seller route", async () => {
     seedTokens(ACCESS, REFRESH);
     const router = scriptTheJourney();
     await call("shopping_offers", { brief: "b1", ids: ["v1"] }, "m3");

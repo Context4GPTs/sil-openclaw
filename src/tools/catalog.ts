@@ -156,8 +156,8 @@ export const SHOPPING_TOOLS = [
     description:
       "Every term of the shops the offers named, delivered to `ship_to` (the default address"
       + " when absent): the delivery, returns and promotions the offers carry, and warranty,"
-      + " policies, reviews and other terms;"
-      + " money is in the minor unit: €130 is 13000. Quote a promotion and ask whether they"
+      + " policies, reviews and other terms; money is in the minor unit: €130 is 13000. A"
+      + " promotion is its shop's alone: quote it on that shop's offers only. Ask whether they"
       + " qualify; a reduced price only from its `discount`, on their yes. Send `page` ="
       + " `next_page` only when a shop the buyer needs may be past it.",
   },
