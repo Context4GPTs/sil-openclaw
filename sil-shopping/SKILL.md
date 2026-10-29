@@ -86,7 +86,7 @@ price and what it misses.
 ## Read the shortlist, tell the pick
 
 `shopping_product_get { ids }`, up to three the buyer leans to: values once, reviews, every
-picture, each variant with what sets it apart and its `starting_from`. Pick the variants here,
+picture, each variant with what sets it apart and its `price_range`. Pick the variants here,
 from the search card's `recommended` one, then read their offers.
 
 The pick is a variant in stock at a shop that ships to the buyer. When no such shop sells it,
@@ -98,18 +98,20 @@ next best and why not; its price, from its offer. With a screen, `studio_decide`
 ## Where to buy, best for them
 
 `shopping_offers { ids, ship_to? }` with **variant** ids; `ship_to` names one of their
-addresses, the default when absent. Every offer, shops shipping there first: `seller` and
-`ships`, `price`, `was`, `availability`, `pack`, `plan`, `url`, the day read. Out of stock is
-not "does not ship": say which. Then `shopping_seller_get { ids, ship_to? }` for the shops
-you show: delivery, returns, warranty, promotions, every other term. Read either on with
+addresses, the default when absent. Every offer, shops shipping there first: its `seller` by
+`name` with `ships`, `delivery` there, `returns_days` and its own `promotions`, then `price`,
+`was`, `availability`, `pack`, `plan`, `url`, the day read. Out of stock is not "does not
+ship": say which. `shopping_seller_get { ids, ship_to? }` reads a shop whole when the buyer
+needs warranty, policies, reviews or any other term. Read either on with
 `page: next_page` only when a shop the buyer needs may be past it.
 
 **Say why: the offer.** sil marks no best. Name the best for this buyer from both reads (ships,
 availability, delivery, free over, returns, promotions, was, pack), not the cheapest by habit.
 With a screen, `studio_decide` carries it, ★ Best with its reason.
 
-- A promotion is the shop's word: quote it, ask whether they qualify, and state a reduced price
-  only from its `discount`, on their yes.
+- A promotion belongs to its own shop: quote it only on that shop's offer, never on another
+  shop's. Ask whether they qualify, and state a reduced price only from its `discount`, on their
+  yes.
 - A `was`: say it was higher, judge on the price. A bundle (`pack.with`) is one offer, worth it
   only if they want the rest. A `plan` price is the plan's.
 - Every price you say is sil's: an offer's, or it plus that shop's delivery. Link only shops

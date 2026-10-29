@@ -117,7 +117,7 @@ export const SHOPPING_TOOLS = [
       + " \"clarity\"` when no spec holds clarity, bad `query: \"Eureka Mignon\"` when the buyer"
       + " never said it. Back come `asked` numbered, `search_stats` to explain the shortlist,"
       + " and the closest cards with `holds`, `misses` and `unknown` as ask numbers,"
-      + " `price_range` and `variants`, one `recommended`. When few fit or many are unknown,"
+      + " `price_range` and `variants` each with its own `price_range`, one `recommended`. When few fit or many are unknown,"
       + " tell the buyer what came back and ask the one question that would change it, or ask"
       + " before relaxing a want, rather than searching again in other words.",
   },
@@ -128,7 +128,8 @@ export const SHOPPING_TOOLS = [
     label: "Read shortlisted products whole",
     description:
       "Read the products the buyer leans to whole: values once, reviews, every picture, and"
-      + " each variant with what sets it apart and its `starting_from`. Pick the variants to buy"
+      + " each variant with what sets it apart and its `price_range`, cheapest to dearest offer."
+      + " Pick the variants to buy"
       + " here; money is in the minor unit: €130 is 13000.",
   },
   {
@@ -140,10 +141,12 @@ export const SHOPPING_TOOLS = [
     description:
       "Where to buy: variant ids from `shopping_product_get`, never product ids, and"
       + " `ship_to`, one of the buyer's addresses by name (the default when absent). Every"
-      + " offer, shops shipping there first, each with its shop, whether it `ships`, `price`,"
-      + " `was`, `pack` or `plan`, and its stock; nothing marks a best. Money is in the minor"
-      + " unit: €130 is 13000. Send `page` = `next_page` only when a shop the buyer needs may be"
-      + " past it. Delivery and returns come from `shopping_seller_get`.",
+      + " offer, shops shipping there first, each with its shop's `name`, whether it `ships`, its"
+      + " `delivery` there, `returns_days` and own `promotions`, then `price`, `was`, `pack` or"
+      + " `plan`, and its stock; nothing marks a best. A promotion is its shop's alone: quote it"
+      + " on that shop's offers only. Money is in the minor unit: €130 is 13000. Send `page` ="
+      + " `next_page` only when a shop the buyer needs may be past it. Warranty, policies,"
+      + " reviews and other terms come from `shopping_seller_get`.",
   },
   {
     name: "shopping_seller_get",
@@ -151,8 +154,9 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/sellers",
     label: "Read the shops' terms",
     description:
-      "The terms of the shops the offers named, delivered to `ship_to` (the default address"
-      + " when absent): delivery cost, `free_over` and days, returns, warranty and promotions;"
+      "Every term of the shops the offers named, delivered to `ship_to` (the default address"
+      + " when absent): the delivery, returns and promotions the offers carry, and warranty,"
+      + " policies, reviews and other terms;"
       + " money is in the minor unit: €130 is 13000. Quote a promotion and ask whether they"
       + " qualify; a reduced price only from its `discount`, on their yes. Send `page` ="
       + " `next_page` only when a shop the buyer needs may be past it.",

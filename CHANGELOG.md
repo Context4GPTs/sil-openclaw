@@ -31,6 +31,12 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 - **sil refuses a plugin older than 0.7.0** (HTTP 426); its message reaches the agent as it
   stands.
 
+- **A variant quotes its `price_range`, and an offer carries its shop's terms.** A variant's
+  `starting_from` is gone: it answers `price_range`, its offers' one-off prices, cheapest to
+  dearest. An offer's `seller` carries its `name`, `delivery` to `ship_to`, `returns_days` and
+  its own `promotions`; `shopping_seller_get` is for warranty, policies, reviews and other
+  terms. The skill quotes a promotion only on its own shop's offer.
+
 ### Removed
 
 - **Nothing to wait for or re-read.** The search receipt's `finding`, and `shopping_offers`'
