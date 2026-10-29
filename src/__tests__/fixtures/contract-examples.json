@@ -248,9 +248,7 @@
           "operators": [
             "gte",
             "lte"
-          ],
-          "decides": true,
-          "why": "loudness while grinding/brewing; asked for by buyers"
+          ]
         },
         {
           "spec": "quietGrinder",
@@ -388,8 +386,9 @@
             {
               "id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
               "values": {},
-              "starting_from": {
-                "amount": 11900,
+              "price_range": {
+                "min": 11900,
+                "max": 11900,
                 "currency": "EUR"
               },
               "images": [
@@ -499,8 +498,9 @@
               "values": {
                 "color": "black"
               },
-              "starting_from": {
-                "amount": 19900,
+              "price_range": {
+                "min": 19900,
+                "max": 19900,
                 "currency": "USD"
               },
               "images": [
@@ -517,8 +517,9 @@
               "values": {
                 "color": "white"
               },
-              "starting_from": {
-                "amount": 19900,
+              "price_range": {
+                "min": 19900,
+                "max": 19900,
                 "currency": "USD"
               },
               "images": [
@@ -667,8 +668,9 @@
               "values": {
                 "color": "black"
               },
-              "starting_from": {
-                "amount": 19900,
+              "price_range": {
+                "min": 19900,
+                "max": 19900,
                 "currency": "USD"
               },
               "images": [
@@ -685,8 +687,9 @@
               "values": {
                 "color": "white"
               },
-              "starting_from": {
-                "amount": 19900,
+              "price_range": {
+                "min": 19900,
+                "max": 19900,
                 "currency": "USD"
               },
               "images": [
@@ -727,8 +730,9 @@
             {
               "id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
               "values": {},
-              "starting_from": {
-                "amount": 11900,
+              "price_range": {
+                "min": 11900,
+                "max": 11900,
                 "currency": "EUR"
               },
               "images": [
@@ -810,8 +814,9 @@
             {
               "id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
               "values": {},
-              "starting_from": {
-                "amount": 11900,
+              "price_range": {
+                "min": 11900,
+                "max": 11900,
                 "currency": "EUR"
               },
               "images": [
@@ -874,8 +879,9 @@
               "values": {
                 "color": "black"
               },
-              "starting_from": {
-                "amount": 19900,
+              "price_range": {
+                "min": 19900,
+                "max": 19900,
                 "currency": "USD"
               },
               "images": [
@@ -902,8 +908,9 @@
               "values": {
                 "color": "white"
               },
-              "starting_from": {
-                "amount": 19900,
+              "price_range": {
+                "min": 19900,
+                "max": 19900,
                 "currency": "USD"
               },
               "images": [
@@ -942,9 +949,23 @@
           "variant_id": "01a17757-3afa-7959-a887-a0f9b5f08e94",
           "seller": {
             "id": "01a17737-7b50-72d5-83c3-06f39cefd20d",
+            "name": "PremiumCo",
             "host": "premiumco.gr",
             "country": "GR",
-            "ships": "serviceable"
+            "ships": "serviceable",
+            "delivery": {
+              "cost": {
+                "min": 290,
+                "max": 590,
+                "currency": "EUR"
+              },
+              "free_over": {
+                "amount": 6900,
+                "currency": "EUR"
+              }
+            },
+            "returns_days": 30,
+            "promotions": []
           },
           "price": {
             "amount": 11900,
@@ -967,9 +988,20 @@
           "variant_id": "01a1774e-97d3-7a31-8a1c-32b4ef629baa",
           "seller": {
             "id": "01a17724-1036-7803-a6c1-af29118c2cfa",
+            "name": "alternativebrewing.com.au",
             "host": "alternativebrewing.com.au",
             "country": "AU",
-            "ships": "not_serviceable"
+            "ships": "not_serviceable",
+            "returns_days": 14,
+            "promotions": [
+              {
+                "what": "Sign up to receive $5 off your first order",
+                "minimum_spend": {
+                  "amount": 4000,
+                  "currency": "AUD"
+                }
+              }
+            ]
           },
           "price": {
             "amount": 301490,
@@ -993,9 +1025,20 @@
           "variant_id": "01a1774e-97d3-7a31-8a1c-32b4ef629baa",
           "seller": {
             "id": "01a17724-1036-7803-a6c1-af29118c2cfa",
+            "name": "alternativebrewing.com.au",
             "host": "alternativebrewing.com.au",
             "country": "AU",
-            "ships": "not_serviceable"
+            "ships": "not_serviceable",
+            "returns_days": 14,
+            "promotions": [
+              {
+                "what": "Sign up to receive $5 off your first order",
+                "minimum_spend": {
+                  "amount": 4000,
+                  "currency": "AUD"
+                }
+              }
+            ]
           },
           "price": {
             "amount": 301490,
@@ -1034,7 +1077,7 @@
       "sellers": [
         {
           "id": "01a17737-7b50-72d5-83c3-06f39cefd20d",
-          "name": "PREMIUMCO EE",
+          "name": "PremiumCo",
           "host": "premiumco.gr",
           "country": "GR",
           "ships": "serviceable",
