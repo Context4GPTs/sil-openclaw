@@ -4,7 +4,13 @@ All notable changes to the `sil-openclaw` plugin (npm `sil-openclaw`, ClawHub `@
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Keep `## [Unreleased]
+Keep `## [Unreleased]` current as you work. `pnpm version <bump>` promotes it to a
+dated release section, and `pnpm release` attaches that section to the ClawHub
+release (`clawhub package publish --changelog`). See [README](./README.md#releasing).
+
+## [Unreleased]
+
+## [0.8.0] - 2026-10-30
 
 ### Changed
 
