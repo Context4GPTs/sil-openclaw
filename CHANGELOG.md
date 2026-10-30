@@ -14,16 +14,40 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
+- **The README says what SIL is.** The Shopping Interface Layer for personal AI agents: why an
+  interface beats a search box or a product feed, and what a turn looks like. `EXAMPLES.md` holds
+  the buyer conversations. The keyboard, bike and tent examples, the checkout link and the UCP
+  lines are gone; a banner under `assets/`; the npm and ClawHub description says the same.
+- **The Ask-to-Offer Journey contract.** Money is `{ amount, currency }` in integer minor units
+  (€130 is 13000), a range `{ min?, max?, currency }`; spec rows are `spec`, not `key`, and
+  the search's `price` is the range. `shopping_domain_get` answers `name`, `reached` and
+  `decides`/`why` on deciding specs. `shopping_search` answers `asked` numbered,
+  `search_stats`, `holds`/`misses`/`unknown` as ask numbers in place of `fit`, up to five
+  `images` and `variants` with one `recommended`. `shopping_offers` and `shopping_seller_get`
+  take `page` and answer `next_page`. Descriptions and the skill are re-cut to the journey.
+- **`sil.answer` and `sil.call` replace `sil.search_results`.** A paired screen reads back any
+  sil answer the agent got (15 minutes, the last 64), and runs a read, or a forget of the rows it names, as the buyer.
 - **Fifteen tools on sil's signed contract.** `shopping_brief_create`, `shopping_brief_edit` and
   `shopping_profile_edit` are gone; `shopping_brief_write`, `shopping_user_read`,
   `shopping_user_remember` and `shopping_user_forget` replace them. `sil_whoami` answers the
   lean shape (name, country, currency, gender, language, one default address). Replies are
-  compact JSON. `shopping_domain_get` pages with `keys` and `after`; `shopping_product_get`
-  takes at most three ids and an optional `page`. The skill is rewritten to match.
+  compact JSON. `shopping_product_get` takes at most three ids.
 - **`sil_whoami` answers flat**, exactly the contract's shape: no `identity` wrapper, no
-  `web_origin` fields. `shopping_product_get` names ids sil does not hold in `not_held`.
+  `web_origin` fields.
 - **sil refuses a plugin older than 0.7.0** (HTTP 426); its message reaches the agent as it
   stands.
+
+- **A variant quotes its `price_range`, and an offer carries its shop's terms.** A variant's
+  `starting_from` is gone: it answers `price_range`, its offers' one-off prices, cheapest to
+  dearest. An offer's `seller` carries its `name`, `delivery` to `ship_to`, `returns_days` and
+  its own `promotions`; `shopping_seller_get` is for warranty, policies, reviews and other
+  terms. The skill quotes a promotion only on its own shop's offer.
+
+### Removed
+
+- **Nothing to wait for or re-read.** The search receipt's `finding`, and `shopping_offers`'
+  `pending` answer and `confirm` request field, are gone: sil answers every call from what it
+  holds. The skill no longer tells the agent to ask again or confirm before a hand-off.
 
 ## [0.6.0] - 2026-10-08
 

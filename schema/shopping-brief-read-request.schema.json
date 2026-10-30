@@ -11,5 +11,6 @@
       "description": "Reads this brief whole; without it, the list of the buyer's briefs comes back."
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Money is in the minor unit: €130 is 13000."
 }

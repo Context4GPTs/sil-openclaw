@@ -2,7 +2,7 @@
  * sil OpenClaw plugin — entry point.
  *
  * A UCP commerce plugin for sil. It registers its real tool groups — the account
- * tools (`sil_register`, `sil_whoami`, `sil_doctor`) and the ten `shopping_*`
+ * tools (`sil_register`, `sil_whoami`, `sil_doctor`) and the twelve `shopping_*`
  * catalog tools — so they load in an OpenClaw host.
  * There is no transport, no persistent service, and no background work at
  * register time — `register()` is strictly synchronous and opens nothing.
@@ -35,7 +35,7 @@ import {
   type SilPluginConfig,
 } from "./lib/config.js";
 import { ensureDataDir, getDataDir } from "./lib/credentials.js";
-import { registerSearchResultsMethod } from "./gateway/search-results.js";
+import { registerScreenMethods } from "./gateway/screen.js";
 import { detectWiringDrift, readSilWiringFacts } from "./lib/host-wiring.js";
 import { registerCatalogTools } from "./tools/catalog.js";
 import { registerDoctorTools } from "./tools/doctor.js";
@@ -85,13 +85,9 @@ export default definePluginEntry({
     registerCatalogTools(api);
     registerDoctorTools(api);
 
-    // The pull surface a paired client resolves a search page from. Registering
-    // a closure opens nothing — no socket, no timer — so the invariant above
-    // holds; the store behind it is touched only inside the handler and inside
-    // shopping_search's execute(). NOT a tool and NOT a `registerXTools` group: it
-    // never reaches the model, and the manifest's `contracts` vocabulary has no
-    // gateway-method key, so this call IS the declaration.
-    registerSearchResultsMethod(api);
+    // Not tools, and not manifest-declarable: registration is the declaration. Registering
+    // a closure opens nothing, so the invariant above holds.
+    registerScreenMethods(api);
 
     // Host-wiring drift, at the ONE surface that survives it.
     //

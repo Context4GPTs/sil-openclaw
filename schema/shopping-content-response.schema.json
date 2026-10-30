@@ -5,8 +5,6 @@
   "type": "object",
   "required": [
     "status",
-    "tokens",
-    "total",
     "passages"
   ],
   "properties": {
@@ -15,282 +13,77 @@
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
     },
-    "tokens": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "Reads what the passages cost, in tokens."
-    },
-    "total": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "Reads how many passages hold a term before the cut."
-    },
     "passages": {
       "type": "array",
       "items": {
-        "anyOf": [
-          {
-            "type": "object",
-            "required": [
-              "id",
-              "title",
-              "from",
-              "role",
-              "written",
-              "part",
-              "of",
-              "matched",
-              "text",
-              "kind"
-            ],
-            "properties": {
-              "id": {
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "text"
+        ],
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
                 "type": "string",
-                "description": "Names the document, to cite it or read it on."
+                "const": "guide"
               },
-              "title": {
+              {
                 "type": "string",
-                "description": "Calls the document this when citing it."
+                "const": "tutorial"
               },
-              "from": {
+              {
                 "type": "string",
-                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-                "maxLength": 255,
-                "description": "Reads the node the document is written for."
+                "const": "faq"
               },
-              "role": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "root"
-                  },
-                  {
-                    "type": "string",
-                    "const": "top"
-                  },
-                  {
-                    "type": "string",
-                    "const": "domain"
-                  },
-                  {
-                    "type": "string",
-                    "const": "shelf"
-                  },
-                  {
-                    "type": "string",
-                    "const": "kind"
-                  },
-                  {
-                    "type": "string",
-                    "const": "leaf"
-                  }
-                ],
-                "description": "Reads what that node is."
-              },
-              "written": {
+              {
                 "type": "string",
-                "format": "date",
-                "description": "Dates sil’s copy of the document."
+                "const": "glossary"
               },
-              "heading": {
+              {
                 "type": "string",
-                "description": "Reads the heading the passage sits under."
+                "const": "review"
               },
-              "part": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Reads where the passage sits, to read on from it."
-              },
-              "of": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Reads how many parts its document has."
-              },
-              "matched": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Reads which asked terms it holds; empty, none."
-              },
-              "text": {
+              {
                 "type": "string",
-                "description": "Reads the passage whole, or cut where `truncated`."
+                "const": "comparison"
               },
-              "truncated": {
-                "type": "boolean",
-                "const": true,
-                "description": "Reads that the budget cut it here."
-              },
-              "kind": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "guide"
-                  },
-                  {
-                    "type": "string",
-                    "const": "tutorial"
-                  },
-                  {
-                    "type": "string",
-                    "const": "faq"
-                  },
-                  {
-                    "type": "string",
-                    "const": "glossary"
-                  },
-                  {
-                    "type": "string",
-                    "const": "comparison"
-                  }
-                ],
-                "description": "Reads what the document is."
-              },
-              "author": {
+              {
                 "type": "string",
-                "description": "Cites them; absent, sil wrote it."
+                "const": "news"
               },
-              "url": {
+              {
                 "type": "string",
-                "description": "Hands the buyer the source."
+                "const": "discussion"
               }
-            },
-            "additionalProperties": false
+            ],
+            "description": "Reads what the document is."
           },
-          {
-            "type": "object",
-            "required": [
-              "id",
-              "title",
-              "from",
-              "role",
-              "written",
-              "part",
-              "of",
-              "matched",
-              "text",
-              "kind",
-              "author",
-              "url",
-              "published"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "description": "Names the document, to cite it or read it on."
-              },
-              "title": {
-                "type": "string",
-                "description": "Calls the document this when citing it."
-              },
-              "from": {
-                "type": "string",
-                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-                "maxLength": 255,
-                "description": "Reads the node the document is written for."
-              },
-              "role": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "root"
-                  },
-                  {
-                    "type": "string",
-                    "const": "top"
-                  },
-                  {
-                    "type": "string",
-                    "const": "domain"
-                  },
-                  {
-                    "type": "string",
-                    "const": "shelf"
-                  },
-                  {
-                    "type": "string",
-                    "const": "kind"
-                  },
-                  {
-                    "type": "string",
-                    "const": "leaf"
-                  }
-                ],
-                "description": "Reads what that node is."
-              },
-              "written": {
-                "type": "string",
-                "format": "date",
-                "description": "Dates sil’s copy of the document."
-              },
-              "heading": {
-                "type": "string",
-                "description": "Reads the heading the passage sits under."
-              },
-              "part": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Reads where the passage sits, to read on from it."
-              },
-              "of": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Reads how many parts its document has."
-              },
-              "matched": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Reads which asked terms it holds; empty, none."
-              },
-              "text": {
-                "type": "string",
-                "description": "Reads the passage whole, or cut where `truncated`."
-              },
-              "truncated": {
-                "type": "boolean",
-                "const": true,
-                "description": "Reads that the budget cut it here."
-              },
-              "kind": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "review"
-                  },
-                  {
-                    "type": "string",
-                    "const": "news"
-                  }
-                ],
-                "description": "Reads a dated review or a dated report."
-              },
-              "author": {
-                "type": "string",
-                "description": "Cites who wrote or measured it, never as sil."
-              },
-              "url": {
-                "type": "string",
-                "description": "Hands the buyer the source."
-              },
-              "published": {
-                "type": "string",
-                "format": "date",
-                "description": "Says when, every time it is cited."
-              },
-              "rumour": {
-                "type": "boolean",
-                "const": true,
-                "description": "Says it is a rumour, every time it is cited."
-              }
-            },
-            "additionalProperties": false
+          "title": {
+            "type": "string",
+            "description": "Cites the document by it."
+          },
+          "author": {
+            "type": "string",
+            "description": "Cites who wrote it; absent, sil did."
+          },
+          "text": {
+            "type": "string",
+            "description": "Reads the passage."
+          },
+          "url": {
+            "type": "string",
+            "description": "Hands the buyer the source."
+          },
+          "publish_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Says when it was published, every time it is cited."
           }
-        ]
+        },
+        "additionalProperties": false
       },
-      "maxItems": 20,
       "description": "Reads sil’s passages, best first. Empty: say so, never the open web."
     }
   },

@@ -1,7 +1,7 @@
 {
   "name": "sil-openclaw",
   "version": "0.7.0",
-  "description": "Turn your OpenClaw into an expert shopping agent.",
+  "description": "The Shopping Interface Layer for personal AI agents. Turn your OpenClaw into an expert shopping agent.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -34,8 +34,10 @@
     "schema",
     "scripts/allowlist-openclaw.mjs",
     "sil-shopping",
+    "assets",
     "openclaw.plugin.json",
     "README.md",
+    "EXAMPLES.md",
     "CHANGELOG.md",
     "SECURITY.md",
     "LICENSE",

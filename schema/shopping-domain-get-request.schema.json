@@ -11,25 +11,30 @@
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Sends a leaf `shopping_domain_search` answered, or a kind to list its leaves. One that does not stand answers `not_found`; a shelf, domain or top answers `not_a_leaf` naming leaves under it; an area sil does not carry yet answers `not_carried`."
+      "description": "Sends the leaf `shopping_domain_search` answered, or the kind above its leaves. A shelf, domain or top answers `not_a_leaf` naming leaves; an area sil does not carry yet `not_carried`."
     },
-    "keys": {
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Sends what the buyer wants, in English — \"quiet, small counter, about €100\" — so the specs it reaches come first."
+    },
+    "spec_keywords": {
       "type": "array",
       "items": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 64
+        "maxLength": 64,
+        "description": "A word for a spec: \"noise\", \"depth\", \"burr\"."
       },
       "minItems": 1,
-      "maxItems": 6,
-      "uniqueItems": true,
-      "description": "Sends keys of this place, from its index, to read only those whole — each with its `description` and `step`. Absent: the index of every key. A key the place has no spec for is refused. Not with `after`."
+      "maxItems": 32,
+      "description": "Sends the specs the agent is looking for, in a word each; the specs they name rank first."
     },
-    "after": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64,
-      "description": "Sends the `next` of the page just read, to read the index on from that key; a key the place has no spec for is refused."
+    "page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Reads on: the `next_page` the last answer gave."
     }
   },
   "additionalProperties": false

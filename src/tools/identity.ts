@@ -1,6 +1,7 @@
 import type { PluginAPI } from "openclaw/plugin-sdk/plugin-entry";
 import { Type } from "typebox";
 
+import { keepAnswer } from "../lib/answers.js";
 import { getWebUrl, getWebUrlSource, getApiUrl } from "../lib/config.js";
 import {
   clearTokens,
@@ -139,8 +140,8 @@ function registerWhoami(api: PluginAPI): void {
       label: "Who am I on sil",
       description:
         "Who is signed in, where they are and what they price in: `name`, `country`,"
-        + " `currency`, `gender`, `language` and the default `address`, each absent where sil"
-        + " holds none. Fast: call it freely, and never ask the buyer for what it answers."
+        + " `currency`, `gender`, `language`, each absent where sil holds none, and `addresses`,"
+        + " each by its name, the default first; `ship_to` on offers names one. Fast: call it freely, and never ask the buyer for what it answers."
         + " `gender` on anything worn is the product spec `gender` (male → `mens`, female →"
         + " `womens`), asked once where it answers none. If they are not registered, or the"
         + " session is past refreshing, the result names the recovery (sil_register).",
@@ -180,7 +181,9 @@ function registerWhoami(api: PluginAPI): void {
             // Logs-only, never a payload field: a session thrashing through silent
             // 401 recoveries is invisible otherwise.
             if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
-            return identityOutcomeToResult(api, recovered.outcome);
+            return identityOutcomeToResult(api, recovered.outcome, (body) =>
+              keepAnswer(api, callId, run.sessionId, body),
+            );
           case "must_reregister":
             // Clear the known-dead pair so its stale presence cannot block the
             // sil_register recovery; an empty re-read has nothing to clear.
@@ -203,10 +206,17 @@ function registerWhoami(api: PluginAPI): void {
 }
 
 /** Map a non-401 identity outcome to the agent-facing result. */
-function identityOutcomeToResult(api: PluginAPI, outcome: IdentityOutcome) {
+function identityOutcomeToResult(
+  api: PluginAPI,
+  outcome: IdentityOutcome,
+  keep: (body: Record<string, unknown>) => void,
+) {
   switch (outcome.kind) {
-    case "ok":
-      return jsonResult({ status: "ok", ...outcome.identity }, ...wiringAdvisoryBlocks(api));
+    case "ok": {
+      const body = { status: "ok", ...outcome.identity };
+      keep(body);
+      return jsonResult(body, ...wiringAdvisoryBlocks(api));
+    }
     case "refused":
       api.logger.info("sil_whoami_refused", {});
       return jsonResult({ status: "invalid_request", message: outcome.message });

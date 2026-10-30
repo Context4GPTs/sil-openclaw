@@ -5,6 +5,7 @@
   "type": "object",
   "required": [
     "status",
+    "ship_to",
     "offers"
   ],
   "properties": {
@@ -13,54 +14,325 @@
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
     },
+    "ship_to": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Names the address."
+        },
+        "locality": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Says the town."
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "minLength": 2,
+          "maxLength": 2,
+          "description": "Says the country every `ships` is relative to."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Says where delivery was priced to: every `ships` is relative to it."
+    },
     "offers": {
       "type": "array",
       "items": {
         "type": "object",
         "required": [
           "variant_id",
-          "title",
-          "seller_id",
-          "seller_name",
+          "seller",
           "price",
-          "currency",
-          "availability",
-          "observed_at",
           "url",
-          "seller_fit"
+          "read_on"
         ],
         "properties": {
           "variant_id": {
             "type": "string",
             "minLength": 1,
             "maxLength": 256,
-            "description": "Matches the offer to the pick; passes it to the dossier."
+            "description": "Matches the offer to the variant asked for."
           },
-          "title": {
-            "type": "string",
-            "description": "Names what the listing sells."
-          },
-          "seller_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256,
-            "description": "Passes it to `shopping_seller_get`."
-          },
-          "seller_name": {
-            "type": "string",
-            "description": "Names the shop."
+          "seller": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "host",
+              "country",
+              "ships",
+              "promotions"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Passes it to `shopping_seller_get` for its warranty, policies, reviews and other terms."
+              },
+              "name": {
+                "type": "string",
+                "description": "Names the shop."
+              },
+              "host": {
+                "type": "string",
+                "description": "Names the shop by its site."
+              },
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$",
+                    "minLength": 2,
+                    "maxLength": 2,
+                    "description": "Where the shop is."
+                  },
+                  {
+                    "type": "string",
+                    "const": "unknown"
+                  }
+                ],
+                "description": "Says where the shop is."
+              },
+              "ships": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "serviceable"
+                  },
+                  {
+                    "type": "string",
+                    "const": "not_serviceable"
+                  },
+                  {
+                    "type": "string",
+                    "const": "unknown"
+                  }
+                ],
+                "description": "Says whether it ships there; `unknown` keeps the seller and says sil has not read its policy."
+              },
+              "delivery": {
+                "type": "object",
+                "properties": {
+                  "cost": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "In this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "currency"
+                        ],
+                        "properties": {
+                          "min": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The low end, in the minor unit."
+                          },
+                          "max": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The high end, in the minor unit."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "Both ends in this currency; sil converts nothing."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "Quotes one fee, or the range from the cheapest route’s to the dearest’s."
+                  },
+                  "free_over": {
+                    "type": "object",
+                    "required": [
+                      "amount",
+                      "currency"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$",
+                        "minLength": 3,
+                        "maxLength": 3,
+                        "description": "In this currency."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "Quotes the basket that clears the charge."
+                  },
+                  "days": {
+                    "type": "object",
+                    "required": [
+                      "min",
+                      "max"
+                    ],
+                    "properties": {
+                      "min": {
+                        "type": "integer",
+                        "description": "Tells the buyer the soonest it arrives."
+                      },
+                      "max": {
+                        "type": "integer",
+                        "description": "Tells the buyer the latest."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "Tells the buyer how long the route takes."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Tells the buyer what delivery to their country costs and how long it takes."
+              },
+              "returns_days": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Says how many days the buyer has to return it."
+              },
+              "promotions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "what"
+                  ],
+                  "properties": {
+                    "what": {
+                      "type": "string",
+                      "description": "Quotes the promotion as the shop prints it."
+                    },
+                    "discount": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100,
+                      "description": "Quotes its discount, in percent, where the shop states one."
+                    },
+                    "minimum_spend": {
+                      "type": "object",
+                      "required": [
+                        "amount",
+                        "currency"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$",
+                          "minLength": 3,
+                          "maxLength": 3,
+                          "description": "In this currency."
+                        }
+                      },
+                      "additionalProperties": false,
+                      "description": "Quotes the spend it needs."
+                    },
+                    "until": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Says when it ends."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "Quotes this shop’s own promotions, on its offers only: ask who qualifies; a reduced price only from `discount` and only on the buyer’s yes."
+              }
+            },
+            "additionalProperties": false,
+            "description": "The shop selling it."
           },
           "price": {
-            "type": "string",
-            "pattern": "^[0-9]+(\\.[0-9]+)?$",
-            "description": "Quotes the price as read, never converted."
+            "type": "object",
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "properties": {
+              "amount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "In this currency."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Quotes what it costs, as the shop printed it."
           },
-          "currency": {
-            "type": "string",
-            "pattern": "^[A-Z]{3}$",
-            "minLength": 3,
-            "maxLength": 3,
-            "description": "Quotes the price in this currency."
+          "was": {
+            "type": "object",
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "properties": {
+              "amount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "minLength": 3,
+                "maxLength": 3,
+                "description": "In this currency."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Quotes the price it was, struck through."
           },
           "availability": {
             "anyOf": [
@@ -78,6 +350,10 @@
               },
               {
                 "type": "string",
+                "const": "by_enquiry"
+              },
+              {
+                "type": "string",
                 "const": "out_of_stock"
               },
               {
@@ -91,91 +367,82 @@
             ],
             "description": "Tells the buyer whether it can be bought now."
           },
-          "observed_at": {
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "new"
+              },
+              {
+                "type": "string",
+                "const": "used"
+              },
+              {
+                "type": "string",
+                "const": "refurbished"
+              },
+              {
+                "type": "string",
+                "const": "damaged"
+              }
+            ],
+            "description": "Says it is not sold new where the shop says so; absent, new or unstated."
+          },
+          "plan": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Says the price is a subscription’s, and each cadence the shop offers."
+          },
+          "pack": {
+            "type": "object",
+            "required": [
+              "count",
+              "with"
+            ],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Says how many of the variant it holds."
+              },
+              "with": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Names what else comes in it."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Says the price buys a pack or a bundle, not one of the variant."
+          },
+          "packaging": {
             "type": "string",
-            "format": "date-time",
-            "description": "Dates the price: when sil last read it."
+            "minLength": 1,
+            "description": "Names a special packaging the price buys it in, as the shop printed it."
           },
           "url": {
             "type": "string",
             "description": "Hands the buyer the listing."
           },
-          "seller_fit": {
-            "type": "object",
-            "required": [
-              "ships"
-            ],
-            "properties": {
-              "ships": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "serviceable"
-                  },
-                  {
-                    "type": "string",
-                    "const": "not_serviceable"
-                  },
-                  {
-                    "type": "string",
-                    "const": "unknown"
-                  }
-                ],
-                "description": "Says whether it ships there; `unknown` keeps the seller and says sil has not read its policy."
-              }
-            },
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "object",
-                  "required": [
-                    "amount",
-                    "currency"
-                  ],
-                  "properties": {
-                    "amount": {
-                      "type": "string",
-                      "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                      "description": "Quotes the amount as the page states it."
-                    },
-                    "currency": {
-                      "type": "string",
-                      "pattern": "^[A-Z]{3}$",
-                      "minLength": 3,
-                      "maxLength": 3,
-                      "description": "Quotes the amount in this currency."
-                    }
-                  },
-                  "additionalProperties": false
-                }
-              ]
-            },
-            "description": "Compares each requested seller key with what it asked, on this seller's value; `ships` says whether it reaches the address."
+          "read_on": {
+            "type": "string",
+            "format": "date",
+            "description": "Dates the price: the day sil read it."
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "One shop’s offer of a variant."
       },
-      "description": "Lists where it can be bought, best for the buyer first."
+      "description": "Lists where each variant can be bought: shops shipping to `ship_to` first, cheapest first."
     },
-    "pending": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 256,
-        "description": "Names a variant whose offers sil is still finding."
-      },
-      "maxItems": 10,
-      "description": "Names the asked variants whose offers sil is still finding; ask again in a few seconds."
+    "next_page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Sends it as `page` to read the offers on; absent on the last page."
     }
   },
   "additionalProperties": false

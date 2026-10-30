@@ -4,14 +4,14 @@
   "title": "sil shopping_domain_search — request",
   "type": "object",
   "required": [
-    "q"
+    "query"
   ],
   "properties": {
-    "q": {
+    "query": {
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "Sends what the thing is called, in English — translate the buyer first."
+      "description": "Sends what the thing is called, in English: \"coffee grinder\"."
     }
   },
   "additionalProperties": false

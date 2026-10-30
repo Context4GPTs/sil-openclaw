@@ -19,78 +19,25 @@
         "type": "object",
         "required": [
           "path",
-          "name",
-          "matched",
-          "under"
+          "name"
         ],
         "properties": {
           "path": {
             "type": "string",
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
-            "description": "Passes the leaf to `shopping_domain_get` and `shopping_search` verbatim."
+            "description": "Sends it to `shopping_domain_get` and `shopping_search`; read outermost first, it names every place the leaf sits under."
           },
           "name": {
             "type": "string",
             "maxLength": 64,
             "description": "Calls the leaf this."
-          },
-          "matched": {
-            "type": "string",
-            "description": "Reads which of sil's words for it the ask matched."
-          },
-          "under": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "path",
-                "name",
-                "role"
-              ],
-              "properties": {
-                "path": {
-                  "type": "string",
-                  "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-                  "maxLength": 255,
-                  "description": "Names the place the leaf sits under."
-                },
-                "name": {
-                  "type": "string",
-                  "maxLength": 64,
-                  "description": "Calls the place this."
-                },
-                "role": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "const": "top"
-                    },
-                    {
-                      "type": "string",
-                      "const": "domain"
-                    },
-                    {
-                      "type": "string",
-                      "const": "shelf"
-                    },
-                    {
-                      "type": "string",
-                      "const": "kind"
-                    }
-                  ],
-                  "description": "Reads what the place is: a top, a domain, a shelf or a kind."
-                }
-              },
-              "additionalProperties": false
-            },
-            "description": "Reads every place above the leaf, outermost first and its parent last, to judge whether this is the thing the buyer means."
           }
         },
         "additionalProperties": false
       },
       "maxItems": 3,
-      "description": "Reads the most relevant leaves for these words and judges which, if any, is the buyer’s thing. Empty: sil holds no such leaf; say so, or rephrase with what the thing is called."
+      "description": "Reads the leaves these words reach, best first, and judges which is the buyer’s thing. Empty: sil holds no such leaf; say so."
     }
   },
   "additionalProperties": false

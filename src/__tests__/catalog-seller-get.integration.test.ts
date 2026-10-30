@@ -45,12 +45,9 @@ describe("shopping_seller_get — one route, one request", () => {
     expect(router.other).toEqual([]);
   });
 
-  it("the request takes `ids` and NOTHING else — an address is refused", () => {
-    // `ships` answers for the buyer's default address, so this call has no address to
-    // send. The artifact IS the tool's `parameters`, so it is what the host validates
-    // against: a re-added echo would be a field the route never agreed to.
+  it("the request takes `ids` and a `ship_to` naming one of the buyer's addresses", () => {
     expect(artifactErrors(TOOL, "request", { ids: ["s1"] })).toEqual([]);
-    expect(artifactErrors(TOOL, "request", { ids: ["s1"], ship_to: "home" })).not.toEqual([]);
+    expect(artifactErrors(TOOL, "request", { ids: ["s1"], ship_to: "Home" })).toEqual([]);
   });
 });
 

@@ -1,11 +1,6 @@
 /**
- * INTEGRATION — `shopping_offers` on the wire: the prices and seller terms, read live.
- *
- * Several offers on one variant ARE the price spread, and the spread is the answer. The
- * assertion that matters here is that every one of them crosses intact, each still
- * carrying its own currency, its own `observed_at` and its own `seller_fit` — a collapse
- * to a "best" offer, a lost timestamp, or a dropped `ships` turns a dated, sourced quote
- * into an undated claim about a seller nobody checked.
+ * INTEGRATION — `shopping_offers` on the wire: the picked variants' ids go to sil once,
+ * and its answer crosses untouched.
  */
 
 import { describe, it, expect } from "vitest";
@@ -49,38 +44,5 @@ describe("shopping_offers — one route, one request", () => {
     expect(router.other).toEqual([]);
   });
 
-  it("the request refuses a field it does not take", () => {
-    expect(artifactErrors(TOOL, "request", ASK)).toEqual([]);
-    expect(artifactErrors(TOOL, "request", { ...ASK, ship_to: "home" })).not.toEqual([]);
-  });
 });
 
-describe("shopping_offers — what the answer means", () => {
-  it("the contract's own 200 arrives verbatim — every seller, price, currency and date", async () => {
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok(contractResponse(TOOL)));
-    const payload = await run();
-    expect(payload).toEqual(contractResponse(TOOL));
-    const offers = payload["offers"] as Record<string, unknown>[];
-    // The spread, not a winner: two sellers for one variant, each dated and priced.
-    expect(offers.length).toBeGreaterThan(1);
-    expect(new Set(offers.map((o) => o["seller_id"])).size).toBe(offers.length);
-    for (const offer of offers) {
-      expect(offer["currency"]).toEqual(expect.any(String));
-      expect(offer["observed_at"]).toEqual(expect.any(String));
-    }
-  });
-
-  it("`seller_fit` reaches the agent on EVERY offer, `ships` inside it", async () => {
-    // The brief's seller rows are answered here and nowhere else. `ships` is always present
-    // and `unknown` is an ordinary value of it — an offer arriving without `seller_fit`
-    // would read as a seller with no terms rather than one sil has not read.
-    seedTokens(ACCESS, REFRESH);
-    installRouter(() => ok(contractResponse(TOOL)));
-    const offers = (await run())["offers"] as Record<string, Record<string, unknown>>[];
-    for (const offer of offers) {
-      expect(Object.keys(offer["seller_fit"] ?? {})).toContain("ships");
-      expect(["serviceable", "not_serviceable", "unknown"]).toContain(offer["seller_fit"]["ships"]);
-    }
-  });
-});

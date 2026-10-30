@@ -32,5 +32,6 @@
       "description": "Reads only these kinds; absent, every row."
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Money is in the minor unit: €130 is 13000."
 }
