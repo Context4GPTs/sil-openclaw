@@ -12,6 +12,10 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
+- **The README says what SIL is.** The Shopping Interface Layer for personal AI agents: why an
+  interface beats a search box or a product feed, and what a turn looks like. `EXAMPLES.md` holds
+  the buyer conversations. The keyboard, bike and tent examples, the checkout link and the UCP
+  lines are gone; a banner under `assets/`; the npm and ClawHub description says the same.
 - **The Ask-to-Offer Journey contract.** Money is `{ amount, currency }` in integer minor units
   (€130 is 13000), a range `{ min?, max?, currency }`; spec rows are `spec`, not `key`, and
   the search's `price` is the range. `shopping_domain_get` answers `name`, `reached` and

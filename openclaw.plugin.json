@@ -1,7 +1,7 @@
 {
   "id": "sil",
   "name": "sil",
-  "description": "Turn your OpenClaw into an expert shopping agent.",
+  "description": "The Shopping Interface Layer for personal AI agents. Your agent shops from the specs that decide a buy, products read from the makers' and shops' own pages, and every shop that sells to you. Open beta.",
   "version": "0.7.0",
   "skills": [
     "./sil-shopping"
