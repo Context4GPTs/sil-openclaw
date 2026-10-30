@@ -7,6 +7,7 @@
 ╚══════╝╚═╝╚══════╝
 
         Shop like you code
+```
 
 **The Shopping Interface Layer for personal AI agents.**
 
