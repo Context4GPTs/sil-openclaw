@@ -419,6 +419,11 @@
             "additionalProperties": false,
             "description": "Says the price buys a pack or a bundle, not one of the variant."
           },
+          "packaging": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Names a special packaging the price buys it in, as the shop printed it."
+          },
           "url": {
             "type": "string",
             "description": "Hands the buyer the listing."
