@@ -65,7 +65,7 @@ const TOOL = "sil_whoami";
 const REAL_IDENTITY = {
   name: "Ada Lovelace",
   country: "GB",
-  address: { label: "Home", locality: "London", country: "GB" },
+  addresses: [{ label: "Home", locality: "London", country: "GB", default: true }],
 };
 
 let dataDir: string;
@@ -225,12 +225,12 @@ describe("sil_whoami — success result carries ONLY identity (no credential ech
     registerIdentityTools(api);
   });
 
-  it("answers the buyer's name, country and default address flat, beside status", async () => {
+  it("answers the buyer's name, country and addresses flat, beside status", async () => {
     const payload = payloadOf(await getTool(api, TOOL).execute("c1", {}));
     expect(payload).not.toHaveProperty("identity");
     expect(payload["name"]).toBe("Ada Lovelace");
     expect(payload["country"]).toBe("GB");
-    expect(payload["address"]).toEqual({ label: "Home", locality: "London", country: "GB" });
+    expect(payload["addresses"]).toEqual([{ label: "Home", locality: "London", country: "GB", default: true }]);
   });
 
   it("does NOT echo the access token, refresh token, or Authorization header", async () => {

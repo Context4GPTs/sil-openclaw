@@ -63,66 +63,114 @@
                 "^.*$": {
                   "type": "array",
                   "items": {
-                    "type": "object",
-                    "required": [
-                      "key",
-                      "op",
-                      "value"
-                    ],
-                    "properties": {
-                      "key": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 64,
-                        "description": "Names the key from the domain read; `price` is a key every domain has."
-                      },
-                      "op": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "const": "eq"
-                          },
-                          {
-                            "type": "string",
-                            "const": "neq"
-                          },
-                          {
-                            "type": "string",
-                            "const": "gte"
-                          },
-                          {
-                            "type": "string",
-                            "const": "lte"
-                          },
-                          {
-                            "type": "string",
-                            "const": "in"
-                          },
-                          {
-                            "type": "string",
-                            "const": "nin"
-                          }
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "required": [
+                          "spec",
+                          "op",
+                          "value"
                         ],
-                        "description": "Sends the operator the domain read listed for this key."
+                        "properties": {
+                          "spec": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "description": "Sends a spec the domain read listed, unchanged: a part’s by its path (`boiler.boilerVolume`)."
+                          },
+                          "op": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "eq"
+                              },
+                              {
+                                "type": "string",
+                                "const": "neq"
+                              },
+                              {
+                                "type": "string",
+                                "const": "gte"
+                              },
+                              {
+                                "type": "string",
+                                "const": "lte"
+                              },
+                              {
+                                "type": "string",
+                                "const": "in"
+                              },
+                              {
+                                "type": "string",
+                                "const": "nin"
+                              }
+                            ],
+                            "description": "Sends the operator the domain read listed for this spec."
+                          },
+                          "value": {
+                            "description": "Sends the desired value, typed by the spec's type."
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256,
+                            "description": "Quotes the buyer's own words behind the spec, in English — translated, never a paraphrase, never a sentence they did not say; a spec derived from a measurement quotes the measurement. Reads them back before proposing to relax it."
+                          }
+                        },
+                        "additionalProperties": false
                       },
-                      "value": {
-                        "description": "Sends the desired value, typed by the key's type."
-                      },
-                      "currency": {
-                        "type": "string",
-                        "pattern": "^[A-Z]{3}$",
-                        "minLength": 3,
-                        "maxLength": 3,
-                        "description": "On money, the currency the bound is tested in: sil holds no exchange rate, so it is tested against offers in this currency only. Leave it out to mean the buyer's own currency, as `sil_whoami` answers it."
-                      },
-                      "reason": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 256,
-                        "description": "Quotes the buyer's own words behind the spec, in English — translated, never a paraphrase, never a sentence they did not say; a spec derived from a measurement quotes the measurement. Reads them back before proposing to relax it."
+                      {
+                        "type": "object",
+                        "required": [
+                          "spec",
+                          "range"
+                        ],
+                        "properties": {
+                          "spec": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "description": "Names a money spec: `price`, or a seller’s money spec."
+                          },
+                          "range": {
+                            "type": "object",
+                            "required": [
+                              "currency"
+                            ],
+                            "properties": {
+                              "min": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991,
+                                "description": "The low end, in the minor unit."
+                              },
+                              "max": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991,
+                                "description": "The high end, in the minor unit."
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$",
+                                "minLength": 3,
+                                "maxLength": 3,
+                                "description": "Both ends in this currency; sil converts nothing."
+                              }
+                            },
+                            "additionalProperties": false,
+                            "description": "Holds the money spec’s range, one or both ends."
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256,
+                            "description": "Quotes the buyer's own words behind the spec, in English — translated, never a paraphrase, never a sentence they did not say; a spec derived from a measurement quotes the measurement. Reads them back before proposing to relax it."
+                          }
+                        },
+                        "additionalProperties": false
                       }
-                    },
-                    "additionalProperties": false
+                    ]
                   }
                 }
               },

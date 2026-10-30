@@ -295,7 +295,7 @@ describe("the retired VOCABULARY is gone from every agent-facing string", () => 
 });
 
 describe("no honesty field is ever framed as an exclusion", () => {
-  it("NO registered tool teaches dropping / filtering / hiding on `unknown`, an absent `fit` key, an empty `variants` or `webpage_info`", () => {
+  it("NO registered tool teaches dropping / filtering / hiding on `unknown` ask numbers, an empty `variants` or `webpage_info`", () => {
     // The named prior failure: a seller tool leading the agent to drop `unknown` sellers
     // undoes the route's fail-closed design one layer up, and the shortlist collapses
     // while looking like it filtered. The scan runs over the WHOLE surface — an account

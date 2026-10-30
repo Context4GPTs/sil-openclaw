@@ -5,31 +5,20 @@
   "type": "object",
   "required": [
     "path",
-    "q"
+    "about"
   ],
   "properties": {
     "path": {
       "type": "string",
       "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
       "maxLength": 255,
-      "description": "Sends the node whose line is read: the leaf chosen, or any place above it. The line is the node, every kind it is, what sits beneath it and every place above it."
+      "description": "Sends the place whose line is read: the place itself, every kind it is, what sits beneath it and every place above it."
     },
-    "q": {
+    "about": {
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "Sends the terms to grep, as the buyer or a shop says them; a \"quoted phrase\" is one term. A passage holding every term comes first, then one holding some."
-    },
-    "document": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 256,
-      "description": "Reads one document's passages in order instead of grepping: any `id` a passage or a domain's map or a place's `guides` carried, from part `from` on; past its last part, none."
-    },
-    "from": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Starts the read of `document` at this part. Default 1."
+      "description": "Sends the words to find, as the buyer or a shop says them; a \"quoted phrase\" is one term. Passages holding every word come first."
     },
     "kinds": {
       "type": "array",
@@ -62,27 +51,22 @@
           {
             "type": "string",
             "const": "news"
+          },
+          {
+            "type": "string",
+            "const": "discussion"
           }
-        ]
+        ],
+        "description": "A kind of document."
       },
       "minItems": 1,
       "uniqueItems": true,
-      "description": "Narrows the read to these kinds of document; absent reads every kind."
-    },
-    "min_passages": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "Fills up to this many from the nearest documents when too few match, marked by an empty `matched`. At most 20; a larger ask is served at that. Default 1."
-    },
-    "max_passages": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Caps the passages answered, at most 20; a larger ask is served at that. Default 8."
+      "description": "Reads only these kinds; absent, every kind."
     },
     "max_tokens": {
       "type": "integer",
       "minimum": 200,
-      "description": "Caps what the passages cost, a token being four characters of a passage as sent; the last passage is cut to fit and marked `truncated`. At most 2300; a larger ask is served at that. Default 2000."
+      "description": "Caps what the passages cost, a token being four characters; whole passages are answered while they fit. At most 2300, a larger ask served at that. Default 2000."
     }
   },
   "additionalProperties": false

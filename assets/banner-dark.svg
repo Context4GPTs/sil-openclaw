@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="230" viewBox="0 0 880 230" role="img" aria-label="SIL. Shop like you code.">
+  <rect width="880" height="230" rx="10" fill="#1c1714"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="21" fill="#e09a68" xml:space="preserve">
+    <text x="44" y="60">███████╗██╗██╗</text>
+    <text x="44" y="84">██╔════╝██║██║</text>
+    <text x="44" y="108">███████╗██║██║</text>
+    <text x="44" y="132">╚════██║██║██║</text>
+    <text x="44" y="156">███████║██║███████╗</text>
+    <text x="44" y="180">╚══════╝╚═╝╚══════╝</text>
+  </g>
+  <text x="340" y="104" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="42" fill="#efe6de">Shop like you code.</text>
+  <text x="342" y="142" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#ad9c90">The Shopping Interface Layer for personal AI agents</text>
+  <rect x="342" y="162" width="92" height="26" rx="4" fill="none" stroke="#e09a68"/>
+  <text x="388" y="180" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#e09a68">OPEN BETA</text>
+</svg>

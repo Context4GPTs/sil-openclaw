@@ -1,16 +1,13 @@
 /**
  * The twelve `shopping_*` tools, 1:1 with the sil-api user, brief and catalog routes.
- * Bodies cross verbatim: a projection would drop the fields the honesty reading is
- * computed from (`fit`, `unknown`, `variants`) while looking healthy.
+ * Bodies cross verbatim: sil's answer is the agent's answer, and the screen's.
  */
 
 import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk/plugin-entry";
 
+import { keepAnswer } from "../lib/answers.js";
 import { requestSchema } from "../lib/artifacts.js";
-import { readConfig } from "../lib/credentials.js";
 import { readHostVersion, wiringAdvisoryBlocks } from "../lib/host-wiring.js";
-import { logSearchResults } from "../lib/search-results-log.js";
-import { putSearchResult, type SearchResultPage } from "../lib/search-results-store.js";
 import { DOMAIN_GET_ROUTE, callRoute, type ShoppingCall } from "../lib/shopping-call.js";
 import type { Caller } from "../lib/sil-client.js";
 import { jsonResult } from "../lib/tool-result.js";
@@ -21,9 +18,6 @@ interface ShoppingTool extends ShoppingCall {
   readonly description: string;
 }
 
-/** The tool whose page a paired client can pull back by `callId`. */
-const SEARCH_TOOL = "shopping_search";
-
 export const SHOPPING_TOOLS = [
   {
     name: "shopping_user_read",
@@ -31,9 +25,10 @@ export const SHOPPING_TOOLS = [
     path: "/user/read",
     label: "Read what sil keeps about the buyer",
     description:
-      "Every row sil keeps about the buyer — measurements, memories, preferences, purchases"
-      + " — each with its `id`, what it gives back and its source. Read it once per"
-      + " conversation before asking anything, and before any forget; say a row when you use it.",
+      "Know the buyer: everything kept about them is here, never in your own memory files."
+      + " Read once per conversation before asking anything, when they ask what you keep, and"
+      + " before a forget. A price row is `value` with `unit` its currency; money is in the"
+      + " minor unit: €130 is 13000.",
   },
   {
     name: "shopping_user_remember",
@@ -41,18 +36,20 @@ export const SHOPPING_TOOLS = [
     path: "/user/remember",
     label: "Keep what lasts about the buyer",
     description:
-      "Keep what is lasting about the buyer, in the turn that settles it, and say so with"
-      + " \"forget that\" as the undo. What changes only this buy rides on the call or in a"
-      + " brief, never here.",
+      "Keep what will matter next time about the buyer (how they use it, what they value, a"
+      + " cap for this kind of thing, a measurement) in the turn you learn it, before any"
+      + " search, and say so with the undo. This is the only place the buyer is kept: \"remember"
+      + " this\" means this call, not a note or memory file. A one-off wish for this buy rides on"
+      + " its calls instead. Each row's `place` is the `name` of the kind you are shopping, from"
+      + " the domain read. A price is `value` with `unit` its currency; money is in the minor"
+      + " unit: €130 is 13000.",
   },
   {
     name: "shopping_user_forget",
     method: "POST",
     path: "/user/forget",
     label: "Erase what sil keeps, on the buyer's word",
-    description:
-      "Erase rows by `ids`, or everything with `all`, only after saying what goes and the"
-      + " buyer saying yes. The answer states what went and what sil cannot reach.",
+    description: "Erase what sil keeps, only after saying what goes and the buyer saying yes.",
   },
   {
     name: "shopping_brief_write",
@@ -61,87 +58,108 @@ export const SHOPPING_TOOLS = [
     label: "Open or update a brief",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Write the requirements of a buy that spans asks or conversations: a title, a"
-      + " narrative in the buyer's terms and specs by domain. Without `id` it opens a brief"
-      + " and answers its `id`; with one it updates it.",
+      "Write down a buy that spans asks or conversations; no other call needs one. Spec rows"
+      + " are `{ spec, op, value }`, a money row `{ spec: \"price\", range: { min?, max?, currency"
+      + " } }`; money is in the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_brief_read",
     method: "POST",
     path: "/briefs/read",
     label: "Read a brief, or list the buyer's briefs",
-    description:
-      "Pick a buy up again: with an `id` the whole brief, without one the buyer's briefs,"
-      + " newest first.",
+    description: "Pick a written-down buy up again; money is in the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_domain_search",
     method: "GET",
     path: "/catalog/domains",
-    query: ["q"],
-    label: "Find the place for a thing",
-    description:
-      "Place a thing: send `q`, what it is called, in English, and get the leaves it"
-      + " could be, best first. An empty answer means sil does not carry it yet.",
+    query: ["query"],
+    label: "Place the thing",
+    description: "Place the thing the buyer named: the leaves sil holds for it.",
   },
   {
     name: "shopping_domain_get",
     ...DOMAIN_GET_ROUTE,
-    label: "Read a place's specs",
+    label: "Read how to search a place",
     recovery: { not_found: "shopping_domain_search" },
     description:
-      "What decides the buy in a leaf, from a path shopping_domain_search answered: the"
-      + " keys it is bought by, their operators and units, and the seller terms. Send those"
-      + " keys, never a synonym you coined.",
+      "Learn what decides a leaf or the kind above its leaves, and how to search it: send"
+      + " `path`, the buyer's words in English as `query`, and a word per spec you are after."
+      + " Back come the place's `name` and one line per spec (`spec`, `type`, `unit`, `values`,"
+      + " `operators`), and a spec marked `decides` carries its `why`, to teach and ask from."
+      + " The first `reached` lines answer the buyer's words; when `reached` is every line on"
+      + " the page and `next_page` is there, more of what they asked for is past it. Send `page`"
+      + " = `next_page` then, and when a spec you need is not on the page.",
   },
   {
     name: "shopping_content",
     method: "POST",
     path: "/catalog/content",
-    label: "Grep what sil holds about it",
+    label: "Read what sil holds about it",
     recovery: { not_found: "shopping_domain_search" },
     description:
-      "Grep sil's library under a `path` for `q`: its own guides and the sources it read,"
-      + " as whole passages quoted verbatim. Empty `passages` means sil holds nothing on it.",
+      "Teach before you ask: the passages sil holds on a place that bear on `about`. Send the"
+      + " buyer's own taste words as `about` (clarity, texture, quiet), then turn the passage"
+      + " into specs from the domain read or into the question that decides. A question's why"
+      + " comes from here or from a spec's `why`.",
   },
   {
-    name: SEARCH_TOOL,
+    name: "shopping_search",
     method: "POST",
     path: "/catalog/search",
     label: "Search sil's products",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "The products that fit, by what decides the buy, in one leaf or the kind above"
-      + " several. Search as often as the job needs; `fit` states per key what sil verified"
-      + " and what it holds nothing on.",
+      "Search once per settled ask: `specs` `{ spec, op, value }` from the domain read and"
+      + " `price` the range `{ min?, max?, currency }`, each a want the buyer said or sil keeps;"
+      + " money is in the minor unit: €130 is 13000. `query` holds only the buyer's own words"
+      + " for what no spec holds, and no brand, model or product they did not name: good `query:"
+      + " \"clarity\"` when no spec holds clarity, bad `query: \"Eureka Mignon\"` when the buyer"
+      + " never said it. Back come `asked` numbered, `search_stats` to explain the shortlist,"
+      + " and the closest cards with `holds`, `misses` and `unknown` as ask numbers,"
+      + " `price_range` and `variants`, each with its own `price_range`, one `recommended`. When"
+      + " few fit or many are unknown, tell the buyer what came back and ask the one question"
+      + " that would change it, or ask before relaxing a want, rather than searching again in"
+      + " other words.",
   },
   {
     name: "shopping_product_get",
     method: "POST",
     path: "/catalog/product",
-    label: "Read the whole dossier on a shortlisted variant",
+    label: "Read shortlisted products whole",
     description:
-      "One product whole: send 1–3 variant ids from a search and get everything sil holds for each,"
-      + " with the source and date of every reading.",
+      "Read the products the buyer leans to whole: values once, reviews, every picture, and"
+      + " each variant with what sets it apart and its `price_range`, cheapest to dearest offer."
+      + " Pick the variants to buy here; money is in the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_offers",
     method: "POST",
     path: "/catalog/offers",
-    label: "List who sells a variant, at what price and on what terms",
+    label: "Where to buy the picked variants",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Who sells the picked variants, at what price and on what terms, each price dated —"
-      + " a price check too; `confirm` re-reads a hand-off listing now.",
+      "Where to buy: variant ids from `shopping_product_get`, never product ids, and"
+      + " `ship_to`, one of the buyer's addresses by name (the default when absent). Every"
+      + " offer, shops shipping there first, each with its shop's `name`, whether it `ships`, its"
+      + " `delivery` there, `returns_days` and own `promotions`, then `price`, `was`, `pack` or"
+      + " `plan`, and its stock; nothing marks a best. A promotion is its shop's alone: quote it"
+      + " on that shop's offers only. Money is in the minor unit: €130 is 13000. Send `page` ="
+      + " `next_page` only when a shop the buyer needs may be past it. Warranty, policies,"
+      + " reviews and other terms come from `shopping_seller_get`.",
   },
   {
     name: "shopping_seller_get",
     method: "POST",
     path: "/catalog/sellers",
-    label: "Read one seller's whole terms",
+    label: "Read the shops' terms",
     description:
-      "A seller's terms and standing: send 1–10 seller ids from shopping_offers and get"
-      + " their shipping, returns and reviews where sil has read them.",
+      "Every term of the shops the offers named, delivered to `ship_to` (the default address"
+      + " when absent): the delivery, returns and promotions the offers carry, and warranty,"
+      + " policies, reviews and other terms; money is in the minor unit: €130 is 13000. A"
+      + " promotion is its shop's alone: quote it on that shop's offers only. Ask whether they"
+      + " qualify; a reduced price only from its `discount`, on their yes. Send `page` ="
+      + " `next_page` only when a shop the buyer needs may be past it.",
   },
 ] as const satisfies readonly ShoppingTool[];
 
@@ -193,36 +211,10 @@ function defineTool(
     parameters,
     async execute(callId, params) {
       const called = await callRoute(api, tool, params, { ...run, toolCallId: callId });
-      if (called.kind === "refused") {
-        if (tool.name === SEARCH_TOOL) skipped(api, callId, `refused:${called.status}`);
-        return called.result;
-      }
-      if (tool.name === SEARCH_TOOL) bufferPage(api, callId, called.body);
+      if (called.kind === "refused") return jsonResult(called.body);
+      keepAnswer(api, callId, run.sessionId, called.body);
       // The advisory rides its own block: nothing of ours may sit beside the body's keys.
       return jsonResult(called.body, ...wiringAdvisoryBlocks(api));
     },
   };
-}
-
-/**
- * Buffer an `ok` search page for a paired client to pull by `callId`
- * (`sil.search_results`). A pure side effect: the agent's result is unchanged.
- */
-function bufferPage(api: PluginAPI, callId: string, body: Record<string, unknown>): void {
-  const principal = readConfig()?.user?.id;
-  if (principal === undefined) {
-    skipped(api, callId, "no_principal");
-    return;
-  }
-  if (!Array.isArray(body["products"])) {
-    skipped(api, callId, "no_products");
-    return;
-  }
-  putSearchResult(callId, body as SearchResultPage, principal);
-}
-
-/** Why this `callId` will resolve nothing: the pull answers only `not_found`, so this
- * log line is the operator's whole account. */
-function skipped(api: PluginAPI, callId: string, reason: string): void {
-  logSearchResults(api, "info", "skipped", { callId, reason });
 }

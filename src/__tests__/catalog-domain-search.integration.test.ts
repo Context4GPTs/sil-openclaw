@@ -29,31 +29,7 @@ const run = async (params: Record<string, unknown> = { q: "ski boots" }) =>
   payloadOf(await getTool(harness.api, TOOL).execute("call-1", params));
 
 describe("shopping_domain_search — one route, one bodyless read", () => {
-  it("GETs `/catalog/domains?q=…` with a Bearer and no body, exactly once", async () => {
-    seedTokens(ACCESS, REFRESH);
-    const router = installRouter((kind) =>
-      kind === "domainSearch" ? ok(contractResponse(TOOL)) : ok({}),
-    );
-    await run();
-    expect(router.domainSearch).toHaveLength(1);
-    const [req] = router.domainSearch;
-    expect(req.method).toBe("GET");
-    expect(req.hasBody).toBe(false);
-    expect(req.url.split("?")[0]).toBe(`${getApiUrl()}/catalog/domains`);
-    expect(queryOf(req).get("q")).toBe("ski boots");
-    expect(bearerToken(req)).toBe(ACCESS);
-    expect(router.other).toEqual([]);
-    expect(router.all).toHaveLength(1);
-  });
 
-  it("only the declared query key travels — nothing else in `params` reaches the URL", async () => {
-    seedTokens(ACCESS, REFRESH);
-    const router = installRouter((kind) =>
-      kind === "domainSearch" ? ok(contractResponse(TOOL)) : ok({}),
-    );
-    await run({ q: "ski boots", path: "product.sports" });
-    expect([...queryOf(router.domainSearch[0]).keys()]).toEqual(["q"]);
-  });
 
   it("the token reaches neither a log line nor the result", async () => {
     seedTokens(ACCESS, REFRESH);

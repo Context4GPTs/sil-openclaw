@@ -5,6 +5,7 @@
   "type": "object",
   "required": [
     "status",
+    "ship_to",
     "sellers"
   ],
   "properties": {
@@ -12,6 +13,35 @@
       "type": "string",
       "const": "ok",
       "description": "Reads the answer. Every other status arrives as an error body carrying recovery."
+    },
+    "ship_to": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Names the address."
+        },
+        "locality": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Says the town."
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "minLength": 2,
+          "maxLength": 2,
+          "description": "Says the country every `ships` is relative to."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Says where delivery was priced to: every `ships` is relative to it."
     },
     "sellers": {
       "type": "array",
@@ -23,8 +53,10 @@
           "host",
           "country",
           "ships",
+          "promotions",
+          "terms",
           "policy_urls",
-          "specs"
+          "reviews"
         ],
         "properties": {
           "id": {
@@ -87,16 +119,17 @@
                     ],
                     "properties": {
                       "amount": {
-                        "type": "string",
-                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                        "description": "Quotes the amount as the page states it."
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                       },
                       "currency": {
                         "type": "string",
                         "pattern": "^[A-Z]{3}$",
                         "minLength": 3,
                         "maxLength": 3,
-                        "description": "Quotes the amount in this currency."
+                        "description": "In this currency."
                       }
                     },
                     "additionalProperties": false
@@ -104,33 +137,33 @@
                   {
                     "type": "object",
                     "required": [
-                      "min",
-                      "max",
                       "currency"
                     ],
                     "properties": {
                       "min": {
-                        "type": "string",
-                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                        "description": "Quotes the low end."
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "The low end, in the minor unit."
                       },
                       "max": {
-                        "type": "string",
-                        "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                        "description": "Quotes the high end."
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "The high end, in the minor unit."
                       },
                       "currency": {
                         "type": "string",
                         "pattern": "^[A-Z]{3}$",
                         "minLength": 3,
                         "maxLength": 3,
-                        "description": "Quotes the range in this currency."
+                        "description": "Both ends in this currency; sil converts nothing."
                       }
                     },
                     "additionalProperties": false
                   }
                 ],
-                "description": "Quotes what delivery there costs."
+                "description": "Quotes one fee, or the range from the cheapest route’s to the dearest’s."
               },
               "free_over": {
                 "type": "object",
@@ -140,16 +173,17 @@
                 ],
                 "properties": {
                   "amount": {
-                    "type": "string",
-                    "pattern": "^[0-9]+(\\.[0-9]+)?$",
-                    "description": "Quotes the amount as the page states it."
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991,
+                    "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
                   },
                   "currency": {
                     "type": "string",
                     "pattern": "^[A-Z]{3}$",
                     "minLength": 3,
                     "maxLength": 3,
-                    "description": "Quotes the amount in this currency."
+                    "description": "In this currency."
                   }
                 },
                 "additionalProperties": false,
@@ -176,40 +210,412 @@
               }
             },
             "additionalProperties": false,
-            "description": "Tells the buyer what delivery to their address costs and how long it takes."
+            "description": "Tells the buyer what delivery to their country costs and how long it takes."
           },
-          "returns": {
-            "type": "object",
-            "properties": {
-              "window_days": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Days to send it back."
+          "returns_days": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Says how many days the buyer has to return it."
+          },
+          "warranty_months": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Says how many months the shop stands behind it."
+          },
+          "promotions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "what"
+              ],
+              "properties": {
+                "what": {
+                  "type": "string",
+                  "description": "Quotes the promotion as the shop prints it."
+                },
+                "discount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "Quotes its discount, in percent, where the shop states one."
+                },
+                "minimum_spend": {
+                  "type": "object",
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$",
+                      "minLength": 3,
+                      "maxLength": 3,
+                      "description": "In this currency."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "description": "Quotes the spend it needs."
+                },
+                "until": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Says when it ends."
+                }
               },
-              "restocking_fee": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1,
-                "description": "The share of the price withheld."
-              }
+              "additionalProperties": false
             },
-            "additionalProperties": false,
-            "description": "Tells the buyer the return terms."
+            "description": "Quotes the shop’s promotions: ask who qualifies; a reduced price only from `discount` and only on the buyer’s yes."
           },
-          "warranty": {
+          "terms": {
             "type": "object",
-            "required": [
-              "months"
-            ],
             "properties": {
-              "months": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "How long the shop’s warranty runs."
+              "who": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "In this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says who the shop is."
+              },
+              "delivery": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "In this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says how the shop delivers, beyond the buyer’s own country."
+              },
+              "payment": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "In this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says how the buyer pays."
+              },
+              "support": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "In this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says how the buyer reaches help."
+              },
+              "returns": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "In this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says how a return works."
+              },
+              "warranty": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "In this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says what the shop stands behind."
+              },
+              "guarantees": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "The amount in the currency’s minor unit (cents): €130 is 13000."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$",
+                            "minLength": 3,
+                            "maxLength": 3,
+                            "description": "In this currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "description": "Says what the shop promises."
               }
             },
             "additionalProperties": false,
-            "description": "Tells the buyer the shop’s warranty."
+            "description": "Reads every other term sil holds, by the lever it weighs the shop by; a lever with nothing held is absent."
           },
           "policy_urls": {
             "type": "array",
@@ -248,122 +654,57 @@
               },
               "additionalProperties": false
             },
-            "description": "Hands the buyer the shop’s own policy pages; a link is not a claim."
-          },
-          "specs": {
-            "type": "object",
-            "patternProperties": {
-              "^.*$": {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              }
-            },
-            "description": "Reads every seller key sil holds a value for."
+            "description": "Hands the buyer the shop’s own policy pages."
           },
           "reviews": {
-            "type": "object",
-            "required": [
-              "count",
-              "praised",
-              "complained",
-              "sources"
-            ],
-            "properties": {
-              "count": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Says how many reviews sil read."
-              },
-              "score": {
-                "type": "object",
-                "required": [
-                  "value",
-                  "of"
-                ],
-                "properties": {
-                  "value": {
-                    "type": "number",
-                    "minimum": 0,
-                    "description": "The average score."
-                  },
-                  "of": {
-                    "type": "number",
-                    "exclusiveMinimum": 0,
-                    "description": "The scale’s top: 5, 10, 100."
-                  }
-                },
-                "additionalProperties": false,
-                "description": "Says the average score on its own scale, where the reviews give one."
-              },
-              "praised": {
-                "type": "array",
-                "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "source",
+                "url",
+                "score",
+                "of",
+                "count"
+              ],
+              "properties": {
+                "source": {
                   "type": "string",
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "description": "One thing reviewers praise."
+                  "description": "Names the site that gathered the reviews."
                 },
-                "maxItems": 5,
-                "description": "Says what reviewers praise, most often first."
-              },
-              "complained": {
-                "type": "array",
-                "items": {
+                "url": {
                   "type": "string",
-                  "minLength": 1,
-                  "maxLength": 256,
-                  "description": "One thing reviewers complain of."
+                  "description": "Hands the buyer the reviews."
                 },
-                "maxItems": 5,
-                "description": "Says what reviewers complain of, most often first."
+                "score": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Quotes the score as that site gives it."
+                },
+                "of": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Reads the scale’s top: 5, 10, 100."
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Says how many reviews the score rests on."
+                }
               },
-              "sources": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "name",
-                    "url",
-                    "date"
-                  ],
-                  "properties": {
-                    "name": {
-                      "type": "string",
-                      "description": "Names the site or reviewer."
-                    },
-                    "url": {
-                      "type": "string",
-                      "description": "Hands the buyer the reviews."
-                    },
-                    "date": {
-                      "type": "string",
-                      "format": "date",
-                      "description": "Dates the latest review read there."
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                "minItems": 1,
-                "maxItems": 5,
-                "description": "Cites where, and how recent."
-              }
+              "additionalProperties": false
             },
-            "additionalProperties": false,
-            "description": "Tells the buyer what other buyers said, from the reviews sil holds; absent until it holds any."
+            "description": "Gives scores from a source the shop does not control; empty until sil reads one."
           }
         },
         "additionalProperties": false
       },
       "description": "Reads the terms before recommending a seller."
+    },
+    "next_page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Sends it as `page` to read the sellers on; absent on the last page."
     }
   },
   "additionalProperties": false

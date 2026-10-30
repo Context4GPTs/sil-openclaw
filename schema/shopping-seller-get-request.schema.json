@@ -18,7 +18,19 @@
       "minItems": 1,
       "maxItems": 10,
       "description": "Sends the seller ids the offers named."
+    },
+    "ship_to": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Names one of the buyer’s addresses from `sil_whoami`, by label or town; the default when absent."
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Reads on: the `next_page` the last answer gave."
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Money is in the minor unit: €130 is 13000."
 }

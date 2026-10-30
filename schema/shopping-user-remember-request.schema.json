@@ -25,7 +25,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Names the row to replace it, and to forget it."
+                "description": "Replaces this row: only an id `shopping_user_read` or a keep answered, never made up. A new row has none."
               },
               "kind": {
                 "type": "string",
@@ -105,7 +105,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Names the row to replace it, and to forget it."
+                "description": "Replaces this row: only an id `shopping_user_read` or a keep answered, never made up. A new row has none."
               },
               "kind": {
                 "type": "string",
@@ -161,7 +161,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Names the row to replace it, and to forget it."
+                "description": "Replaces this row: only an id `shopping_user_read` or a keep answered, never made up. A new row has none."
               },
               "kind": {
                 "type": "string",
@@ -215,13 +215,13 @@
                     "description": "The value in words."
                   }
                 ],
-                "description": "Reads the value the preference holds to."
+                "description": "Reads the value the preference holds to; on price, money in the minor unit: €130 is 13000."
               },
               "unit": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 16,
-                "description": "Reads the unit or currency of a number."
+                "description": "Reads the unit of a number; on price, its currency: EUR."
               },
               "place": {
                 "type": "string",
@@ -271,7 +271,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Names the row to replace it, and to forget it."
+                "description": "Replaces this row: only an id `shopping_user_read` or a keep answered, never made up. A new row has none."
               },
               "kind": {
                 "type": "string",
@@ -333,8 +333,9 @@
       },
       "minItems": 1,
       "maxItems": 10,
-      "description": "Keeps what lasts beyond this buy, in the turn that settled it; an `id` replaces that row."
+      "description": "Keeps what lasts beyond this buy, in the turn that settled it. Kept only when the answer is `ok` and lists the row in `kept`."
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Money is in the minor unit: €130 is 13000."
 }

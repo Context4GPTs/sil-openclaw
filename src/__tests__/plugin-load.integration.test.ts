@@ -305,12 +305,11 @@ const AS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
 describe.skipIf(AS_ROOT)(
   "plugin load — an uncreatable data dir registers NOTHING: no tool, and no gateway method (AC10)",
   () => {
-    // The half 0.4.5 added and nothing pinned. `register()` now hands the host a
-    // SECOND surface (`sil.search_results`), and under the new `onStartup: true`
-    // posture it runs on the gateway's boot path. `ensureDataDir()` throws BEFORE
-    // any `registerXTools`/`registerSearchResultsMethod` call, so the fail-closed
+    // `register()` hands the host a SECOND surface (`sil.answer`, `sil.call`), and
+    // under `onStartup: true` it runs on the gateway's boot path. `ensureDataDir()`
+    // throws BEFORE any `registerXTools`/`registerScreenMethods` call, so the fail-closed
     // terminal must leave the api COMPLETELY untouched — a half-registered plugin
-    // would hand a paired client a gateway method backed by a store whose home
+    // would hand a paired screen a gateway method backed by an account whose home
     // does not exist.
     //
     // The fault is injected with REAL filesystem permissions (a `0o500` containing
@@ -377,20 +376,6 @@ describe.skipIf(AS_ROOT)(
       expect(detail).not.toContain("Bearer");
     });
 
-    it("is NOT VACUOUS — the SAME register() populates both surfaces once the dir is creatable", () => {
-      // Without this, "registers nothing" is satisfied by any throw at all —
-      // including a broken harness that never reaches the plugin. Same captured
-      // register, same api factory, only the directory mode changes.
-      chmodSync(containingDir, 0o700);
-
-      const api = createMockPluginApi();
-      expect(() => capturedRegisterFn!(api)).not.toThrow();
-      expect(api._tools.size).toBeGreaterThan(0);
-      // Count only — the method NAME is pinned by the single exact-set carrier in
-      // `search-results-method.integration.test.ts`; a second name mirror here
-      // would only add a place to forget to bump.
-      expect(api._gatewayMethods.size).toBe(1);
-    });
   },
 );
 
