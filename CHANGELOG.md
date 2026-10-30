@@ -10,6 +10,13 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-30
+
+### Fixed
+
+- **On ClawHub again.** ClawHub's scanner failed on 0.8.0 and left it unlisted. This is the same plugin
+  as 0.8.0.
+
 ## [0.8.0] - 2026-10-30
 
 ### Changed
