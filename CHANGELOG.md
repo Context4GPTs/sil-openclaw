@@ -14,8 +14,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Fixed
 
-- **The banner is no longer in the package.** ClawHub's scanner failed on 0.8.0 and 0.8.1, the first
-  releases to ship `assets/`. The README loads it from GitHub. The plugin is unchanged.
+- **The SVG banner is gone.** ClawHub's scanner failed on 0.8.0 and 0.8.1, the first releases to
+  ship `assets/`. The README carries the ASCII art again. The plugin is unchanged.
 
 ## [0.8.1] - 2026-10-30
 

@@ -1,7 +1,14 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Context4GPTs/sil-openclaw/main/assets/banner-dark.svg">
-  <img alt="SIL. Shop like you code. The Shopping Interface Layer for personal AI agents. Open beta." src="https://raw.githubusercontent.com/Context4GPTs/sil-openclaw/main/assets/banner.svg" width="880">
-</picture>
+```
+███████╗██╗██╗
+██╔════╝██║██║
+███████╗██║██║
+╚════██║██║██║
+███████║██║███████╗
+╚══════╝╚═╝╚══════╝
+
+        Shop like you code
+
+**The Shopping Interface Layer for personal AI agents.**
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-8a4b22)](https://github.com/Context4GPTs/sil-openclaw/blob/main/LICENSE)
 [![npm](https://img.shields.io/npm/v/sil-openclaw?logo=npm&logoColor=white&color=cb3837)](https://www.npmjs.com/package/sil-openclaw)
