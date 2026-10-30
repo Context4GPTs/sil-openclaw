@@ -4,13 +4,7 @@ All notable changes to the `sil-openclaw` plugin (npm `sil-openclaw`, ClawHub `@
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Keep `## [Unreleased]` current as you work. `pnpm version <bump>` promotes it to a
-dated release section, and `pnpm release` attaches that section to the ClawHub
-release (`clawhub package publish --changelog`). See [README](./README.md#releasing).
-
-## [Unreleased]
-
-## [0.7.0] - 2026-10-12
+Keep `## [Unreleased]
 
 ### Changed
 
@@ -27,16 +21,6 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
   take `page` and answer `next_page`. Descriptions and the skill are re-cut to the journey.
 - **`sil.answer` and `sil.call` replace `sil.search_results`.** A paired screen reads back any
   sil answer the agent got (15 minutes, the last 64), and runs a read, or a forget of the rows it names, as the buyer.
-- **Fifteen tools on sil's signed contract.** `shopping_brief_create`, `shopping_brief_edit` and
-  `shopping_profile_edit` are gone; `shopping_brief_write`, `shopping_user_read`,
-  `shopping_user_remember` and `shopping_user_forget` replace them. `sil_whoami` answers the
-  lean shape (name, country, currency, gender, language, one default address). Replies are
-  compact JSON. `shopping_product_get` takes at most three ids.
-- **`sil_whoami` answers flat**, exactly the contract's shape: no `identity` wrapper, no
-  `web_origin` fields.
-- **sil refuses a plugin older than 0.7.0** (HTTP 426); its message reaches the agent as it
-  stands.
-
 - **A variant quotes its `price_range`, and an offer carries its shop's terms.** A variant's
   `starting_from` is gone: it answers `price_range`, its offers' one-off prices, cheapest to
   dearest. An offer's `seller` carries its `name`, `delivery` to `ship_to`, `returns_days` and
@@ -48,6 +32,21 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 - **Nothing to wait for or re-read.** The search receipt's `finding`, and `shopping_offers`'
   `pending` answer and `confirm` request field, are gone: sil answers every call from what it
   holds. The skill no longer tells the agent to ask again or confirm before a hand-off.
+
+## [0.7.0] - 2026-10-12
+
+### Changed
+
+- **Fifteen tools on sil's signed contract.** `shopping_brief_create`, `shopping_brief_edit` and
+  `shopping_profile_edit` are gone; `shopping_brief_write`, `shopping_user_read`,
+  `shopping_user_remember` and `shopping_user_forget` replace them. `sil_whoami` answers the
+  lean shape (name, country, currency, gender, language, one default address). Replies are
+  compact JSON. `shopping_domain_get` pages with `keys` and `after`; `shopping_product_get`
+  takes at most three ids and an optional `page`. The skill is rewritten to match.
+- **`sil_whoami` answers flat**, exactly the contract's shape: no `identity` wrapper, no
+  `web_origin` fields. `shopping_product_get` names ids sil does not hold in `not_held`.
+- **sil refuses a plugin older than 0.7.0** (HTTP 426); its message reaches the agent as it
+  stands.
 
 ## [0.6.0] - 2026-10-08
 
