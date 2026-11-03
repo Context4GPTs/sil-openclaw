@@ -185,12 +185,13 @@ export function registerCatalogTools(api: PluginAPI): void {
   }
 }
 
-/** sil's record reads a `none/` model as no agent turn — `tools.invoke` runs a tool outside one. */
+/** sil's record reads a `none/` model as no agent turn — `tools.invoke` runs a tool outside one,
+ * handing over no model and, at most, the host's own session key (`main`), never a turn's. */
 const NO_TURN_MODEL = "none/sil-openclaw";
 
 export interface Run {
   readonly caller: Omit<Caller, "toolCallId">;
-  /** The host's conversation, absent off-turn: the screen must never follow a minted one. */
+  /** The turn's conversation; absent off-turn, so the screen never follows an off-turn call. */
   readonly conversation: string | undefined;
 }
 
@@ -201,13 +202,14 @@ export function runOf(
   openclawVersion: string | undefined,
 ): Run {
   const { provider, modelId } = ctx.activeModel ?? {};
-  const conversation = ctx.sessionId || undefined;
+  const model = provider && modelId ? `${provider}/${modelId}` : undefined;
+  const conversation = model !== undefined ? ctx.sessionId || undefined : undefined;
   return {
     caller: {
       pluginVersion,
       ...(openclawVersion !== undefined ? { openclawVersion } : {}),
       sessionId: conversation ?? randomUUID(),
-      model: provider && modelId ? `${provider}/${modelId}` : NO_TURN_MODEL,
+      model: model ?? NO_TURN_MODEL,
     },
     conversation,
   };

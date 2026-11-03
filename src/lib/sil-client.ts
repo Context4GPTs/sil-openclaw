@@ -39,11 +39,12 @@
  *     200 { status, name, country?, currency?, gender?, language?, addresses } → ok
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
+ *     408 / 429                                           → retryable
  *     any other 4xx                                       → invalid_request (sil's message)
  *     5xx / network / abort                               → retryable
  *
- * Shopping routes: 404 → not_found; any other 4xx but 401/403 → invalid_request, carrying
- * sil's message. A 4xx is sil refusing THIS request, so it is never `retryable`.
+ * Shopping routes: 404 → not_found; 408/429 → retryable; any other 4xx but 401/403 →
+ * invalid_request, carrying sil's message: sil refused THIS request, so it is not retried.
  *
  * THE SHOPPING WIRE IS NOT MIRRORED HERE. Each tool's request shape is the committed
  * artifact under `schema/`, registered as the tool's own `parameters`; each 200 body is
@@ -182,6 +183,7 @@ function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcom
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
   if (status === 404) return { kind: "not_found", message: extractApiError(body).message };
+  if (status === 408 || status === 429) return retryableFromBody(body);
   // 400, 409 `full`, 410 retired, 426 plugin too old: the same call again cannot pass.
   if (status >= 400 && status < 500) {
     return { kind: "invalid_request", message: extractApiError(body).message };
@@ -263,6 +265,7 @@ export function classifyRefreshResponse(status: number, body: unknown): RefreshO
  * on STATUS (and, for 200, the body shape) — never on `res.ok`:
  *   401 → unauthorized (the ONLY refresh trigger)
  *   403 → forbidden (terminal; carries user_not_provisioned/principal_mismatch)
+ *   408 / 429 → retryable (an edge proxy's "try again")
  *   other 4xx → invalid_request (sil's message; a missing identity header is a 400)
  *   5xx / other non-200 → retryable
  *   200 → unwrap the envelope `result` and narrow to {name, …}; a 200
@@ -277,6 +280,7 @@ export function classifyRefreshResponse(status: number, body: unknown): RefreshO
 export function classifyIdentityResponse(status: number, body: unknown): IdentityOutcome {
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
+  if (status === 408 || status === 429) return { kind: "retryable" };
   if (status >= 400 && status < 500) {
     return { kind: "invalid_request", message: extractApiError(body).message };
   }
@@ -662,7 +666,7 @@ function extractForbiddenReason(body: unknown): string {
 
 
 /**
- * Build the `retryable` outcome for a non-200, non-4xx response, attaching
+ * Build the `retryable` outcome for a 408/429 or a non-200, non-4xx response, attaching
  * the failed catalog `source` (+ a `detail` carrying the upstream cause) ONLY when
  * the 5xx body is a real `source_unavailable` SourceError that names a source.
  *
