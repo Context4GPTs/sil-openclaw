@@ -10,8 +10,7 @@
  *
  * Edits only the manifest's `version` string in place — all other bytes
  * and formatting are preserved, so the diff is one line. Idempotent (a
- * no-op when already in sync) and fail-fast on a non-semver version. The
- * version-parity integration test is the guard that keeps this honest.
+ * no-op when already in sync) and fail-fast on a non-semver version.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";

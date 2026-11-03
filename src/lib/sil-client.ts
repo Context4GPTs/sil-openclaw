@@ -207,8 +207,7 @@ function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcom
  * non-polling terminal `invalid_request` (fail fast) rather than riding the
  * keep-polling `not_found` path and spinning for the full deadline.
  *
- * Pure and exported — this is the highest-risk subtle branch, unit-tested in
- * isolation (sil-client.test.ts).
+ * Pure and exported — this is the highest-risk subtle branch.
  */
 export function classifyClaimResponse(status: number, body: unknown): ClaimOutcome {
   if (status === 409) return { kind: "already_claimed" };

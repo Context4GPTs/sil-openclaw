@@ -14,7 +14,6 @@
  *   - The interval timer is cleared on EVERY exit path (terminal, deadline,
  *     explicit `stop()`). The architect's "poll loop leak" risk: a missed
  *     `clearInterval` leaks a timer per `sil_register` call in a reused process.
- *     `vi.getTimerCount()` must be 0 after any exit — enforced by poller.test.ts.
  *
  * The loop is deliberately GENERIC over the step result: it knows only `done`.
  * The claim-status → done mapping lives in the caller (the tool), keeping the
