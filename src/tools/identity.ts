@@ -169,7 +169,7 @@ function registerWhoami(api: PluginAPI): void {
 
         // 2 — read identity; on a 401 refresh-and-retry ONCE, shared with every
         // `shopping_*` call so the recovery cannot drift between tools.
-        const caller = { ...run, toolCallId: callId };
+        const caller = { ...run.caller, toolCallId: callId };
         const first = await fetchIdentity(getApiUrl(), stored.access_token, caller, 1);
         const recovered = await refreshAndRetryOnce(
           first,
@@ -182,7 +182,7 @@ function registerWhoami(api: PluginAPI): void {
             // 401 recoveries is invisible otherwise.
             if (recovered.refreshed) api.logger.info("sil_whoami_refreshed", {});
             return identityOutcomeToResult(api, recovered.outcome, (body) =>
-              keepAnswer(api, callId, run.sessionId, body),
+              keepAnswer(api, callId, run.conversation, body),
             );
           case "must_reregister":
             // Clear the known-dead pair so its stale presence cannot block the
@@ -217,8 +217,8 @@ function identityOutcomeToResult(
       keep(body);
       return jsonResult(body, ...wiringAdvisoryBlocks(api));
     }
-    case "refused":
-      api.logger.info("sil_whoami_refused", {});
+    case "invalid_request":
+      api.logger.info("sil_whoami_invalid_request", {});
       return jsonResult({ status: "invalid_request", message: outcome.message });
     case "forbidden":
       // A token that maps to no account is structurally dead, so clear it or the

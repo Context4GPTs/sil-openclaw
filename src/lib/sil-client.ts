@@ -39,10 +39,12 @@
  *     200 { status, name, country?, currency?, gender?, language?, addresses } → ok
  *     401                                                 → unauthorized (→ refresh)
  *     403 { error: user_not_provisioned | principal_mismatch } → forbidden (terminal)
- *     426 plugin older than sil accepts                   → refused (carries sil's message)
+ *     408 / 429                                           → retryable
+ *     any other 4xx                                       → invalid_request (sil's message)
  *     5xx / network / abort                               → retryable
  *
- * Shopping routes: 426 (plugin too old) → invalid_request, carrying sil's message.
+ * Shopping routes: 404 → not_found; 408/429 → retryable; any other 4xx but 401/403 →
+ * invalid_request, carrying sil's message: sil refused THIS request, so it is not retried.
  *
  * THE SHOPPING WIRE IS NOT MIRRORED HERE. Each tool's request shape is the committed
  * artifact under `schema/`, registered as the tool's own `parameters`; each 200 body is
@@ -136,7 +138,7 @@ export interface Identity {
  */
 export type IdentityOutcome =
   | { kind: "ok"; identity: Identity }
-  | { kind: "refused"; message: string }
+  | { kind: "invalid_request"; message: string }
   | { kind: "unauthorized" }
   | { kind: "forbidden"; reason: string }
   | { kind: "retryable" };
@@ -178,13 +180,14 @@ export type ShoppingOutcome =
  * source, and a second opinion here would be the copy that drifts from it.
  */
 function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcome {
-  // 426: sil refuses a plugin older than it accepts; its message says to update.
-  if (status === 400 || status === 426) {
-    return { kind: "invalid_request", message: extractApiError(body).message };
-  }
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
   if (status === 404) return { kind: "not_found", message: extractApiError(body).message };
+  if (status === 408 || status === 429) return retryableFromBody(body);
+  // 400, 409 `full`, 410 retired, 426 plugin too old: the same call again cannot pass.
+  if (status >= 400 && status < 500) {
+    return { kind: "invalid_request", message: extractApiError(body).message };
+  }
   if (status !== 200) return retryableFromBody(body);
 
   const envelope = asRecord(body);
@@ -207,8 +210,7 @@ function classifyShoppingResponse(status: number, body: unknown): ShoppingOutcom
  * non-polling terminal `invalid_request` (fail fast) rather than riding the
  * keep-polling `not_found` path and spinning for the full deadline.
  *
- * Pure and exported — this is the highest-risk subtle branch, unit-tested in
- * isolation (sil-client.test.ts).
+ * Pure and exported — this is the highest-risk subtle branch.
  */
 export function classifyClaimResponse(status: number, body: unknown): ClaimOutcome {
   if (status === 409) return { kind: "already_claimed" };
@@ -263,7 +265,9 @@ export function classifyRefreshResponse(status: number, body: unknown): RefreshO
  * on STATUS (and, for 200, the body shape) — never on `res.ok`:
  *   401 → unauthorized (the ONLY refresh trigger)
  *   403 → forbidden (terminal; carries user_not_provisioned/principal_mismatch)
- *   5xx / non-200 → retryable
+ *   408 / 429 → retryable (an edge proxy's "try again")
+ *   other 4xx → invalid_request (sil's message; a missing identity header is a 400)
+ *   5xx / other non-200 → retryable
  *   200 → unwrap the envelope `result` and narrow to {name, …}; a 200
  *         that yields no usable identity (no `name`) is `retryable`, NEVER `ok`
  *         (the anti-false-green guard — a partial/garbage 200, or the current
@@ -274,11 +278,12 @@ export function classifyRefreshResponse(status: number, body: unknown): RefreshO
  * auth-branch bug in this flow.
  */
 export function classifyIdentityResponse(status: number, body: unknown): IdentityOutcome {
-  // Not `invalid_request`: IdentityOutcome has no such variant; the tool surfaces it as one.
-  if (status === 426) return { kind: "refused", message: extractApiError(body).message };
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", reason: extractForbiddenReason(body) };
-  if (status >= 500) return { kind: "retryable" };
+  if (status === 408 || status === 429) return { kind: "retryable" };
+  if (status >= 400 && status < 500) {
+    return { kind: "invalid_request", message: extractApiError(body).message };
+  }
   if (status !== 200) return { kind: "retryable" };
 
   const identity = extractIdentity(body);
@@ -397,16 +402,13 @@ export async function callShopping(
   return classifyShoppingResponse(res.status, await readJsonBody(res));
 }
 
-/**
- * Who is making a shopping call — sil-api refuses one that does not say. A field the host
- * did not hand over is absent and sends no header: sil's refusal then names it, where a
- * guessed value would file a false trace.
- */
+/** Who is making a call to sil-api, which refuses one that does not say. */
 export interface Caller {
-  readonly sessionId?: string;
+  /** A UUID: the conversation's, or one minted for a caller with none. */
+  readonly sessionId: string;
   readonly toolCallId: string;
-  /** `<provider>/<modelId>`. */
-  readonly model?: string;
+  /** `<provider>/<modelId>`; `none/<caller>` or `studio/buyer` when no model made the call. */
+  readonly model: string;
   readonly openclawVersion?: string;
   readonly pluginVersion: string;
 }
@@ -664,7 +666,7 @@ function extractForbiddenReason(body: unknown): string {
 
 
 /**
- * Build the `retryable` outcome for a non-200, non-{400,401} response, attaching
+ * Build the `retryable` outcome for a 408/429 or a non-200, non-4xx response, attaching
  * the failed catalog `source` (+ a `detail` carrying the upstream cause) ONLY when
  * the 5xx body is a real `source_unavailable` SourceError that names a source.
  *

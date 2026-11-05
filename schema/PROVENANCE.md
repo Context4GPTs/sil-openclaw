@@ -11,8 +11,7 @@ contract the API never agreed to.
 
 ```sh
 S=<sil-services>/packages/schemas/schema; rm schema/*.schema.json \
-  && cp $S/shopping-*.schema.json $S/sil-whoami-*.schema.json schema/ \
-  && node scripts/contract-examples.mjs $S/agent-contract.md
+  && cp $S/shopping-*.schema.json $S/sil-whoami-*.schema.json schema/
 ```
 
 Byte-identity against the sibling is graded by sil-stage, not here.

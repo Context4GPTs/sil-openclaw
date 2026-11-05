@@ -1,0 +1,9 @@
+#!/bin/sh
+# Throwaway tests live in a scratch folder and never reach a commit (staging rubric). Deleting one is allowed.
+# By name, not by folder: e2e/ and tests/ hold proofs and probes that are not tests.
+bad=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '(^|/)__(tests|mocks)__/|\.(test|spec|e2e)(-d)?\.[cm]?[jt]sx?$|(^|/)(vitest|jest|playwright)(\.[a-z-]+)*\.(config|workspace)\.[cm]?[jt]s$')
+[ -z "$bad" ] && exit 0
+echo "refused: a test file does not enter a product repo — keep it in a scratch folder" >&2
+echo "$bad" | sed 's/^/  /' >&2
+exit 1
