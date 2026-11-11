@@ -3,6 +3,8 @@
  * Bodies cross verbatim: sil's answer is the agent's answer, and the screen's.
  */
 
+import { randomUUID } from "node:crypto";
+
 import type { PluginAPI, ToolDefinition } from "openclaw/plugin-sdk/plugin-entry";
 
 import { keepAnswer } from "../lib/answers.js";
@@ -183,18 +185,33 @@ export function registerCatalogTools(api: PluginAPI): void {
   }
 }
 
+/** sil's record reads a `none/` model as no agent turn — `tools.invoke` runs a tool outside one,
+ * handing over no model and, at most, the host's own session key (`main`), never a turn's. */
+const NO_TURN_MODEL = "none/sil-openclaw";
+
+export interface Run {
+  readonly caller: Omit<Caller, "toolCallId">;
+  /** The turn's conversation; absent off-turn, so the screen never follows an off-turn call. */
+  readonly conversation: string | undefined;
+}
+
 /** Who is calling, as the host hands it to a tool factory once per agent run. */
 export function runOf(
   ctx: { activeModel?: { provider?: string; modelId?: string }; sessionId?: string },
   pluginVersion: string,
   openclawVersion: string | undefined,
-): Omit<Caller, "toolCallId"> {
+): Run {
   const { provider, modelId } = ctx.activeModel ?? {};
+  const model = provider && modelId ? `${provider}/${modelId}` : undefined;
+  const conversation = model !== undefined ? ctx.sessionId || undefined : undefined;
   return {
-    pluginVersion,
-    ...(openclawVersion !== undefined ? { openclawVersion } : {}),
-    ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
-    ...(provider && modelId ? { model: `${provider}/${modelId}` } : {}),
+    caller: {
+      pluginVersion,
+      ...(openclawVersion !== undefined ? { openclawVersion } : {}),
+      sessionId: conversation ?? randomUUID(),
+      model: model ?? NO_TURN_MODEL,
+    },
+    conversation,
   };
 }
 
@@ -202,7 +219,7 @@ function defineTool(
   api: PluginAPI,
   tool: ShoppingTool,
   parameters: ToolDefinition["parameters"],
-  run: Omit<Caller, "toolCallId">,
+  run: Run,
 ): ToolDefinition {
   return {
     name: tool.name,
@@ -210,9 +227,9 @@ function defineTool(
     description: tool.description,
     parameters,
     async execute(callId, params) {
-      const called = await callRoute(api, tool, params, { ...run, toolCallId: callId });
+      const called = await callRoute(api, tool, params, { ...run.caller, toolCallId: callId });
       if (called.kind === "refused") return jsonResult(called.body);
-      keepAnswer(api, callId, run.sessionId, called.body);
+      keepAnswer(api, callId, run.conversation, called.body);
       // The advisory rides its own block: nothing of ours may sit beside the body's keys.
       return jsonResult(called.body, ...wiringAdvisoryBlocks(api));
     },

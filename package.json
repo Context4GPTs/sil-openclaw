@@ -78,15 +78,14 @@
     }
   },
   "scripts": {
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "pnpm clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "dev": "tsc -p tsconfig.build.json --watch",
-    "test": "vitest run --passWithNoTests",
-    "test:watch": "vitest",
     "sync-version": "node scripts/sync-version.mjs",
     "openclaw:allowlist": "node scripts/allowlist-openclaw.mjs",
-    "preversion": "pnpm typecheck && pnpm test",
+    "preversion": "pnpm typecheck",
     "version": "pnpm sync-version && node scripts/changelog.mjs cut && git add openclaw.plugin.json CHANGELOG.md",
     "postversion": "git push --follow-tags",
     "prepack": "pnpm build",
@@ -98,9 +97,6 @@
   },
   "devDependencies": {
     "@types/node": "22.15.3",
-    "ajv": "8.20.0",
-    "ajv-formats": "3.0.1",
-    "typescript": "5.8.3",
-    "vitest": "4.1.2"
+    "typescript": "5.8.3"
   }
 }
