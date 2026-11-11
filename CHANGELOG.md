@@ -10,6 +10,22 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-11-11
+
+### Fixed
+
+- **A tool called outside a turn reaches sil.** `tools.invoke` hands a tool no session and no
+  model, so sil-api refused every such call and the plugin read the refusal as sil being down.
+  An off-turn call now mints a session and names its model `none/sil-openclaw`; the screen
+  follows only the host's own conversation.
+- **sil's refusals read as refusals.** Any 4xx but 401, 403 and 404 is `invalid_request`
+  carrying sil's message, not a retry; 408 and 429 stay retryable.
+
+### Removed
+
+- **The plugin's test suite.** Its proofs live in sil-stage; `pnpm version` runs the type
+  check alone. The package's contents are unchanged by this.
+
 ## [0.8.2] - 2026-10-30
 
 ### Fixed
