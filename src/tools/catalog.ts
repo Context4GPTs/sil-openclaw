@@ -29,8 +29,9 @@ export const SHOPPING_TOOLS = [
     description:
       "Know the buyer: everything kept about them is here, never in your own memory files."
       + " Read once per conversation before asking anything, when they ask what you keep, and"
-      + " before a forget. A price row is `value` with `unit` its currency; money is in the"
-      + " minor unit: €130 is 13000.",
+      + " before a forget. What it answers is never asked again; say a row when you use it. A"
+      + " price row is `value` with `unit` its currency; money is in the minor unit: €130 is"
+      + " 13000.",
   },
   {
     name: "shopping_user_remember",
@@ -40,11 +41,17 @@ export const SHOPPING_TOOLS = [
     description:
       "Keep what will matter next time about the buyer (how they use it, what they value, a"
       + " cap for this kind of thing, a measurement) in the turn you learn it, before any"
-      + " search, and say so with the undo. This is the only place the buyer is kept: \"remember"
-      + " this\" means this call, not a note or memory file. A one-off wish for this buy rides on"
-      + " its calls instead. Each row's `place` is the `name` of the kind you are shopping, from"
-      + " the domain read. A price is `value` with `unit` its currency; money is in the minor"
-      + " unit: €130 is 13000.",
+      + " search. This is the only place the buyer is kept: \"remember this\" means this call,"
+      + " not a note or memory file. A one-off wish for this buy rides on its calls instead."
+      + " Send whole rows: `{ rows: [{ kind: \"measurement\", what: \"foot length\", value:"
+      + " 27.2, unit: \"cm\", place: \"Running shoes\", gives_back: \"shoes are searched in"
+      + " their size without asking\", source: \"told\" }] }`. The other kinds, same row:"
+      + " `kind: \"preference\"` with `subject`, `op`, `value` and `reason` (a price in the"
+      + " minor unit with `unit` its currency: €130 is 13000); `kind: \"memory\"` with `text`;"
+      + " `kind: \"purchase\"` with `product` and `when`. `place` is the `name` of the kind you"
+      + " are shopping, from the domain read; `source` is \"agent\" for what you inferred. Then"
+      + " say it to the buyer: what you kept, what it is for next time (its `gives_back`), and"
+      + " that \"forget that\" undoes it.",
   },
   {
     name: "shopping_user_forget",
@@ -77,7 +84,9 @@ export const SHOPPING_TOOLS = [
     path: "/catalog/domains",
     query: ["query"],
     label: "Place the thing",
-    description: "Place the thing the buyer named: the leaves sil holds for it.",
+    description:
+      "Place the thing the buyer named: the leaves sil holds for it. Search the leaf; while the"
+      + " buyer has not chosen between leaves of one kind, read and search the kind above them.",
   },
   {
     name: "shopping_domain_get",
@@ -100,10 +109,13 @@ export const SHOPPING_TOOLS = [
     label: "Read what sil holds about it",
     recovery: { not_found: "shopping_domain_search" },
     description:
-      "Teach before you ask: the passages sil holds on a place that bear on `about`. Send the"
-      + " buyer's own taste words as `about` (clarity, texture, quiet), then turn the passage"
-      + " into specs from the domain read or into the question that decides. A question's why"
-      + " comes from here or from a spec's `why`.",
+      "Read sil's guides before you teach or ask: the passages sil holds on a place that bear"
+      + " on `about`. Send the buyer's own words as `about` (clarity, texture, quiet). Each"
+      + " passage carries its `title`, `author`, `publish_date` and `url`: when you teach from"
+      + " one, say whose it is, and its date when it has one. A taste word goes through here:"
+      + " the passage gives the route, and a spec from the domain read only where sil has one"
+      + " for it. A question's why comes from here or from a spec's `why`. Nothing held: say so,"
+      + " never fill it from the web.",
   },
   {
     name: "shopping_search",
@@ -112,17 +124,23 @@ export const SHOPPING_TOOLS = [
     label: "Search sil's products",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Search once per settled ask: `specs` `{ spec, op, value }` from the domain read and"
-      + " `price` the range `{ min?, max?, currency }`, each a want the buyer said or sil keeps;"
-      + " money is in the minor unit: €130 is 13000. `query` holds only the buyer's own words"
-      + " for what no spec holds, and no brand, model or product they did not name: good `query:"
-      + " \"clarity\"` when no spec holds clarity, bad `query: \"Eureka Mignon\"` when the buyer"
-      + " never said it. Back come `asked` numbered, `search_stats` to explain the shortlist,"
-      + " and the closest cards with `holds`, `misses` and `unknown` as ask numbers,"
-      + " `price_range` and `variants`, each with its own `price_range`, one `recommended`. When"
-      + " few fit or many are unknown, tell the buyer what came back and ask the one question"
-      + " that would change it, or ask before relaxing a want, rather than searching again in"
-      + " other words.",
+      "Search once per settled ask. On a considered buy, first tell the buyer the route and"
+      + " the search, part by part with the why of each: what you send is what you said."
+      + " `domain` is the leaf, or the kind above while the buyer has not chosen between its"
+      + " leaves. `specs` `{ spec, op, value }` from the domain read, each a want the buyer said"
+      + " or sil keeps and none of your own; a brand they named is the `brand` spec; on a kind,"
+      + " `leaf` with `in` or `nin` rules a leaf in or out. `price` is the range `{ min?, max?,"
+      + " currency }`; money is in the minor unit: €130 is 13000. `query` holds only the buyer's"
+      + " own word for a name or a model: good `query: \"Speedgoat\"` when they named it, bad"
+      + " `query: \"light grippy trail shoe\"`, which is wants, not a name. `n`: 8 to weigh a"
+      + " kind or show a range, 1 to 3 for a product they named. Back come `asked` numbered,"
+      + " `search_stats`, and the closest cards with `holds`, `misses` and `unknown` as ask"
+      + " numbers, `price_range` and `variants`, each with its own `price_range`, one"
+      + " `recommended`. After it, tell the buyer how wide you looked by `search_stats`: the"
+      + " products and shops sil weighed in this kind, never a brand's count, and a page of"
+      + " eight is the eight you asked for. When few fit or many are unknown, say what came"
+      + " back and ask the one question that would change it, or ask before relaxing a want,"
+      + " rather than searching again in other words.",
   },
   {
     name: "shopping_product_get",
@@ -132,7 +150,8 @@ export const SHOPPING_TOOLS = [
     description:
       "Read the products the buyer leans to whole: values once, reviews, every picture, and"
       + " each variant with what sets it apart and its `price_range`, cheapest to dearest offer."
-      + " Pick the variants to buy here; money is in the minor unit: €130 is 13000.",
+      + " Pick the variant here, then read its offers before you name the pick; money is in the"
+      + " minor unit: €130 is 13000.",
   },
   {
     name: "shopping_offers",
@@ -145,10 +164,14 @@ export const SHOPPING_TOOLS = [
       + " `ship_to`, one of the buyer's addresses by name (the default when absent). Every"
       + " offer, shops shipping there first, each with its shop's `name`, whether it `ships`, its"
       + " `delivery` there, `returns_days` and own `promotions`, then `price`, `was`, `pack` or"
-      + " `plan`, and its stock; nothing marks a best. A promotion is its shop's alone: quote it"
-      + " on that shop's offers only. Money is in the minor unit: €130 is 13000. Send `page` ="
-      + " `next_page` only when a shop the buyer needs may be past it. Warranty, policies,"
-      + " reviews and other terms come from `shopping_seller_get`.",
+      + " `plan`, its stock, its `url` and `read_on`, the day sil read it; nothing marks a best."
+      + " Tell the buyer where to buy and why there, with one link, the offer's `url`. `ships:"
+      + " unknown` is sil not having read that shop's delivery: say so, never \"delivers\", and"
+      + " never hand over to a shop that does not ship to them. A promotion is its shop's alone:"
+      + " quote it on that shop's offers only. A `was`: say it was higher, judge on the price. A"
+      + " bundle (`pack.with`) is one offer; a `plan` price is the plan's. Money is in the minor"
+      + " unit: €130 is 13000. Send `page` = `next_page` only when a shop the buyer needs may be"
+      + " past it. Warranty, policies, reviews and other terms come from `shopping_seller_get`.",
   },
   {
     name: "shopping_seller_get",

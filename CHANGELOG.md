@@ -10,6 +10,17 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+### Changed
+
+- **The skill is rebuilt around one order of a turn, by kind of ask.** A quick answer, a browse,
+  a decided buy and a considered buy each get their own turn. On a considered buy the agent
+  says where it stands before asking, the route and the search before searching, and what came
+  back after the products: the guide named, sil's own counts, what sil has not verified, and
+  where to buy.
+- **Each tool's description carries the sentence for its own moment.** `shopping_user_remember`
+  shows a whole row to keep; `shopping_search` sends only the search the buyer was told;
+  `shopping_content` asks for the guide's name; `shopping_offers` for where to buy and why there.
+
 ## [0.8.3] - 2026-11-11
 
 ### Fixed
