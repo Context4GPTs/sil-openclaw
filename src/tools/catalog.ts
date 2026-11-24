@@ -113,10 +113,10 @@ export const SHOPPING_TOOLS = [
       "Read sil's guides before you teach or ask: the passages sil holds on a place that bear"
       + " on `about`. Send the buyer's own words as `about` (clarity, texture, quiet). Each"
       + " passage carries its `title`, `author`, `publish_date` and `url`: when you teach from"
-      + " one, say whose it is, and its date when it has one. A taste word goes through here:"
-      + " the passage gives the route, and a spec from the domain read only where sil has one"
-      + " for it. A question's why comes from here or from a spec's `why`. Nothing held: say so,"
-      + " never fill it from the web.",
+      + " one, name it by its `title` or `author`, never \"the guide\" alone, and its date when"
+      + " it has one. A taste the buyer gives (fruity, grippy) goes through here before you"
+      + " search: the passage gives the route; a taste is no spec. A question's why comes from"
+      + " here or from a spec's `why`. Nothing held: say so, never fill it from the web.",
   },
   {
     name: "shopping_search",
@@ -128,11 +128,13 @@ export const SHOPPING_TOOLS = [
       "Search once per settled ask. On a considered buy, first say the route you think best"
       + " and why, then the search, part by part, each with its why; send exactly what you said."
       + " `domain` is the leaf, or the kind above while the buyer has not chosen between its"
-      + " leaves. `specs` `{ spec, op, value }` from the domain read, each a want the buyer said"
-      + " or sil keeps and none of your own. Send only what must hold (what it is for, a size, a"
-      + " hard cap): a soft want (quiet, grippy) is no spec, it pushes down every product that"
-      + " says nothing about it. A brand they named is the `brand` spec; on a kind, `leaf` with"
-      + " `in` or `nin` rules a leaf in or out. `price` is the range `{ min?, max?, currency }`;"
+      + " leaves: your own route is a lean until they take it, so the search still covers the"
+      + " other kind. `specs` `{ spec, op, value }` from the domain read, each a want the buyer"
+      + " said or sil keeps and none of your own. Send only what must hold (what it is for, a"
+      + " size, a hard cap): a taste or a soft want (fruity, quiet) is no spec, it pushes down"
+      + " every product that says nothing about it. A brand they named is the `brand` spec on"
+      + " every kind, never the `query`; on a kind, `leaf` with `in` or `nin` rules a leaf in or"
+      + " out. `price` is the range `{ min?, max?, currency }`;"
       + " money is in the minor unit: €130 is 13000; \"around\" a sum is searched a fifth wider,"
       + " and you say so. `query` holds only the buyer's"
       + " own word for a name or a model: good `query: \"Speedgoat\"` when they named it, bad"
@@ -170,7 +172,8 @@ export const SHOPPING_TOOLS = [
       + " offer, shops shipping there first, each with its shop's `name`, whether it `ships`, its"
       + " `delivery` there, `returns_days` and own `promotions`, then `price`, `was`, `pack` or"
       + " `plan`, its stock, its `url` and `read_on`, the day sil read it; nothing marks a best."
-      + " Tell the buyer where to buy and why there, with one link, the offer's `url`. `ships:"
+      + " Tell the buyer where to buy and why there, with one link, the offer's `url`; when"
+      + " they choose, hand over in that turn, even if you linked it before. `ships:"
       + " unknown` is sil not having read that shop's delivery: say so, never \"delivers\", and"
       + " never hand over to a shop that does not ship to them. A promotion is its shop's alone:"
       + " quote it on that shop's offers only. A `was`: say it was higher, judge on the price. A"
