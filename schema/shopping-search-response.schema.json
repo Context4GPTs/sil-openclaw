@@ -131,7 +131,8 @@
       "type": "object",
       "required": [
         "sellers",
-        "products"
+        "products",
+        "asks"
       ],
       "properties": {
         "sellers": {
@@ -175,10 +176,46 @@
           },
           "additionalProperties": false,
           "description": "Counts the products."
+        },
+        "asks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "n",
+              "held",
+              "passed",
+              "failed"
+            ],
+            "properties": {
+              "n": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "An ask by its number in `asked`."
+              },
+              "held": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Products holding a value for it; for the price, a price in its currency."
+              },
+              "passed": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Products holding it, as a card’s `holds` says; for a brand, those of the brand here."
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Products missing it, as a card’s `misses` says; the rest of `held` are unverified."
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Counts each ask alone over every product weighed: say how the place splits on it."
         }
       },
       "additionalProperties": false,
-      "description": "Explains the shortlist: how much was searched, and how much answers the whole ask."
+      "description": "Explains the shortlist: how much was searched, how much answers the whole ask, and each ask."
     },
     "products": {
       "type": "array",
