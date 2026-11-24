@@ -114,9 +114,9 @@ export const SHOPPING_TOOLS = [
       "Read sil's guides before you teach or ask: the passages sil holds on a place that bear"
       + " on `about`. Send the buyer's own words as `about` (clarity, texture, quiet). Each"
       + " passage carries its `title`, `author`, `heading`, `publish_date` and `url`: when you"
-      + " teach from one, name it by its `title` or `author` and the `heading` it sits under,"
-      + " never \"the guide\" alone, and its date, or that sil holds none. A taste the buyer gives (springy, grippy) goes through here before you"
-      + " search: the passage gives the route; a taste is no spec. A question's why comes from"
+      + " teach from one, name it by its `title` or `author`, its `heading` when it has one,"
+      + " never \"the guide\" alone, and its date when it has one. A taste the buyer gives"
+      + " (springy, grippy) goes through here before you search: the passage gives the route; a taste is no spec. A question's why comes from"
       + " here or from a spec's `why`. Nothing held: say so, never fill it from the web.",
   },
   {
@@ -137,21 +137,22 @@ export const SHOPPING_TOOLS = [
       + " about it would drop off the page. A brand they named is the `brand` spec on"
       + " every kind, never the `query`; on a kind, `leaf` with `in` or `nin` rules a leaf in or"
       + " out. `price` is the range `{ min?, max?, currency }`;"
-      + " money is in the minor unit: €130 is 13000; \"around\" a sum is up to a fifth over it and"
-      + " never a floor under it, and you say so; a kept cap is their figure, not the wider one. `query` holds only the buyer's"
-      + " own word for what no spec holds, a name, a model or a use: good `query: \"Speedgoat\"` when they named it,"
+      + " money is in the minor unit: €130 is 13000; \"around\" a sum is up to a fifth over it,"
+      + " never a floor under it, and you say so; a kept cap is their figure, not the wider one."
+      + " `query` holds only the buyer's own word for what no spec holds, a name, a model or a use: good `query: \"Speedgoat\"` when they named it,"
       + " bad `query: \"light grippy trail shoe\"`, which is a sentence of yours. `n`: 8 to weigh a"
       + " kind or show a range, 1 to 3 for a product they named. Back come `asked` numbered,"
       + " `search_stats`, and the closest cards with `holds`, `misses` and `unknown` as ask"
       + " numbers, `price_range` and `variants`, each with its own `price_range`, one"
       + " `recommended`. After it, say what came back: how wide you looked, by sil's own counts"
       + " (`search_stats`: the products and shops sil weighed in this kind; per ask in `asks`,"
-      + " how many held a value, passed and failed, so a brand ask's `passed` is how many of that"
-      + " brand sil holds; a page of eight is the eight you asked for). An ask few products hold"
-      + " leaves most of the kind untested: say so, and when it hid what they asked for, search"
-      + " once more without it. When few fit or many are unknown, say what came"
-      + " back and ask the one question that would change it, or ask before relaxing a want,"
-      + " rather than searching again in other words.",
+      + " how many held a value for it, passed and failed, so a brand ask's `passed` is how many"
+      + " of that brand sil holds in this kind; `with_all_specs` is testable, not passing; a page"
+      + " of eight is the eight you asked for). A quality word few products hold a value for"
+      + " hides the rest: drop it, say which and why, and search once more. When few fit or many"
+      + " are unknown, say what came back and ask the one question that would change it, or ask"
+      + " before relaxing a want they measured or named, rather than searching again in other"
+      + " words.",
   },
   {
     name: "shopping_product_get",
