@@ -116,7 +116,8 @@ export const SHOPPING_TOOLS = [
       + " passage carries its `title`, `author`, `heading`, `publish_date` and `url`: when you"
       + " teach from one, name it by its `title` or `author`, its `heading` when it has one,"
       + " never \"the guide\" alone, and its date when it has one. A taste the buyer gives"
-      + " (springy, grippy) goes through here before you search: the passage gives the route; a taste is no spec. A question's why comes from"
+      + " (springy, grippy) goes through here before you search: the passage gives the route;"
+      + " a taste is no spec. A question's why comes from"
       + " here or from a spec's `why`. Nothing held: say so, never fill it from the web.",
   },
   {
@@ -139,7 +140,8 @@ export const SHOPPING_TOOLS = [
       + " out. `price` is the range `{ min?, max?, currency }`;"
       + " money is in the minor unit: €130 is 13000; \"around\" a sum is up to a fifth over it,"
       + " never a floor under it, and you say so; a kept cap is their figure, not the wider one."
-      + " `query` holds only the buyer's own word for what no spec holds, a name, a model or a use: good `query: \"Speedgoat\"` when they named it,"
+      + " `query` holds only the buyer's own word for what no spec holds, a name, a model or a use:"
+      + " good `query: \"Speedgoat\"` when they named it,"
       + " bad `query: \"light grippy trail shoe\"`, which is a sentence of yours. `n`: 8 to weigh a"
       + " kind or show a range, 1 to 3 for a product they named. Back come `asked` numbered,"
       + " `search_stats`, and the closest cards with `holds`, `misses` and `unknown` as ask"

@@ -42,7 +42,8 @@ search by; a deciding one has `decides` and its `why`. On a considered buy read 
 and what it means for this buy; what decides, at their level, and whose guide says so, by name: its `title`
 or `author`, its `heading` when it has one, never "the guide" alone; the routes that are left; what you
 cannot know, and so why you ask. Teach nothing they know and nothing twice. Then ask only what changes the
-route or the search and that neither their words nor sil's rows settle: a deciding spec with no value, how the thing is used today. What
+route or the search and that neither their words nor sil's rows settle: a deciding spec with no value, how
+the thing is used today. What
 your pick would have to assume is a question, never a guess; a present always asks before it picks. At most
 three, each with what it decides, in one round; no budget unless nothing else bounds the price. Then stop:
 no product search until they answer.
