@@ -86,8 +86,9 @@ export const SHOPPING_TOOLS = [
     query: ["query"],
     label: "Place the thing",
     description:
-      "Place the thing the buyer named: the leaves sil holds for it. Search the leaf; while the"
-      + " buyer has not chosen between leaves of one kind, read and search the kind above them.",
+      "Place the thing the buyer named: the leaves sil holds for it. Send the kind of thing"
+      + " (\"trail shoes\"), never a brand or a model. Search the leaf; while the buyer has not"
+      + " chosen between leaves of one kind, read and search the kind above them.",
   },
   {
     name: "shopping_domain_get",
@@ -130,16 +131,16 @@ export const SHOPPING_TOOLS = [
       + " `domain` is the leaf, or the kind above while the buyer has not chosen between its"
       + " leaves: your own route is a lean until they take it, so the search still covers the"
       + " other kind. `specs` `{ spec, op, value }` from the domain read, each a want the buyer"
-      + " said or sil keeps and none of your own. A want is a spec only when they gave a figure"
-      + " or a choice for it (a size, a width, what it is for, a cap) and would refuse a product"
-      + " without it: a word with no figure (springy, grippy) is no spec, it pushes down every"
-      + " product that says nothing about it. A brand they named is the `brand` spec on"
+      + " said or sil keeps and none of your own. Filter only on what they measured or named (a"
+      + " size, a width, what it is for, a cap): a quality word (springy, grippy, light) is never"
+      + " a filter, even where a spec exists for it, since every product whose maker says nothing"
+      + " about it would drop off the page. A brand they named is the `brand` spec on"
       + " every kind, never the `query`; on a kind, `leaf` with `in` or `nin` rules a leaf in or"
       + " out. `price` is the range `{ min?, max?, currency }`;"
       + " money is in the minor unit: €130 is 13000; \"around\" a sum is searched a fifth wider,"
       + " and you say so; a kept cap is their figure, not the wider one. `query` holds only the buyer's"
-      + " own word for what no spec holds, a name or a model: good `query: \"Speedgoat\"` when they named it, bad"
-      + " `query: \"light grippy trail shoe\"`, which is wants, not a name. `n`: 8 to weigh a"
+      + " own word for what no spec holds, a name, a model or a use: good `query: \"Speedgoat\"` when they named it,"
+      + " bad `query: \"light grippy trail shoe\"`, which is a sentence of yours. `n`: 8 to weigh a"
       + " kind or show a range, 1 to 3 for a product they named. Back come `asked` numbered,"
       + " `search_stats`, and the closest cards with `holds`, `misses` and `unknown` as ask"
       + " numbers, `price_range` and `variants`, each with its own `price_range`, one"
