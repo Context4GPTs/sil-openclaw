@@ -1,6 +1,6 @@
 ---
 name: sil-shopping
-description: 'Use on any shopping intent: a thing to buy, a price, a comparison, a gift, what to get first. sil is the catalog you shop on: it knows the buyer, how each kind of thing is searched, the guides on it, the products, the offers and the shops. Never announce a workflow or a skill to the buyer (no "I''m using the shopping workflow"): answer them. Drives sil_register, sil_whoami, sil_doctor, shopping_user_read, shopping_user_remember, shopping_user_forget, shopping_brief_write, shopping_brief_read, shopping_domain_search, shopping_domain_get, shopping_content, shopping_search, shopping_product_get, shopping_offers, shopping_seller_get.'
+description: 'Use on any shopping intent: a thing to buy, a price, a comparison, a gift, what to get first. sil is the catalog you shop on: it knows the buyer, how each kind of thing is searched, the guides on it, the products, the offers and the shops. Never announce a workflow or a skill to the buyer (no "I''m using the shopping workflow"): answer them. Drives the sil_* and shopping_* tools.'
 metadata:
   openclaw:
     emoji: "\U0001F6D2"
@@ -33,7 +33,8 @@ is never asked; say a row when you use it. `shopping_domain_search { query }`, i
 up to three leaves. Empty: sil does not carry it; say so and stay on sil.
 `shopping_domain_get { path, query, spec_keywords }` answers the specs to search by; a deciding one has
 `decides` and its `why`. On a considered buy read the guide too:
-`shopping_content { path, about: "<their words>" }`.
+`shopping_content { path, about: "<their words>" }`. Your first words come after these reads: an opening
+line about what you are going to do is how, not why.
 
 ## A considered buy
 
@@ -44,8 +45,8 @@ you ask. Teach nothing they know and nothing twice. Then ask, at most three, eac
 What your pick would have to assume about a thing that decides is a question, never a guess. Then stop: no
 product search until they answer. If nothing that decides is missing, say so and go on.
 
-**2. On their answer, before you search.** Keep what lasts and say it: what you kept, what it is for next
-time, and that "forget that" undoes it. Say the route you now think best and why. Then say the search, part
+**2. On their answer, before you search.** Keep what lasts first; once sil answers `ok`, say what you kept,
+what it is for next time, and that "forget that" undoes it. Say the route you now think best and why. Then say the search, part
 by part, each with its why, and what you leave out: "Running shoes, road and trail together, to see whether
 a road shoe changes the picture. Size 44.5. Up to €160, a little over your €150, so a good one just above is
 not hidden. No filter on grip: sil has read no figure for it." Send exactly that, once. A buyer who skips a
@@ -58,8 +59,9 @@ read. Then one of three: recommend, with why this one for them and why not the n
 why; or say your first idea changed and put the choice back, two or three ways side by side, asked in your
 words. Last, where to buy.
 
-**When they choose,** read that product and its offers, answer what they ask from sil (a guide, named; what
-sil does not hold said as such, never a figure from another model or the web), and hand over.
+**When they choose,** read that product's offers and hand over, every time. What they ask about using it is
+answered from sil's guide, read now and named; what sil does not hold is said as such, never a figure from
+another model or the web.
 
 ## The search you send is the search you said
 
@@ -68,27 +70,28 @@ sil does not hold said as such, never a figure from another model or the web), a
 - `domain`: the leaf. While the buyer has not chosen between leaves of one kind (road or trail, hand or
   electric), the kind above them, even when you lean one way.
 - `specs`: `{ spec, op, value }` from the domain read, unchanged, each a want the buyer said or sil keeps;
-  add none. A brand they named is the `brand` spec. On a kind, `leaf` with `in` or `nin` rules a leaf in or
-  out. A taste word (quiet, grippy) goes through the guide: it gives the route, and a spec only where sil has
-  values for one; else you weigh it in what comes back, and say so.
-- `price`: `{ "max": 50000, "currency": "EUR" }` is up to €500. "About" a sum is searched a little wider.
+  add none. Send only what must hold: what it is for, a size, a hard cap. A soft want (quiet, grippy, "maybe
+  one day") is no spec: it pushes down every product that says nothing about it. Weigh it in what comes
+  back, and say you are. A brand they named is the `brand` spec. On a kind, `leaf` with `in` or `nin` rules a
+  leaf in or out.
+- `price`: `{ "max": 50000, "currency": "EUR" }` is up to €500. "Around €150" is searched a fifth wider, to
+  €180, and you say so.
 - `query`: the buyer's own word for a name or a model, or nothing. Never a sentence of yours.
 - `n`: 8 to weigh a kind or show a range; 1 to 3 for a product they named.
 
-Back come `asked`, numbered; `search_stats`; cards closest first with `holds`, `misses` and `unknown` as ask
-numbers, `price_range` and `variants`, one `recommended`. Unknown is unverified: say so. Another currency
-than the filter's is unknown, not a miss. Keep sil's order; copy every id exactly.
+Back come `search_stats` and cards closest first, each with `holds`, `misses` and `unknown`. Unknown is
+unverified: say so. Another currency than the filter's is unknown, not a miss. Keep sil's order; copy every
+id exactly. `with_all_specs` counts the products sil could test on every ask, not the ones that pass.
 
 A count is said only as sil gives it, and of what it counts. `search_stats` counts the kind sil weighed,
-never one brand's range. A page of eight is the eight you asked for, not all sil holds. A thin answer hands
-the next move to the buyer: say it and ask the one question that would change it; never search again in
-other words.
+never one brand's range. A page of eight is the eight you asked for, not all sil holds. A thin answer: say
+it and ask the one question that would change it; never search again in other words.
 
 ## The pick, and where to buy
 
 `shopping_product_get { ids }`, up to three they lean to: values, reviews, each variant with what sets it
 apart. The pick is a variant; read its offers before you name it: `shopping_offers { ids, ship_to? }` with
-**variant** ids, `ship_to` one of their addresses, the default when absent.
+**variant** ids.
 
 Say where to buy and why there: the price, stock, delivery and returns as sil read them. `ships: unknown` is
 "sil has not read their delivery; check before you pay", never "delivers". Out of stock is not "does not
@@ -104,8 +107,9 @@ place: "Running shoes", gives_back: "shoes are searched in their size without as
 `place` is the `name` of the kind you are shopping; `gives_back` is what the row saves them next time, and
 you say it; `source` is `"agent"` for what you inferred. The other kinds, same row:
 
-- `kind: "preference", subject: "price", op: "lte", value: 15000, unit: "EUR", reason: "their cap"`
-- `kind: "memory", text: "Runs twice a week on rocky trails."`
+- how they use it, in their words: `kind: "memory", text: "Runs twice a week on rocky trails."`
+- a taste or a cap, always with `subject`, `op`, `value`: `kind: "preference", subject: "cushioning", op:
+  "eq", value: "soft", reason: "long descents"`; a price is `op: "lte"`, the minor unit, `unit` its currency
 - `kind: "purchase", product: "Petzl Actik headlamp", when: "2026-09"`
 
 A new row has no `id`; an `id` replaces a row sil answered. It is kept when the answer is `ok` and lists it
@@ -115,9 +119,9 @@ yes, `shopping_user_forget`.
 
 ## With a screen, and without
 
-With `studio_*` tools the buyer sees cards: a question card, the results after every search, the pick with
-its offer. You still say all of the above, before and after each card: your words give the reasons, the card
-gives the rows. No table, no price list, no product-by-product repeat. Without a screen, the same in words.
+With `studio_*` tools the buyer also sees cards. You still say all of the above, before and after each card:
+your words give the reasons, the card gives the rows. No table, no price list, no product-by-product repeat.
+Without a screen, the same in words.
 
 ## Also
 

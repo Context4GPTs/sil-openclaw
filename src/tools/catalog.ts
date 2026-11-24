@@ -49,9 +49,10 @@ export const SHOPPING_TOOLS = [
       + " `kind: \"preference\"` with `subject`, `op`, `value` and `reason` (a price in the"
       + " minor unit with `unit` its currency: €130 is 13000); `kind: \"memory\"` with `text`;"
       + " `kind: \"purchase\"` with `product` and `when`. `place` is the `name` of the kind you"
-      + " are shopping, from the domain read; `source` is \"agent\" for what you inferred. Then"
-      + " say it to the buyer: what you kept, what it is for next time (its `gives_back`), and"
-      + " that \"forget that\" undoes it.",
+      + " are shopping, from the domain read; `source` is \"agent\" for what you inferred. How"
+      + " they use it, in their words, is a memory; a taste or a cap is a preference, always"
+      + " with `subject`, `op` and `value`. Once it answers `ok`, say what you kept, what it is"
+      + " for next time (its `gives_back`), and that \"forget that\" undoes it.",
   },
   {
     name: "shopping_user_forget",
@@ -124,21 +125,25 @@ export const SHOPPING_TOOLS = [
     label: "Search sil's products",
     recovery: { not_found: "shopping_brief_read" },
     description:
-      "Search once per settled ask. On a considered buy, first tell the buyer the route and"
-      + " the search, part by part with the why of each: what you send is what you said."
+      "Search once per settled ask. On a considered buy, first say the route you think best"
+      + " and why, then the search, part by part, each with its why; send exactly what you said."
       + " `domain` is the leaf, or the kind above while the buyer has not chosen between its"
       + " leaves. `specs` `{ spec, op, value }` from the domain read, each a want the buyer said"
-      + " or sil keeps and none of your own; a brand they named is the `brand` spec; on a kind,"
-      + " `leaf` with `in` or `nin` rules a leaf in or out. `price` is the range `{ min?, max?,"
-      + " currency }`; money is in the minor unit: €130 is 13000. `query` holds only the buyer's"
+      + " or sil keeps and none of your own. Send only what must hold (what it is for, a size, a"
+      + " hard cap): a soft want (quiet, grippy) is no spec, it pushes down every product that"
+      + " says nothing about it. A brand they named is the `brand` spec; on a kind, `leaf` with"
+      + " `in` or `nin` rules a leaf in or out. `price` is the range `{ min?, max?, currency }`;"
+      + " money is in the minor unit: €130 is 13000; \"around\" a sum is searched a fifth wider,"
+      + " and you say so. `query` holds only the buyer's"
       + " own word for a name or a model: good `query: \"Speedgoat\"` when they named it, bad"
       + " `query: \"light grippy trail shoe\"`, which is wants, not a name. `n`: 8 to weigh a"
       + " kind or show a range, 1 to 3 for a product they named. Back come `asked` numbered,"
       + " `search_stats`, and the closest cards with `holds`, `misses` and `unknown` as ask"
       + " numbers, `price_range` and `variants`, each with its own `price_range`, one"
-      + " `recommended`. After it, tell the buyer how wide you looked by `search_stats`: the"
-      + " products and shops sil weighed in this kind, never a brand's count, and a page of"
-      + " eight is the eight you asked for. When few fit or many are unknown, say what came"
+      + " `recommended`. After it, say what came back: how wide you looked, by sil's own counts"
+      + " (`search_stats`: the products and shops sil weighed in this kind, never a brand's"
+      + " count; `with_all_specs` is how many sil could test on every ask, not how many pass; a"
+      + " page of eight is the eight you asked for). When few fit or many are unknown, say what came"
       + " back and ask the one question that would change it, or ask before relaxing a want,"
       + " rather than searching again in other words.",
   },
