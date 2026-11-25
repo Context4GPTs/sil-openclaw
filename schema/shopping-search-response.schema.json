@@ -211,7 +211,7 @@
               "failed": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Products missing it, as a card’s `misses` says; the rest of `held` are unverified."
+                "description": "Products missing it, as a card’s `misses` says; the rest of `held` are unverified. Always 0 on a lean, which is in no card’s `misses`."
               }
             },
             "additionalProperties": false
@@ -515,7 +515,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Shows the products closest to the ask: those holding most wants first, then most leans, then those the query names, then the cheapest."
+      "description": "Shows the products closest to the ask: those holding most wants first, then those the query names, then most leans, then the cheapest; with a lean, one seat in three (at least one) goes to the best holding no lean that answer the wants alike, on the last seats."
     }
   },
   "additionalProperties": false

@@ -2,7 +2,7 @@
 
 Copied verbatim from `sil-services` `packages/schemas/schema/`, commit
 `fd37ffed3c04ef12c81b3490a91d6dfd290105c3`; the six `shopping-user-*` files and the two `shopping-search-*`
-files from its branch `iter/sil-leaves-you-smarter/6` at `533c1062`. One request and one response artifact per
+files from its branch `iter/sil-leaves-you-smarter/6` at `b265722b`. One request and one response artifact per
 `shopping_*` tool, plus `sil-whoami-*`; each is `JSON.stringify` of the TypeBox object the
 API serialises against.
 
