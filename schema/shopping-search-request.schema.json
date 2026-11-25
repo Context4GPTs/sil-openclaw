@@ -96,11 +96,65 @@
       "additionalProperties": false,
       "description": "Keeps variants with an offer in this currency within one or both ends; sil converts nothing."
     },
+    "leans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "spec",
+          "op",
+          "value"
+        ],
+        "properties": {
+          "spec": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Sends a spec the domain read listed, unchanged: a part’s by its path (`boiler.boilerVolume`)."
+          },
+          "op": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "eq"
+              },
+              {
+                "type": "string",
+                "const": "neq"
+              },
+              {
+                "type": "string",
+                "const": "gte"
+              },
+              {
+                "type": "string",
+                "const": "lte"
+              },
+              {
+                "type": "string",
+                "const": "in"
+              },
+              {
+                "type": "string",
+                "const": "nin"
+              }
+            ],
+            "description": "Sends the operator the domain read listed for this spec."
+          },
+          "value": {
+            "description": "Sends the desired value, typed by the spec's type."
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 4,
+      "description": "Sends what the buyer likes, as a spec row — a brand they like is `{ \"spec\": \"brand\", \"op\": \"eq\", \"value\": \"Baratza\" }`: ranks the products holding it first among those fitting the wants alike, and never narrows."
+    },
     "query": {
       "type": "string",
       "minLength": 1,
       "maxLength": 512,
-      "description": "Sends the words the buyer used for what no spec holds — a name, a model, \"travel\" — matched against the products’ titles and words."
+      "description": "Sends the words the buyer used for what no spec holds — a name, a model, \"travel\": a product whose title holds every word, whole or as its start, ranks before the cheaper."
     },
     "n": {
       "type": "integer",

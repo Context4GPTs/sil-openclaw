@@ -75,6 +75,11 @@
                 "type": "string",
                 "minLength": 1,
                 "description": "Reads the value in this unit."
+              },
+              "lean": {
+                "type": "boolean",
+                "const": true,
+                "description": "Is a lean: it ranks the products, never narrows them."
               }
             },
             "additionalProperties": false
@@ -125,7 +130,7 @@
           }
         ]
       },
-      "description": "Echoes the ask, numbered from 1: each spec with its unit, then the price."
+      "description": "Echoes the ask, numbered from 1: each spec with its unit, then the price, then the leans."
     },
     "search_stats": {
       "type": "object",
@@ -150,7 +155,7 @@
             "with_fit": {
               "type": "integer",
               "minimum": 0,
-              "description": "Shops behind a product holding every ask."
+              "description": "Shops behind a product holding every want."
             }
           },
           "additionalProperties": false,
@@ -276,7 +281,7 @@
               "minimum": 1,
               "description": "An ask by its number in `asked`."
             },
-            "description": "Names the asks it holds a value for that fails on every variant."
+            "description": "Names the wants it holds a value for that fails on every variant; a lean it does not hold is in no list."
           },
           "unknown": {
             "type": "array",
@@ -285,7 +290,7 @@
               "minimum": 1,
               "description": "An ask by its number in `asked`."
             },
-            "description": "Names the asks sil could not test on it: say them as unverified."
+            "description": "Names the wants sil could not test on it: say them as unverified."
           },
           "price_range": {
             "type": "object",
@@ -510,7 +515,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Shows the products closest to the ask: those holding most asks first."
+      "description": "Shows the products closest to the ask: those holding most wants first, then most leans, then those the query names, then the cheapest."
     }
   },
   "additionalProperties": false

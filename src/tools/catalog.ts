@@ -38,8 +38,9 @@ export const SHOPPING_TOOLS = [
       + " overrides the usual flow: ask nothing the pick can be made without; pick, say in a"
       + " clause the one thing it assumes, give the shop. What they own `now` is where you start"
       + " (read a linked `product` for its specs) and is never offered unless they are replacing"
-      + " it. A price row is `value` with `unit` its currency; money is in the minor unit: €130"
-      + " is 13000.",
+      + " it. A `likes` row is a lean on the search, never a want, and its `from` names what"
+      + " it was read from. A price row is `value` with `unit` its currency; money is in the"
+      + " minor unit: €130 is 13000.",
   },
   {
     name: "shopping_user_remember",
@@ -66,7 +67,10 @@ export const SHOPPING_TOOLS = [
       + " first and link the one that is it, else keep it by `name`; `kind: \"preference\"`"
       + " with `subject`, `op`, `value` and"
       + " `reason`, only a limit a search can hold, on a spec or the price (a price in the minor"
-      + " unit with `unit` its currency: €130 is 13000); `kind: \"measurement\"` with `what`,"
+      + " unit with `unit` its currency: €130 is 13000), or a liking: `op: \"likes\"` only when"
+      + " they say they like it (owning is not liking), their reason, and `from`, sil's ids of"
+      + " what they own and like; read those products, and a spec two share at one value is a"
+      + " liking too, `from` both; `kind: \"measurement\"` with `what`,"
       + " `value` and `unit`. `place` is the path the domain read gave, a wider node for a wider"
       + " place, `product` for everywhere; `source` on every row: \"told\", or \"agent\" for"
       + " what you inferred. A place that is no node is refused with the nearest sil holds and"
@@ -168,7 +172,10 @@ export const SHOPPING_TOOLS = [
       + " `query` holds only the buyer's own word for what no spec holds, a name, a model or a use:"
       + " good `query: \"Speedgoat\"` when they named it,"
       + " bad `query: \"light grippy trail shoe\"`, which is a sentence of yours. `n`: 8 to weigh a"
-      + " kind or show a range, 1 to 3 for a product they named. Back come `asked` numbered,"
+      + " kind or show a range, 1 to 3 for a product they named; the product a `query` names"
+      + " comes first. `leans` `{ spec, op, value }` are their kept likings: those holding them"
+      + " come first among products that fit alike, nothing is left out, and a liking is never"
+      + " in `specs`; a pick that follows one says so, in their reason. Back come `asked` numbered,"
       + " `search_stats`, and the closest cards with `holds`, `misses` and `unknown` as ask"
       + " numbers, `price_range` and `variants`, each with its own `price_range`, one"
       + " `recommended`. After it, say what came back: how wide you looked, by sil's own counts"

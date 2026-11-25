@@ -271,6 +271,18 @@
                 "maxLength": 256,
                 "description": "Quotes why, in the buyer’s words."
               },
+              "from": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Names a product sil holds, its id from a search or product read."
+                },
+                "minItems": 1,
+                "maxItems": 8,
+                "description": "Links sil’s products the liking was read from — what they own and like, or turned away from — only with `likes` or `dislikes`."
+              },
               "place_name": {
                 "type": "string",
                 "maxLength": 64,
