@@ -60,13 +60,14 @@ export const SHOPPING_TOOLS = [
       + " spec or the price (a price in the minor unit with `unit` its currency: €130 is"
       + " 13000); `kind: \"measurement\"` with `what`, `value` and `unit`; `kind:"
       + " \"purchase\"` with `product` and `when`. `place` is the path the domain read gave,"
-      + " a wider node for a wider place, `product` for everywhere; `source` is \"agent\" for"
-      + " what you inferred. A place that is no node is refused with the nearest sil holds"
-      + " and those beneath it: keep at one of them. `full` (12 persona rows, or 300 rows in"
-      + " all) names the oldest to forget first: say so and ask. Never \"got it\" before it"
-      + " answers `ok`. Once sil answers `ok`, say in one line what you kept, what it gives"
-      + " them next time (its `gives_back`), and that \"forget that\" undoes it; a keep is"
-      + " never silent.",
+      + " a wider node for a wider place, `product` for everywhere; `source` on every row:"
+      + " \"told\", or \"agent\" for what you inferred. A place that is no node is refused"
+      + " with the nearest sil holds and those beneath it: keep at one of them. `full` (12"
+      + " persona rows, or 300 rows in all) names the oldest to forget first: say so and ask."
+      + " A refused keep: fix what the refusal names and resend every row of that keep, never"
+      + " a subset. Never \"got it\" before it answers `ok`. Once sil answers `ok`, say in"
+      + " one line what you kept, what it gives them next time (its `gives_back`), and that"
+      + " \"forget that\" undoes it; a keep is never silent.",
   },
   {
     name: "shopping_user_forget",
