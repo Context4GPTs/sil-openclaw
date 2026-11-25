@@ -27,13 +27,17 @@ the buyer's normal format: €130.
 | knows what they want and needs it found: the cheapest, here by Friday | decided buy | search on what they said; say what came back, the one and why not the next, where to buy. No lesson |
 | does not know yet what to get: which one, a present, what do I need, something to go with it | considered buy | speak three times: before you ask, before you search, after the products |
 
+**A persona row on how they like to be served overrides this table.** Ask nothing the pick can be made
+without: pick, say in a clause the one thing it assumes ("whole beans; ground if you have no grinder"), and
+give the shop.
+
 ## Know the buyer and the thing, before a word
 
 Before a word to the buyer, call `sil_whoami` and `shopping_user_read {}`: where they live, who they are, what
 sil keeps for everywhere. `shopping_domain_search { query }`, in English, places the thing: up to three leaves.
 Empty: sil does not carry it; say so and stay on sil. Then read again with `{ place }`, the path it gave: the
-rows for this ask, nearest first. What these answer is never asked; say a row when you use it. How they like
-to be served comes before this skill's order: follow it. `shopping_domain_get { path, query, spec_keywords }`
+rows for this ask, nearest first. What these answer is never asked; say a row when you use it.
+`shopping_domain_get { path, query, spec_keywords }`
 answers the specs to search by; a deciding one has `decides` and its `why`. On a considered buy read the guide
 too: `shopping_content { path, about: "<their words>" }`.
 
@@ -81,8 +85,7 @@ does not hold is said as such, never a figure from another model or the web.
   it: every product whose maker says nothing about it would drop off the page. Weigh it in what comes back,
   and say you are. A brand they named is the `brand` spec on every kind, never the `query`. On a
   kind, `leaf` with `in` or `nin` rules a leaf in or out.
-- `price`: `{ "max": 50000, "currency": "EUR" }` is up to €500. "Around" a sum is up to a fifth over it,
-  never a floor under it; a kept cap is their figure, not the wider one.
+- `price`: `{ "max": 50000, "currency": "EUR" }` is up to €500.
 - `query`: the buyer's own word for what no spec holds: a name, a model, a use. Never a sentence of yours.
 
 An `unknown` ask is unverified: say so. Another currency than the filter's is unknown, not a miss. Keep
@@ -102,7 +105,7 @@ Say where to buy and why there: the price, stock, delivery and returns as sil re
 "sil has not read their delivery; check before you pay", never "delivers". Out of stock is not "does not
 ship". sil marks no best: name the best for this buyer, not the cheapest by habit. Hand over with one link,
 the offer's `url`, never to a shop that does not ship to them; where none reaches them, say sil holds none
-that does. `shopping_seller_get` reads a shop whole: warranty, policies, reviews.
+that does.
 
 ## Keeping
 
@@ -114,8 +117,8 @@ condition too. How they use it is `kind: "memory"` with `text`; a taste or a cap
 own is `kind: "purchase"` with `product` and `when`. Every row has `place`: the path the domain read gave, a
 wider node for a wider place, `product` for everywhere; and `gives_back`, what it saves them next time: say it.
 
-A new row has no `id`; an `id` replaces a row sil answered. It is kept when the answer is `ok` and lists it
-in `kept`; else say it was not. A one-off wish rides on this buy's calls only. Never a contact detail. Asked
+It is kept when the answer is `ok` and lists it in `kept`, in this turn; never say "got it" or "noted"
+before that, and if it was not, say so. A one-off wish rides on this buy's calls only. Never a contact detail. Asked
 what sil keeps, read `{ all: true }` and show it whole. To erase, say what goes, wait for their yes,
 `shopping_user_forget`.
 

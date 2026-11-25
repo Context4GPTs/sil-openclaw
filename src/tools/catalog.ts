@@ -33,9 +33,10 @@ export const SHOPPING_TOOLS = [
       + " who they are, then the rows at or under it, elsewhere in its domain and above it,"
       + " nearest first; `held` counts by domain what the answer left out. `all: true` reads"
       + " every row: when they ask what sil keeps, and before a forget. What it answers is never"
-      + " asked again; say a row when you use it, and serve them as their persona rows say. A"
-      + " price row is `value` with `unit` its currency; money is in the minor unit: €130 is"
-      + " 13000.",
+      + " asked again; say a row when you use it. A persona row on how they like to be served"
+      + " overrides the usual flow: ask nothing the pick can be made without; pick, say in a"
+      + " clause the one thing it assumes, give the shop. A price row is `value` with `unit` its"
+      + " currency; money is in the minor unit: €130 is 13000.",
   },
   {
     name: "shopping_user_remember",
@@ -59,8 +60,8 @@ export const SHOPPING_TOOLS = [
       + " `product` for everywhere; `source` is \"agent\" for what you inferred. A place that is"
       + " no node is refused with the nearest sil holds and those beneath it: keep at one of them."
       + " `full` (12 persona rows, or 300 rows in all) names the oldest to forget first: say so"
-      + " and ask. Once it answers `ok`, say what you kept, what it is for next time (its"
-      + " `gives_back`), and that \"forget that\" undoes it.",
+      + " and ask. Never \"got it\" before it answers `ok` in this turn; then say what you"
+      + " kept, what it is for next time (its `gives_back`), and that \"forget that\" undoes it.",
   },
   {
     name: "shopping_user_forget",
