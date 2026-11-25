@@ -64,8 +64,9 @@ export const SHOPPING_TOOLS = [
       + " what you inferred. A place that is no node is refused with the nearest sil holds"
       + " and those beneath it: keep at one of them. `full` (12 persona rows, or 300 rows in"
       + " all) names the oldest to forget first: say so and ask. Never \"got it\" before it"
-      + " answers `ok` in this turn; then say what you kept, what it is for next time (its"
-      + " `gives_back`), and that \"forget that\" undoes it.",
+      + " answers `ok`. Once sil answers `ok`, say in one line what you kept, what it gives"
+      + " them next time (its `gives_back`), and that \"forget that\" undoes it; a keep is"
+      + " never silent.",
   },
   {
     name: "shopping_user_forget",
