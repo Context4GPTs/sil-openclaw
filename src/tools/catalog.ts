@@ -56,9 +56,11 @@ export const SHOPPING_TOOLS = [
       + " price in the minor unit with `unit` its currency: €130 is 13000); `kind:"
       + " \"measurement\"` with `what`, `value` and `unit`; `kind: \"purchase\"` with `product`"
       + " and `when`. `place` is the path the domain read gave, a wider node for a wider place,"
-      + " `product` for everywhere; `source` is \"agent\" for what you inferred. Once it answers"
-      + " `ok`, say what you kept, what it is for next time (its `gives_back`), and that"
-      + " \"forget that\" undoes it.",
+      + " `product` for everywhere; `source` is \"agent\" for what you inferred. A place that is"
+      + " no node is refused with the nearest sil holds and those beneath it: keep at one of them."
+      + " `full` (12 persona rows, or 300 rows in all) names the oldest to forget first: say so"
+      + " and ask. Once it answers `ok`, say what you kept, what it is for next time (its"
+      + " `gives_back`), and that \"forget that\" undoes it.",
   },
   {
     name: "shopping_user_forget",

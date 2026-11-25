@@ -53,6 +53,11 @@
                 "maxLength": 255,
                 "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
               },
+              "place_name": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "Calls the place this, sil’s own name for it; absent once the graph drops it."
+              },
               "gives_back": {
                 "type": "string",
                 "minLength": 1,
@@ -142,6 +147,11 @@
                 "maxLength": 255,
                 "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
               },
+              "place_name": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "Calls the place this, sil’s own name for it; absent once the graph drops it."
+              },
               "gives_back": {
                 "type": "string",
                 "minLength": 1,
@@ -203,6 +213,11 @@
                 "minLength": 1,
                 "maxLength": 255,
                 "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
+              },
+              "place_name": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "Calls the place this, sil’s own name for it; absent once the graph drops it."
               },
               "gives_back": {
                 "type": "string",
@@ -323,6 +338,11 @@
                 "maxLength": 256,
                 "description": "Quotes why, in the buyer’s words."
               },
+              "place_name": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "Calls the place this, sil’s own name for it; absent once the graph drops it."
+              },
               "gives_back": {
                 "type": "string",
                 "minLength": 1,
@@ -403,6 +423,11 @@
                 "maxLength": 256,
                 "description": "Reads what else they said about it: its size, its fit."
               },
+              "place_name": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "Calls the place this, sil’s own name for it; absent once the graph drops it."
+              },
               "gives_back": {
                 "type": "string",
                 "minLength": 1,
@@ -448,6 +473,11 @@
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "maxLength": 255,
             "description": "Names a domain the buyer holds rows in."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Calls the place this, sil’s own name for it; absent once the graph drops it."
           },
           "rows": {
             "type": "integer",
