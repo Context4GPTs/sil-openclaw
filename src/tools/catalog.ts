@@ -45,24 +45,27 @@ export const SHOPPING_TOOLS = [
     path: "/user/remember",
     label: "Keep what lasts about the buyer",
     description:
-      "Keep what will matter next time about the buyer in the turn you learn it, before any"
-      + " search. This is the only place the buyer is kept: \"remember this\" means this call,"
+      "Keep what will matter next time about the buyer in the turn you learn it, the first"
+      + " included, before any search, even mid-ask and even when the ask's own terms use it"
+      + " too. This is the only place the buyer is kept: \"remember this\" means this call,"
       + " not a note or memory file. A one-off wish for this buy rides on its calls instead."
-      + " What they tell about themselves, and how they like to be served, is a persona row: as"
-      + " they said it, with what it means for their buys, never labelled, a health condition"
-      + " too. Send whole rows: `{ rows: [{ kind: \"persona\", text: \"Has arthritis, so kitchen"
-      + " gear must be light, with an easy grip.\", place: \"product.food_kitchen\", gives_back:"
-      + " \"kitchen gear is weighed for its weight and grip\", source: \"told\" }] }`. The other"
-      + " kinds, same row: `kind: \"memory\"` with `text`, how they use it in their words;"
-      + " `kind: \"preference\"` with `subject`, `op`, `value` and `reason`, a taste or a cap (a"
-      + " price in the minor unit with `unit` its currency: €130 is 13000); `kind:"
-      + " \"measurement\"` with `what`, `value` and `unit`; `kind: \"purchase\"` with `product`"
-      + " and `when`. `place` is the path the domain read gave, a wider node for a wider place,"
-      + " `product` for everywhere; `source` is \"agent\" for what you inferred. A place that is"
-      + " no node is refused with the nearest sil holds and those beneath it: keep at one of them."
-      + " `full` (12 persona rows, or 300 rows in all) names the oldest to forget first: say so"
-      + " and ask. Never \"got it\" before it answers `ok` in this turn; then say what you"
-      + " kept, what it is for next time (its `gives_back`), and that \"forget that\" undoes it.",
+      + " Who they are is a persona row: their experience, what they value, how they spend,"
+      + " how they like to be served, a health condition too; as they said it, with what it"
+      + " means for their buys, never labelled. Send whole rows: `{ rows: [{ kind:"
+      + " \"persona\", text: \"Has arthritis, so kitchen gear must be light, with an easy"
+      + " grip.\", place: \"product.food_kitchen\", gives_back: \"kitchen gear is weighed for"
+      + " its weight and grip\", source: \"told\" }] }`. The other kinds, same row: `kind:"
+      + " \"memory\"` with `text`, how they use it in their words; `kind: \"preference\"`"
+      + " with `subject`, `op`, `value` and `reason`, only a limit a search can hold, on a"
+      + " spec or the price (a price in the minor unit with `unit` its currency: €130 is"
+      + " 13000); `kind: \"measurement\"` with `what`, `value` and `unit`; `kind:"
+      + " \"purchase\"` with `product` and `when`. `place` is the path the domain read gave,"
+      + " a wider node for a wider place, `product` for everywhere; `source` is \"agent\" for"
+      + " what you inferred. A place that is no node is refused with the nearest sil holds"
+      + " and those beneath it: keep at one of them. `full` (12 persona rows, or 300 rows in"
+      + " all) names the oldest to forget first: say so and ask. Never \"got it\" before it"
+      + " answers `ok` in this turn; then say what you kept, what it is for next time (its"
+      + " `gives_back`), and that \"forget that\" undoes it.",
   },
   {
     name: "shopping_user_forget",
