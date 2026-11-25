@@ -10,7 +10,7 @@
           "type": "string",
           "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
           "maxLength": 255,
-          "description": "Reads by the ask’s place, the node the domain read gave: who the buyer is, then the rows at or under it, elsewhere in its domain, then above it. Absent, who the buyer is and the rows placed everywhere — the read at a conversation’s start."
+          "description": "Reads by the ask’s place, the node the domain read gave: the rows placed everywhere, then the rows at or under it and elsewhere in its domain, nearest first, then above it. Absent, only the first — the read at a conversation’s start."
         }
       },
       "additionalProperties": false

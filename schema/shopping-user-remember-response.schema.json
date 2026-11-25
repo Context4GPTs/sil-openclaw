@@ -33,7 +33,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "const": "persona"
+                "const": "memory"
               },
               {
                 "type": "string",
@@ -41,15 +41,11 @@
               },
               {
                 "type": "string",
-                "const": "memory"
-              },
-              {
-                "type": "string",
                 "const": "preference"
               },
               {
                 "type": "string",
-                "const": "purchase"
+                "const": "owned"
               }
             ],
             "description": "Reads which kind was kept."

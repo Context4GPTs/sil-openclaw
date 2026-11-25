@@ -38,14 +38,14 @@
               },
               "kind": {
                 "type": "string",
-                "const": "persona",
+                "const": "memory",
                 "description": "Reads what kind of row it is."
               },
               "text": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 400,
-                "description": "Reads who the buyer is or how they like to be served, as they said it, with what it means for their buys — one to three sentences, never a label; says it when it is used."
+                "maxLength": 500,
+                "description": "Reads what the buyer told about themselves, how they like to be served or their situation, as said, with what it means for their buys: one to three sentences, never a label. Its place is its reach: `product` holds on every ask, a node is its context there. Starts from it, never asks it again, and says it when it is used."
               },
               "place": {
                 "type": "string",
@@ -140,73 +140,6 @@
                 "minLength": 1,
                 "maxLength": 64,
                 "description": "Reads whose sizing a printed size is in."
-              },
-              "place": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 255,
-                "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
-              },
-              "place_name": {
-                "type": "string",
-                "maxLength": 64,
-                "description": "Calls the place this, sil’s own name for it; absent once the graph drops it."
-              },
-              "gives_back": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 200,
-                "description": "Says what the row gives the buyer back next time; said when it is kept."
-              },
-              "source": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "told"
-                  },
-                  {
-                    "type": "string",
-                    "const": "agent"
-                  }
-                ],
-                "description": "`told`: the buyer said it. `agent`: the agent read it off the conversation."
-              },
-              "kept_at": {
-                "type": "string",
-                "format": "date-time",
-                "description": "Says when it was kept."
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "id",
-              "kind",
-              "text",
-              "place",
-              "gives_back",
-              "source",
-              "kept_at"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 256,
-                "description": "Names the row to replace it, and to forget it."
-              },
-              "kind": {
-                "type": "string",
-                "const": "memory",
-                "description": "Reads what kind of row it is."
-              },
-              "text": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 500,
-                "description": "Reads the buyer’s situation in one place, as told; starts from it, never asks it again."
               },
               "place": {
                 "type": "string",
@@ -375,9 +308,9 @@
             "required": [
               "id",
               "kind",
-              "product",
+              "name",
+              "has",
               "place",
-              "when",
               "gives_back",
               "source",
               "kept_at"
@@ -391,20 +324,43 @@
               },
               "kind": {
                 "type": "string",
-                "const": "purchase",
+                "const": "owned",
                 "description": "Reads what kind of row it is."
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "description": "Names what they own or owned, maker and model, as they said it."
               },
               "product": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 128,
-                "description": "Names what they bought, maker and model."
+                "maxLength": 256,
+                "description": "Links sil’s product, its id from a search or product read: its specs are read from it, and it is never offered again unless they are replacing it. Absent when sil holds none."
               },
-              "place": {
+              "has": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "now"
+                  },
+                  {
+                    "type": "string",
+                    "const": "before"
+                  }
+                ],
+                "description": "`now`: they have it. `before`: they had it and no longer do."
+              },
+              "since": {
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 255,
-                "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
+                "pattern": "^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$",
+                "description": "Dates when they got it: a year, a month or a day."
+              },
+              "until": {
+                "type": "string",
+                "pattern": "^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$",
+                "description": "Dates when they stopped having it, only when `before`."
               },
               "store": {
                 "type": "string",
@@ -412,10 +368,11 @@
                 "maxLength": 128,
                 "description": "Names where they bought it."
               },
-              "when": {
+              "place": {
                 "type": "string",
-                "pattern": "^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$",
-                "description": "Dates it, to the month or the day."
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
               },
               "note": {
                 "type": "string",

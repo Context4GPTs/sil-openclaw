@@ -12,6 +12,11 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ### Changed
 
+- **What sil keeps about the buyer is four kinds, and a memory's place is its reach.** The persona
+  kind is gone: who the buyer is and how they like to be served is a memory placed at `product`,
+  read on every ask; a memory placed in a domain is its context there. A purchase is now `owned`:
+  had `now` or `before`, linked to sil's product when a search gave its id, started from and never
+  offered again unless the buyer is replacing it.
 - **The skill is rebuilt around one order of a turn, by kind of ask.** A quick answer, a browse,
   a decided buy and a considered buy each get their own turn. On a considered buy the agent
   says where it stands before asking, the route and the search before searching, and what came
