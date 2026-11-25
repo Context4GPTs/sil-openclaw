@@ -34,7 +34,7 @@
     "page": {
       "type": "integer",
       "minimum": 2,
-      "description": "Reads on: the `next_page` the last answer gave."
+      "description": "Reads on: the `next_page` the last answer gave, sent with the same request it answered."
     }
   },
   "additionalProperties": false

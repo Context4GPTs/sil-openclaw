@@ -24,6 +24,12 @@ is fact. Every product you name is one sil answered.
 **Money.** Every amount you send is an integer in the minor unit: €130 is 13000. Every amount
 you say is in the buyer's normal format: €130.
 
+**Pages.** An answer with `next_page` has more, and `remaining` says how many. Read on with the
+same call and `page: next_page`: a page never takes other ids or another search.
+
+**Scripts.** Start every script that calls sil with `// @exec: {"max_output_tokens": 40000}`, so
+nothing it prints is cut.
+
 ## Know the buyer, once
 
 Before asking anything: `sil_whoami` (name, country, currency, language, addresses, the
@@ -85,7 +91,7 @@ price and what it misses.
 
 ## Read the shortlist, tell the pick
 
-`shopping_product_get { ids }`, up to three the buyer leans to: values once, reviews, every
+`shopping_product_get { ids }`, up to ten the buyer leans to: values once, reviews, every
 picture, each variant with what sets it apart and its `price_range`. Pick the variants here,
 from the search card's `recommended` one, then read their offers.
 

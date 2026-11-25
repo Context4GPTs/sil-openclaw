@@ -12,7 +12,7 @@ import type { PluginAPI, RespondFn } from "openclaw/plugin-sdk/plugin-entry";
 import { latestSession, readAnswer, signedInPrincipal } from "../lib/answers.js";
 import { readHostVersion } from "../lib/host-wiring.js";
 import { logScreen } from "../lib/screen-log.js";
-import { callRoute, type CallResult, type RefusalBody } from "../lib/shopping-call.js";
+import { callRoute, type RefusalBody } from "../lib/shopping-call.js";
 import type { Caller } from "../lib/sil-client.js";
 import { readInstalledVersion } from "../lib/version-advisory.js";
 import { SHOPPING_TOOLS, type ShoppingToolName } from "../tools/catalog.js";
@@ -37,12 +37,12 @@ const SCREEN_TOOLS: ReadonlySet<ShoppingToolName> = new Set([
   "shopping_user_forget",
 ]);
 
-/** sil reads three products an answer; a screen's Compare asks for up to ten. */
+/** sil reads ten products a call; a screen's Compare asks for up to ten. */
 const PRODUCT_IDS_MAX = 10;
-const PRODUCT_IDS_PER_READ = 3;
 
-/** sil's record tells the buyer's taps from the agent's calls by this model. */
-const SCREEN_MODEL = "studio/buyer";
+/** sil answers a `studio/` model whole and files it apart from the agent's calls: what the screen reads by
+ * itself, or what the buyer's tap asks (`by: "buyer"`). */
+const SCREEN_MODEL = { app: "studio/app", buyer: "studio/buyer" } as const;
 
 /** sil-api's rules for `sil-tool-call-id` and `sil-session-id`. */
 const REQUEST_ID = /^[\x21-\x7E]{1,256}$/;
@@ -120,7 +120,7 @@ async function call(
     invalid(api, respond, parsed.invalid);
     return;
   }
-  const { tool, reads, requestId } = parsed;
+  const { tool, body, requestId, by } = parsed;
   const principal = signedInPrincipal();
   if (principal === undefined) {
     logScreen(api, "info", "call_refused", { requestId, tool: tool.name, reason: "no_principal" });
@@ -132,17 +132,17 @@ async function call(
   const caller: Caller = {
     ...run,
     toolCallId: requestId,
-    model: SCREEN_MODEL,
+    model: SCREEN_MODEL[by],
     sessionId: parsed.sessionId ?? latestSession(principal) ?? randomUUID(),
   };
-  const answered = await readAll(api, tool, reads, caller);
+  const answered = await callRoute(api, tool, body, caller);
   if (answered.kind === "refused") {
     const { status } = answered.body;
     logScreen(api, "info", "call_refused", { requestId, tool: tool.name, reason: status });
     respond(true, SIGNED_OUT.has(status) ? NOT_FOUND : answered.body);
     return;
   }
-  logScreen(api, "info", "call_answered", { requestId, tool: tool.name, reads: reads.length });
+  logScreen(api, "info", "call_answered", { requestId, tool: tool.name, by });
   respond(true, answered.body);
 }
 
@@ -150,13 +150,14 @@ type ScreenTool = (typeof SHOPPING_TOOLS)[number];
 
 interface ParsedCall {
   tool: ScreenTool;
-  reads: Record<string, unknown>[];
+  body: Record<string, unknown>;
   requestId: string;
   sessionId: string | undefined;
+  by: keyof typeof SCREEN_MODEL;
 }
 
 function parseCall(params: Record<string, unknown>): ParsedCall | { invalid: string } {
-  const { tool: name, args, requestId, sessionId } = params;
+  const { tool: name, args, requestId, sessionId, by = "app" } = params;
   const tool = SHOPPING_TOOLS.find((t) => t.name === name && SCREEN_TOOLS.has(t.name));
   if (tool === undefined) return { invalid: `sil.call runs only ${[...SCREEN_TOOLS].join(", ")}.` };
   if (args === null || typeof args !== "object" || Array.isArray(args)) {
@@ -168,16 +169,16 @@ function parseCall(params: Record<string, unknown>): ParsedCall | { invalid: str
   if (sessionId !== undefined && (typeof sessionId !== "string" || !SESSION_ID.test(sessionId))) {
     return { invalid: "sil.call takes `sessionId`, when sent, as a UUID." };
   }
+  if (by !== "app" && by !== "buyer") return { invalid: "sil.call takes `by`, when sent, as app or buyer." };
   const body = args as Record<string, unknown>;
   // A tap erases the rows it names; everything goes only on the buyer's word to the agent.
   if (tool.name === "shopping_user_forget" && !namesRowsOnly(body)) {
     return { invalid: "shopping_user_forget from a screen takes `ids` only." };
   }
-  const reads = tool.name === "shopping_product_get" ? productReads(body) : [body];
-  if (reads === null) {
+  if (tool.name === "shopping_product_get" && !productIds(body)) {
     return { invalid: `shopping_product_get takes \`ids\`, 1–${PRODUCT_IDS_MAX} strings.` };
   }
-  return { tool, reads, requestId, sessionId };
+  return { tool, body, requestId, sessionId, by };
 }
 
 function namesRowsOnly(args: Record<string, unknown>): boolean {
@@ -185,35 +186,11 @@ function namesRowsOnly(args: Record<string, unknown>): boolean {
   return Object.keys(args).length === 1 && Array.isArray(ids) && ids.length > 0;
 }
 
-/** The reads at once — the refresh they may share is single-flight — the product reads'
- * `products` joined in order, and the first refusal answering for all. */
-async function readAll(
-  api: PluginAPI,
-  tool: ScreenTool,
-  reads: Record<string, unknown>[],
-  caller: Caller,
-): Promise<CallResult> {
-  if (reads.length === 1) return callRoute(api, tool, reads[0] ?? {}, caller);
-  const called = await Promise.all(reads.map((read) => callRoute(api, tool, read, caller)));
-  const refused = called.find((c) => c.kind === "refused");
-  if (refused !== undefined) return refused;
-  const products = called.flatMap((c) => {
-    const page = c.body["products"];
-    return Array.isArray(page) ? page : [];
-  });
-  return { kind: "ok", body: { status: "ok", products } };
-}
-
-/** The ids cut into the threes sil reads, or null when they are not 1–10 strings. */
-function productReads(args: Record<string, unknown>): Record<string, unknown>[] | null {
+/** The ids a product read takes: 1–10 strings, one read. */
+function productIds(args: Record<string, unknown>): boolean {
   const ids = args["ids"];
-  if (!Array.isArray(ids) || ids.length === 0 || ids.length > PRODUCT_IDS_MAX) return null;
-  if (!ids.every((id) => typeof id === "string" && id.length > 0)) return null;
-  const reads: Record<string, unknown>[] = [];
-  for (let at = 0; at < ids.length; at += PRODUCT_IDS_PER_READ) {
-    reads.push({ ...args, ids: ids.slice(at, at + PRODUCT_IDS_PER_READ) });
-  }
-  return reads;
+  return Array.isArray(ids) && ids.length > 0 && ids.length <= PRODUCT_IDS_MAX
+    && ids.every((id) => typeof id === "string" && id.length > 0);
 }
 
 function invalid(api: PluginAPI, respond: RespondFn, message: string): void {

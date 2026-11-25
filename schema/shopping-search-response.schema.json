@@ -221,7 +221,7 @@
               "type": "string"
             },
             "maxItems": 5,
-            "description": "Shows it: the recommended variant’s pictures first, then the product’s; the product read has every one."
+            "description": "Shows it: the recommended variant’s pictures first, then the product’s, up to five; the product read has every one."
           },
           "holds": {
             "type": "array",
@@ -468,12 +468,22 @@
               },
               "additionalProperties": false
             },
-            "description": "Lists the variants the ask leaves standing, one of them recommended."
+            "description": "Lists the variants the ask leaves standing, the recommended one first."
           }
         },
         "additionalProperties": false
       },
-      "description": "Shows the products closest to the ask: those holding most asks first."
+      "description": "Shows the `n` products closest to the ask, a product the buyer’s words name first, then those holding most asks; the pages hold those `n` and no more."
+    },
+    "next_page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Sends it as `page`, with the same request unchanged, to read the products on; absent on the last page."
+    },
+    "remaining": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Says how many products are still to come after this page; absent on the last page. Every answer holds whole entries in order up to its limit and pages the rest, nothing left out. One product bigger than a page continues by its variants: each page repeats its own fields with the next of its variants, the variant asked for (on a search card, the recommended one) on its first page, and it counts here until its last variant is sent. The one exception to the limit: a single entry, or a product’s own fields with one variant, bigger than a whole page alone, is sent whole."
     }
   },
   "additionalProperties": false

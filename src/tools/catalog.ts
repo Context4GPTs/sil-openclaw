@@ -122,7 +122,8 @@ export const SHOPPING_TOOLS = [
       + " `price_range` and `variants`, each with its own `price_range`, one `recommended`. When"
       + " few fit or many are unknown, tell the buyer what came back and ask the one question"
       + " that would change it, or ask before relaxing a want, rather than searching again in"
-      + " other words.",
+      + " other words. Where the cards do not fit one answer, `next_page` is there and `remaining`"
+      + " says how many wait: send the same search again with `page` = `next_page`.",
   },
   {
     name: "shopping_product_get",
@@ -132,7 +133,9 @@ export const SHOPPING_TOOLS = [
     description:
       "Read the products the buyer leans to whole: values once, reviews, every picture, and"
       + " each variant with what sets it apart and its `price_range`, cheapest to dearest offer."
-      + " Pick the variants to buy here; money is in the minor unit: €130 is 13000.",
+      + " Pick the variants to buy here; money is in the minor unit: €130 is 13000. Up to ten ids."
+      + " Where they do not fit one answer, `next_page` is there and `remaining` says how many"
+      + " products wait: send the same ids again with `page` = `next_page`.",
   },
   {
     name: "shopping_offers",
@@ -202,7 +205,9 @@ export function runOf(
   openclawVersion: string | undefined,
 ): Run {
   const { provider, modelId } = ctx.activeModel ?? {};
-  const model = provider && modelId ? `${provider}/${modelId}` : undefined;
+  // sil reads a `studio/` model whole: that name is the screen's alone, whatever a gateway calls its provider.
+  const named = provider === "studio" ? "agent-studio" : provider;
+  const model = named && modelId ? `${named}/${modelId}` : undefined;
   const conversation = model !== undefined ? ctx.sessionId || undefined : undefined;
   return {
     caller: {
