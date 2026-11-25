@@ -2,36 +2,34 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.sil.com/shopping-user-read-request.schema.json",
   "title": "sil shopping_user_read — request",
-  "type": "object",
-  "properties": {
-    "kinds": {
-      "type": "array",
-      "items": {
-        "anyOf": [
-          {
-            "type": "string",
-            "const": "measurement"
-          },
-          {
-            "type": "string",
-            "const": "memory"
-          },
-          {
-            "type": "string",
-            "const": "preference"
-          },
-          {
-            "type": "string",
-            "const": "purchase"
-          }
-        ],
-        "description": "A kind of row."
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "place": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+          "maxLength": 255,
+          "description": "Reads by the ask’s place, the node the domain read gave: who the buyer is, then the rows at or under it, elsewhere in its domain, then above it. Absent, who the buyer is and the rows placed everywhere — the read at a conversation’s start."
+        }
       },
-      "minItems": 1,
-      "uniqueItems": true,
-      "description": "Reads only these kinds; absent, every row."
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "all"
+      ],
+      "properties": {
+        "all": {
+          "type": "boolean",
+          "const": true,
+          "description": "Reads every row, newest first: for \"what do you keep about me?\"."
+        }
+      },
+      "additionalProperties": false
     }
-  },
-  "additionalProperties": false,
+  ],
+  "type": "object",
   "description": "Money is in the minor unit: €130 is 13000."
 }

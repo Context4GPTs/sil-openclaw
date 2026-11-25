@@ -5,7 +5,8 @@
   "type": "object",
   "required": [
     "status",
-    "rows"
+    "rows",
+    "held"
   ],
   "properties": {
     "status": {
@@ -22,8 +23,71 @@
             "required": [
               "id",
               "kind",
+              "text",
+              "place",
+              "gives_back",
+              "source",
+              "kept_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Names the row to replace it, and to forget it."
+              },
+              "kind": {
+                "type": "string",
+                "const": "persona",
+                "description": "Reads what kind of row it is."
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400,
+                "description": "Reads who the buyer is or how they like to be served, as they said it, with what it means for their buys — one to three sentences, never a label; says it when it is used."
+              },
+              "place": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
+              },
+              "gives_back": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Says what the row gives the buyer back next time; said when it is kept."
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "told"
+                  },
+                  {
+                    "type": "string",
+                    "const": "agent"
+                  }
+                ],
+                "description": "`told`: the buyer said it. `agent`: the agent read it off the conversation."
+              },
+              "kept_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Says when it was kept."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "kind",
               "what",
               "value",
+              "place",
               "gives_back",
               "source",
               "kept_at"
@@ -75,8 +139,8 @@
               "place": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 64,
-                "description": "Names where the row applies: a place sil holds, or a wider one in a word or two, never a sentence."
+                "maxLength": 255,
+                "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
               },
               "gives_back": {
                 "type": "string",
@@ -111,6 +175,7 @@
               "id",
               "kind",
               "text",
+              "place",
               "gives_back",
               "source",
               "kept_at"
@@ -131,13 +196,13 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 500,
-                "description": "Reads what the buyer told, in a sentence; starts from it, never asks it again."
+                "description": "Reads the buyer’s situation in one place, as told; starts from it, never asks it again."
               },
               "place": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 64,
-                "description": "Names where the row applies: a place sil holds, or a wider one in a word or two, never a sentence."
+                "maxLength": 255,
+                "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
               },
               "gives_back": {
                 "type": "string",
@@ -174,6 +239,7 @@
               "subject",
               "op",
               "value",
+              "place",
               "gives_back",
               "source",
               "kept_at"
@@ -248,8 +314,8 @@
               "place": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 64,
-                "description": "Names where the row applies: a place sil holds, or a wider one in a word or two, never a sentence."
+                "maxLength": 255,
+                "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
               },
               "reason": {
                 "type": "string",
@@ -290,6 +356,7 @@
               "id",
               "kind",
               "product",
+              "place",
               "when",
               "gives_back",
               "source",
@@ -316,8 +383,8 @@
               "place": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 64,
-                "description": "Names where the row applies: a place sil holds, or a wider one in a word or two, never a sentence."
+                "maxLength": 255,
+                "description": "Places the row at the node the domain read gave, as its path; a wider node for a wider place, `product` for everywhere. A read by place answers it there and beneath."
               },
               "store": {
                 "type": "string",
@@ -365,7 +432,32 @@
           }
         ]
       },
-      "description": "Reads everything sil keeps about the buyer, whole: never asks what a row answers, and says the row when it uses it."
+      "description": "Reads the rows that bear on the ask, nearest first: never asks what a row answers, and says the row when it uses it."
+    },
+    "held": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "domain",
+          "rows"
+        ],
+        "properties": {
+          "domain": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "maxLength": 255,
+            "description": "Names a domain the buyer holds rows in."
+          },
+          "rows": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many of its rows this answer did not carry."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Knows what else is kept, by domain: reads that place when the buyer brings it up. Empty: nothing more."
     }
   },
   "additionalProperties": false

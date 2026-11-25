@@ -33,6 +33,10 @@
             "anyOf": [
               {
                 "type": "string",
+                "const": "persona"
+              },
+              {
+                "type": "string",
                 "const": "measurement"
               },
               {

@@ -17,6 +17,7 @@
     "removed": {
       "type": "object",
       "required": [
+        "persona",
         "measurement",
         "memory",
         "preference",
@@ -25,6 +26,11 @@
         "brief"
       ],
       "properties": {
+        "persona": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Persona rows removed."
+        },
         "measurement": {
           "type": "integer",
           "minimum": 0,
