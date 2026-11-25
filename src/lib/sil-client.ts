@@ -407,7 +407,7 @@ export interface Caller {
   /** A UUID: the conversation's, or one minted for a caller with none. */
   readonly sessionId: string;
   readonly toolCallId: string;
-  /** `<provider>/<modelId>`; `none/<caller>` or `studio/buyer` when no model made the call. */
+  /** `<provider>/<modelId>`; `none/<caller>`, or `studio/app` · `studio/buyer` for the screen, when no model made the call. */
   readonly model: string;
   readonly openclawVersion?: string;
   readonly pluginVersion: string;

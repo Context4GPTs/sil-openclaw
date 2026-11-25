@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import type { PluginAPI, RespondFn } from "openclaw/plugin-sdk/plugin-entry";
 
 import { latestSession, readAnswer, signedInPrincipal } from "../lib/answers.js";
+import { requestSchema } from "../lib/artifacts.js";
 import { readHostVersion } from "../lib/host-wiring.js";
 import { logScreen } from "../lib/screen-log.js";
 import { callRoute, type RefusalBody } from "../lib/shopping-call.js";
@@ -37,8 +38,14 @@ const SCREEN_TOOLS: ReadonlySet<ShoppingToolName> = new Set([
   "shopping_user_forget",
 ]);
 
-/** sil reads ten products a call; a screen's Compare asks for up to ten. */
-const PRODUCT_IDS_MAX = 10;
+/** sil's own cap on a read, from its request file: the door sends a Compare in one read. */
+const PRODUCT_IDS_MAX = productIdsMax();
+
+function productIdsMax(): number {
+  const ids = (requestSchema("shopping_product_get") as { properties?: { ids?: { maxItems?: unknown } } }).properties?.ids?.maxItems;
+  if (typeof ids !== "number") throw new Error("schema/shopping-product-get-request.schema.json names no ids.maxItems");
+  return ids;
+}
 
 /** sil answers a `studio/` model whole and files it apart from the agent's calls: what the screen reads by
  * itself, or what the buyer's tap asks (`by: "buyer"`). */
