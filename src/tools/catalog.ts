@@ -27,9 +27,13 @@ export const SHOPPING_TOOLS = [
     path: "/user/read",
     label: "Read what sil keeps about the buyer",
     description:
-      "Know the buyer: everything kept about them is here, never in your own memory files."
-      + " Read once per conversation before asking anything, when they ask what you keep, and"
-      + " before a forget. What it answers is never asked again; say a row when you use it. A"
+      "Know the buyer: everything kept about them is here, never in your own memory files. At"
+      + " the start of a conversation read with no `place`: who they are and the rows for"
+      + " everywhere. Once the domain read gives the ask's path, read again with it as `place`:"
+      + " who they are, then the rows at or under it, elsewhere in its domain and above it,"
+      + " nearest first; `held` counts by domain what the answer left out. `all: true` reads"
+      + " every row: when they ask what sil keeps, and before a forget. What it answers is never"
+      + " asked again; say a row when you use it, and serve them as their persona rows say. A"
       + " price row is `value` with `unit` its currency; money is in the minor unit: €130 is"
       + " 13000.",
   },
@@ -39,27 +43,31 @@ export const SHOPPING_TOOLS = [
     path: "/user/remember",
     label: "Keep what lasts about the buyer",
     description:
-      "Keep what will matter next time about the buyer (how they use it, what they value, a"
-      + " cap for this kind of thing, a measurement) in the turn you learn it, before any"
+      "Keep what will matter next time about the buyer in the turn you learn it, before any"
       + " search. This is the only place the buyer is kept: \"remember this\" means this call,"
       + " not a note or memory file. A one-off wish for this buy rides on its calls instead."
-      + " Send whole rows: `{ rows: [{ kind: \"measurement\", what: \"foot length\", value:"
-      + " 27.2, unit: \"cm\", place: \"Running shoes\", gives_back: \"shoes are searched in"
-      + " their size without asking\", source: \"told\" }] }`. The other kinds, same row:"
-      + " `kind: \"preference\"` with `subject`, `op`, `value` and `reason` (a price in the"
-      + " minor unit with `unit` its currency: €130 is 13000); `kind: \"memory\"` with `text`;"
-      + " `kind: \"purchase\"` with `product` and `when`. `place` is the `name` of the kind you"
-      + " are shopping, from the domain read; `source` is \"agent\" for what you inferred. How"
-      + " they use it, in their words, is a memory; a taste or a cap is a preference, always"
-      + " with `subject`, `op` and `value`. Once it answers `ok`, say what you kept, what it is"
-      + " for next time (its `gives_back`), and that \"forget that\" undoes it.",
+      + " What they tell about themselves, and how they like to be served, is a persona row: as"
+      + " they said it, with what it means for their buys, never labelled, a health condition"
+      + " too. Send whole rows: `{ rows: [{ kind: \"persona\", text: \"Has arthritis, so kitchen"
+      + " gear must be light, with an easy grip.\", place: \"product.food_kitchen\", gives_back:"
+      + " \"kitchen gear is weighed for its weight and grip\", source: \"told\" }] }`. The other"
+      + " kinds, same row: `kind: \"memory\"` with `text`, how they use it in their words;"
+      + " `kind: \"preference\"` with `subject`, `op`, `value` and `reason`, a taste or a cap (a"
+      + " price in the minor unit with `unit` its currency: €130 is 13000); `kind:"
+      + " \"measurement\"` with `what`, `value` and `unit`; `kind: \"purchase\"` with `product`"
+      + " and `when`. `place` is the path the domain read gave, a wider node for a wider place,"
+      + " `product` for everywhere; `source` is \"agent\" for what you inferred. Once it answers"
+      + " `ok`, say what you kept, what it is for next time (its `gives_back`), and that"
+      + " \"forget that\" undoes it.",
   },
   {
     name: "shopping_user_forget",
     method: "POST",
     path: "/user/forget",
     label: "Erase what sil keeps, on the buyer's word",
-    description: "Erase what sil keeps, only after saying what goes and the buyer saying yes.",
+    description:
+      "Erase what sil keeps, only after saying what goes and the buyer saying yes: \"forget"
+      + " that\" is its row's `ids`, \"forget everything\" is `all: true`.",
   },
   {
     name: "shopping_brief_write",

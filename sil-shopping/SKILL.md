@@ -29,12 +29,13 @@ the buyer's normal format: €130.
 
 ## Know the buyer and the thing, before a word
 
-Before a word to the buyer, and before any question, call `sil_whoami` and `shopping_user_read`: who they
-are, where they live, every row sil keeps. What these answer is never asked; say a row when you use it.
-`shopping_domain_search { query }`, in English, places the thing: up to three leaves. Empty: sil does not
-carry it; say so and stay on sil. `shopping_domain_get { path, query, spec_keywords }` answers the specs to
-search by; a deciding one has `decides` and its `why`. On a considered buy read the guide too:
-`shopping_content { path, about: "<their words>" }`.
+Before a word to the buyer, call `sil_whoami` and `shopping_user_read {}`: where they live, who they are, what
+sil keeps for everywhere. `shopping_domain_search { query }`, in English, places the thing: up to three leaves.
+Empty: sil does not carry it; say so and stay on sil. Then read again with `{ place }`, the path it gave: the
+rows for this ask, nearest first. What these answer is never asked; say a row when you use it. How they like
+to be served comes before this skill's order: follow it. `shopping_domain_get { path, query, spec_keywords }`
+answers the specs to search by; a deciding one has `decides` and its `why`. On a considered buy read the guide
+too: `shopping_content { path, about: "<their words>" }`.
 
 ## A considered buy
 
@@ -48,10 +49,10 @@ your pick would have to assume is a question, never a guess; a present always as
 three, each with what it decides, in one round; no budget unless nothing else bounds the price. Then stop:
 no product search until they answer.
 
-**2. On their answer, before you search.** First keep what they just told you that will hold next time: how
-they use it, a taste, a cap. Once sil answers `ok`, say what you kept, what it is for next time, and that
-"forget that" undoes it. A taste they give goes through the guide: read `shopping_content` with their words
-and say what it means, the guide named. Ask no second round: say the route you now think best and why. It is
+**2. On their answer, before you search.** First keep what they just told you that will hold next time: who
+they are, how they use it, a taste, a cap; then say what you kept, what it is for, and that "forget that"
+undoes it. A taste they give goes through the guide: read `shopping_content` with their words and say what it
+means, the guide named. Ask no second round: say the route you now think best and why. It is
 a lean until they take it, so the search still covers the other kind. An idea they came with is searched too.
 Then say the search, part by part, each with its why, and what you leave out: "Running shoes, road and trail
 together, to see whether a road shoe changes the picture. Size 44.5. Up to €180, a fifth over your 'around
@@ -85,13 +86,11 @@ does not hold is said as such, never a figure from another model or the web.
 - `query`: the buyer's own word for what no spec holds: a name, a model, a use. Never a sentence of yours.
 
 An `unknown` ask is unverified: say so. Another currency than the filter's is unknown, not a miss. Keep
-sil's order; copy every id exactly. `search_stats.asks` says per ask how many products held a value for
-it, passed and failed; the rest sil could not test. `with_all_specs` is testable, not passing. A quality word
-few products hold a value for hides the rest: drop it, say which and why, search once more.
+sil's order; copy every id exactly. `with_all_specs` is testable, not passing. A quality word few products
+hold a value for hides the rest: drop it, say which and why, search once more.
 
-A count is said only as sil gives it. `search_stats` counts the kind sil weighed; a brand's count in it is
-its ask's `passed`. A page of eight is the eight you asked for, not all sil holds. A thin answer: say it and
-ask the one question that would change it; never search again in other words.
+A count is said only as sil gives it. A page of eight is the eight you asked for, not all sil holds. A thin
+answer: say it and ask the one question that would change it; never search again in other words.
 
 ## The pick, and where to buy
 
@@ -103,22 +102,23 @@ Say where to buy and why there: the price, stock, delivery and returns as sil re
 "sil has not read their delivery; check before you pay", never "delivers". Out of stock is not "does not
 ship". sil marks no best: name the best for this buyer, not the cheapest by habit. Hand over with one link,
 the offer's `url`, never to a shop that does not ship to them; where none reaches them, say sil holds none
-that does. When a date decides, a shop whose delivery sil has not read does not count as reaching them. `shopping_seller_get` reads a shop whole: warranty, policies, reviews.
+that does. `shopping_seller_get` reads a shop whole: warranty, policies, reviews.
 
 ## Keeping
 
 The buyer is kept only in sil, never in your memory files. In the turn you learn something lasting, keep it
-before you search: `shopping_user_remember { rows: [...] }`, each row whole, as its description shows. How
-they use it, in their words, is `kind: "memory"` with `text`; a taste or a cap is `kind: "preference"` with
-`subject`, `op` and `value`; a number about them is `kind: "measurement"` with `what`, `value`, `unit`; what
-they own is `kind: "purchase"` with `product` and `when`. Every
-row has `place` (the `name` the domain read gave), `gives_back` (what it saves them next time: say it) and
-`source`: `"told"`, or `"agent"` for what you inferred.
+before you search: `shopping_user_remember { rows: [...] }`, each row whole, as its description shows. What
+they tell about themselves, and how they like to be served, is `kind: "persona"` with `text`: as they said it,
+with what it means for their buys, never labelled, a health condition too. How they use it is `kind:
+"memory"` with `text`; a taste or a cap is `kind: "preference"` with `subject`, `op` and `value`; a number
+about them is `kind: "measurement"` with `what`, `value`, `unit`; what they own is `kind: "purchase"` with
+`product` and `when`. Every row has `place`: the path the domain read gave, a wider node for a wider place,
+`product` for everywhere; and `gives_back`, what it saves them next time: say it.
 
 A new row has no `id`; an `id` replaces a row sil answered. It is kept when the answer is `ok` and lists it
-in `kept`; else say it was not. A one-off wish rides on this buy's calls only. Keep the need, never a health
-condition or a contact detail. Asked what sil keeps, show it whole. To erase, say what goes, wait for their
-yes, `shopping_user_forget`.
+in `kept`; else say it was not. A one-off wish rides on this buy's calls only. Never a contact detail. Asked
+what sil keeps, read `{ all: true }` and show it whole. To erase, say what goes, wait for their yes,
+`shopping_user_forget`.
 
 ## Also
 
