@@ -66,7 +66,7 @@ export const SHOPPING_TOOLS = [
       + " `until` when said (a year, month or day), and `product`, sil's id: search it by name"
       + " first and link the one that is it, else keep it by `name`; `kind: \"preference\"`"
       + " with `subject`, `op`, `value` and"
-      + " `reason`, only a limit a search can hold, on a spec or the price (a price in the minor"
+      + " `reason`, a limit a search can hold, on a spec or the price (a price in the minor"
       + " unit with `unit` its currency: €130 is 13000), or a liking: `op: \"likes\"` only when"
       + " they say they like it (owning is not liking), their reason, and `from`, sil's ids of"
       + " what they own and like; read those with `shopping_product_get`, and a spec two share"
