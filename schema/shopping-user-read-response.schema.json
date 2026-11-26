@@ -208,7 +208,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 64,
-                "description": "Names what the preference is about: noise, price, a maker."
+                "description": "Names what the preference is about: noise, price, a maker. A liking’s: a spec the domain read listed, by its key, or `brand`."
               },
               "op": {
                 "anyOf": [
