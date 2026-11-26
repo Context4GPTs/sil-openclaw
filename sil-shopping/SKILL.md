@@ -108,14 +108,14 @@ shows. Once sil answers `ok`, say in one line what you kept, what it gives them 
 undoes it; a keep is never silent. What they tell about themselves is `kind: "memory"` with `text`: as they said
 it, with what it means for their buys, never labelled, a health condition too. Its place is its reach: what they
 value, how they spend and how they like to be served at `product`; their experience or situation in one domain at
-that domain's path. A quality no spec holds is a memory. A preference is a limit or a liking on a spec, or the price: `kind: "preference"`
+that domain's path, read first. A quality no spec holds is a memory. A preference is a limit or a liking on a spec, or the price: `kind: "preference"`
 with `subject`, `op` and `value`. What they have or had is `kind: "owned"` with `name`, `has` ("now" or "before"),
 and `product`, sil's id found by name; start from what they own now, never offered unless replaced. A liking is a
 preference with `op: "likes"`, kept only when they say they like it (owning is not liking), with `from`, sil's ids
 of what they own and like, and `reason`, what made them like it, in their words (the burr he swapped himself).
 Every row has `place`: the path the domain read gave; `gives_back`, what it saves them next time; and `source`:
-`"told"`, or `"agent"` for what you inferred. Each row reads alone weeks on: name the products, never "both"
-or "it".
+`"told"`, or `"agent"` for what you inferred. Each row reads alone weeks on: name
+its products in it.
 
 It is kept when the answer is `ok`; never say "got it" or "noted" before that, and if it
 was not, say so. A refused keep: fix what the refusal names and resend every row of that keep, never a subset.
