@@ -85,7 +85,7 @@
         "additionalProperties": false
       },
       "minItems": 1,
-      "description": "Owned rows kept as sent, without sil’s product id: finds it and resends the row. Absent: nothing to fix."
+      "description": "A new owned row kept as sent, without sil’s product id: finds it and resends the row once. Absent: nothing to fix."
     },
     "shared": {
       "type": "array",
@@ -137,7 +137,8 @@
         "additionalProperties": false
       },
       "minItems": 1,
-      "description": "Reads what the products this keep links share, by spec: what the buyer may like in them. Absent: fewer than two products, or nothing shared."
+      "maxItems": 20,
+      "description": "Reads what the products this keep links all hold, by spec: keeps one as a liking only when the buyer said they like it. Absent: fewer than two products, or nothing shared."
     }
   },
   "additionalProperties": false
