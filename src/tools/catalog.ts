@@ -202,8 +202,7 @@ export const SHOPPING_TOOLS = [
       + " hides the rest: drop it, say which and why, and search once more. When few fit or many"
       + " are unknown, say what came back and ask the one question that would change it, or ask"
       + " before relaxing a want they measured or named, rather than searching again in other"
-      + " words. Where the cards do not fit one answer, `next_page` is there and `remaining`"
-      + " says how many wait: send the same search again with `page` = `next_page`.",
+      + " words.",
   },
   {
     name: "shopping_product_get",
@@ -214,9 +213,7 @@ export const SHOPPING_TOOLS = [
       "Read the products the buyer leans to whole: values once, reviews, every picture, and"
       + " each variant with what sets it apart and its `price_range`, cheapest to dearest offer."
       + " Pick the variant here, then read its offers before you name the pick; money is in the"
-      + " minor unit: €130 is 13000. Up to ten ids. Where they do not fit one answer, `next_page`"
-      + " is there and `remaining` says how many products wait: send the same ids again with"
-      + " `page` = `next_page`.",
+      + " minor unit: €130 is 13000. Up to ten ids.",
   },
   {
     name: "shopping_offers",

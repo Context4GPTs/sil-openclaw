@@ -14,8 +14,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 - **sil's new answers.** The tools take sil-services' answer files of `sil-answers-arrive-whole`: an answer holds
   30,000 characters and a spec sheet 14,000; every list pages, with `next_page` and `remaining`, the product read and
-  the search included; a read takes up to ten ids. The read's and the search's texts and the skill say how to read
-  on: the same call with `page: next_page`.
+  the search included; a read takes up to ten ids. The skill says how to read on: the same call with
+  `page: next_page`.
 - **A script's print is not cut.** The skill has every script that calls sil start with
   `// @exec: {"max_output_tokens": 40000}`.
 - **The screen reads whole.** `sil.call` names its reads `studio/app`, or `studio/buyer` when the screen sends

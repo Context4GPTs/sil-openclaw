@@ -31,8 +31,8 @@ the buyer's normal format: €130.
 without: pick, say in a clause the one thing it assumes ("whole beans; ground if you have no grinder"), give
 the shop.
 
-**Pages.** An answer with `next_page` has more, and `remaining` says how many. Read on with the
-same call and `page: next_page`: a page never takes other ids or another search.
+**Pages.** An answer with `next_page` has more: send the same call again with `page: next_page`
+and nothing else changed.
 
 **Scripts.** Start every script that calls sil with `// @exec: {"max_output_tokens": 40000}`, so
 nothing it prints is cut.
