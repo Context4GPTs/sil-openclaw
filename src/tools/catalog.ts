@@ -213,7 +213,7 @@ export const SHOPPING_TOOLS = [
       "Read the products the buyer leans to whole: values once, reviews, every picture, and"
       + " each variant with what sets it apart and its `price_range`, cheapest to dearest offer."
       + " Pick the variant here, then read its offers before you name the pick; money is in the"
-      + " minor unit: €130 is 13000.",
+      + " minor unit: €130 is 13000. Up to ten ids.",
   },
   {
     name: "shopping_offers",
@@ -289,7 +289,9 @@ export function runOf(
   openclawVersion: string | undefined,
 ): Run {
   const { provider, modelId } = ctx.activeModel ?? {};
-  const model = provider && modelId ? `${provider}/${modelId}` : undefined;
+  // sil reads a `studio/` model whole: that name is the screen's alone, whatever a gateway calls its provider.
+  const named = provider === "studio" ? "agent-studio" : provider;
+  const model = named && modelId ? `${named}/${modelId}` : undefined;
   const conversation = model !== undefined ? ctx.sessionId || undefined : undefined;
   return {
     caller: {

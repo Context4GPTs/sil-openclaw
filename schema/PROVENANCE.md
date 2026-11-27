@@ -1,8 +1,7 @@
 # Where these twenty-six files come from
 
 Copied verbatim from `sil-services` `packages/schemas/schema/`, commit
-`fd37ffed3c04ef12c81b3490a91d6dfd290105c3`; the six `shopping-user-*` files and the two `shopping-search-*`
-files from its branch `iter/sil-leaves-you-smarter/8` at `46028607`. One request and one response artifact per
+`c477f13a` (`goal/sil-answers-arrive-whole`, `dev` taken in). One request and one response artifact per
 `shopping_*` tool, plus `sil-whoami-*`; each is `JSON.stringify` of the TypeBox object the
 API serialises against.
 

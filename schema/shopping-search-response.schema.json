@@ -263,7 +263,7 @@
               "type": "string"
             },
             "maxItems": 5,
-            "description": "Shows it: the recommended variant’s pictures first, then the product’s; the product read has every one."
+            "description": "Shows it: the recommended variant’s pictures first, then the product’s, up to five; the product read has every one."
           },
           "holds": {
             "type": "array",
@@ -510,12 +510,22 @@
               },
               "additionalProperties": false
             },
-            "description": "Lists the variants the ask leaves standing, one of them recommended."
+            "description": "Lists the variants the ask leaves standing, the recommended one first."
           }
         },
         "additionalProperties": false
       },
-      "description": "Shows the products closest to the ask: those holding most wants first, then those the query names, then most leans, then the cheapest; with a lean, one seat in three (at least one) goes to the best holding no lean that answer the wants alike, on the last seats."
+      "description": "Shows the `n` products closest to the ask: a product the query names first, then those holding most wants, then most leans, then the cheapest. With a lean, one seat in three (at least one) goes to the best holding no lean that answer the wants alike, on the last seats."
+    },
+    "next_page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Sends it as `page`, with the same request unchanged, to read the products on; absent on the last page."
+    },
+    "remaining": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Says how many products are still to come after this page; absent on the last page."
     }
   },
   "additionalProperties": false

@@ -704,7 +704,12 @@
     "next_page": {
       "type": "integer",
       "minimum": 2,
-      "description": "Sends it as `page` to read the sellers on; absent on the last page."
+      "description": "Sends it as `page`, with the same request unchanged, to read the sellers on; absent on the last page."
+    },
+    "remaining": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Says how many sellers are still to come after this page; absent on the last page."
     }
   },
   "additionalProperties": false

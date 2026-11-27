@@ -166,6 +166,11 @@
       "minLength": 1,
       "maxLength": 256,
       "description": "Ties the call to a brief in sil’s record; never required."
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Reads on: the `next_page` the last answer gave, sent with the same request it answered."
     }
   },
   "additionalProperties": false,

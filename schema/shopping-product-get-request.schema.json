@@ -16,8 +16,13 @@
         "description": "An id sil minted, passed back verbatim."
       },
       "minItems": 1,
-      "maxItems": 3,
+      "maxItems": 10,
       "description": "Sends the product or variant ids it wants the whole of; one sil does not hold is left out."
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Reads on: the `next_page` the last answer gave, sent with the same request it answered."
     }
   },
   "additionalProperties": false,

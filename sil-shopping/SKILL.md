@@ -31,6 +31,12 @@ the buyer's normal format: €130.
 without: pick, say in a clause the one thing it assumes ("whole beans; ground if you have no grinder"), give
 the shop.
 
+**Pages.** An answer with `next_page` has more: send the same call again with `page: next_page`
+and nothing else changed.
+
+**Scripts.** Start every script that calls sil with `// @exec: {"max_output_tokens": 40000}`, so
+nothing it prints is cut.
+
 ## Know the buyer and the thing, before a word
 
 Before a word to the buyer, call `sil_whoami` and `shopping_user_read {}`: where they live, who they are, what
@@ -91,7 +97,7 @@ A thin answer: say it and ask the one question that would change it; never searc
 
 ## The pick, and where to buy
 
-`shopping_product_get { ids }`, up to three they lean to. The pick is a variant; read its offers before you
+`shopping_product_get { ids }`, up to ten they lean to. The pick is a variant; read its offers before you
 name it: `shopping_offers { ids, ship_to? }` with **variant** ids.
 
 A pick a liking leaned says why: "a Baratza, the maker whose burr you swapped yourself".
