@@ -68,6 +68,10 @@
             "type": "string",
             "description": "Cites who wrote it; absent, sil did."
           },
+          "heading": {
+            "type": "string",
+            "description": "Reads the heading it sits under; absent before the document’s first."
+          },
           "text": {
             "type": "string",
             "description": "Reads the passage."
@@ -84,7 +88,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Reads sil’s passages, best first. Empty: say so, never the open web."
+      "description": "Reads sil’s passages, best first, at most two of one document. Empty: say so, never the open web."
     }
   },
   "additionalProperties": false

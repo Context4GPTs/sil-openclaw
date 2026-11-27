@@ -471,7 +471,7 @@
     "remaining": {
       "type": "integer",
       "minimum": 1,
-      "description": "Says how many offers are still to come after this page; absent on the last page. Every answer holds whole entries in order up to its limit and pages the rest, nothing left out. One product bigger than a page continues by its variants: each page repeats its own fields with the next of its variants, the variant asked for (on a search card, the recommended one) on its first page, and it counts here until its last variant is sent. The one exception to the limit: a single entry, or a product’s own fields with one variant, bigger than a whole page alone, is sent whole."
+      "description": "Says how many offers are still to come after this page; absent on the last page."
     }
   },
   "additionalProperties": false

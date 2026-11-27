@@ -17,33 +17,33 @@
     "removed": {
       "type": "object",
       "required": [
-        "measurement",
         "memory",
+        "measurement",
         "preference",
-        "purchase",
+        "owned",
         "record",
         "brief"
       ],
       "properties": {
-        "measurement": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Measurements removed."
-        },
         "memory": {
           "type": "integer",
           "minimum": 0,
           "description": "Memories removed."
+        },
+        "measurement": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Measurements removed."
         },
         "preference": {
           "type": "integer",
           "minimum": 0,
           "description": "Preferences removed."
         },
-        "purchase": {
+        "owned": {
           "type": "integer",
           "minimum": 0,
-          "description": "Purchases removed."
+          "description": "What they own or owned, removed."
         },
         "record": {
           "type": "integer",

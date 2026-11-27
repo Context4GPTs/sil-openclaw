@@ -10,8 +10,6 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
-## [0.8.4] - 2026-11-25
-
 ### Changed
 
 - **sil's new answers.** The tools take sil-services' answer files of `sil-answers-arrive-whole`: an answer holds
@@ -23,6 +21,24 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 - **The screen reads whole.** `sil.call` names its reads `studio/app`, or `studio/buyer` when the screen sends
   `by: "buyer"`; sil answers a `studio/` model's product read whole, ten ids in one read. The agent's calls never
   carry a `studio/` model, whatever a gateway names its provider.
+
+## [0.8.4] - 2026-11-27
+
+### Changed
+
+- **What sil keeps about the buyer is four kinds, and a memory's place is its reach.** The persona
+  kind is gone: who the buyer is and how they like to be served is a memory placed at `product`,
+  read on every ask; a memory placed in a domain is its context there. A purchase is now `owned`:
+  had `now` or `before`, linked to sil's product when a search gave its id, started from and never
+  offered again unless the buyer is replacing it.
+- **The skill is rebuilt around one order of a turn, by kind of ask.** A quick answer, a browse,
+  a decided buy and a considered buy each get their own turn. On a considered buy the agent
+  says where it stands before asking, the route and the search before searching, and what came
+  back after the products: the guide named, sil's own counts, what sil has not verified, and
+  where to buy.
+- **Each tool's description carries the sentence for its own moment.** `shopping_user_remember`
+  shows a whole row to keep; `shopping_search` sends only the search the buyer was told;
+  `shopping_content` asks for the guide's name; `shopping_offers` for where to buy and why there.
 
 ## [0.8.3] - 2026-11-11
 
