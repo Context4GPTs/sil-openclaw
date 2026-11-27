@@ -10,6 +10,8 @@ release (`clawhub package publish --changelog`). See [README](./README.md#releas
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-11-27
+
 ### Changed
 
 - **What sil keeps about the buyer is four kinds, and a memory's place is its reach.** The persona
