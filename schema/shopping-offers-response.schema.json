@@ -432,6 +432,30 @@
             "type": "string",
             "format": "date",
             "description": "Dates the price: the day sil read it."
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "card",
+                "full"
+              ],
+              "properties": {
+                "card": {
+                  "type": "string",
+                  "description": "Hands the photo at card size, for a thumbnail."
+                },
+                "full": {
+                  "type": "string",
+                  "description": "Hands the photo at full size."
+                }
+              },
+              "additionalProperties": false,
+              "description": "One photo of the set, at two sizes."
+            },
+            "minItems": 1,
+            "description": "Shows a set the offer sells together, several products at once: its own photos, never a variant’s."
           }
         },
         "additionalProperties": false,

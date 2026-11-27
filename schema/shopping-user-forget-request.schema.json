@@ -33,7 +33,7 @@
         "all": {
           "type": "boolean",
           "const": true,
-          "description": "Forgets everything the read lists and the buyer’s calls in sil’s record."
+          "description": "Forgets every row and the buyer’s calls in sil’s record."
         }
       },
       "additionalProperties": false

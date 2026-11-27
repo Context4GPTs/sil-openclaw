@@ -33,11 +33,11 @@
             "anyOf": [
               {
                 "type": "string",
-                "const": "measurement"
+                "const": "memory"
               },
               {
                 "type": "string",
-                "const": "memory"
+                "const": "measurement"
               },
               {
                 "type": "string",
@@ -45,7 +45,7 @@
               },
               {
                 "type": "string",
-                "const": "purchase"
+                "const": "owned"
               }
             ],
             "description": "Reads which kind was kept."
@@ -60,6 +60,85 @@
         "additionalProperties": false
       },
       "description": "Tells the buyer each keep, what it gives back, and that \"forget that\" undoes it."
+    },
+    "tips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "tip"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Names the kept row the tip is about."
+          },
+          "tip": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Teaches the fix: does it this turn."
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "description": "A new owned row kept as sent, without sil’s product id: finds it and resends the row once. Absent: nothing to fix."
+    },
+    "shared": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "spec",
+          "value"
+        ],
+        "properties": {
+          "spec": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Names the spec, as the domain read lists it."
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "minItems": 1
+              }
+            ],
+            "description": "The value every one holds; a list, the values common to all."
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 20,
+      "description": "Reads what the products this keep links all hold, by spec: keeps one as a liking only when the buyer said they like it. Absent: fewer than two products, or nothing shared."
     }
   },
   "additionalProperties": false
