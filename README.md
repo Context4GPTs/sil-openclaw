@@ -96,7 +96,7 @@ for you; you just say what you want.
 
 | Tool | What it does |
 |---|---|
-| `shopping_user_read` | Everything sil keeps about you — measurements, memories, preferences, purchases — each with what it gives you back. |
+| `shopping_user_read` | Everything sil keeps about you — what you told it, your measurements and preferences, what you own — each with what it gives you back. |
 | `shopping_user_remember` | Keep what lasts, in the turn you say it, with "forget that" as the undo. |
 | `shopping_user_forget` | Erase rows you name, or everything, on your word. |
 | `shopping_brief_write` | Open a brief for a buy with requirements, or update one: a title, what you are after in your own words, specs by domain, decisions and the end of the job. |

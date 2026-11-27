@@ -75,6 +75,11 @@
                 "type": "string",
                 "minLength": 1,
                 "description": "Reads the value in this unit."
+              },
+              "lean": {
+                "type": "boolean",
+                "const": true,
+                "description": "Is a lean: it ranks the products, never narrows them."
               }
             },
             "additionalProperties": false
@@ -125,13 +130,14 @@
           }
         ]
       },
-      "description": "Echoes the ask, numbered from 1: each spec with its unit, then the price."
+      "description": "Echoes the ask, numbered from 1: each spec with its unit, then the price, then the leans."
     },
     "search_stats": {
       "type": "object",
       "required": [
         "sellers",
-        "products"
+        "products",
+        "asks"
       ],
       "properties": {
         "sellers": {
@@ -149,7 +155,7 @@
             "with_fit": {
               "type": "integer",
               "minimum": 0,
-              "description": "Shops behind a product holding every ask."
+              "description": "Shops behind a product holding every want."
             }
           },
           "additionalProperties": false,
@@ -175,10 +181,46 @@
           },
           "additionalProperties": false,
           "description": "Counts the products."
+        },
+        "asks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "n",
+              "held",
+              "passed",
+              "failed"
+            ],
+            "properties": {
+              "n": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "An ask by its number in `asked`."
+              },
+              "held": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Products holding a value for it; for the price, a price in its currency."
+              },
+              "passed": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Products holding it, as a card’s `holds` says; for a brand, those of the brand here."
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Products missing it, as a card’s `misses` says; the rest of `held` are unverified. Always 0 on a lean, which is in no card’s `misses`."
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Counts each ask alone over every product weighed: say how the place splits on it."
         }
       },
       "additionalProperties": false,
-      "description": "Explains the shortlist: how much was searched, and how much answers the whole ask."
+      "description": "Explains the shortlist: how much was searched, how much answers the whole ask, and each ask."
     },
     "products": {
       "type": "array",
@@ -239,7 +281,7 @@
               "minimum": 1,
               "description": "An ask by its number in `asked`."
             },
-            "description": "Names the asks it holds a value for that fails on every variant."
+            "description": "Names the wants it holds a value for that fails on every variant; a lean it does not hold is in no list."
           },
           "unknown": {
             "type": "array",
@@ -248,7 +290,7 @@
               "minimum": 1,
               "description": "An ask by its number in `asked`."
             },
-            "description": "Names the asks sil could not test on it: say them as unverified."
+            "description": "Names the wants sil could not test on it: say them as unverified."
           },
           "price_range": {
             "type": "object",
@@ -473,7 +515,7 @@
         },
         "additionalProperties": false
       },
-      "description": "Shows the products closest to the ask: those holding most asks first."
+      "description": "Shows the products closest to the ask: those holding most wants first, then those the query names, then most leans, then the cheapest; with a lean, one seat in three (at least one) goes to the best holding no lean that answer the wants alike, on the last seats."
     }
   },
   "additionalProperties": false
